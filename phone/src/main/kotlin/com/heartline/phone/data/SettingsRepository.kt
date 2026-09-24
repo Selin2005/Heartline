@@ -26,6 +26,9 @@ class SettingsRepository(private val context: Context, private val now: () -> Lo
         val DEMO_SEEDED = booleanPreferencesKey("demo_seeded")
         val DEMO_PURGED = booleanPreferencesKey("demo_purged")
         val MONITOR_JSON = stringPreferencesKey("monitor_json")
+        val AI_CONSENT = booleanPreferencesKey("ai_consent")
+        val AI_PROMPT = stringPreferencesKey("ai_prompt")
+        val AI_ATTACH_PDF = booleanPreferencesKey("ai_attach_pdf")
     }
 
     /**
@@ -49,6 +52,25 @@ class SettingsRepository(private val context: Context, private val now: () -> Lo
             it[Keys.DEMO_SEEDED] = true
         }
         return first
+    }
+
+    /** Phone-only sharing preferences for "Share with AI". */
+    data class SharingPrefs(val consent: Boolean = false, val prompt: String? = null, val attachPdf: Boolean = true)
+
+    val sharing: Flow<SharingPrefs> = context.settingsStore.data.map {
+        SharingPrefs(it[Keys.AI_CONSENT] ?: false, it[Keys.AI_PROMPT], it[Keys.AI_ATTACH_PDF] ?: true)
+    }
+
+    suspend fun setAiConsent() {
+        context.settingsStore.edit { it[Keys.AI_CONSENT] = true }
+    }
+
+    suspend fun setAiPrompt(prompt: String?) {
+        context.settingsStore.edit { if (prompt.isNullOrBlank()) it.remove(Keys.AI_PROMPT) else it[Keys.AI_PROMPT] = prompt }
+    }
+
+    suspend fun setAiAttachPdf(on: Boolean) {
+        context.settingsStore.edit { it[Keys.AI_ATTACH_PDF] = on }
     }
 
     val onboarded: Flow<Boolean> = context.settingsStore.data.map { it[Keys.ONBOARDED] ?: false }

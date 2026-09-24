@@ -41,6 +41,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.heartline.phone.R
+import com.heartline.phone.ui.components.ShareAction
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.ui.res.pluralStringResource
@@ -91,6 +92,7 @@ fun BpHomeScreen(
     onMeasureOnWatch: (() -> Unit)? = null,
     onValidate: (Int?, Int?) -> Boolean = { _, _ -> true },
     listState: LazyListState = rememberLazyListState(),
+    onShare: (() -> Unit)? = null,
 ) {
     var validating by remember { mutableStateOf(false) }
     if (validating) ValidationDialog(onDismiss = { validating = false }, onSave = { s, d -> onValidate(s, d).also { ok -> if (ok) validating = false } })
@@ -100,6 +102,7 @@ fun BpHomeScreen(
         subtitle = state.latest?.let { stringResource(R.string.bp_last_measured, "${it.date} ${it.time}") },
         onBack = onBack,
         listState = listState,
+        actions = { if (onShare != null && state.latest != null) ShareAction(onShare) },
     ) {
         item {
             RoundedCard(Modifier.gutter()) {

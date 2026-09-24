@@ -171,6 +171,27 @@ class PhoneScreenshotTest(private val theme: String) {
 
     @Test fun onboarding() = shot("onboarding") { OnboardingScreen() }
 
+    @Test fun shareSheet() = shot("share_sheet") {
+        Box(Modifier.background(HeartlineTheme.colors.surface).padding(top = 24.dp)) {
+            com.heartline.phone.ui.share.ShareSheetContent(
+                defaultName = "Heartline_ECG_Sara-Karimi_2026-09-24_09-41",
+                aiTargets = listOf(
+                    com.heartline.phone.share.AiTarget("com.anthropic.claude", "Claude", null, acceptsPdf = true),
+                    com.heartline.phone.share.AiTarget("com.openai.chatgpt", "ChatGPT", null, acceptsPdf = true),
+                    com.heartline.phone.share.AiTarget("com.google.android.apps.bard", "Gemini", null, acceptsPdf = false),
+                ),
+                onSave = {},
+                onShare = {},
+            )
+        }
+    }
+
+    @Test fun shareSheetNoAi() = shot("share_sheet_no_ai") {
+        Box(Modifier.background(HeartlineTheme.colors.surface).padding(top = 24.dp)) {
+            com.heartline.phone.ui.share.ShareSheetContent(defaultName = null, aiTargets = emptyList())
+        }
+    }
+
     @Test fun hrChartSelected() = shot("hr_chart_selected") {
         Box(Modifier.background(HeartlineTheme.colors.surface).padding(20.dp)) {
             com.heartline.phone.ui.components.RangeBarChart(

@@ -13,6 +13,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.rounded.Alarm
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.PictureAsPdf
+import androidx.compose.material3.OutlinedTextField
+import com.heartline.phone.data.SettingsRepository
 import androidx.compose.material.icons.rounded.MonitorHeart
 import androidx.compose.material.icons.rounded.ShowChart
 import androidx.compose.material.icons.rounded.Speed
@@ -108,7 +112,11 @@ fun SettingsScreen(
     onExport: () -> Unit = {},
     onAbout: () -> Unit = {},
     listState: LazyListState = rememberLazyListState(),
+    sharing: SettingsRepository.SharingPrefs = SettingsRepository.SharingPrefs(),
+    onAiPrompt: (String?) -> Unit = {},
+    onAiAttachPdf: (Boolean) -> Unit = {},
 ) {
+    var editingPrompt by remember { mutableStateOf(false) }
     val colors = HeartlineTheme.colors
     var picker by remember { mutableStateOf<Picker?>(null) }
     val on = stringResource(R.string.state_on)
@@ -236,6 +244,23 @@ fun SettingsScreen(
             }
         }
 
+        item { SectionHeader(stringResource(R.string.settings_sharing)) }
+        item {
+            RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
+                CardRow(
+                    stringResource(R.string.settings_ai_prompt),
+                    subtitle = sharing.prompt ?: stringResource(R.string.settings_ai_prompt_default),
+                    leading = { IconBadge(Icons.Rounded.AutoAwesome, colors.primary) },
+                    showDivider = true,
+                    onClick = { editingPrompt = true },
+                )
+                CardRow(
+                    stringResource(R.string.settings_ai_attach_pdf),
+                    leading = { IconBadge(Icons.Rounded.PictureAsPdf, colors.onSurfaceVariant) },
+                    trailing = { OneUiSwitch(sharing.attachPdf, onAiAttachPdf) },
+                )
+            }
+        }
         item { SectionHeader(stringResource(R.string.settings_data)) }
         item {
             RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
@@ -270,6 +295,22 @@ fun SettingsScreen(
         }
     }
 
+    if (editingPrompt) {
+        val default = stringResource(R.string.ai_default_prompt)
+        var text by remember { mutableStateOf(sharing.prompt ?: default) }
+        AlertDialog(
+            onDismissRequest = { editingPrompt = false },
+            title = { Text(stringResource(R.string.settings_ai_prompt)) },
+            text = { OutlinedTextField(text, { text = it.take(500) }, minLines = 3, modifier = Modifier.fillMaxWidth()) },
+            confirmButton = {
+                TextButton(onClick = {
+                    onAiPrompt(text.takeIf { it.isNotBlank() && it != default })
+                    editingPrompt = false
+                }) { Text(stringResource(R.string.action_save)) }
+            },
+            dismissButton = { TextButton(onClick = { editingPrompt = false }) { Text(stringResource(R.string.action_cancel)) } },
+        )
+    }
     when (picker) {
         Picker.Interval -> ChoiceDialog(
             stringResource(R.string.settings_irn_interval),

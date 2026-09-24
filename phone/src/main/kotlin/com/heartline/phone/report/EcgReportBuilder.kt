@@ -46,8 +46,8 @@ class EcgReportBuilder(private val context: Context, private val exporter: EcgPd
         return listOfNotNull(name, age).joinToString(", ")
     }
 
-    fun export(record: EcgRecordUi, profile: UserProfile? = null): File =
-        exporter.export(data(record, profile), "heartline-ecg-${record.id.take(8)}.pdf")
+    fun export(record: EcgRecordUi, profile: UserProfile? = null, fileName: String = "heartline-ecg-${record.id.take(8)}.pdf"): File =
+        exporter.export(data(record, profile), fileName)
 
     fun shareIntent(file: File) = exporter.shareIntent(file, context.getString(R.string.report_title))
 }

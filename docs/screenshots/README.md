@@ -206,6 +206,18 @@ Do not edit by hand.
 ### settings_light
 <img src="phone/settings_light.png" width="280">
 
+### share_sheet_no_ai_dark
+<img src="phone/share_sheet_no_ai_dark.png" width="280">
+
+### share_sheet_no_ai_light
+<img src="phone/share_sheet_no_ai_light.png" width="280">
+
+### share_sheet_dark
+<img src="phone/share_sheet_dark.png" width="280">
+
+### share_sheet_light
+<img src="phone/share_sheet_light.png" width="280">
+
 ### skin_temperature_dark
 <img src="phone/skin_temperature_dark.png" width="280">
 

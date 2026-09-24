@@ -3,6 +3,18 @@
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- "Share with AI": which assistant apps are installed and accept shares (package visibility). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="*/*" />
+        </intent>
+        <package android:name="com.anthropic.claude" />
+        <package android:name="com.openai.chatgpt" />
+        <package android:name="com.google.android.apps.bard" />
+        <package android:name="ai.x.grok" />
+    </queries>
+
     <application
         android:name=".PhoneApplication"
         android:allowBackup="false"

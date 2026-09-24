@@ -63,6 +63,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.heartline.phone.R
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import com.heartline.phone.report.EcgReportBuilder
+import com.heartline.phone.share.ResultSummary
+import com.heartline.phone.ui.share.ShareRequest
+import com.heartline.phone.ui.share.rememberShareSheet
 import com.heartline.phone.ui.ecg.EcgDetailScreen
 import com.heartline.phone.ui.ecg.EcgHistoryScreen
 import com.heartline.phone.ui.ecg.EcgHomeScreen
@@ -140,6 +146,8 @@ fun HeartlineApp(
         }
     }
     val openOnWatch: (String) -> Unit = { opener.open(it) }
+    val share = rememberShareSheet()
+    val reports: EcgReportBuilder = koinInject()
     val backStack by navController.currentBackStackEntryAsState()
     val route = backStack?.destination?.route ?: Routes.HOME
     Scaffold(
@@ -184,6 +192,7 @@ fun HeartlineApp(
                     val context = LocalContext.current
                     val exporter: DataExporter = koinInject()
                     val monitor by vm.monitor.collectAsStateWithLifecycle()
+                    val sharingPrefs by vm.sharing.collectAsStateWithLifecycle()
                     val linkVm: WatchLinkViewModel = koinViewModel()
                     val link by linkVm.link.collectAsStateWithLifecycle()
                     LifecycleResumeEffect(Unit) {
@@ -199,9 +208,21 @@ fun HeartlineApp(
                         onProfile = { navController.navigate(Routes.PROFILE) },
                         onWatch = linkVm::refresh,
                         onExport = {
-                            vm.export(exporter) { context.startActivity(Intent.createChooser(it, context.getString(R.string.settings_export))) }
+                            share(
+                                ShareRequest(
+                                    kind = "Export",
+                                    extension = "csv",
+                                    mime = "text/csv",
+                                    buildFile = { name, _ -> vm.exportFile(exporter, name) },
+                                    text = { _, _ -> "" },
+                                    allowAi = false,
+                                ),
+                            )
                         },
                         onAbout = { navController.navigate(Routes.ABOUT) },
+                        sharing = sharingPrefs,
+                        onAiPrompt = vm::setAiPrompt,
+                        onAiAttachPdf = vm::setAiAttachPdf,
                     )
                 }
                 composable(Routes.ECG) {
@@ -223,6 +244,13 @@ fun HeartlineApp(
                         onBack = { navController.popBackStack() },
                         onOpenAlerts = { navController.navigate(Routes.ALERTS) },
                         onMeasureOnWatch = { openOnWatch(WatchRoutes.HEART_RATE) },
+                        onShare = {
+                            share(
+                                ShareRequest("HeartRate", null, null, null, { prompt, person ->
+                                    ResultSummary.heartRate(context.resources, state, person, prompt)
+                                }),
+                            )
+                        },
                     )
                 }
                 composable(Routes.BLOOD_PRESSURE) {
@@ -234,6 +262,13 @@ fun HeartlineApp(
                         onCalibrate = { navController.navigate(Routes.BP_CALIBRATION) },
                         onMeasureOnWatch = { openOnWatch(WatchRoutes.BLOOD_PRESSURE) },
                         onValidate = vm::validateLatest,
+                        onShare = {
+                            share(
+                                ShareRequest("BloodPressure", null, null, null, { prompt, person ->
+                                    ResultSummary.bp(context.resources, state, person, prompt)
+                                }),
+                            )
+                        },
                     )
                 }
                 composable(Routes.BP_CALIBRATION) {
@@ -282,9 +317,15 @@ fun HeartlineApp(
                             current,
                             onBack = { navController.popBackStack() },
                             onSharePdf = {
-                                vm.sharePdf { intent ->
-                                    context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_via)))
-                                }
+                                share(
+                                    ShareRequest(
+                                        kind = "ECG",
+                                        extension = "pdf",
+                                        mime = "application/pdf",
+                                        buildFile = { name, profile -> withContext(Dispatchers.IO) { reports.export(current, profile, name) } },
+                                        text = { prompt, person -> ResultSummary.ecg(context.resources, current, person, prompt) },
+                                    ),
+                                )
                             },
                             onDelete = { confirmDelete = true },
                             onEditSymptoms = { editing = true },

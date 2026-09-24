@@ -65,22 +65,12 @@ class EcgDetailViewModel(
     private val repository: RecordRepository,
     private val sync: PhoneSyncEngine,
     private val formatter: RecordFormatter,
-    private val reports: EcgReportBuilder,
-    private val profiles: ProfileRepository,
 ) : ViewModel() {
     val state: StateFlow<EcgRecordUi?> = repository.observe(id)
         .flatMapLatest { record -> flow { emit(record?.let { formatter.ecg(it, repository.displayWave(it)) }) } }
         .stateIn(viewModelScope, WHILE_SUBSCRIBED, null)
 
     fun updateSymptoms(symptoms: List<Symptom>) = viewModelScope.launch { repository.updateEcgSymptoms(id, symptoms, null) }
-
-    /** Writes the PDF off the main thread and hands back a share intent. */
-    fun sharePdf(onReady: (Intent) -> Unit) = viewModelScope.launch {
-        val record = state.value ?: return@launch
-        val profile = profiles.profile.first()
-        val file = withContext(Dispatchers.IO) { reports.export(record, profile) }
-        onReady(reports.shareIntent(file))
-    }
 
     /** Deletes here and asks the watch to drop its copy too. */
     fun delete(onDone: () -> Unit) = viewModelScope.launch {
@@ -156,6 +146,12 @@ class SettingsViewModel(
 ) : ViewModel() {
     val monitor: StateFlow<MonitorSettings> = settings.monitor.stateIn(viewModelScope, WHILE_SUBSCRIBED, MonitorSettings())
 
+    val sharing: StateFlow<SettingsRepository.SharingPrefs> = settings.sharing.stateIn(viewModelScope, WHILE_SUBSCRIBED, SettingsRepository.SharingPrefs())
+
+    fun setAiPrompt(prompt: String?) = viewModelScope.launch { settings.setAiPrompt(prompt) }
+
+    fun setAiAttachPdf(on: Boolean) = viewModelScope.launch { settings.setAiAttachPdf(on) }
+
     /** Saves the change here, pushes it to the watch and re-arms the phone reminders. */
     fun change(change: SettingChange) = viewModelScope.launch {
         val next = settings.update { change.applyTo(it) }
@@ -167,6 +163,9 @@ class SettingsViewModel(
         val file = withContext(Dispatchers.IO) { exporter.export(repository.all()) }
         onReady(exporter.shareIntent(file))
     }
+
+    /** The CSV under a chosen name, for the share sheet. */
+    suspend fun exportFile(exporter: DataExporter, fileName: String) = withContext(Dispatchers.IO) { exporter.export(repository.all(), fileName) }
 
     fun deleteAll() = viewModelScope.launch {
         repository.deleteAll()

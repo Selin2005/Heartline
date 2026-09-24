@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.heartline.phone.R
+import com.heartline.phone.ui.components.ShareAction
 import androidx.compose.foundation.layout.Arrangement
 import com.heartline.phone.ui.components.Chip
 import androidx.compose.runtime.setValue
@@ -44,12 +45,19 @@ import com.heartline.shared.hr.AlertKind
 enum class HrPeriod(val label: Int) { DAY(R.string.period_day), WEEK(R.string.period_week), MONTH(R.string.period_month) }
 
 @Composable
-fun HeartRateScreen(state: HeartRateUi, onBack: (() -> Unit)? = null, onOpenAlerts: () -> Unit = {}, onMeasureOnWatch: (() -> Unit)? = null) {
+fun HeartRateScreen(
+    state: HeartRateUi,
+    onBack: (() -> Unit)? = null,
+    onOpenAlerts: () -> Unit = {},
+    onMeasureOnWatch: (() -> Unit)? = null,
+    onShare: (() -> Unit)? = null,
+) {
     val colors = HeartlineTheme.colors
     ReachabilityScaffold(
         title = stringResource(R.string.metric_hr),
         subtitle = state.latestTime?.let { stringResource(R.string.hr_last_measured, it) },
         onBack = onBack,
+        actions = { if (onShare != null && state.latestBpm != null) ShareAction(onShare) },
     ) {
         onMeasureOnWatch?.let { measure ->
             item { TonalPillButton(stringResource(R.string.action_measure_on_watch), onClick = measure, modifier = Modifier.gutter(), color = colors.heartRate) }

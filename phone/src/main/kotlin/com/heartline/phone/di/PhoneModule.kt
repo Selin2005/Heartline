@@ -100,7 +100,7 @@ val phoneModule = module {
     viewModel { HomeViewModel(get(), get(), get(), get(), get()) }
     viewModel { EcgListViewModel(get(), get()) }
     single { EcgReportBuilder(androidContext()) }
-    viewModel { params -> EcgDetailViewModel(params.get(), get(), get(), get(), get(), get()) }
+    viewModel { params -> EcgDetailViewModel(params.get(), get(), get(), get()) }
     viewModel { SettingsViewModel(get(), get(), get(), get(), get()) { Reminders.sync(androidContext(), it) } }
     viewModel { HeartRateViewModel(get(), get()) }
     viewModel { BpHomeViewModel(get(), get()) }
@@ -109,6 +109,7 @@ val phoneModule = module {
     viewModel { ProfileViewModel(get()) }
     viewModel { OpenOnWatchViewModel(get()) }
     viewModel { WatchLinkViewModel(get(), get()) }
+    viewModel { com.heartline.phone.ui.share.ShareViewModel(get(), get()) }
     viewModel { OnboardingViewModel(get()) }
     single { DataExporter(androidContext()) }
     viewModel { AlertsViewModel(get(), get()) }

@@ -34,9 +34,9 @@ object CsvFormat {
 }
 
 class DataExporter(private val context: Context) {
-    fun export(records: List<RecordEntity>): File {
+    fun export(records: List<RecordEntity>, fileName: String = "heartline-export.csv"): File {
         val dir = File(context.cacheDir, "exports").apply { mkdirs() }
-        val file = File(dir, "heartline-export.csv")
+        val file = File(dir, fileName)
         file.bufferedWriter().use { w ->
             w.appendLine(CsvFormat.HEADER)
             records.sortedBy { it.startedAtMs }.forEach { w.appendLine(CsvFormat.row(it)) }
