@@ -35,6 +35,8 @@ class EcgReportBuilder(private val context: Context, private val exporter: EcgPd
             footer = context.getString(R.string.report_footer, record.sampleRateHz),
             samples = record.samples ?: FloatArray(0),
             sampleRateHz = record.sampleRateHz,
+            recordingDetails = record.metrics?.let { EcgDetailRows.rows(context.resources, it) }.orEmpty(),
+            noisySeconds = record.metrics?.noisySeconds.orEmpty(),
         )
     }
 

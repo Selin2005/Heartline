@@ -14,15 +14,19 @@ class FakeEcgSource(
     private val irregularity: Double = 0.02,
     private val chunkDelayMs: Long = 20,
     private val leadOffChunks: Int = 50,
+    /** Contact lost for this many chunks once 5 s have been recorded. */
+    private val midLeadOffChunks: Int = 0,
 ) : EcgSource {
     override fun stream(): Flow<EcgChunk> = flow {
         val signal = SyntheticEcg.generate(40.0, heartRateBpm, irregularity, seed = System.nanoTime().toInt())
         var chunkIndex = 0
         var offset = 0
         while (offset + CHUNK <= signal.size) {
-            val leadOff = chunkIndex < leadOffChunks
+            val recorded = chunkIndex - leadOffChunks
+            val midStart = 5 * 500 / CHUNK
+            val leadOff = chunkIndex < leadOffChunks || (midLeadOffChunks > 0 && recorded in midStart until midStart + midLeadOffChunks)
             emit(EcgChunk(if (leadOff) FloatArray(CHUNK) else signal.copyOfRange(offset, offset + CHUNK), leadOff))
-            if (!leadOff) offset += CHUNK
+            if (!leadOff || chunkIndex >= leadOffChunks) offset += CHUNK
             chunkIndex++
             delay(chunkDelayMs)
         }

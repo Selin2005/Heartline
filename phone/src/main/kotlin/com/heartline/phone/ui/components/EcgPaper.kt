@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -31,6 +32,7 @@ fun EcgStrip(
     mmSize: Dp = 4.dp,
     heightMm: Int = 30,
     contentDescription: String? = null,
+    noisySeconds: List<Int> = emptyList(),
 ) {
     val colors = HeartlineTheme.colors
     val widthMm = samples.size.toFloat() / sampleRateHz * MM_PER_SECOND
@@ -54,6 +56,10 @@ fun EcgStrip(
                 Offset(size.width, y),
                 strokeWidth = if (j % 5 == 0) 1.2f else 0.8f,
             )
+        }
+        // Seconds the analysis treated as noise are shaded, so the user sees which part didn't count.
+        noisySeconds.forEach { s ->
+            drawRect(colors.statusWarn.copy(alpha = 0.12f), Offset(s * MM_PER_SECOND * mm, 0f), Size(MM_PER_SECOND * mm, size.height))
         }
         val baselineY = size.height * 0.62f
         val pxPerSample = MM_PER_SECOND * mm / sampleRateHz

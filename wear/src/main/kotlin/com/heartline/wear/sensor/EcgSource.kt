@@ -2,8 +2,11 @@ package com.heartline.wear.sensor
 
 import kotlinx.coroutines.flow.Flow
 
-/** A batch of ECG samples (mV at 500 Hz) and whether the electrodes lost contact. */
-class EcgChunk(val samples: FloatArray, val leadOff: Boolean)
+/**
+ * A batch of ECG samples (mV at 500 Hz) and whether the electrodes lost contact.
+ * [timestampMs]: sensor time of the last sample, used to measure the real sample rate.
+ */
+class EcgChunk(val samples: FloatArray, val leadOff: Boolean, val timestampMs: Long? = null)
 
 class SensorException(val problem: SensorProblem) : Exception(problem.name)
 

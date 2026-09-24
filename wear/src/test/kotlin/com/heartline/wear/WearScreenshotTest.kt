@@ -84,7 +84,11 @@ class WearScreenshotTest(private val size: String) {
 
     @Test fun ecgInstruction() = shot("ecg_instruction") { EcgInstructionScreen() }
 
-    @Test fun ecgMeasuring() = shot("ecg_measuring") { EcgMeasuringScreen(0.4f, 18, WearSample.liveEcg, leadOff = false) }
+    @Test fun ecgMeasuring() = shot("ecg_measuring") {
+        EcgMeasuringScreen(0.4f, 18, WearSample.liveEcg, leadOff = false, bpm = 72, endIndex = 1500L * 3 + 900)
+    }
+
+    @Test fun ecgWaitingForTouch() = shot("ecg_waiting") { EcgMeasuringScreen(0f, 30, FloatArray(0), leadOff = true, waitingForTouch = true) }
 
     @Test fun ecgLeadOff() = shot("ecg_lead_off") { EcgMeasuringScreen(0.55f, 14, WearSample.liveEcg.copyOf(900), leadOff = true) }
 
@@ -93,6 +97,17 @@ class WearScreenshotTest(private val size: String) {
     @Test fun ecgResultSinus() = shot("ecg_result_sinus") { EcgResultScreen(EcgResult.SINUS_RHYTHM, 72) }
 
     @Test fun ecgResultAfib() = shot("ecg_result_afib") { EcgResultScreen(EcgResult.AFIB_SIGNS, 94) }
+
+    @Test fun ecgResultPoorWithReason() = shot("ecg_result_poor") {
+        EcgResultScreen(
+            EcgResult.POOR_RECORDING,
+            null,
+            com.heartline.shared.model.EcgMetrics(
+                0, 31_000, 30f, 9f, 21f, 4f, 17f, 1f, null, null, null, 31, null, null, null, 34,
+                com.heartline.shared.model.EcgPoorReason.MUSCLE_NOISE, sampleRateHz = 500f,
+            ),
+        )
+    }
 
     @Test fun history() = shot("history") {
         HistoryScreen(

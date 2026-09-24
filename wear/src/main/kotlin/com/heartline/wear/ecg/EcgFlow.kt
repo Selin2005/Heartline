@@ -64,7 +64,10 @@ fun EcgFlow(onExit: () -> Unit, vm: EcgMeasureViewModel = koinViewModel(), gatew
         view.keepScreenOn = measuring != null
         onDispose { view.keepScreenOn = false }
     }
-    LaunchedEffect(measuring?.leadOff) { if (measuring?.leadOff == true) haptics.performHapticFeedback(HapticFeedbackType.Reject) }
+    // Buzz when contact is lost mid-recording, not while waiting for the first touch.
+    LaunchedEffect(measuring?.leadOff) {
+        if (measuring?.leadOff == true && !measuring.waitingForTouch) haptics.performHapticFeedback(HapticFeedbackType.Reject)
+    }
     LaunchedEffect(state is EcgMeasureState.Done) { if (state is EcgMeasureState.Done) haptics.performHapticFeedback(HapticFeedbackType.Confirm) }
 
     when (val s = state) {
@@ -74,9 +77,17 @@ fun EcgFlow(onExit: () -> Unit, vm: EcgMeasureViewModel = koinViewModel(), gatew
             } else {
                 EcgInstructionScreen(onStart = ::startWithPermission)
             }
-        is EcgMeasureState.Measuring -> EcgMeasuringScreen(s.progress, s.secondsLeft, s.trace, s.leadOff)
+        is EcgMeasureState.Measuring -> EcgMeasuringScreen(
+            s.progress,
+            s.secondsLeft,
+            s.trace,
+            s.leadOff,
+            bpm = s.bpm,
+            endIndex = s.endIndex,
+            waitingForTouch = s.waitingForTouch,
+        )
         EcgMeasureState.Analyzing -> EcgAnalyzingScreen()
-        is EcgMeasureState.Done -> EcgResultScreen(s.result, s.averageBpm, onDone = {
+        is EcgMeasureState.Done -> EcgResultScreen(s.result, s.averageBpm, s.metrics, onDone = {
             vm.reset()
             onExit()
         })

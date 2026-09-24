@@ -17,8 +17,13 @@ enum class RecordKind(val metric: Metric) {
 @Serializable
 sealed interface RecordSummary {
     @Serializable
-    data class Ecg(val averageBpm: Int?, val result: EcgResult?, val leadOffRatio: Float, val symptoms: List<Symptom> = emptyList()) :
-        RecordSummary
+    data class Ecg(
+        val averageBpm: Int?,
+        val result: EcgResult?,
+        val leadOffRatio: Float,
+        val symptoms: List<Symptom> = emptyList(),
+        val metrics: EcgMetrics? = null
+    ) : RecordSummary
 
     @Serializable
     data class BloodPressure(val systolic: Int, val diastolic: Int, val pulse: Int?) : RecordSummary
@@ -48,3 +53,39 @@ data class RecordMeta(
     val sampleCount: Int,
     val summary: RecordSummary
 )
+
+/** Why a recording couldn't be classified (NONE for a usable one). */
+@Serializable
+enum class EcgPoorReason { NONE, TOO_SHORT, LEAD_OFF, MOTION, MUSCLE_NOISE, LOW_AMPLITUDE, TOO_FEW_BEATS }
+
+/**
+ * Everything measured about one ECG recording, shown on the watch, the phone and the PDF.
+ * Durations are seconds of recorded (contact) signal; heart rates come from beat-to-beat intervals.
+ */
+@Serializable
+data class EcgMetrics(
+    val startedAtMs: Long,
+    val endedAtMs: Long,
+    val durationSec: Float,
+    val usableSec: Float,
+    val noiseSec: Float,
+    val motionSec: Float,
+    val muscleNoiseSec: Float,
+    val leadOffSec: Float,
+    val averageBpm: Int?,
+    val minBpm: Int?,
+    val maxBpm: Int?,
+    val beats: Int,
+    val meanRrMs: Int?,
+    val sdnnMs: Int?,
+    val rmssdMs: Int?,
+    val qualityScore: Int,
+    val poorReason: EcgPoorReason,
+    /** Seconds (0-based) of the recording marked as noise, for shading on strips. */
+    val noisySeconds: List<Int> = emptyList(),
+    val sampleRateHz: Float,
+    val inverted: Boolean = false,
+    val algorithm: Int = 2
+) {
+    val usablePercent: Int get() = if (durationSec <= 0f) 0 else (usableSec / durationSec * 100f).toInt()
+}

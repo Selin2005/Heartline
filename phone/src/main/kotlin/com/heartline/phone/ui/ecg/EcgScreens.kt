@@ -33,6 +33,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.heartline.phone.R
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
+import com.heartline.phone.report.EcgDetailRows
+import androidx.compose.ui.platform.LocalContext
 import com.heartline.phone.ui.components.CardRow
 import com.heartline.phone.ui.components.CardTitle
 import com.heartline.phone.ui.components.Chip
@@ -231,12 +235,14 @@ fun EcgDetailScreen(
     onSharePdf: () -> Unit = {},
     onDelete: () -> Unit = {},
     onEditSymptoms: () -> Unit = {},
+    listState: LazyListState = rememberLazyListState(),
 ) {
     val colors = HeartlineTheme.colors
     ReachabilityScaffold(
         title = stringResource(record.result.label),
         subtitle = "${record.date} · ${record.time}",
         onBack = onBack,
+        listState = listState,
     ) {
         item {
             RoundedCard(Modifier.gutter()) {
@@ -253,7 +259,23 @@ fun EcgDetailScreen(
         val samples = record.samples
         if (samples != null) {
             item {
-                EcgStripCard(samples, record.sampleRateHz)
+                EcgStripCard(samples, record.sampleRateHz, noisySeconds = record.metrics?.noisySeconds.orEmpty())
+            }
+        }
+        record.metrics?.let { metrics ->
+            item {
+                val res = LocalContext.current.resources
+                val rows = remember(metrics) { EcgDetailRows.rows(res, metrics) }
+                RoundedCard(Modifier.gutter()) {
+                    CardTitle(stringResource(R.string.ecg_details_title))
+                    Spacer(Modifier.height(8.dp))
+                    rows.forEach { (label, value) ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
+                            Text(label, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant, modifier = Modifier.weight(0.45f))
+                            Text(value, style = MaterialTheme.typography.bodyMedium, color = colors.onBackground, modifier = Modifier.weight(0.55f))
+                        }
+                    }
+                }
             }
         }
         item {
@@ -303,7 +325,7 @@ fun EcgDetailScreen(
 
 /** The full recording on ECG paper; scrolls horizontally like a printed strip. */
 @Composable
-fun EcgStripCard(samples: FloatArray, sampleRateHz: Int, modifier: Modifier = Modifier) {
+fun EcgStripCard(samples: FloatArray, sampleRateHz: Int, modifier: Modifier = Modifier, noisySeconds: List<Int> = emptyList()) {
     RoundedCard(modifier.gutter(), contentPadding = 0.dp) {
         Box(
             Modifier
@@ -316,10 +338,11 @@ fun EcgStripCard(samples: FloatArray, sampleRateHz: Int, modifier: Modifier = Mo
                 sampleRateHz,
                 mmSize = 3.4.dp,
                 contentDescription = stringResource(R.string.a11y_ecg_strip, samples.size / sampleRateHz),
+                noisySeconds = noisySeconds,
             )
         }
         Text(
-            stringResource(R.string.ecg_strip_caption),
+            if (noisySeconds.isEmpty()) stringResource(R.string.ecg_strip_caption) else stringResource(R.string.ecg_strip_caption) + " " + stringResource(R.string.ecg_noise_legend),
             style = MaterialTheme.typography.bodySmall,
             color = HeartlineTheme.colors.onSurfaceVariant,
             modifier = Modifier.padding(start = 20.dp, bottom = 14.dp),

@@ -1,9 +1,9 @@
 package com.heartline.shared.ecg
 
 import com.heartline.shared.hr.RrFeatures
+import com.heartline.shared.model.EcgPoorReason
 import com.heartline.shared.model.EcgResult
 import kotlin.math.abs
-import kotlin.math.sqrt
 
 /**
  * Wellness rhythm classification with SHM's categories (MASTER_PLAN §5):
@@ -14,28 +14,25 @@ object RhythmClassifier {
     const val LOW_HR = 50
     const val HIGH_HR = 120
     const val SINUS_MAX_HR = 100
-    const val MAX_LEAD_OFF_RATIO = 0.3f
 
-    data class Evidence(val quality: Double, val features: RrFeatures?, val pWaveMv: Double?)
+    /** P wave height relative to the whole beat (typically 0.1–0.2 in lead I; absent in AFib). */
+    const val P_WAVE_PRESENT_RATIO = 0.04
 
-    fun classify(clean: FloatArray, peaks: IntArray, fs: Int, bpm: Int?, leadOffRatio: Float): Pair<EcgResult, Evidence> {
-        val quality = SignalQuality.score(clean, peaks, fs)
-        val features = RrFeatures.of(RPeakDetector.rrIntervalsMs(peaks, fs))
-        val pWave = pWaveAmplitude(clean, peaks, fs)
-        val evidence = Evidence(quality, features, pWave)
-        val result = when {
-            leadOffRatio > MAX_LEAD_OFF_RATIO || bpm == null || features == null -> EcgResult.POOR_RECORDING
-            quality < SignalQuality.MIN_GOOD -> EcgResult.POOR_RECORDING
-            bpm > HIGH_HR -> EcgResult.HIGH_HEART_RATE
-            bpm < LOW_HR -> EcgResult.LOW_HEART_RATE
-            features.isIrregular && (pWave == null || pWave < P_WAVE_PRESENT_MV || features.nRmssd > 0.15) -> EcgResult.AFIB_SIGNS
-            features.isRegular && bpm <= SINUS_MAX_HR && pWave != null && pWave >= P_WAVE_PRESENT_MV -> EcgResult.SINUS_RHYTHM
-            else -> EcgResult.INCONCLUSIVE
-        }
-        return result to evidence
+    data class Evidence(val quality: Double, val features: RrFeatures?, val pWaveMv: Double?, val pWaveRatio: Double? = null)
+
+    /**
+     * Heart-rate bounds first, then rhythm: irregular without P waves → AFib signs; regular with
+     * P waves up to 100 bpm → sinus rhythm. The P-wave test is relative to the beat, so it works
+     * at wrist-ECG amplitudes (R often 0.3–0.6 mV) as well as chest-lead ones.
+     */
+    fun classify(reason: EcgPoorReason, bpm: Int?, features: RrFeatures?, pWaveRatio: Double?): EcgResult = when {
+        reason != EcgPoorReason.NONE || bpm == null || features == null -> EcgResult.POOR_RECORDING
+        bpm > HIGH_HR -> EcgResult.HIGH_HEART_RATE
+        bpm < LOW_HR -> EcgResult.LOW_HEART_RATE
+        features.isIrregular && (pWaveRatio == null || pWaveRatio < P_WAVE_PRESENT_RATIO || features.nRmssd > 0.15) -> EcgResult.AFIB_SIGNS
+        features.isRegular && bpm <= SINUS_MAX_HR && pWaveRatio != null && pWaveRatio >= P_WAVE_PRESENT_RATIO -> EcgResult.SINUS_RHYTHM
+        else -> EcgResult.INCONCLUSIVE
     }
-
-    private const val P_WAVE_PRESENT_MV = 0.05
 
     /**
      * Peak-to-baseline amplitude of the averaged P wave: beats are aligned on R, the median beat
@@ -55,28 +52,5 @@ object RhythmClassifier {
     private fun median(v: List<Double>): Double {
         val s = v.sorted()
         return if (s.size % 2 == 1) s[s.size / 2] else (s[s.size / 2 - 1] + s[s.size / 2]) / 2
-    }
-}
-
-/** 0..1 recording quality from QRS prominence and R-amplitude consistency. */
-object SignalQuality {
-    const val MIN_GOOD = 0.45
-
-    fun score(clean: FloatArray, peaks: IntArray, fs: Int): Double {
-        if (peaks.size < 5 || clean.isEmpty()) return 0.0
-        val mean = clean.average()
-        val sd = sqrt(clean.sumOf { (it - mean) * (it - mean) } / clean.size)
-        if (sd < 1e-6) return 0.0
-        // Kurtosis: sharp QRS complexes on a quiet baseline give high values; noise is ~3.
-        val kurtosis = clean.sumOf {
-            val z = (it - mean) / sd
-            z * z * z * z
-        } / clean.size
-        val amps = peaks.map { abs(clean[it] - mean) }
-        val ampMean = amps.average()
-        val ampCov = sqrt(amps.sumOf { (it - ampMean) * (it - ampMean) } / amps.size) / ampMean
-        val kurtosisScore = ((kurtosis - 3.0) / 7.0).coerceIn(0.0, 1.0)
-        val consistency = (1.0 - ampCov / 0.5).coerceIn(0.0, 1.0)
-        return 0.6 * kurtosisScore + 0.4 * consistency
     }
 }

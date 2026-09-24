@@ -17,7 +17,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.PriorityHigh
 import androidx.compose.material.icons.rounded.QuestionMark
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import java.text.DateFormat
+import java.util.Date
+import kotlin.math.roundToInt
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,11 +38,14 @@ import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ProgressIndicatorDefaults
 import androidx.wear.compose.material3.Text
+import com.heartline.shared.model.EcgMetrics
+import com.heartline.shared.model.EcgPoorReason
 import com.heartline.shared.model.EcgResult
 import com.heartline.shared.model.Severity
 import com.heartline.wear.R
 import com.heartline.wear.ui.components.ActionScreen
 import com.heartline.wear.ui.components.LiveWave
+import com.heartline.wear.ui.components.SweepTrace
 import com.heartline.wear.ui.components.isSmallRound
 import com.heartline.wear.ui.components.label
 import com.heartline.wear.ui.theme.WearColors
@@ -89,17 +97,79 @@ private fun WatchKeyIllustration(modifier: Modifier) {
 }
 
 /** Step 2: recording (ECG). */
+/**
+ * ECG recording: a monitor-style sweep on ECG paper (filtered, auto-gain) with the live heart rate,
+ * the countdown and a contact hint, inside the progress ring. The strip runs from the moment
+ * measuring starts, so the user sees the signal appear as soon as the finger touches the key.
+ */
 @Composable
-fun EcgMeasuringScreen(progress: Float, secondsLeft: Int, samples: FloatArray, leadOff: Boolean) = MeasuringScreen(
-    title = stringResource(R.string.metric_ecg),
-    color = WearColors.ecg,
-    progress = progress,
-    secondsLeft = secondsLeft,
-    samples = samples,
-    hint = stringResource(if (leadOff) R.string.ecg_lead_off else R.string.ecg_keep_finger),
-    warn = leadOff,
-    fixedRangeMv = 1.6f,
-)
+fun EcgMeasuringScreen(
+    progress: Float,
+    secondsLeft: Int,
+    samples: FloatArray,
+    leadOff: Boolean,
+    bpm: Int? = null,
+    endIndex: Long = samples.size.toLong(),
+    waitingForTouch: Boolean = false,
+    sampleRateHz: Int = 500,
+) {
+    val color = WearColors.ecg
+    Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(
+            progress = { progress },
+            modifier = Modifier.fillMaxSize().padding(2.dp),
+            strokeWidth = 6.dp,
+            colors = ProgressIndicatorDefaults.colors(indicatorColor = color, trackColor = WearColors.surfaceHigh),
+        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 18.dp),
+        ) {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text("$secondsLeft", style = MaterialTheme.typography.displayMedium)
+                Text(
+                    stringResource(R.string.unit_sec),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = WearColors.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 3.dp, bottom = 6.dp),
+                )
+            }
+            SweepTrace(
+                samples = samples,
+                endIndex = endIndex,
+                windowSamples = sampleRateHz * 3,
+                color = color,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp).height(if (isSmallRound()) 58.dp else 70.dp),
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(18.dp)) {
+                if (bpm != null && !leadOff) {
+                    Icon(Icons.Rounded.Favorite, contentDescription = null, tint = color, modifier = Modifier.size(12.dp))
+                    Text(
+                        stringResource(R.string.ecg_bpm_value, bpm),
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(start = 4.dp),
+                    )
+                }
+            }
+            Text(
+                stringResource(
+                    when {
+                        waitingForTouch -> R.string.ecg_touch_to_start
+                        leadOff -> R.string.ecg_lead_off
+                        else -> R.string.ecg_keep_finger
+                    },
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (leadOff && !waitingForTouch) WearColors.warn else WearColors.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                modifier = Modifier.padding(horizontal = 22.dp),
+            )
+        }
+    }
+}
 
 /**
  * Shared recording layout: a progress ring runs around the edge of the round screen, with the
@@ -153,9 +223,9 @@ fun MeasuringScreen(
     }
 }
 
-/** Step 3: result with a coloured status icon; details live on the phone. */
+/** Step 3: the result, then every measured detail (scroll), like the phone's recording details. */
 @Composable
-fun EcgResultScreen(result: EcgResult, averageBpm: Int?, onDone: () -> Unit = {}) {
+fun EcgResultScreen(result: EcgResult, averageBpm: Int?, metrics: EcgMetrics? = null, onDone: () -> Unit = {}) {
     val color = WearColors.severity(result.severity)
     val icon = when (result.severity) {
         Severity.NORMAL -> Icons.Rounded.Check
@@ -177,21 +247,52 @@ fun EcgResultScreen(result: EcgResult, averageBpm: Int?, onDone: () -> Unit = {}
             modifier = Modifier.padding(top = 6.dp),
         )
         if (averageBpm != null) {
+            Text(stringResource(R.string.ecg_bpm_value, averageBpm), style = MaterialTheme.typography.bodyLarge, color = WearColors.onSurfaceVariant)
+        }
+        metrics?.poorReason?.takeIf { it != EcgPoorReason.NONE }?.let { reason ->
             Text(
-                stringResource(R.string.ecg_bpm_value, averageBpm),
-                style = MaterialTheme.typography.bodyLarge,
-                color = WearColors.onSurfaceVariant,
+                stringResource(reason.hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = WearColors.warn,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 4.dp),
             )
         }
-        Text(
-            stringResource(if (small) R.string.ecg_view_on_phone_short else R.string.ecg_view_on_phone),
-            style = MaterialTheme.typography.bodySmall,
-            color = WearColors.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 4.dp),
-        )
+        metrics?.let { EcgDetails(it) }
     }
 }
+
+@Composable
+private fun EcgDetails(m: EcgMetrics) {
+    val time = remember(m.startedAtMs) { DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(m.startedAtMs)) }
+    Spacer(Modifier.height(8.dp))
+    DetailRow(stringResource(R.string.ecg_detail_recorded), time)
+    DetailRow(stringResource(R.string.ecg_detail_duration), stringResource(R.string.value_seconds, m.durationSec.roundToInt()))
+    DetailRow(stringResource(R.string.ecg_detail_usable), stringResource(R.string.value_seconds_percent, m.usableSec.roundToInt(), m.usablePercent))
+    DetailRow(stringResource(R.string.ecg_detail_noise), stringResource(R.string.value_seconds, m.noiseSec.roundToInt()))
+    if (m.minBpm != null && m.maxBpm != null) DetailRow(stringResource(R.string.ecg_detail_range), "${m.minBpm}–${m.maxBpm}")
+    DetailRow(stringResource(R.string.ecg_detail_beats), "${m.beats}")
+    m.rmssdMs?.let { DetailRow(stringResource(R.string.ecg_detail_rmssd), stringResource(R.string.value_ms, it)) }
+    DetailRow(stringResource(R.string.ecg_detail_quality), "${m.qualityScore}/100")
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.bodySmall, color = WearColors.onSurfaceVariant, modifier = Modifier.weight(1f))
+        Text(value, style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+private val EcgPoorReason.hint: Int
+    get() = when (this) {
+        EcgPoorReason.MOTION -> R.string.ecg_poor_motion
+        EcgPoorReason.MUSCLE_NOISE -> R.string.ecg_poor_muscle
+        EcgPoorReason.LOW_AMPLITUDE -> R.string.ecg_poor_low
+        EcgPoorReason.LEAD_OFF -> R.string.ecg_poor_lead_off
+        EcgPoorReason.TOO_SHORT -> R.string.ecg_poor_short
+        EcgPoorReason.TOO_FEW_BEATS, EcgPoorReason.NONE -> R.string.ecg_poor_beats
+    }
 
 @Composable
 fun EcgAnalyzingScreen() {

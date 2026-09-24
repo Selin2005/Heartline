@@ -1,5 +1,6 @@
 package com.heartline.phone.ui.model
 
+import com.heartline.shared.model.EcgMetrics
 import com.heartline.shared.model.EcgResult
 import com.heartline.shared.model.Metric
 import com.heartline.shared.model.Symptom
@@ -16,6 +17,7 @@ data class EcgRecordUi(
     val durationSec: Int,
     val sampleRateHz: Int,
     val samples: FloatArray? = null,
+    val metrics: EcgMetrics? = null,
 )
 
 data class EcgListState(val records: List<EcgRecordUi> = emptyList(), val loading: Boolean = true) {

@@ -83,6 +83,12 @@ Do not edit by hand.
 ### ecg_detail_afib_light
 <img src="phone/ecg_detail_afib_light.png" width="280">
 
+### ecg_detail_recording_dark
+<img src="phone/ecg_detail_recording_dark.png" width="280">
+
+### ecg_detail_recording_light
+<img src="phone/ecg_detail_recording_light.png" width="280">
+
 ### ecg_detail_sinus_dark
 <img src="phone/ecg_detail_sinus_dark.png" width="280">
 
@@ -302,11 +308,23 @@ Do not edit by hand.
 ### ecg_result_afib_small
 <img src="wear/ecg_result_afib_small.png" width="240">
 
+### ecg_result_poor_large
+<img src="wear/ecg_result_poor_large.png" width="240">
+
+### ecg_result_poor_small
+<img src="wear/ecg_result_poor_small.png" width="240">
+
 ### ecg_result_sinus_large
 <img src="wear/ecg_result_sinus_large.png" width="240">
 
 ### ecg_result_sinus_small
 <img src="wear/ecg_result_sinus_small.png" width="240">
+
+### ecg_waiting_large
+<img src="wear/ecg_waiting_large.png" width="240">
+
+### ecg_waiting_small
+<img src="wear/ecg_waiting_small.png" width="240">
 
 ### error_not_supported_large
 <img src="wear/error_not_supported_large.png" width="240">

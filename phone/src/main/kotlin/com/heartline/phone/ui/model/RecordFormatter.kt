@@ -56,6 +56,7 @@ class RecordFormatter(
             durationSec = (e.durationMs / 1000).toInt(),
             sampleRateHz = e.sampleRateHz,
             samples = samples,
+            metrics = summary.metrics,
         )
     }
 

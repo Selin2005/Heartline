@@ -31,7 +31,14 @@ object SampleData {
         bpm: Int,
         symptoms: List<Symptom> = emptyList(),
         samples: FloatArray? = null,
-    ) = EcgRecordUi(id, month, date, time, result, bpm, symptoms, 30, SyntheticEcg.SAMPLE_RATE_HZ, samples)
+    ) = EcgRecordUi(id, month, date, time, result, bpm, symptoms, 30, SyntheticEcg.SAMPLE_RATE_HZ, samples, samples?.let { metrics(it) })
+
+    /** Real analysis of the sample waveform, with a fixed recording time (24 Sep 2026, 09:41:05 UTC). */
+    private fun metrics(samples: FloatArray) = com.heartline.shared.ecg.EcgAnalyzer.analyze(
+        samples,
+        SyntheticEcg.SAMPLE_RATE_HZ,
+        com.heartline.shared.ecg.EcgSession(startedAtMs = 1_790_242_865_000, endedAtMs = 1_790_242_897_000, leadOffSec = 1.5f, measuredRateHz = 499.6f),
+    ).metrics
 
     val ecgRecords: List<EcgRecordUi> by lazy {
         listOf(

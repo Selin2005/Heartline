@@ -160,4 +160,22 @@
     <string name="bp_waiting_phone_title">Calibration</string>
     <string name="bp_waiting_phone_body">Start the round on your phone. The watch begins measuring by itself.</string>
     <string name="action_open_short">Open</string>
+    <string name="ecg_touch_to_start">Touch the top key to start</string>
+    <string name="ecg_detail_recorded">Recorded</string>
+    <string name="ecg_detail_duration">Duration</string>
+    <string name="ecg_detail_usable">Usable</string>
+    <string name="ecg_detail_noise">Noise</string>
+    <string name="ecg_detail_range">HR min–max</string>
+    <string name="ecg_detail_beats">Beats</string>
+    <string name="ecg_detail_rmssd">HRV (RMSSD)</string>
+    <string name="ecg_detail_quality">Signal quality</string>
+    <string name="value_seconds">%1$d s</string>
+    <string name="value_seconds_percent">%1$d s · %2$d%%</string>
+    <string name="value_ms">%1$d ms</string>
+    <string name="ecg_poor_motion">Too much movement. Rest your arm on a table and keep still.</string>
+    <string name="ecg_poor_muscle">Muscle noise. Relax your arm and touch the key lightly, don\'t press.</string>
+    <string name="ecg_poor_low">Signal too weak. Wear the watch snugly and keep your fingertip on the key.</string>
+    <string name="ecg_poor_lead_off">Your finger left the key too often.</string>
+    <string name="ecg_poor_short">The recording was too short.</string>
+    <string name="ecg_poor_beats">Not enough clear beats. Keep still and try again.</string>
 </resources>

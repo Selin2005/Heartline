@@ -39,6 +39,34 @@ class Biquad private constructor(
         return out
     }
 
+    /** Sample-by-sample state for live (causal) filtering. */
+    inner class Stream {
+        private var x1 = 0.0
+        private var x2 = 0.0
+        private var y1 = 0.0
+        private var y2 = 0.0
+
+        /** Sets the state as if [x] had been the input forever (no step transient). */
+        fun settle(x: Double) {
+            val dcGain = (b0 + b1 + b2) / (1 + a1 + a2)
+            x1 = x
+            x2 = x
+            y1 = if (dcGain.isFinite()) x * dcGain else 0.0
+            y2 = y1
+        }
+
+        fun process(x: Double): Double {
+            val y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+            x2 = x1
+            x1 = x
+            y2 = y1
+            y1 = y
+            return y
+        }
+    }
+
+    fun stream() = Stream()
+
     companion object {
         private val Q_BUTTERWORTH = 1 / sqrt(2.0)
 

@@ -28,6 +28,9 @@ data class EcgReportData(
     val footer: String,
     val samples: FloatArray,
     val sampleRateHz: Int,
+    /** Recording details (usable/noise/HR range…) printed below the strips. */
+    val recordingDetails: List<Pair<String, String>> = emptyList(),
+    val noisySeconds: List<Int> = emptyList(),
 )
 
 /** Draws the report page on any Canvas (PDF page, or a bitmap for screenshots). */
@@ -84,7 +87,11 @@ class EcgReportPainter(private val regular: Typeface = Typeface.DEFAULT, private
         text.typeface = regular
         text.textSize = 9f
         text.color = Color.rgb(17, 17, 20)
-        val belowStrips = (strips.lastOrNull()?.let { it.top + it.height } ?: mm(60.0)).toFloat() + mm(10.0).toFloat()
+        var belowStrips = (strips.lastOrNull()?.let { it.top + it.height } ?: mm(60.0)).toFloat() + mm(7.0).toFloat()
+        if (data.recordingDetails.isNotEmpty()) belowStrips = drawDetails(canvas, data.recordingDetails, left, belowStrips) + mm(4.0).toFloat()
+        text.typeface = regular
+        text.textSize = 9f
+        text.color = Color.rgb(17, 17, 20)
         drawWrapped(canvas, data.explanation, left, belowStrips, EcgStripLayout.PAGE_WIDTH_PT - 2 * left)
         text.textSize = 8f
         text.color = Color.rgb(110, 110, 118)
@@ -93,12 +100,43 @@ class EcgReportPainter(private val regular: Typeface = Typeface.DEFAULT, private
         canvas.drawText(data.footer, left, bottom, text)
     }
 
+    /** Recording details in three label/value columns; returns the y below them. */
+    private fun drawDetails(canvas: Canvas, rows: List<Pair<String, String>>, left: Float, top: Float): Float {
+        val columns = 3
+        val colWidth = (EcgStripLayout.PAGE_WIDTH_PT - 2 * left) / columns
+        val lineHeight = 11f
+        val perColumn = (rows.size + columns - 1) / columns
+        rows.forEachIndexed { i, (label, value) ->
+            val x = left + (i / perColumn) * colWidth
+            val y = top + (i % perColumn) * lineHeight
+            text.typeface = regular
+            text.textSize = 7.5f
+            text.color = Color.rgb(110, 110, 118)
+            canvas.drawText(label, x, y, text)
+            text.typeface = bold
+            text.color = Color.rgb(17, 17, 20)
+            canvas.drawText(value, x + colWidth * 0.36f, y, text)
+        }
+        return top + perColumn * lineHeight
+    }
+
     private fun drawStrip(canvas: Canvas, strip: EcgStripLayout.Strip, data: EcgReportData) {
         val mm1 = mm(1.0).toFloat()
         val l = strip.left.toFloat()
         val t = strip.top.toFloat()
         val w = strip.width.toFloat()
         val h = strip.height.toFloat()
+        // Seconds treated as noise by the analysis are shaded.
+        val shade = Paint().apply { color = Color.argb(34, 255, 149, 0) }
+        val xsShade = EcgStripLayout.xScale(data.sampleRateHz).toFloat()
+        data.noisySeconds.forEach { s ->
+            val from = s * data.sampleRateHz
+            val to = from + data.sampleRateHz
+            if (to <= strip.fromSample || from >= strip.toSample) return@forEach
+            val x0 = l + (maxOf(from, strip.fromSample) - strip.fromSample) * xsShade
+            val x1 = l + (minOf(to, strip.toSample) - strip.fromSample) * xsShade
+            canvas.drawRect(x0, t, x1, t + h, shade)
+        }
         val cols = (w / mm1).toInt()
         val rows = (h / mm1).toInt()
         for (i in 0..cols) {

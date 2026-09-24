@@ -55,7 +55,7 @@ class EcgMeasureTest {
 
     @Test
     fun fullRecordingIsAnalysedStoredAndScheduled() = runBlocking {
-        val vm = vm(FakeEcgSource(heartRateBpm = 130.0, chunkDelayMs = 0, leadOffChunks = 20))
+        val vm = vm(FakeEcgSource(heartRateBpm = 130.0, chunkDelayMs = 0, leadOffChunks = 20, midLeadOffChunks = 30))
         vm.start()
         val done = withTimeout(20_000) { vm.state.first { it is EcgMeasureState.Done } } as EcgMeasureState.Done
 
@@ -65,6 +65,11 @@ class EcgMeasureTest {
         assertEquals(15_000, item.wave!!.size)
         val summary = item.meta.summary as RecordSummary.Ecg
         assertTrue(summary.leadOffRatio > 0f)
+        val metrics = summary.metrics!!
+        assertEquals(30f, metrics.durationSec, 0.01f)
+        assertTrue("usable ${metrics.usableSec}", metrics.usableSec > 25f)
+        assertTrue(metrics.minBpm!! <= 130 && metrics.maxBpm!! >= 126)
+        assertEquals(metrics, done.metrics)
         assertEquals(1, scheduled)
     }
 

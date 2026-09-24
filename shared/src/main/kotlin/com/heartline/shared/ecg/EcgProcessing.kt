@@ -56,10 +56,13 @@ object RPeakDetector {
         }
 
         val refractory = (0.200 * fs).roundToInt()
-        // Initialise thresholds on the first 2 s.
-        val initial = mwi.copyOfRange(0, fs * 2)
-        var spk = initial.max() * 0.35
-        var npk = initial.average() * 0.5
+        // Initialise thresholds from the median per-second maximum of the first 8 s. The plain
+        // maximum (textbook) lets one artefact, e.g. the electrode settling spike when the finger
+        // lands on the key, lift the threshold above every real beat.
+        val learn = minOf(mwi.size / fs, 8)
+        val secondMax = (0 until learn).map { w -> (w * fs until (w + 1) * fs).maxOf { mwi[it] }.toDouble() }.sorted()
+        var spk = secondMax[secondMax.size / 2] * 0.5
+        var npk = mwi.copyOfRange(0, learn * fs).average() * 0.5
         var threshold = npk + 0.25 * (spk - npk)
 
         val candidates = localMaxima(mwi, refractory / 2)

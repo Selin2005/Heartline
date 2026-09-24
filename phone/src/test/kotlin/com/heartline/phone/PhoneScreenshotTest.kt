@@ -82,6 +82,10 @@ class PhoneScreenshotTest(private val theme: String) {
 
     @Test fun ecgDetailAfib() = shot("ecg_detail_afib") { EcgDetailScreen(SampleData.ecgRecords[1], onBack = {}) }
 
+    @Test fun ecgDetailRecordingDetails() = shot("ecg_detail_recording") {
+        EcgDetailScreen(SampleData.ecgRecords[0], onBack = {}, listState = rememberLazyListState(initialFirstVisibleItemIndex = 3))
+    }
+
     @Test fun homeEmpty() = shot("home_empty") { HomeScreen(HomeState(irregularRhythmNotifications = false)) }
 
     @Test fun ecgHomeEmpty() = shot("ecg_home_empty") { EcgHomeScreen(EcgListState(loading = false), onBack = {}) }

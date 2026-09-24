@@ -26,13 +26,16 @@ class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
         if (TrackerKind.ECG_ON_DEMAND !in (state as GatewayState.Connected).trackers) throw SensorException(SensorProblem.NOT_SUPPORTED)
         val tracker = gateway.tracker(TrackerKind.ECG_ON_DEMAND) ?: throw SensorException(SensorProblem.NOT_SUPPORTED)
 
+        var missing = 0
         tracker.setEventListener(
             object : HealthTracker.TrackerEventListener {
                 override fun onDataReceived(points: List<DataPoint>) {
                     if (points.isEmpty()) return
-                    val samples = FloatArray(points.size) { points[it].getValue(ValueKey.EcgSet.ECG_MV) ?: 0f }
+                    // A point without a value is skipped: a substituted 0 mV would be a spike after filtering.
+                    val values = points.mapNotNull { it.getValue(ValueKey.EcgSet.ECG_MV)?.takeIf { v -> v.isFinite() } }
+                    if (values.size < points.size) missing += points.size - values.size
                     val leadOff = points.any { it.getValue(ValueKey.EcgSet.LEAD_OFF) == LEAD_OFF_NO_CONTACT }
-                    trySendBlocking(EcgChunk(samples, leadOff))
+                    if (values.isNotEmpty()) trySendBlocking(EcgChunk(values.toFloatArray(), leadOff, points.last().timestamp))
                 }
 
                 override fun onFlushCompleted() = Unit
@@ -43,7 +46,10 @@ class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
                 }
             },
         )
-        awaitClose { tracker.unsetEventListener() }
+        awaitClose {
+            tracker.unsetEventListener()
+            if (missing > 0) Log.w(SdkSensorGateway.TAG, "ECG: $missing points had no ECG_MV value")
+        }
     }
 
     private companion object {

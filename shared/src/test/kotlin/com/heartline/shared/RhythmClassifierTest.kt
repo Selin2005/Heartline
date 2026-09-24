@@ -34,7 +34,7 @@ class RhythmClassifierTest {
 
     @Test
     fun noisyOrDetachedRecordingsArePoor() {
-        assertEquals(EcgResult.POOR_RECORDING, classify(72.0, leadOff = 0.5f))
+        assertEquals(EcgResult.POOR_RECORDING, classify(72.0, leadOff = 0.6f))
         val random = Random(3)
         val noise = FloatArray(15_000) { (random.nextGaussian() * 0.4).toFloat() }
         assertEquals(EcgResult.POOR_RECORDING, EcgAnalyzer.analyze(noise, fs, 0f).result)
