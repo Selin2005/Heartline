@@ -1,0 +1,239 @@
+<resources>
+    <string name="app_name">Heartline</string>
+
+    <!-- Common -->
+    <string name="action_back">Back</string>
+    <string name="action_view_all">View all</string>
+    <string name="action_view_details">View details</string>
+    <string name="action_share_pdf">Share PDF</string>
+    <string name="action_delete">Delete recording</string>
+    <string name="action_open_on_watch">Open on watch</string>
+    <string name="action_get_started">Get started</string>
+    <string name="action_edit">Edit</string>
+    <string name="unit_bpm">bpm</string>
+    <string name="unit_mmhg">mmHg</string>
+    <string name="unit_percent">%</string>
+    <string name="unit_seconds">sec</string>
+    <string name="not_a_diagnosis">Heartline is a wellness app. It can\'t diagnose, treat or rule out any condition. If you feel unwell, contact a doctor or emergency services.</string>
+
+    <string name="date_today">Today</string>
+    <string name="date_yesterday">Yesterday</string>
+    <string name="no_data_yet">No data yet</string>
+    <string name="measure_on_watch">Measure on your watch</string>
+
+    <!-- Tabs -->
+    <string name="tab_home">Home</string>
+    <string name="tab_history">History</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- Metrics -->
+    <string name="metric_ecg">ECG</string>
+    <string name="metric_bp">Blood pressure</string>
+    <string name="metric_hr">Heart rate</string>
+    <string name="metric_spo2">Blood oxygen</string>
+    <string name="metric_skin_temp">Skin temperature</string>
+    <string name="metric_body">Body composition</string>
+    <string name="metric_stress">Stress</string>
+
+    <!-- Home -->
+    <string name="home_watch_connected">Connected to %1$s</string>
+    <string name="home_bp_calibration_left">Calibration valid · %1$d days left</string>
+    <string name="home_hr_resting">Resting %1$d bpm today</string>
+    <string name="home_spo2_caption">Average while measuring</string>
+    <string name="home_temp_caption">vs. your 7-day baseline</string>
+    <string name="home_body_caption">Body fat</string>
+    <string name="home_temp_detail">%1$s °C from baseline</string>
+    <string name="home_stress_low">Low</string>
+    <string name="home_irn_on">Irregular rhythm notifications are on</string>
+    <string name="home_irn_caption">Your watch checks your rhythm in the background while you\'re still.</string>
+
+    <!-- ECG -->
+    <string name="ecg_last_recorded">Last recorded %1$s</string>
+    <string name="ecg_latest">Latest recording</string>
+    <string name="ecg_how_to">How to record an ECG</string>
+    <string name="ecg_step_1">Open Heartline on your watch and choose ECG.</string>
+    <string name="ecg_step_2">Rest your arm on a table and sit still.</string>
+    <string name="ecg_step_3">Hold your fingertip lightly on the top key for 30 seconds.</string>
+    <string name="ecg_recent">Recent recordings</string>
+    <string name="ecg_history_title">ECG history</string>
+    <string name="ecg_filter_all">All</string>
+    <string name="ecg_filter_other">Other</string>
+    <string name="ecg_avg_hr">Average heart rate</string>
+    <string name="ecg_duration">Duration</string>
+    <string name="ecg_strip_caption">Lead I · 25 mm/s · 10 mm/mV</string>
+    <string name="ecg_symptoms">Symptoms</string>
+    <string name="ecg_no_symptoms">No symptoms added</string>
+    <string name="ecg_about_result">About this result</string>
+    <string name="ecg_bpm_value">%1$d bpm</string>
+
+    <string name="ecg_result_sinus">Sinus rhythm</string>
+    <string name="ecg_result_afib">Signs of AFib</string>
+    <string name="ecg_result_high_hr">High heart rate</string>
+    <string name="ecg_result_low_hr">Low heart rate</string>
+    <string name="ecg_result_inconclusive">Inconclusive</string>
+    <string name="ecg_result_poor">Poor recording</string>
+
+    <string name="ecg_explain_sinus">Your heart beat in a uniform pattern between 50 and 100 bpm. This is the pattern usually seen in a normally beating heart.</string>
+    <string name="ecg_explain_afib">Your heart beat in an irregular pattern. This can be a sign of atrial fibrillation (AFib). If you haven\'t been told you have AFib, talk to your doctor.</string>
+    <string name="ecg_explain_high_hr">Your heart rate was over 120 bpm, so the rhythm couldn\'t be checked. Exercise, stress, alcohol or dehydration can raise your heart rate.</string>
+    <string name="ecg_explain_low_hr">Your heart rate was under 50 bpm, so the rhythm couldn\'t be checked. Some medicines and very good fitness can lower your heart rate.</string>
+    <string name="ecg_explain_inconclusive">The recording couldn\'t be classified. Make sure your arm is resting and try again.</string>
+    <string name="ecg_explain_poor">Too much noise was detected. Rest your arm on a table, keep still and touch the key lightly.</string>
+
+    <string name="symptom_palpitations">Rapid, pounding or fluttering heartbeat</string>
+    <string name="symptom_dizziness">Dizziness</string>
+    <string name="symptom_fatigue">Fatigue</string>
+    <string name="symptom_breath">Shortness of breath</string>
+    <string name="symptom_chest">Chest tightness or pain</string>
+    <string name="symptom_fainting">Fainting</string>
+    <string name="symptom_other">Other</string>
+
+    <string name="ecg_empty_title">No recordings yet</string>
+    <string name="ecg_empty_body">Recordings you take on your watch appear here, with the full waveform and a PDF you can share.</string>
+    <string name="ecg_delete_confirm_title">Delete this recording?</string>
+    <string name="ecg_delete_confirm_body">It will also be removed from your watch.</string>
+    <string name="action_cancel">Cancel</string>
+
+    <string name="ecg_symptoms_title">How did you feel?</string>
+    <string name="ecg_symptoms_hint">Add any symptoms you had while recording. They are included in your report.</string>
+    <string name="action_save">Save</string>
+    <string name="report_title">Heartline ECG report</string>
+    <string name="report_footer">Single lead (Lead I) · 25 mm/s · 10 mm/mV · %1$d Hz · Recorded with a Galaxy Watch and Heartline</string>
+    <string name="share_via">Share report</string>
+
+    <string name="unit_ms">ms</string>
+    <string name="hr_last_measured">Last measured %1$s</string>
+    <string name="hr_today">Today</string>
+    <string name="hr_resting">Resting</string>
+    <string name="hr_min">Min</string>
+    <string name="hr_max">Max</string>
+    <string name="hr_empty_title">No heart rate data yet</string>
+    <string name="hr_empty_body">Your watch measures your heart rate in the background and sends it here every 15 minutes.</string>
+    <string name="hrv_title">Heart rate variability</string>
+    <string name="hrv_caption">RMSSD while resting · last 7 days</string>
+    <string name="alerts_title">Notifications</string>
+    <string name="alerts_history">Heart notifications</string>
+    <string name="alerts_unread">%1$d new</string>
+    <string name="alerts_none_new">No new notifications</string>
+    <string name="alerts_empty_title">No notifications</string>
+    <string name="alerts_empty_body">You\'ll see irregular rhythm and high or low heart rate notifications here.</string>
+    <string name="alerts_footer">Notifications are checks, not a diagnosis. Your watch looks for an irregular rhythm only while you\'re still, and can\'t detect heart attacks, blood clots or stroke.</string>
+    <string name="channel_alerts">Heart alerts</string>
+    <string name="alert_irn_title">Irregular rhythm</string>
+    <string name="alert_irn_text">Your heart showed signs of an irregular rhythm. Take an ECG and talk to your doctor if this continues.</string>
+    <string name="alert_irn_detail">%1$d irregular checks</string>
+    <string name="alert_high_title">High heart rate</string>
+    <string name="alert_high_text">Your heart rate was above %1$d bpm for 10 minutes while you seemed inactive.</string>
+    <string name="alert_low_title">Low heart rate</string>
+    <string name="alert_low_text">Your heart rate was below %1$d bpm for 10 minutes while you seemed inactive.</string>
+
+    <string name="bp_last_measured">Last measured %1$s</string>
+    <string name="bp_calibrated">Calibrated</string>
+    <string name="bp_needs_calibration">Calibration needed</string>
+    <string name="bp_days_left">Valid for %1$d more days</string>
+    <string name="bp_calibration_why">Your watch estimates blood pressure from your pulse. It needs 3 readings from a cuff every 4 weeks.</string>
+    <string name="bp_calibrate">Calibrate</string>
+    <string name="bp_recalibrate">Calibrate again</string>
+    <string name="bp_latest">Latest reading</string>
+    <string name="bp_pulse">Pulse %1$d bpm</string>
+    <string name="bp_trend">Recent readings</string>
+    <string name="bp_avg7">7-day average</string>
+    <string name="bp_avg30">30-day average</string>
+    <string name="bp_history">History</string>
+    <string name="bp_normal">Normal</string>
+    <string name="bp_elevated">Elevated</string>
+    <string name="bp_stage1">High · stage 1</string>
+    <string name="bp_stage2">High · stage 2</string>
+    <string name="bp_crisis">Very high</string>
+    <string name="bp_disclaimer">Blood pressure from your watch is an estimate based on your calibration. It can\'t replace a cuff, and it isn\'t meant to diagnose hypertension.</string>
+    <string name="bp_calibration_title">Calibration</string>
+    <string name="bp_calibration_progress">%1$d of 3 readings</string>
+    <string name="bp_calibration_intro_title">Before you start</string>
+    <string name="bp_cal_step_1">Have an upper-arm blood pressure cuff ready.</string>
+    <string name="bp_cal_step_2">Sit with your back supported and feet flat for 5 minutes.</string>
+    <string name="bp_cal_step_3">Wear the cuff on one arm and your watch on the other wrist, both at heart level.</string>
+    <string name="bp_cal_step_4">You\'ll take 3 readings, about a minute apart.</string>
+    <string name="bp_round">Reading %1$d of 3</string>
+    <string name="bp_waiting_watch">Start your cuff. At the same time, tap the notification on your watch and keep still until both finish.</string>
+    <string name="bp_waiting_status">Waiting for your watch…</string>
+    <string name="bp_enter_cuff">Enter cuff reading %1$d</string>
+    <string name="bp_enter_cuff_hint">Type the values shown on your cuff.</string>
+    <string name="bp_sys">SYS</string>
+    <string name="bp_dia">DIA</string>
+    <string name="bp_pulse_short">Pulse</string>
+    <string name="bp_input_error">Check the values: systolic 70–250, diastolic 40–150, systolic above diastolic.</string>
+    <string name="bp_next_round">Next reading</string>
+    <string name="bp_finish">Finish</string>
+    <string name="bp_calibration_done">Calibration complete</string>
+    <string name="bp_calibration_done_body">You can measure blood pressure on your watch for the next 4 weeks.</string>
+    <string name="action_start">Start</string>
+    <string name="action_done">Done</string>
+
+    <string name="metric_empty_body">Measure on your watch. Your results appear here with a trend and history.</string>
+    <string name="value_spo2">Oxygen saturation</string>
+    <string name="value_temp">Change from your baseline</string>
+    <string name="value_body">Body fat</string>
+    <string name="value_stress">Stress score</string>
+    <string name="detail_heart_rate">Heart rate</string>
+    <string name="detail_skin">Skin</string>
+    <string name="detail_ambient">Ambient</string>
+    <string name="detail_muscle">Skeletal muscle</string>
+    <string name="detail_water">Body water</string>
+    <string name="detail_bmr">BMR</string>
+    <string name="detail_level">Level</string>
+    <string name="detail_hrv">HRV</string>
+    <string name="detail_eda">Skin conductance</string>
+    <string name="about_spo2">Blood oxygen is measured with red and infrared light while you keep still. Readings of 95–100% are typical at rest. It isn\'t a medical oximeter.</string>
+    <string name="about_temp">Skin temperature changes with the room and your activity, so Heartline shows the change from your own 7-day baseline. It isn\'t body temperature.</string>
+    <string name="about_body">Body composition uses a small electrical current between your wrist and fingers. Measure at the same time of day, before eating or exercising.</string>
+    <string name="about_stress">Stress is estimated from your heart rate variability over one minute at rest (and skin conductance on Galaxy Watch8). Lower is calmer.</string>
+    <string name="profile_hint">Your watch uses these to estimate body composition. They stay on your devices.</string>
+    <string name="profile_sex">Sex</string>
+    <string name="profile_female">Female</string>
+    <string name="profile_male">Male</string>
+    <string name="profile_birth_year">Birth year</string>
+    <string name="profile_height">Height (cm)</string>
+    <string name="profile_weight">Weight (kg)</string>
+    <string name="profile_invalid">Check the values: height 100–250 cm, weight 25–300 kg.</string>
+
+    <string name="action_record_on_watch">Record on watch</string>
+    <string name="about_use_title">What Heartline is for</string>
+    <string name="about_use_body">Heartline records a single-lead ECG, estimates blood pressure after cuff calibration, and checks your heart rhythm in the background with a Galaxy Watch. It\'s for general wellness and to help you talk with your doctor.</string>
+    <string name="about_disclaimer_body">Heartline isn\'t a medical device. It can\'t diagnose, treat or rule out any condition, and it can\'t detect heart attacks, blood clots or stroke. Don\'t change your medication or treatment based on it. If you think you\'re having a medical emergency, call emergency services.</string>
+    <string name="about_privacy_title">Your data</string>
+    <string name="about_privacy_body">Measurements stay on your watch and phone. Nothing is uploaded; you choose when to share a PDF or export a CSV.</string>
+    <string name="about_licenses_body">Samsung Health Sensor SDK 1.4.1 (Samsung Health Partner Service &amp; SDK License). Inter typeface (SIL Open Font License 1.1). AndroidX, Kotlin, kotlinx, Koin (Apache License 2.0).</string>
+
+    <string name="a11y_ecg_strip">ECG waveform, %1$d seconds. Scroll sideways to see all of it.</string>
+    <string name="a11y_hr_chart">Heart rate today, from %1$d to %2$d beats per minute</string>
+    <string name="a11y_hrv_chart">Heart rate variability for the last 7 days</string>
+    <string name="a11y_bp_chart">Last %1$d blood pressure readings, systolic to diastolic</string>
+
+    <!-- Settings -->
+    <string name="settings_profile">Profile</string>
+    <string name="settings_profile_summary">Birthday, sex, height and weight</string>
+    <string name="settings_notifications">Notifications</string>
+    <string name="settings_irn">Irregular rhythm notifications</string>
+    <string name="settings_irn_summary">Get notified when signs of an irregular rhythm are found</string>
+    <string name="settings_hr_alerts">High and low heart rate alerts</string>
+    <string name="settings_hr_alerts_summary">Above %1$d bpm or below %2$d bpm while resting</string>
+    <string name="settings_reminders">Calibration reminders</string>
+    <string name="settings_device">Watch</string>
+    <string name="settings_device_summary">Connected · Health Sensor Service 1.6.5</string>
+    <string name="settings_units">Units</string>
+    <string name="settings_units_summary">mmHg, °C, kg, cm</string>
+    <string name="settings_data">Data</string>
+    <string name="settings_export">Export data</string>
+    <string name="settings_delete_all">Delete all data</string>
+    <string name="settings_about">About Heartline</string>
+    <string name="settings_disclaimer">Health disclaimer</string>
+    <string name="settings_licenses">Open source licenses</string>
+    <string name="settings_version">Version %1$s</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_title">Your heart, on your wrist</string>
+    <string name="onboarding_body">Record an ECG, estimate your blood pressure and keep an eye on your rhythm with your Galaxy Watch.</string>
+    <string name="onboarding_point_ecg">30-second ECG with rhythm check</string>
+    <string name="onboarding_point_bp">Blood pressure with cuff calibration</string>
+    <string name="onboarding_point_irn">Background irregular rhythm notifications</string>
+</resources>

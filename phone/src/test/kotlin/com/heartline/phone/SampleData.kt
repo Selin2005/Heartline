@@ -1,0 +1,127 @@
+package com.heartline.phone
+
+import com.heartline.phone.ui.components.RangePoint
+import com.heartline.phone.ui.model.AlertUi
+import com.heartline.phone.ui.model.BpHomeUi
+import com.heartline.phone.ui.model.MetricDetailUi
+import com.heartline.phone.ui.model.MetricReadingUi
+import com.heartline.phone.ui.model.BpReadingUi
+import com.heartline.phone.ui.model.EcgListState
+import com.heartline.phone.ui.model.HeartRateUi
+import com.heartline.shared.hr.AlertKind
+import com.heartline.phone.ui.model.EcgRecordUi
+import com.heartline.phone.ui.model.HomeState
+import com.heartline.phone.ui.model.TileValue
+import com.heartline.shared.model.EcgResult
+import com.heartline.shared.model.Metric
+import com.heartline.shared.model.Symptom
+import com.heartline.shared.sample.SyntheticEcg
+
+/** Deterministic UI state for screenshots (fixed strings, fixed seeds, no clock). */
+object SampleData {
+    private fun ecg(bpm: Double, irregular: Double = 0.02, seed: Int = 1) =
+        SyntheticEcg.generate(durationSec = 30.0, heartRateBpm = bpm, irregularity = irregular, seed = seed)
+
+    private fun record(
+        id: String,
+        month: String,
+        date: String,
+        time: String,
+        result: EcgResult,
+        bpm: Int,
+        symptoms: List<Symptom> = emptyList(),
+        samples: FloatArray? = null,
+    ) = EcgRecordUi(id, month, date, time, result, bpm, symptoms, 30, SyntheticEcg.SAMPLE_RATE_HZ, samples)
+
+    val ecgRecords: List<EcgRecordUi> by lazy {
+        listOf(
+            record("e1", "September 2026", "Today", "9:41 AM", EcgResult.SINUS_RHYTHM, 72, samples = ecg(72.0)),
+            record("e2", "September 2026", "Sep 21", "10:15 PM", EcgResult.AFIB_SIGNS, 94, listOf(Symptom.PALPITATIONS, Symptom.FATIGUE), ecg(94.0, 0.3, 2)),
+            record("e3", "September 2026", "Sep 18", "7:02 AM", EcgResult.LOW_HEART_RATE, 47),
+            record("e4", "September 2026", "Sep 12", "6:30 PM", EcgResult.SINUS_RHYTHM, 68),
+            record("e5", "August 2026", "Aug 30", "8:12 PM", EcgResult.INCONCLUSIVE, 88, listOf(Symptom.DIZZINESS)),
+            record("e6", "August 2026", "Aug 22", "1:47 PM", EcgResult.HIGH_HEART_RATE, 126),
+            record("e7", "August 2026", "Aug 3", "9:05 AM", EcgResult.SINUS_RHYTHM, 70),
+        )
+    }
+
+    val ecgList get() = EcgListState(ecgRecords, loading = false)
+
+    val heartRate: HeartRateUi by lazy {
+        val random = kotlin.random.Random(4)
+        val points = (0 until 9 * 60 + 41 step 5).map { m ->
+            val hour = m / 60.0
+            val base = if (hour < 6) 54.0 else 66.0 + 12 * kotlin.math.sin((hour - 6) / 16.0 * Math.PI)
+            val avg = (base + random.nextDouble(-3.0, 3.0)).toInt()
+            RangePoint(m, avg, avg - random.nextInt(2, 6), avg + random.nextInt(2, 8))
+        }
+        HeartRateUi(
+            latestBpm = 64,
+            latestTime = "Today 9:41 AM",
+            restingBpm = 56,
+            minBpm = points.minOf { it.min },
+            maxBpm = points.maxOf { it.max },
+            points = points,
+            hrvTodayMs = 34,
+            hrvWeek = listOf(31f, 36f, 29f, null, 40f, 33f, 34f),
+            weekLabels = listOf("T", "F", "S", "S", "M", "T", "W"),
+            unreadAlerts = 1,
+        )
+    }
+
+    val bpHome: BpHomeUi by lazy {
+        val values = listOf(118 to 76, 121 to 79, 116 to 74, 124 to 81, 119 to 77, 131 to 84, 117 to 75, 122 to 78, 120 to 77, 126 to 80)
+        val readings = values.mapIndexed { i, (s, d) ->
+            BpReadingUi("bp$i", if (i == 0) "Today" else "Sep ${24 - i}", "8:0$i AM", s, d, 64 + i % 4)
+        }
+        BpHomeUi(calibrated = true, daysLeft = 21, latest = readings.first(), readings = readings, average7 = 121 to 78, average30 = 120 to 77)
+    }
+
+    fun metricDetail(metric: Metric): MetricDetailUi {
+        val rows = (0 until 8).map { i ->
+            val date = if (i == 0) "Today" else "Sep ${24 - i}"
+            when (metric) {
+                Metric.SPO2 -> MetricReadingUi("s$i", date, "7:1$i AM", "${97 - i % 3}", "%", (97 - i % 3).toFloat(), listOf(R.string.detail_heart_rate to "6${i}  bpm"))
+                Metric.SKIN_TEMPERATURE -> MetricReadingUi(
+                    "t$i",
+                    date,
+                    "7:1$i AM",
+                    listOf("+0.3", "-0.1", "+0.1", "0.0", "+0.2", "-0.2", "+0.1", "0.0")[i],
+                    "°C",
+                    33f + i % 3 * 0.2f,
+                    listOf(R.string.detail_skin to "33.${4 + i % 3} °C", R.string.detail_ambient to "23.5 °C"),
+                )
+                Metric.BODY_COMPOSITION -> MetricReadingUi(
+                    "b$i",
+                    date,
+                    "7:1$i AM",
+                    "2${1 + i % 2}.${4 - i % 3}",
+                    "%",
+                    21f + i % 2,
+                    listOf(R.string.detail_muscle to "29.8 kg", R.string.detail_water to "38.6 kg", R.string.detail_bmr to "1540 kcal"),
+                )
+                else -> MetricReadingUi("x$i", date, "7:1$i AM", "${32 + i * 4}", null, 32f + i * 4, listOf(R.string.detail_level to "Low", R.string.detail_hrv to "38 ms"))
+            }
+        }
+        return MetricDetailUi(metric, rows)
+    }
+
+    val alerts = listOf(
+        AlertUi("a1", AlertKind.IRREGULAR_RHYTHM, "Sep 21", "3:12 AM", 94, 5, read = false),
+        AlertUi("a2", AlertKind.HIGH_HEART_RATE, "Sep 14", "11:40 PM", 128, 0, read = true),
+        AlertUi("a3", AlertKind.LOW_HEART_RATE, "Aug 30", "4:05 AM", 38, 0, read = true),
+    )
+
+    val home get() = HomeState(
+        watchName = "Galaxy Watch8 Classic",
+        latestEcg = ecgRecords.first(),
+        tiles = mapOf(
+            Metric.BLOOD_PRESSURE to TileValue("118/76", "mmHg", "Today 8:05 AM", "Calibration valid · 21 days left"),
+            Metric.HEART_RATE to TileValue("64", "bpm", "Now", "Resting 58 bpm today"),
+            Metric.SPO2 to TileValue("97", "%", "Yesterday", "Average while measuring"),
+            Metric.SKIN_TEMPERATURE to TileValue("+0.3", "°C", "Last night", "vs. your 7-day baseline"),
+            Metric.BODY_COMPOSITION to TileValue("21.4", "%", "Sep 20", "Body fat"),
+            Metric.STRESS to TileValue("Low", null, "Now"),
+        ),
+    )
+}
