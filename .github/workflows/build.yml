@@ -1,19 +1,52 @@
 name: Build
 
+# Runs only from the form (Actions → Build → Run workflow), not on every commit.
 on:
-  push:
-  pull_request:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version name (e.g. 1.2.0)"
+        required: true
+        type: string
+      release:
+        description: "Publish a GitHub release with both APKs"
+        required: false
+        default: false
+        type: boolean
+      dev:
+        description: "Dev build: debug APKs (full logs), pre-release tagged -dev. Off: R8 release APKs"
+        required: false
+        default: true
+        type: boolean
+      run_tests:
+        description: "Run lint and tests before building"
+        required: false
+        default: true
+        type: boolean
 
 concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: true
+  group: build-${{ github.ref }}-${{ inputs.version }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      VERSION: ${{ inputs.version }}
+      VARIANT: ${{ inputs.dev && 'debug' || 'release' }}
+      SUFFIX: ${{ inputs.dev && '-dev' || '' }}
     steps:
+      - name: Check the version name
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+){1,2}([-.+][0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Version must look like 1.2 or 1.2.0 (optionally 1.2.0-beta1), got '$VERSION'"
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-java@v4
@@ -23,42 +56,55 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Assemble debug APKs
-        run: ./gradlew --console=plain :phone:assembleDebug :wear:assembleDebug
-
-      - name: Upload phone APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: heartline-phone-debug
-          path: phone/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-
-      - name: Upload wear APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: heartline-wear-debug
-          path: wear/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-
-      # APKs are uploaded before checks so a red check never blocks downloading them.
       - name: Lint
+        if: inputs.run_tests
         run: ./gradlew --console=plain ktlintCheck
 
       - name: Unit, Robolectric and Paparazzi tests
+        if: inputs.run_tests
         run: ./gradlew --console=plain test verifyPaparazziDebug
 
-      # R8-minified release build (signed with the shared test key) to catch shrinker issues.
-      - name: Assemble release APKs
-        run: ./gradlew --console=plain :phone:assembleRelease :wear:assembleRelease
+      - name: Assemble APKs (${{ env.VARIANT }})
+        run: |
+          task=assemble${VARIANT^}
+          ./gradlew --console=plain ":phone:$task" ":wear:$task" \
+            -Pheartline.versionName="$VERSION$SUFFIX" \
+            -Pheartline.versionCode="${{ github.run_number }}"
+          mkdir -p dist
+          cp phone/build/outputs/apk/$VARIANT/*.apk "dist/Heartline-phone-$VERSION$SUFFIX.apk"
+          cp wear/build/outputs/apk/$VARIANT/*.apk "dist/Heartline-watch-$VERSION$SUFFIX.apk"
+          ls -l dist
 
-      - name: Upload release APKs
+      # Always downloadable from the run page, released or not.
+      - name: Upload phone APK
         uses: actions/upload-artifact@v4
         with:
-          name: heartline-release-apks
-          path: |
-            phone/build/outputs/apk/release/*.apk
-            wear/build/outputs/apk/release/*.apk
+          name: Heartline-phone-${{ env.VERSION }}${{ env.SUFFIX }}
+          path: dist/Heartline-phone-*.apk
           if-no-files-found: error
+
+      - name: Upload watch APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Heartline-watch-${{ env.VERSION }}${{ env.SUFFIX }}
+          path: dist/Heartline-watch-*.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: inputs.release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}${{ env.SUFFIX }}
+          name: Heartline ${{ env.VERSION }}${{ inputs.dev && ' (dev)' || '' }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ inputs.dev }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: dist/*.apk
+          body: |
+            Install **Heartline-phone** on the phone and **Heartline-watch** on the Galaxy Watch
+            (both are needed; see docs/DEVICE_TESTING.md).
+            ${{ inputs.dev && 'Dev build: debug APKs with full logging.' || 'Release build (R8), signed with the shared test key.' }}
 
       - name: Upload test reports
         if: failure()

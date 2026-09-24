@@ -15,8 +15,9 @@ android {
         applicationId = "com.heartline.app"
         minSdk = 30
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // Set by the Build workflow form: -Pheartline.versionName=1.2.0 -Pheartline.versionCode=<run number>.
+        versionCode = (findProperty("heartline.versionCode") ?: "1").toString().toInt()
+        versionName = (findProperty("heartline.versionName") ?: "0.1.0").toString()
         // `./gradlew -Pheartline.fakeSensors=true :wear:assembleDebug` builds a watch app with
         // synthetic sensors for demos without Developer mode.
         buildConfigField("boolean", "USE_FAKE_SENSORS", (findProperty("heartline.fakeSensors") ?: "false").toString())

@@ -15,8 +15,9 @@ android {
         applicationId = "com.heartline.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // Set by the Build workflow form: -Pheartline.versionName=1.2.0 -Pheartline.versionCode=<run number>.
+        versionCode = (findProperty("heartline.versionCode") ?: "1").toString().toInt()
+        versionName = (findProperty("heartline.versionName") ?: "0.1.0").toString()
         // `-Pheartline.demoData=true` seeds sample records on first launch (UI exploration without a watch).
         buildConfigField("boolean", "DEMO_DATA", (findProperty("heartline.demoData") ?: "false").toString())
     }

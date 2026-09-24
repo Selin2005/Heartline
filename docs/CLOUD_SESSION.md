@@ -39,9 +39,10 @@ bash tools/screenshots/sync.sh                        # کپی PNGها به docs
 ```
 
 ## 3) CI و دانلود APK
-`.github/workflows/build.yml` با هر push/PR: ktlint + تست + verifyPaparazzi + assembleDebug هر دو ماژول،
-سپس artifactهای `heartline-phone-debug` و `heartline-wear-debug` را آپلود می‌کند
-(GitHub → Actions → آخرین run → بخش Artifacts). هر دو APK با `keystore/debug.keystore` مشترک امضا می‌شوند
+`.github/workflows/build.yml` فقط با فرم دستی اجرا می‌شود (GitHub → Actions → Build → Run workflow)، نه با هر push.
+فرم: نام نسخه، Release (ساخت GitHub Release)، Dev (APK دیباگ و pre-release با برچسب `-dev`؛ خاموش = APK ریلیز R8)
+و اجرای تست‌ها. دو APK (`Heartline-phone-<نسخه>` و `Heartline-watch-<نسخه>`) همیشه در بخش Artifacts همان اجرا
+قابل دانلودند، چه Release تیک خورده باشد چه نه. هر دو APK با `keystore/debug.keystore` مشترک امضا می‌شوند
 (لازمه‌ی Wearable Data Layer و نصب روی نسخه‌ی قبلی).
 
 ## 4) عیب‌یابی
