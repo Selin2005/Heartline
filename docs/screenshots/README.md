@@ -224,6 +224,12 @@ Do not edit by hand.
 ### body_instruction_small
 <img src="wear/body_instruction_small.png" width="240">
 
+### body_measuring_large
+<img src="wear/body_measuring_large.png" width="240">
+
+### body_measuring_small
+<img src="wear/body_measuring_small.png" width="240">
+
 ### body_result_large
 <img src="wear/body_result_large.png" width="240">
 
@@ -247,6 +253,12 @@ Do not edit by hand.
 
 ### bp_instruction_small
 <img src="wear/bp_instruction_small.png" width="240">
+
+### bp_measuring_live_large
+<img src="wear/bp_measuring_live_large.png" width="240">
+
+### bp_measuring_live_small
+<img src="wear/bp_measuring_live_small.png" width="240">
 
 ### bp_measuring_large
 <img src="wear/bp_measuring_large.png" width="240">
@@ -446,6 +458,12 @@ Do not edit by hand.
 ### spo2_instruction_small
 <img src="wear/spo2_instruction_small.png" width="240">
 
+### spo2_measuring_live_large
+<img src="wear/spo2_measuring_live_large.png" width="240">
+
+### spo2_measuring_live_small
+<img src="wear/spo2_measuring_live_small.png" width="240">
+
 ### spo2_measuring_large
 <img src="wear/spo2_measuring_large.png" width="240">
 
@@ -458,6 +476,12 @@ Do not edit by hand.
 ### spo2_result_small
 <img src="wear/spo2_result_small.png" width="240">
 
+### stress_measuring_large
+<img src="wear/stress_measuring_large.png" width="240">
+
+### stress_measuring_small
+<img src="wear/stress_measuring_small.png" width="240">
+
 ### stress_result_large
 <img src="wear/stress_result_large.png" width="240">
 
@@ -469,4 +493,10 @@ Do not edit by hand.
 
 ### temp_result_small
 <img src="wear/temp_result_small.png" width="240">
+
+### temperature_measuring_large
+<img src="wear/temperature_measuring_large.png" width="240">
+
+### temperature_measuring_small
+<img src="wear/temperature_measuring_small.png" width="240">
 

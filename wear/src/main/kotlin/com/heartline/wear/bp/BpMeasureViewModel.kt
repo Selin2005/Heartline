@@ -7,6 +7,8 @@ import com.heartline.shared.bp.BpCategory
 import com.heartline.shared.bp.BpEstimator
 import com.heartline.shared.bp.BpOutcome
 import com.heartline.shared.bp.PpgFeatures
+import com.heartline.shared.bp.PulseRate
+import com.heartline.shared.dsp.StreamingPpgFilter
 import com.heartline.shared.model.RecordKind
 import com.heartline.shared.model.RecordMeta
 import com.heartline.shared.model.RecordSummary
@@ -35,7 +37,15 @@ sealed interface BpState {
 
     data object NeedsCalibration : BpState
 
-    data class Measuring(val progress: Float, val secondsLeft: Int, val trace: FloatArray, val contact: Boolean) : BpState
+    /** [trace]: filtered, upright PPG for the sweep; [bpm]: live pulse. */
+    data class Measuring(
+        val progress: Float,
+        val secondsLeft: Int,
+        val trace: FloatArray,
+        val contact: Boolean,
+        val bpm: Int? = null,
+        val endIndex: Long = trace.size.toLong(),
+    ) : BpState
 
     data class Done(val systolic: Int, val diastolic: Int, val pulse: Int, val category: BpCategory, val uncertainty: Int = 0) : BpState
 
@@ -87,6 +97,7 @@ class BpMeasureViewModel(
         var collected = 0
         var lastUi = 0L
         val startedAt = now()
+        val live = LivePpg(fs)
         mutable.value = BpState.Measuring(0f, seconds, FloatArray(0), contact = true)
         job = viewModelScope.launch {
             var failure: SensorProblem? = null
@@ -94,6 +105,7 @@ class BpMeasureViewModel(
                 .catch { e -> failure = (e as? SensorException)?.problem ?: SensorProblem.NOT_SUPPORTED }
                 .takeWhile { collected < target }
                 .collect { chunk ->
+                    live.add(chunk.samples)
                     if (chunk.contact) {
                         val n = minOf(chunk.samples.size, target - collected)
                         chunk.samples.copyInto(buffer, collected, 0, n)
@@ -102,12 +114,13 @@ class BpMeasureViewModel(
                     val t = now()
                     if (t - lastUi >= uiIntervalMs) {
                         lastUi = t
-                        val from = (collected - fs * 3).coerceAtLeast(0)
                         mutable.value = BpState.Measuring(
                             collected.toFloat() / target,
                             (target - collected + fs - 1) / fs,
-                            buffer.copyOfRange(from, collected),
+                            live.recent(3.0),
                             chunk.contact,
+                            live.bpm(t),
+                            live.total,
                         )
                     }
                 }
@@ -160,6 +173,41 @@ class BpMeasureViewModel(
 
     fun reset() {
         mutable.value = BpState.Idle
+    }
+
+    /** Band-passed PPG, flipped upright when the raw signal is inverted, and a live pulse. */
+    private class LivePpg(private val fs: Int) {
+        private val filter = StreamingPpgFilter(fs)
+        private val ring = FloatArray(fs * 8)
+        var total = 0L
+            private set
+        private var inverted: Boolean? = null
+        private var lastBpmAt = 0L
+        private var bpm: Int? = null
+
+        fun add(samples: FloatArray) {
+            filter.process(samples).forEach {
+                ring[(total % ring.size).toInt()] = it
+                total++
+            }
+            // Decide the polarity once there's enough signal; raw watch PPG is usually upside down.
+            if (inverted == null && total >= fs * 4) inverted = PpgFeatures.isInverted(raw(4.0))
+        }
+
+        private fun raw(seconds: Double): FloatArray {
+            val n = (seconds * fs).toInt().coerceAtMost(minOf(total, ring.size.toLong()).toInt())
+            return FloatArray(n) { k -> ring[((total - n + k) % ring.size).toInt()] }
+        }
+
+        fun recent(seconds: Double): FloatArray = raw(seconds).let { x -> if (inverted == true) FloatArray(x.size) { -x[it] } else x }
+
+        fun bpm(nowMs: Long): Int? {
+            if (nowMs - lastBpmAt >= 1_000) {
+                lastBpmAt = nowMs
+                bpm = PulseRate.bpm(recent(6.0), fs) ?: bpm
+            }
+            return bpm
+        }
     }
 
     private companion object {

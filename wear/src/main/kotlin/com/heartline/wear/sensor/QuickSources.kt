@@ -21,6 +21,9 @@ sealed interface QuickEvent {
 
     data class Result(val summary: RecordSummary) : QuickEvent
 
+    /** Live values while measuring: heart rate, and for stress the HRV so far (RMSSD, ms). */
+    data class Live(val bpm: Int?, val hrvMs: Double? = null) : QuickEvent
+
     data class Failed(val problem: SensorProblem?, val hint: QuickHint? = null) : QuickEvent
 }
 
@@ -53,6 +56,7 @@ class StressSource(
                 n++
                 ibis += sample.ibiMs
                 emit(QuickEvent.Progress(n.toFloat() / seconds, if (!sample.onBody) QuickHint.WRIST_CONTACT else null))
+                if (sample.onBody && sample.bpm > 0) emit(QuickEvent.Live(sample.bpm, Hrv.compute(ibis)?.rmssdMs))
             }
         error?.let {
             emit(QuickEvent.Failed((it as? SensorException)?.problem))
@@ -83,6 +87,7 @@ class FakeQuickSource(
         for (i in 1..ticks) {
             delay(tickMs)
             emit(QuickEvent.Progress(i.toFloat() / ticks, if (i in ticks / 3 until ticks / 3 + 2) QuickHint.HOLD_STILL else null))
+            if (i % 4 == 0 && metric != Metric.SKIN_TEMPERATURE) emit(QuickEvent.Live(66 + (i / 4) % 5, if (metric == Metric.STRESS) 38.0 + i % 7 else null))
         }
         emit(QuickEvent.Result(result(profile)))
     }

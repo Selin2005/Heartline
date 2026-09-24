@@ -21,7 +21,7 @@ class HeartRateViewModel(source: HrSource) : ViewModel() {
             } else if (sample.bpm <= 0) {
                 acc
             } else {
-                HeartRateState(sample.bpm, (acc.recent + sample.bpm).takeLast(30), onBody = true)
+                HeartRateState(sample.bpm, (acc.recent + sample.bpm).takeLast(60), onBody = true)
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(2_000), HeartRateState())

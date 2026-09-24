@@ -95,6 +95,11 @@ class SdkSpo2Source(private val gateway: SdkSensorGateway) :
                 trySendBlocking(QuickEvent.Progress(0f, QuickHint.HOLD_STILL))
                 false
             }
+            0 -> {
+                // Still calculating: the heart rate is already known, show it live.
+                p.getValue(ValueKey.SpO2Set.HEART_RATE)?.takeIf { it > 0 }?.let { trySendBlocking(QuickEvent.Live(it)) }
+                false
+            }
             -5 -> {
                 trySendBlocking(QuickEvent.Failed(null, QuickHint.LOW_SIGNAL))
                 true

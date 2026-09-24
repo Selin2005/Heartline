@@ -198,3 +198,22 @@ object PpgFeatures {
         return if (da <= 0 || db <= 0) 0.0 else num / sqrt(da * db)
     }
 }
+
+/** Live pulse rate from a few seconds of filtered, upright PPG (for the measuring screen). */
+object PulseRate {
+    fun bpm(x: FloatArray, fs: Int): Int? {
+        if (x.size < fs * 3) return null
+        val sorted = x.sorted()
+        val level = sorted[(sorted.size * 0.6).toInt()]
+        val half = (0.2 * fs).toInt()
+        val peaks = mutableListOf<Int>()
+        for (i in half until x.size - half) {
+            if (x[i] < level) continue
+            if ((i - half..i + half).any { x[it] > x[i] }) continue
+            if (peaks.isEmpty() || i - peaks.last() >= (0.33 * fs).toInt()) peaks += i
+        }
+        if (peaks.size < 3) return null
+        val intervals = peaks.zipWithNext { a, b -> b - a }.sorted()
+        return (60.0 * fs / intervals[intervals.size / 2]).toInt().takeIf { it in 35..200 }
+    }
+}

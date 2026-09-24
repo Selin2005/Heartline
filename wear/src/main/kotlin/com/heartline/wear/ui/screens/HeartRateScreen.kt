@@ -25,11 +25,12 @@ import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import com.heartline.wear.R
+import com.heartline.wear.ui.components.BeatingHeart
 import com.heartline.wear.ui.theme.WearColors
 
-/** Live heart rate with the last minute as a bar trend (Samsung Health style). */
+/** Live heart rate with a heart beating at that rate and the last minute as a bar trend (Samsung Health style). */
 @Composable
-fun HeartRateScreen(bpm: Int?, recent: List<Int>, onBody: Boolean) {
+fun HeartRateScreen(bpm: Int?, recent: List<Int>, onBody: Boolean, animate: Boolean = true) {
     val color = WearColors.metric(com.heartline.shared.model.Metric.HEART_RATE)
     Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
         Column(
@@ -37,7 +38,8 @@ fun HeartRateScreen(bpm: Int?, recent: List<Int>, onBody: Boolean) {
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 24.dp),
         ) {
-            Icon(Icons.Rounded.Favorite, contentDescription = null, tint = color, modifier = Modifier.size(26.dp))
+            // Beats at the measured rate.
+            BeatingHeart(bpm.takeIf { onBody }, color, 28.dp, animate)
             when {
                 !onBody -> Text(
                     stringResource(R.string.hr_off_body),

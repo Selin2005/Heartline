@@ -120,7 +120,7 @@ class WearScreenshotTest(private val size: String) {
     }
 
     @Test fun heartRate() = shot("heart_rate") {
-        HeartRateScreen(66, listOf(64, 65, 66, 68, 70, 69, 67, 66, 65, 64, 66, 67, 69, 71, 70, 68, 66, 65, 66, 67), onBody = true)
+        HeartRateScreen(66, listOf(64, 65, 66, 68, 70, 69, 67, 66, 65, 64, 66, 67, 69, 71, 70, 68, 66, 65, 66, 67), onBody = true, animate = false)
     }
 
     @Test fun heartRateOffBody() = shot("heart_rate_off_body") { HeartRateScreen(null, emptyList(), onBody = false) }
@@ -147,7 +147,20 @@ class WearScreenshotTest(private val size: String) {
 
     @Test fun bodyInstruction() = shot("body_instruction") { QuickInstructionScreen(Metric.BODY_COMPOSITION) }
 
-    @Test fun spo2Measuring() = shot("spo2_measuring") { QuickMeasuringScreen(Metric.SPO2, 0.45f, 17, QuickHint.HOLD_STILL) }
+    @Test fun spo2Measuring() = shot("spo2_measuring") { QuickMeasuringScreen(Metric.SPO2, 0.45f, 17, QuickHint.HOLD_STILL, animate = false) }
+
+    @Test fun spo2MeasuringLive() = shot("spo2_measuring_live") { QuickMeasuringScreen(Metric.SPO2, 0.6f, 12, null, bpm = 71, animate = false) }
+
+    @Test fun stressMeasuring() = shot("stress_measuring") { QuickMeasuringScreen(Metric.STRESS, 0.4f, 36, null, bpm = 68, hrvMs = 42.0, animate = false) }
+
+    @Test fun temperatureMeasuring() = shot("temperature_measuring") { QuickMeasuringScreen(Metric.SKIN_TEMPERATURE, 0.5f, 5, null, animate = false) }
+
+    @Test fun bodyMeasuring() = shot("body_measuring") { QuickMeasuringScreen(Metric.BODY_COMPOSITION, 0.3f, 11, null, animate = false) }
+
+    @Test fun bpMeasuringLive() = shot("bp_measuring_live") {
+        val ppg = WearSample.livePpg
+        com.heartline.wear.ui.screens.BpMeasuringScreen(0.45f, 11, ppg.copyOfRange(0, 300), contact = true, bpm = 68, endIndex = 300L * 4 + 180, animate = false)
+    }
 
     @Test fun spo2Result() = shot("spo2_result") { QuickResultScreen(Metric.SPO2, RecordSummary.Spo2(97, 64, false)) }
 

@@ -27,6 +27,13 @@ import com.heartline.shared.bp.BpCategory
 import com.heartline.shared.design.Palette
 import com.heartline.shared.model.Metric
 import com.heartline.wear.R
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
+import com.heartline.wear.ui.components.BeatingHeart
+import com.heartline.wear.ui.components.SweepTrace
 import com.heartline.wear.ui.components.ActionScreen
 import com.heartline.wear.ui.components.isSmallRound
 import com.heartline.wear.ui.theme.WearColors
@@ -101,6 +108,73 @@ fun BpResultScreen(systolic: Int, diastolic: Int, pulse: Int, category: BpCatego
             modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(50)).background(category.color).padding(horizontal = 10.dp, vertical = 3.dp),
         )
         Body(stringResource(R.string.bp_pulse, pulse))
+    }
+}
+
+/**
+ * Blood pressure recording: the pulse wave sweeps across the screen (filtered, upright) with the
+ * live pulse rate, inside the progress ring.
+ */
+@Composable
+fun BpMeasuringScreen(
+    progress: Float,
+    secondsLeft: Int,
+    trace: FloatArray,
+    contact: Boolean,
+    bpm: Int?,
+    endIndex: Long = trace.size.toLong(),
+    calibrationRound: Int? = null,
+    showWave: Boolean = true,
+    animate: Boolean = true,
+) {
+    val color = WearColors.metric(Metric.BLOOD_PRESSURE)
+    Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
+        androidx.wear.compose.material3.CircularProgressIndicator(
+            progress = { progress },
+            modifier = Modifier.fillMaxSize().padding(2.dp),
+            strokeWidth = 6.dp,
+            colors = androidx.wear.compose.material3.ProgressIndicatorDefaults.colors(indicatorColor = color, trackColor = WearColors.surfaceHigh),
+        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 18.dp),
+        ) {
+            Text(
+                calibrationRound?.let { stringResource(R.string.bp_calibration_round, it) } ?: stringResource(R.string.metric_bp),
+                style = MaterialTheme.typography.labelMedium,
+                color = color,
+            )
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text("$secondsLeft", style = MaterialTheme.typography.displayMedium)
+                Text(
+                    stringResource(R.string.unit_sec),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = WearColors.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 3.dp, bottom = 6.dp),
+                )
+            }
+            val waveHeight = if (isSmallRound()) 44.dp else 54.dp
+            if (showWave) {
+                SweepTrace(trace, endIndex, windowSamples = 300, color = color, paper = false, centered = false, minRange = 0f, modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp).height(waveHeight))
+            } else {
+                Box(Modifier.height(waveHeight), contentAlignment = Alignment.Center) { BeatingHeart(bpm, color, 30.dp, animate) }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(18.dp).padding(top = 2.dp)) {
+                if (bpm != null && contact) {
+                    BeatingHeart(bpm, color, 12.dp, animate)
+                    Text(stringResource(R.string.live_pulse, bpm), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 4.dp))
+                }
+            }
+            Text(
+                stringResource(if (contact) R.string.bp_keep_still else R.string.bp_adjust_watch),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (contact) WearColors.onSurfaceVariant else WearColors.warn,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                modifier = Modifier.padding(horizontal = 18.dp),
+            )
+        }
     }
 }
 

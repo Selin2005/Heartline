@@ -57,7 +57,7 @@ fun QuickFlow(metric: Metric, onExit: () -> Unit, vm: QuickMeasureViewModel = ko
     when (val s = state) {
         QuickState.Idle -> QuickInstructionScreen(metric, onStart = ::start)
         QuickState.NeedsProfile -> ProfileNeededScreen(onDone = done)
-        is QuickState.Measuring -> QuickMeasuringScreen(metric, s.progress, s.secondsLeft, s.hint)
+        is QuickState.Measuring -> QuickMeasuringScreen(metric, s.progress, s.secondsLeft, s.hint, s.bpm, s.hrvMs)
         is QuickState.Done -> QuickResultScreen(metric, s.summary, onDone = done)
         is QuickState.Failed -> SensorErrorScreen(s.problem ?: SensorProblem.OFF_BODY, onAction = { vm.reset() })
     }

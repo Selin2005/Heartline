@@ -187,4 +187,8 @@
     <string name="settings_haptics">Vibration</string>
     <string name="settings_live_wave">Live wave</string>
     <string name="settings_synced_with_phone">Synced with Heartline on your phone. Thresholds and reminders are on the phone.</string>
+    <string name="live_bpm">♥ %1$d bpm</string>
+    <string name="live_hrv">HRV %1$d ms</string>
+    <string name="hint_breathe">Breathe slowly and relax</string>
+    <string name="live_pulse">%1$d bpm</string>
 </resources>

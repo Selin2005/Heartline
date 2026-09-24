@@ -8,11 +8,17 @@ import kotlin.math.abs
  * After a touch (or any jump larger than [jumpMv]) the state is re-seeded on the new level, so the
  * settling step doesn't ring through the filter for seconds.
  */
-class StreamingEcgFilter(fs: Int, mains: List<Double> = listOf(50.0, 60.0), private val jumpMv: Float = 1.5f) {
+open class StreamingEcgFilter(
+    fs: Int,
+    mains: List<Double> = listOf(50.0, 60.0),
+    private val jumpMv: Float = 1.5f,
+    lowHz: Double = 0.5,
+    highHz: Double = 40.0
+) {
     private val stages = buildList {
         val f = fs.toDouble()
-        add(Biquad.highPass(0.5, f).stream())
-        add(Biquad.lowPass(40.0, f).stream())
+        add(Biquad.highPass(lowHz, f).stream())
+        add(Biquad.lowPass(highHz, f).stream())
         mains.filter { it < f / 2 }.forEach { add(Biquad.notch(it, f).stream()) }
     }
     private var last: Float? = null
@@ -38,3 +44,10 @@ class StreamingEcgFilter(fs: Int, mains: List<Double> = listOf(50.0, 60.0), priv
         stages.forEachIndexed { i, stage -> stage.settle(if (i == 0) x.toDouble() else 0.0) }
     }
 }
+
+/**
+ * Live PPG for display: 0.5–8 Hz band-pass. Raw watch PPG is light intensity in large ADC counts
+ * (and upside down); a jump of [jump] counts (contact change) re-seeds the filter.
+ */
+class StreamingPpgFilter(fs: Int, jump: Float = Float.MAX_VALUE) :
+    StreamingEcgFilter(fs, mains = emptyList(), jumpMv = jump, lowHz = 0.5, highHz = 8.0)

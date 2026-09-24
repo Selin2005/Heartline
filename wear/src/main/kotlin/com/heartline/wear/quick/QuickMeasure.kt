@@ -56,7 +56,7 @@ sealed interface QuickState {
 
     data object NeedsProfile : QuickState
 
-    data class Measuring(val progress: Float, val secondsLeft: Int, val hint: QuickHint?) : QuickState
+    data class Measuring(val progress: Float, val secondsLeft: Int, val hint: QuickHint?, val bpm: Int? = null, val hrvMs: Double? = null) : QuickState
 
     data class Done(val summary: RecordSummary) : QuickState
 
@@ -94,7 +94,16 @@ class QuickMeasureViewModel(
                         is QuickEvent.Progress -> {
                             val current = mutable.value as? QuickState.Measuring
                             val fraction = maxOf(event.fraction, current?.progress ?: 0f)
-                            mutable.value = QuickState.Measuring(fraction, ((1 - fraction) * source.seconds).toInt().coerceAtLeast(1), event.hint)
+                            mutable.value = QuickState.Measuring(
+                                fraction,
+                                ((1 - fraction) * source.seconds).toInt().coerceAtLeast(1),
+                                event.hint,
+                                current?.bpm,
+                                current?.hrvMs,
+                            )
+                        }
+                        is QuickEvent.Live -> (mutable.value as? QuickState.Measuring)?.let { m ->
+                            mutable.value = m.copy(bpm = event.bpm ?: m.bpm, hrvMs = event.hrvMs ?: m.hrvMs)
                         }
                         is QuickEvent.Failed -> mutable.value = QuickState.Failed(event.problem, event.hint)
                         is QuickEvent.Result -> {

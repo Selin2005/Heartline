@@ -36,6 +36,7 @@ import com.heartline.wear.sensor.SensorProblem
 import com.heartline.wear.ui.screens.BpCalibrationRecordedScreen
 import com.heartline.wear.ui.screens.BpInstructionScreen
 import com.heartline.wear.ui.screens.BpNeedsCalibrationScreen
+import com.heartline.wear.ui.screens.BpMeasuringScreen
 import com.heartline.wear.ui.screens.BpOutOfRangeScreen
 import com.heartline.wear.ui.screens.BpResultScreen
 import com.heartline.wear.ui.screens.MeasuringScreen
@@ -111,15 +112,15 @@ fun BpFlow(
             },
             opened = opened,
         )
-        is BpState.Measuring -> MeasuringScreen(
-            title = stringResource(R.string.metric_bp),
-            color = WearColors.metric(Metric.BLOOD_PRESSURE),
+        is BpState.Measuring -> BpMeasuringScreen(
             progress = s.progress,
             secondsLeft = s.secondsLeft,
-            samples = s.trace,
-            hint = stringResource(if (s.contact) R.string.bp_keep_still else R.string.bp_adjust_watch),
-            warn = !s.contact,
-            fixedRangeMv = null,
+            trace = s.trace,
+            contact = s.contact,
+            bpm = s.bpm,
+            endIndex = s.endIndex,
+            calibrationRound = capture?.round,
+            showWave = prefs.liveWave,
         )
         is BpState.Done -> BpResultScreen(s.systolic, s.diastolic, s.pulse, s.category, s.uncertainty, onDone = done)
         BpState.OutOfRange -> BpOutOfRangeScreen(

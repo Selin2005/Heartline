@@ -32,6 +32,12 @@ import com.heartline.shared.model.RecordSummary
 import com.heartline.shared.profile.StressIndex
 import com.heartline.shared.profile.StressLevel
 import com.heartline.wear.R
+import kotlin.math.roundToInt
+import com.heartline.wear.ui.components.BeatingHeart
+import com.heartline.wear.ui.components.BreathingCircle
+import com.heartline.wear.ui.components.KeysContact
+import com.heartline.wear.ui.components.ThermometerFill
+import com.heartline.wear.ui.components.PulseRipple
 import com.heartline.wear.sensor.QuickHint
 import com.heartline.wear.ui.components.ActionScreen
 import com.heartline.wear.ui.components.icon
@@ -79,8 +85,20 @@ fun QuickInstructionScreen(metric: Metric, onStart: () -> Unit = {}) {
     }
 }
 
+/**
+ * Measuring: progress ring, countdown and a metric-specific animation driven by live data where
+ * the sensor gives it (the SpO2 ripple and the stress heart beat at the measured heart rate).
+ */
 @Composable
-fun QuickMeasuringScreen(metric: Metric, progress: Float, secondsLeft: Int, hint: QuickHint?) {
+fun QuickMeasuringScreen(
+    metric: Metric,
+    progress: Float,
+    secondsLeft: Int,
+    hint: QuickHint?,
+    bpm: Int? = null,
+    hrvMs: Double? = null,
+    animate: Boolean = true,
+) {
     val color = WearColors.metric(metric)
     Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
         CircularProgressIndicator(
@@ -89,19 +107,39 @@ fun QuickMeasuringScreen(metric: Metric, progress: Float, secondsLeft: Int, hint
             strokeWidth = 6.dp,
             colors = ProgressIndicatorDefaults.colors(indicatorColor = color, trackColor = WearColors.surfaceHigh),
         )
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.padding(horizontal = 30.dp)) {
-            Icon(metric.icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.padding(horizontal = 26.dp)) {
+            val visual = if (isSmallRound()) 50.dp else 62.dp
+            when (metric) {
+                Metric.SPO2 -> PulseRipple(bpm, color, Modifier.size(visual), animate) {
+                    Icon(metric.icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
+                }
+                Metric.SKIN_TEMPERATURE -> ThermometerFill(color, Modifier.size(width = visual * 0.6f, height = visual), animate)
+                Metric.BODY_COMPOSITION -> KeysContact(color, Modifier.size(visual), animate)
+                Metric.STRESS -> BreathingCircle(color, Modifier.size(visual), animate) {
+                    BeatingHeart(bpm, color, 20.dp, animate)
+                }
+                else -> Icon(metric.icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
+            }
             Row(verticalAlignment = Alignment.Bottom) {
-                Text("$secondsLeft", style = MaterialTheme.typography.displayLarge)
+                Text("$secondsLeft", style = MaterialTheme.typography.displayMedium)
                 Text(
                     stringResource(R.string.unit_sec),
                     style = MaterialTheme.typography.bodySmall,
                     color = WearColors.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 3.dp, bottom = 7.dp),
+                    modifier = Modifier.padding(start = 3.dp, bottom = 6.dp),
                 )
             }
+            val live = listOfNotNull(
+                bpm?.let { stringResource(R.string.live_bpm, it) },
+                hrvMs?.takeIf { metric == Metric.STRESS }?.let { stringResource(R.string.live_hrv, it.roundToInt()) },
+            ).joinToString(" · ")
             Text(
-                stringResource(hint?.text ?: R.string.hint_measuring),
+                when {
+                    hint != null -> stringResource(hint.text)
+                    live.isNotEmpty() -> live
+                    metric == Metric.STRESS -> stringResource(R.string.hint_breathe)
+                    else -> stringResource(R.string.hint_measuring)
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = if (hint != null) WearColors.warn else WearColors.onSurfaceVariant,
                 textAlign = TextAlign.Center,
