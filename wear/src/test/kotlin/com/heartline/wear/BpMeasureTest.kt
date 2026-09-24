@@ -84,7 +84,8 @@ class BpMeasureTest {
         bp.setCalibration(BpCalibration("c", System.currentTimeMillis(), List(3) { CalibrationPoint(features, 122, 80, 68) }))
         val vm = vm()
         vm.start()
-        val done = withTimeout(10_000) { vm.state.first { it is BpState.Done } } as BpState.Done
+        val end = withTimeout(10_000) { vm.state.first { it !is BpState.Measuring && it !is BpState.Idle } }
+        val done = end as? BpState.Done ?: error("ended with $end")
         assertTrue("$done", done.systolic in 110..135 && done.diastolic in 70..90)
         val summary = records.pending().single().meta.summary as RecordSummary.BloodPressure
         assertEquals(done.systolic, summary.systolic)

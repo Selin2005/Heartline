@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.heartline.phone.data.BpRepository
 import com.heartline.shared.bp.BpCalibration
+import com.heartline.phone.data.BpValidationEntity
+import com.heartline.shared.bp.BpPair
+import com.heartline.shared.bp.BpAccuracy
 import com.heartline.shared.bp.BpCategory
 import com.heartline.shared.bp.CalibrationPoint
 import com.heartline.shared.bp.PpgFeatureVector
@@ -19,7 +22,15 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 import kotlin.math.roundToInt
 
-data class BpReadingUi(val id: String, val date: String, val time: String, val systolic: Int, val diastolic: Int, val pulse: Int?) {
+data class BpReadingUi(
+    val id: String,
+    val date: String,
+    val time: String,
+    val systolic: Int,
+    val diastolic: Int,
+    val pulse: Int?,
+    val uncertainty: Int? = null,
+) {
     val category get() = BpCategory.of(systolic, diastolic)
 }
 
@@ -30,15 +41,25 @@ data class BpHomeUi(
     val readings: List<BpReadingUi> = emptyList(),
     val average7: Pair<Int, Int>? = null,
     val average30: Pair<Int, Int>? = null,
+    /** Watch-vs-cuff agreement from validation checks, if any were done. */
+    val accuracy: BpAccuracy? = null,
+    /** The latest reading can still be compared with a cuff (recent and not yet compared). */
+    val canValidateLatest: Boolean = false,
 )
 
-class BpHomeViewModel(repository: BpRepository, formatter: RecordFormatter, private val now: () -> Long = System::currentTimeMillis) : ViewModel() {
-    val state: StateFlow<BpHomeUi> = combine(repository.calibration, repository.readings) { calibration, records ->
+class BpHomeViewModel(
+    private val repository: BpRepository,
+    formatter: RecordFormatter,
+    private val now: () -> Long = System::currentTimeMillis,
+    private val newId: () -> String = { UUID.randomUUID().toString() },
+) : ViewModel() {
+    val state: StateFlow<BpHomeUi> = combine(repository.calibration, repository.readings, repository.validations) { calibration, records, validations ->
         val readings = records.mapNotNull { r ->
             val s = r.summary as? RecordSummary.BloodPressure ?: return@mapNotNull null
-            BpReadingUi(r.id, formatter.date(r.entity.startedAtMs), formatter.time(r.entity.startedAtMs), s.systolic, s.diastolic, s.pulse) to
+            BpReadingUi(r.id, formatter.date(r.entity.startedAtMs), formatter.time(r.entity.startedAtMs), s.systolic, s.diastolic, s.pulse, s.uncertainty) to
                 r.entity.startedAtMs
         }
+        val latest = readings.firstOrNull()
         fun average(days: Int): Pair<Int, Int>? {
             val window = readings.filter { now() - it.second <= days * BpCalibration.DAY_MS }.map { it.first }
             if (window.isEmpty()) return null
@@ -51,8 +72,25 @@ class BpHomeViewModel(repository: BpRepository, formatter: RecordFormatter, priv
             readings = readings.map { it.first },
             average7 = average(7),
             average30 = average(30),
+            accuracy = BpAccuracy.of(validations.map { BpPair(it.watchSystolic, it.watchDiastolic, it.cuffSystolic, it.cuffDiastolic) }),
+            canValidateLatest = latest != null && now() - latest.second <= VALIDATION_WINDOW_MS && validations.none { it.readingId == latest.first.id },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BpHomeUi())
+
+    /** Stores a cuff reading taken right after the latest watch reading. @return false for implausible values. */
+    fun validateLatest(systolic: Int?, diastolic: Int?): Boolean {
+        val latest = state.value.latest ?: return false
+        if (systolic == null || diastolic == null || systolic !in 70..250 || diastolic !in 40..150 || systolic <= diastolic + 10) return false
+        viewModelScope.launch {
+            repository.addValidation(BpValidationEntity(newId(), latest.id, now(), latest.systolic, latest.diastolic, systolic, diastolic))
+        }
+        return true
+    }
+
+    private companion object {
+        /** A cuff reading only says something about a watch reading taken within the last half hour. */
+        const val VALIDATION_WINDOW_MS = 30 * 60_000L
+    }
 }
 
 /** State of the 3-round cuff calibration wizard (MASTER_PLAN F7). */
@@ -77,6 +115,7 @@ class CalibrationViewModel(
     private val captureId = newId()
     private val points = mutableListOf<CalibrationPoint>()
     private var captured: PpgFeatureVector? = null
+    private var capturedPpg: List<Float>? = null
 
     init {
         viewModelScope.launch {
@@ -84,6 +123,7 @@ class CalibrationViewModel(
                 val ui = mutable.value
                 if (result.captureId == captureId && result.round == ui.round && ui.phase == CalibrationUi.Phase.WAITING_FOR_WATCH) {
                     captured = result.features
+                    capturedPpg = result.ppg
                     mutable.value = ui.copy(phase = CalibrationUi.Phase.ENTER_CUFF)
                 }
             }
@@ -104,8 +144,9 @@ class CalibrationViewModel(
             mutable.value = mutable.value.copy(inputError = true)
             return@launch
         }
-        points += CalibrationPoint(features, systolic!!, diastolic!!, pulse)
+        points += CalibrationPoint(features, systolic!!, diastolic!!, pulse, capturedPpg)
         captured = null
+        capturedPpg = null
         val ui = mutable.value
         if (points.size < BpCalibration.REQUIRED_POINTS) {
             mutable.value = CalibrationUi(round = ui.round + 1, phase = CalibrationUi.Phase.WAITING_FOR_WATCH, completedRounds = points.size)

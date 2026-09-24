@@ -36,6 +36,7 @@ import com.heartline.wear.sensor.SensorProblem
 import com.heartline.wear.ui.screens.BpCalibrationRecordedScreen
 import com.heartline.wear.ui.screens.BpInstructionScreen
 import com.heartline.wear.ui.screens.BpNeedsCalibrationScreen
+import com.heartline.wear.ui.screens.BpOutOfRangeScreen
 import com.heartline.wear.ui.screens.BpResultScreen
 import com.heartline.wear.ui.screens.MeasuringScreen
 import com.heartline.wear.ui.screens.SensorErrorScreen
@@ -116,7 +117,15 @@ fun BpFlow(
             warn = !s.contact,
             fixedRangeMv = null,
         )
-        is BpState.Done -> BpResultScreen(s.systolic, s.diastolic, s.pulse, s.category, onDone = done)
+        is BpState.Done -> BpResultScreen(s.systolic, s.diastolic, s.pulse, s.category, s.uncertainty, onDone = done)
+        BpState.OutOfRange -> BpOutOfRangeScreen(
+            onRetry = { vm.reset() },
+            onRecalibrate = {
+                scope.launch {
+                    if (phone.open(SetupTarget.BP_CALIBRATION)) onStartCalibration()
+                }
+            },
+        )
         is BpState.CalibrationRecorded -> BpCalibrationRecordedScreen(s.round, onDone = done)
         BpState.PoorSignal -> SensorErrorScreen(SensorProblem.OFF_BODY, onAction = { vm.reset() })
         is BpState.Failed -> SensorErrorScreen(s.problem, onAction = {

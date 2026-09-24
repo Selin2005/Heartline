@@ -1,5 +1,6 @@
 package com.heartline.wear.bp
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.heartline.shared.bp.BpCategory
@@ -36,7 +37,10 @@ sealed interface BpState {
 
     data class Measuring(val progress: Float, val secondsLeft: Int, val trace: FloatArray, val contact: Boolean) : BpState
 
-    data class Done(val systolic: Int, val diastolic: Int, val pulse: Int, val category: BpCategory) : BpState
+    data class Done(val systolic: Int, val diastolic: Int, val pulse: Int, val category: BpCategory, val uncertainty: Int = 0) : BpState
+
+    /** Today's pulse wave is outside what the calibration covers. */
+    data object OutOfRange : BpState
 
     data class CalibrationRecorded(val round: Int) : BpState
 
@@ -111,14 +115,16 @@ class BpMeasureViewModel(
                 mutable.value = BpState.Failed(it)
                 return@launch
             }
-            val features = withContext(Dispatchers.Default) { PpgFeatures.extract(buffer.copyOf(collected), fs) }
-            mutable.value = if (capture != null) finishCalibration(capture, features) else finishMeasurement(features, startedAt)
+            val recording = buffer.copyOf(collected)
+            val features = withContext(Dispatchers.Default) { PpgFeatures.extract(recording, fs) }
+            Log.i(TAG, "BP ${if (capture != null) "calibration round ${capture.round}" else "measurement"}: samples=$collected features=$features")
+            mutable.value = if (capture != null) finishCalibration(capture, features, recording) else finishMeasurement(features, startedAt)
         }
     }
 
-    private suspend fun finishCalibration(capture: CaptureRequest, features: com.heartline.shared.bp.PpgFeatureVector?): BpState {
-        if (features == null || features.quality < BpEstimator.MIN_QUALITY) return BpState.PoorSignal
-        val result = CaptureResult(UUID.randomUUID().toString(), capture.captureId, capture.round, features)
+    private suspend fun finishCalibration(capture: CaptureRequest, features: com.heartline.shared.bp.PpgFeatureVector?, ppg: FloatArray): BpState {
+        if (features == null || features.quality < BpEstimator.MIN_QUALITY || features.beats < BpEstimator.MIN_BEATS) return BpState.PoorSignal
+        val result = CaptureResult(UUID.randomUUID().toString(), capture.captureId, capture.round, features, ppg.toList())
         records.enqueueMessage(result.id, Protocol.BP_CALIBRATION_CAPTURE, Protocol.json.encodeToString(result).encodeToByteArray())
         sync.schedule()
         bpStore.setPendingCapture(null)
@@ -126,9 +132,10 @@ class BpMeasureViewModel(
     }
 
     private suspend fun finishMeasurement(features: com.heartline.shared.bp.PpgFeatureVector?, startedAt: Long): BpState =
-        when (val outcome = BpEstimator.estimate(bpStore.calibration.value, features, now())) {
+        when (val outcome = BpEstimator.estimate(bpStore.calibration.value, features, now()).also { Log.i(TAG, "BP outcome: $it") }) {
             BpOutcome.NeedsCalibration -> BpState.NeedsCalibration
             BpOutcome.PoorSignal -> BpState.PoorSignal
+            is BpOutcome.OutOfRange -> BpState.OutOfRange
             is BpOutcome.Ok -> {
                 val e = outcome.estimate
                 val meta = RecordMeta(
@@ -138,11 +145,11 @@ class BpMeasureViewModel(
                     seconds * 1000L,
                     0,
                     0,
-                    RecordSummary.BloodPressure(e.systolic, e.diastolic, e.pulse),
+                    RecordSummary.BloodPressure(e.systolic, e.diastolic, e.pulse, e.uncertaintySys, algorithm = 2),
                 )
                 records.add(meta, null)
                 sync.schedule()
-                BpState.Done(e.systolic, e.diastolic, e.pulse, BpCategory.of(e.systolic, e.diastolic))
+                BpState.Done(e.systolic, e.diastolic, e.pulse, BpCategory.of(e.systolic, e.diastolic), e.uncertaintySys)
             }
         }
 
@@ -153,5 +160,9 @@ class BpMeasureViewModel(
 
     fun reset() {
         mutable.value = BpState.Idle
+    }
+
+    private companion object {
+        const val TAG = "Heartline/BP"
     }
 }

@@ -178,4 +178,8 @@
     <string name="ecg_poor_lead_off">Your finger left the key too often.</string>
     <string name="ecg_poor_short">The recording was too short.</string>
     <string name="ecg_poor_beats">Not enough clear beats. Keep still and try again.</string>
+    <string name="bp_unit_uncertainty">mmHg · ±%1$d</string>
+    <string name="bp_out_of_range_title">Outside your calibration</string>
+    <string name="bp_out_of_range_body">Your pulse differs a lot from calibration. Rest 5 minutes, then try again.</string>
+    <string name="bp_recalibrate">Recalibrate</string>
 </resources>

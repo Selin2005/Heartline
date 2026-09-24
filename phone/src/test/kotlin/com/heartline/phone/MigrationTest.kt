@@ -35,6 +35,20 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate3To4AddsValidations() {
+        helper.createDatabase(DB, 3).use { db ->
+            db.execSQL("INSERT INTO bp_calibrations (id, createdAtMs, json) VALUES ('c1', 1, '{}')")
+        }
+        helper.runMigrationsAndValidate(DB, 4, true, HeartlineDatabase.MIGRATION_3_4).use { db ->
+            db.query("SELECT COUNT(*) FROM bp_calibrations").use { c ->
+                c.moveToFirst()
+                assertEquals(1, c.getInt(0))
+            }
+            db.execSQL("INSERT INTO bp_validations (id, readingId, atMs, watchSystolic, watchDiastolic, cuffSystolic, cuffDiastolic) VALUES ('v', 'r', 1, 120, 80, 118, 79)")
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

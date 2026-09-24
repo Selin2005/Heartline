@@ -83,12 +83,17 @@ fun BpInstructionScreen(calibrationRound: Int? = null, onStart: () -> Unit = {})
 }
 
 @Composable
-fun BpResultScreen(systolic: Int, diastolic: Int, pulse: Int, category: BpCategory, onDone: () -> Unit = {}) {
+fun BpResultScreen(systolic: Int, diastolic: Int, pulse: Int, category: BpCategory, uncertainty: Int = 0, onDone: () -> Unit = {}) {
     ActionScreen(stringResource(R.string.action_done), onDone) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text("$systolic/$diastolic", style = MaterialTheme.typography.displayMedium)
         }
-        Text(stringResource(R.string.unit_mmhg), style = MaterialTheme.typography.bodySmall, color = WearColors.onSurfaceVariant)
+        // The estimate's uncertainty is shown, never hidden: this is an estimate, not a cuff reading.
+        Text(
+            if (uncertainty > 0) stringResource(R.string.bp_unit_uncertainty, uncertainty) else stringResource(R.string.unit_mmhg),
+            style = MaterialTheme.typography.bodySmall,
+            color = WearColors.onSurfaceVariant,
+        )
         Text(
             stringResource(category.label),
             style = MaterialTheme.typography.labelMedium,
@@ -96,6 +101,19 @@ fun BpResultScreen(systolic: Int, diastolic: Int, pulse: Int, category: BpCatego
             modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(50)).background(category.color).padding(horizontal = 10.dp, vertical = 3.dp),
         )
         Body(stringResource(R.string.bp_pulse, pulse))
+    }
+}
+
+/** Today's pulse wave is outside what the calibration covers: no number is invented. */
+@Composable
+fun BpOutOfRangeScreen(onRetry: () -> Unit = {}, onRecalibrate: () -> Unit = {}) {
+    ActionScreen(stringResource(R.string.action_try_again), onRetry) {
+        Badge(Icons.Rounded.PhoneAndroid, WearColors.warn)
+        Text(stringResource(R.string.bp_out_of_range_title), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+        Body(stringResource(R.string.bp_out_of_range_body))
+        androidx.wear.compose.material3.FilledTonalButton(onClick = onRecalibrate, modifier = Modifier.padding(top = 6.dp)) {
+            Text(stringResource(R.string.bp_recalibrate), maxLines = 1)
+        }
     }
 }
 

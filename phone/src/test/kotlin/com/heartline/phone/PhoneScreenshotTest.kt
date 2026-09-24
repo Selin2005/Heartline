@@ -98,6 +98,10 @@ class PhoneScreenshotTest(private val theme: String) {
 
     @Test fun bloodPressure() = shot("bp_home") { BpHomeScreen(SampleData.bpHome, onBack = {}) }
 
+    @Test fun bloodPressureAccuracy() = shot("bp_home_accuracy") {
+        BpHomeScreen(SampleData.bpHome, onBack = {}, listState = rememberLazyListState(initialFirstVisibleItemIndex = 3))
+    }
+
     @Test fun bloodPressureUncalibrated() = shot("bp_home_uncalibrated") { BpHomeScreen(BpHomeUi(), onBack = {}) }
 
     @Test fun calibrationIntro() = shot("bp_calibration_intro") { BpCalibrationScreen(CalibrationUi(), onBack = {}) }

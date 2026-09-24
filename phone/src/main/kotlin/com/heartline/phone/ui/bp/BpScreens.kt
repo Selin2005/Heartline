@@ -41,6 +41,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.heartline.phone.R
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import com.heartline.phone.ui.components.CardRow
 import com.heartline.phone.ui.components.CardTitle
 import com.heartline.phone.ui.components.IconBadge
@@ -79,12 +84,22 @@ val BpCategory.label: Int
     }
 
 @Composable
-fun BpHomeScreen(state: BpHomeUi, onBack: (() -> Unit)? = null, onCalibrate: () -> Unit = {}, onMeasureOnWatch: (() -> Unit)? = null) {
+fun BpHomeScreen(
+    state: BpHomeUi,
+    onBack: (() -> Unit)? = null,
+    onCalibrate: () -> Unit = {},
+    onMeasureOnWatch: (() -> Unit)? = null,
+    onValidate: (Int?, Int?) -> Boolean = { _, _ -> true },
+    listState: LazyListState = rememberLazyListState(),
+) {
+    var validating by remember { mutableStateOf(false) }
+    if (validating) ValidationDialog(onDismiss = { validating = false }, onSave = { s, d -> onValidate(s, d).also { ok -> if (ok) validating = false } })
     val colors = HeartlineTheme.colors
     ReachabilityScaffold(
         title = stringResource(R.string.metric_bp),
         subtitle = state.latest?.let { stringResource(R.string.bp_last_measured, "${it.date} ${it.time}") },
         onBack = onBack,
+        listState = listState,
     ) {
         item {
             RoundedCard(Modifier.gutter()) {
@@ -126,7 +141,11 @@ fun BpHomeScreen(state: BpHomeUi, onBack: (() -> Unit)? = null, onCalibrate: () 
                 RoundedCard(Modifier.gutter()) {
                     CardTitle(stringResource(R.string.bp_latest))
                     Spacer(Modifier.height(8.dp))
-                    MetricValue("${latest.systolic}/${latest.diastolic}", stringResource(R.string.unit_mmhg), large = true)
+                    MetricValue(
+                        "${latest.systolic}/${latest.diastolic}",
+                        latest.uncertainty?.let { stringResource(R.string.bp_unit_uncertainty, it) } ?: stringResource(R.string.unit_mmhg),
+                        large = true,
+                    )
                     latest.pulse?.let {
                         Text(stringResource(R.string.bp_pulse, it), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
                     }
@@ -149,6 +168,31 @@ fun BpHomeScreen(state: BpHomeUi, onBack: (() -> Unit)? = null, onCalibrate: () 
                     }
                 }
             }
+            item {
+                RoundedCard(Modifier.gutter()) {
+                    CardTitle(stringResource(R.string.bp_accuracy_title))
+                    Spacer(Modifier.height(6.dp))
+                    val acc = state.accuracy
+                    if (acc == null) {
+                        Text(stringResource(R.string.bp_accuracy_empty), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                    } else {
+                        Row {
+                            StatColumn(stringResource(R.string.bp_accuracy_sys), signed(acc.meanDiffSys, acc.sdSys), Modifier.weight(1f))
+                            StatColumn(stringResource(R.string.bp_accuracy_dia), signed(acc.meanDiffDia, acc.sdDia), Modifier.weight(1f))
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            pluralStringResource(R.plurals.bp_accuracy_summary, acc.count, acc.count, acc.within10Percent),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.onSurfaceVariant,
+                        )
+                    }
+                    if (state.canValidateLatest) {
+                        Spacer(Modifier.height(12.dp))
+                        TonalPillButton(stringResource(R.string.bp_accuracy_compare), onClick = { validating = true })
+                    }
+                }
+            }
             item { SectionHeader(stringResource(R.string.bp_history)) }
             item {
                 RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
@@ -156,7 +200,7 @@ fun BpHomeScreen(state: BpHomeUi, onBack: (() -> Unit)? = null, onCalibrate: () 
                     rows.forEachIndexed { i, r ->
                         CardRow(
                             "${r.systolic}/${r.diastolic} ${stringResource(R.string.unit_mmhg)}",
-                            subtitle = listOfNotNull(r.date, r.time, r.pulse?.let { stringResource(R.string.bp_pulse, it) }).joinToString(" · "),
+                            subtitle = listOfNotNull(r.date, r.time, r.uncertainty?.let { "±$it" }, r.pulse?.let { stringResource(R.string.bp_pulse, it) }).joinToString(" · "),
                             leading = { Box(Modifier.size(10.dp).clip(CircleShape).background(colors.bpCategory(r.category))) },
                             trailing = {
                                 Text(stringResource(r.category.label), style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
@@ -177,6 +221,33 @@ fun BpHomeScreen(state: BpHomeUi, onBack: (() -> Unit)? = null, onCalibrate: () 
             )
         }
     }
+}
+
+private fun signed(mean: Double, sd: Double) = "%+.0f ± %.0f".format(mean, sd)
+
+/** Cuff reading taken right after the latest watch reading. */
+@Composable
+private fun ValidationDialog(onDismiss: () -> Unit, onSave: (Int?, Int?) -> Boolean) {
+    var sys by remember { mutableStateOf("") }
+    var dia by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.bp_accuracy_compare)) },
+        text = {
+            Column {
+                Text(stringResource(R.string.bp_accuracy_dialog_body), style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(sys, { sys = it.filter(Char::isDigit).take(3) }, label = { Text(stringResource(R.string.bp_sys)) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
+                    OutlinedTextField(dia, { dia = it.filter(Char::isDigit).take(3) }, label = { Text(stringResource(R.string.bp_dia)) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
+                }
+                if (error) Text(stringResource(R.string.bp_input_error), style = MaterialTheme.typography.bodySmall, color = HeartlineTheme.colors.statusAlert)
+            }
+        },
+        confirmButton = { TextButton(onClick = { error = !onSave(sys.toIntOrNull(), dia.toIntOrNull()) }) { Text(stringResource(R.string.action_save)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
 }
 
 /** Segmented AHA scale with a marker on the current category (Samsung Health style). */

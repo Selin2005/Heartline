@@ -225,6 +225,7 @@ fun HeartlineApp(
                         onBack = { navController.popBackStack() },
                         onCalibrate = { navController.navigate(Routes.BP_CALIBRATION) },
                         onMeasureOnWatch = { openOnWatch(WatchRoutes.BLOOD_PRESSURE) },
+                        onValidate = vm::validateLatest,
                     )
                 }
                 composable(Routes.BP_CALIBRATION) {

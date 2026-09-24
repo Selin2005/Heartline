@@ -355,4 +355,15 @@
     <string name="ecg_poor_lead_off">Your finger left the key too often.</string>
     <string name="ecg_poor_short">The recording was too short.</string>
     <string name="ecg_poor_beats">Not enough clear heartbeats were found. Keep still and try again.</string>
+    <string name="bp_unit_uncertainty">mmHg · ±%1$d</string>
+    <string name="bp_accuracy_title">Accuracy check</string>
+    <string name="bp_accuracy_empty">Right after measuring on your watch, take a cuff reading and enter it here. Heartline shows how close the watch is for you, honestly.</string>
+    <string name="bp_accuracy_sys">Systolic difference</string>
+    <string name="bp_accuracy_dia">Diastolic difference</string>
+    <plurals name="bp_accuracy_summary">
+        <item quantity="one">%1$d comparison · %2$d%% within 10 mmHg. Watch minus cuff, mean ± spread.</item>
+        <item quantity="other">%1$d comparisons · %2$d%% within 10 mmHg. Watch minus cuff, mean ± spread.</item>
+    </plurals>
+    <string name="bp_accuracy_compare">Compare latest reading with a cuff</string>
+    <string name="bp_accuracy_dialog_body">Enter the cuff reading you took right after the watch reading, on the other arm, sitting still.</string>
 </resources>

@@ -133,7 +133,9 @@ class WearScreenshotTest(private val size: String) {
         MeasuringScreen("Blood pressure", WearColors.metric(Metric.BLOOD_PRESSURE), 0.35f, 13, WearSample.livePpg, "Keep still and don't talk", false, null)
     }
 
-    @Test fun bpResult() = shot("bp_result") { BpResultScreen(118, 76, 66, BpCategory.NORMAL) }
+    @Test fun bpResult() = shot("bp_result") { BpResultScreen(118, 76, 66, BpCategory.NORMAL, uncertainty = 7) }
+
+    @Test fun bpOutOfRange() = shot("bp_out_of_range") { com.heartline.wear.ui.screens.BpOutOfRangeScreen() }
 
     @Test fun bpNeedsCalibration() = shot("bp_needs_calibration") { BpNeedsCalibrationScreen() }
 

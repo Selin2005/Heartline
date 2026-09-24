@@ -17,6 +17,12 @@ Do not edit by hand.
 ### alerts_light
 <img src="phone/alerts_light.png" width="280">
 
+### bp_home_accuracy_dark
+<img src="phone/bp_home_accuracy_dark.png" width="280">
+
+### bp_home_accuracy_light
+<img src="phone/bp_home_accuracy_light.png" width="280">
+
 ### bp_home_uncalibrated_dark
 <img src="phone/bp_home_uncalibrated_dark.png" width="280">
 
@@ -253,6 +259,12 @@ Do not edit by hand.
 
 ### bp_needs_calibration_small
 <img src="wear/bp_needs_calibration_small.png" width="240">
+
+### bp_out_of_range_large
+<img src="wear/bp_out_of_range_large.png" width="240">
+
+### bp_out_of_range_small
+<img src="wear/bp_out_of_range_small.png" width="240">
 
 ### bp_result_large
 <img src="wear/bp_result_large.png" width="240">

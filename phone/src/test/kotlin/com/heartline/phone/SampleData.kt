@@ -79,9 +79,18 @@ object SampleData {
     val bpHome: BpHomeUi by lazy {
         val values = listOf(118 to 76, 121 to 79, 116 to 74, 124 to 81, 119 to 77, 131 to 84, 117 to 75, 122 to 78, 120 to 77, 126 to 80)
         val readings = values.mapIndexed { i, (s, d) ->
-            BpReadingUi("bp$i", if (i == 0) "Today" else "Sep ${24 - i}", "8:0$i AM", s, d, 64 + i % 4)
+            BpReadingUi("bp$i", if (i == 0) "Today" else "Sep ${24 - i}", "8:0$i AM", s, d, 64 + i % 4, uncertainty = 6 + i % 3)
         }
-        BpHomeUi(calibrated = true, daysLeft = 21, latest = readings.first(), readings = readings, average7 = 121 to 78, average30 = 120 to 77)
+        BpHomeUi(
+            calibrated = true,
+            daysLeft = 21,
+            latest = readings.first(),
+            readings = readings,
+            average7 = 121 to 78,
+            average30 = 120 to 77,
+            accuracy = com.heartline.shared.bp.BpAccuracy(5, 2.4, 6.1, 1.2, 4.3, 80),
+            canValidateLatest = true,
+        )
     }
 
     fun metricDetail(metric: Metric): MetricDetailUi {

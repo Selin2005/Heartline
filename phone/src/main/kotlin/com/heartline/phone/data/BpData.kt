@@ -23,6 +23,18 @@ import kotlinx.serialization.encodeToString
 @Entity(tableName = "bp_calibrations")
 data class BpCalibrationEntity(@PrimaryKey val id: String, val createdAtMs: Long, val json: String)
 
+/** A watch reading compared with a cuff reading taken right after it (validation mode). */
+@Entity(tableName = "bp_validations")
+data class BpValidationEntity(
+    @PrimaryKey val id: String,
+    val readingId: String,
+    val atMs: Long,
+    val watchSystolic: Int,
+    val watchDiastolic: Int,
+    val cuffSystolic: Int,
+    val cuffDiastolic: Int,
+)
+
 @Dao
 interface BpDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -36,6 +48,15 @@ interface BpDao {
 
     @Query("DELETE FROM bp_calibrations WHERE id LIKE 'demo%'")
     suspend fun deleteDemo(): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertValidation(validation: BpValidationEntity)
+
+    @Query("SELECT * FROM bp_validations ORDER BY atMs DESC")
+    fun validations(): Flow<List<BpValidationEntity>>
+
+    @Query("DELETE FROM bp_validations")
+    suspend fun deleteValidations()
 }
 
 /** Blood-pressure calibration (source of truth on the phone) and readings from the watch. */
@@ -68,8 +89,13 @@ class BpRepository(
         if (current != null || orNull) sync().sendCalibration(current)
     }
 
+    val validations: Flow<List<BpValidationEntity>> = dao.validations()
+
+    suspend fun addValidation(validation: BpValidationEntity) = dao.insertValidation(validation)
+
     suspend fun deleteAll() {
         dao.deleteAll()
+        dao.deleteValidations()
         sync().sendCalibration(null)
     }
 }

@@ -8,8 +8,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [RecordEntity::class, HrMinuteEntity::class, AlertEntity::class, BpCalibrationEntity::class],
-    version = 3,
+    entities = [RecordEntity::class, HrMinuteEntity::class, AlertEntity::class, BpCalibrationEntity::class, BpValidationEntity::class],
+    version = 4,
     exportSchema = true,
 )
 abstract class HeartlineDatabase : RoomDatabase() {
@@ -45,8 +45,21 @@ abstract class HeartlineDatabase : RoomDatabase() {
             }
         }
 
+        /** v4 (R7): watch-vs-cuff validation pairs. */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `bp_validations` (`id` TEXT NOT NULL, `readingId` TEXT NOT NULL, `atMs` INTEGER NOT NULL, " +
+                        "`watchSystolic` INTEGER NOT NULL, `watchDiastolic` INTEGER NOT NULL, `cuffSystolic` INTEGER NOT NULL, " +
+                        "`cuffDiastolic` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+                )
+            }
+        }
+
         fun create(context: Context): HeartlineDatabase =
-            Room.databaseBuilder(context, HeartlineDatabase::class.java, "heartline.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
+            Room.databaseBuilder(context, HeartlineDatabase::class.java, "heartline.db")
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .build()
 
         fun inMemory(context: Context): HeartlineDatabase =
             Room.inMemoryDatabaseBuilder(context, HeartlineDatabase::class.java).allowMainThreadQueries().build()

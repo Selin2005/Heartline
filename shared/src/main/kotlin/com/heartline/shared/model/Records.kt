@@ -26,7 +26,14 @@ sealed interface RecordSummary {
     ) : RecordSummary
 
     @Serializable
-    data class BloodPressure(val systolic: Int, val diastolic: Int, val pulse: Int?) : RecordSummary
+    data class BloodPressure(
+        val systolic: Int,
+        val diastolic: Int,
+        val pulse: Int?,
+        /** ± mmHg (about one standard deviation) for systolic; null for older readings. */
+        val uncertainty: Int? = null,
+        val algorithm: Int = 1
+    ) : RecordSummary
 
     @Serializable
     data class Spo2(val percent: Int, val heartRate: Int?, val lowConfidence: Boolean) : RecordSummary

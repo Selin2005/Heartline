@@ -67,4 +67,11 @@ data class CaptureRequest(val captureId: String, val round: Int)
 
 /** Watch → phone: PPG features recorded for a calibration round. */
 @Serializable
-data class CaptureResult(val id: String, val captureId: String, val round: Int, val features: com.heartline.shared.bp.PpgFeatureVector)
+data class CaptureResult(
+    val id: String,
+    val captureId: String,
+    val round: Int,
+    val features: com.heartline.shared.bp.PpgFeatureVector,
+    /** Raw PPG of the round (100 Hz), kept with the calibration so it can be re-analysed later. */
+    val ppg: List<Float>? = null
+)

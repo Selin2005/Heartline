@@ -30,7 +30,9 @@ class SdkPpgSource(private val gateway: SdkSensorGateway) : PpgSource {
             object : HealthTracker.TrackerEventListener {
                 override fun onDataReceived(points: List<DataPoint>) {
                     if (points.isEmpty()) return
-                    val samples = FloatArray(points.size) { (points[it].getValue(ValueKey.PpgSet.PPG_GREEN) ?: 0).toFloat() }
+                    // Points without a value are skipped: a substituted 0 would be a huge fake pulse.
+                    val samples = points.mapNotNull { it.getValue(ValueKey.PpgSet.PPG_GREEN)?.toFloat() }.toFloatArray()
+                    if (samples.isEmpty()) return
                     // Status 0 is a normal reading; anything else means poor contact.
                     val contact = points.all { (it.getValue(ValueKey.PpgSet.GREEN_STATUS) ?: 0) == 0 }
                     trySendBlocking(PpgChunk(samples, contact))
