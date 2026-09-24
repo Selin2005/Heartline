@@ -12,7 +12,7 @@
 | SpO2، دمای پوست، ترکیب بدن (BIA)، استرس (HRV + EDA) | اندازه‌گیری on-demand | جزئیات، روند، تاریخچه |
 | خروجی | — | PDF هر ECG، CSV همه‌ی داده‌ها |
 
-اسکرین‌شات‌ها: [`docs/screenshots/`](docs/screenshots/README.md) · پلن: [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) · پروتکل: [`docs/PROTOCOL.md`](docs/PROTOCOL.md) · دیزاین: [`docs/DESIGN.md`](docs/DESIGN.md)
+اسکرین‌شات‌ها: [`docs/screenshots/`](docs/screenshots/README.md) · پلن: [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) · پروتکل: [`docs/PROTOCOL.md`](docs/PROTOCOL.md) · دیزاین: [`docs/DESIGN.md`](docs/DESIGN.md) · فشار خون: [`docs/BP_ALGORITHM.md`](docs/BP_ALGORITHM.md) · تست روی دستگاه: [`docs/DEVICE_TESTING.md`](docs/DEVICE_TESTING.md)
 
 ## ساختار
 ```

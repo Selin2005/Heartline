@@ -19,6 +19,11 @@ class WearApplication : Application() {
             androidContext(this@WearApplication)
             modules(wearModule)
         }
+        android.util.Log.i(
+            "Heartline/App",
+            "watch app ${BuildConfig.VERSION_NAME} (${BuildConfig.BUILD_TYPE}, fakeSensors=${BuildConfig.USE_FAKE_SENSORS}) " +
+                "on ${android.os.Build.MODEL}, API ${android.os.Build.VERSION.SDK_INT}",
+        )
         // Deliver anything left over from a previous session.
         SyncWorker.enqueue(this)
         val settings = get<WatchSettingsStore>().settings.value

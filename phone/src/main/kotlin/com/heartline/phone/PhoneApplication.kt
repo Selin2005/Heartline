@@ -37,6 +37,7 @@ class PhoneApplication : Application() {
             androidContext(this@PhoneApplication)
             modules(phoneModule)
         }
+        Log.i("Heartline/App", "phone app ${BuildConfig.VERSION_NAME} (${BuildConfig.BUILD_TYPE}) on ${android.os.Build.MODEL}, API ${android.os.Build.VERSION.SDK_INT}")
         val scope = get<CoroutineScope>(APP_SCOPE)
         scope.launch {
             val settings = get<SettingsRepository>()
