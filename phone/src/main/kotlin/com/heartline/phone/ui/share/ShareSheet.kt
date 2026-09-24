@@ -36,7 +36,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.annotation.DrawableRes
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import com.heartline.phone.R
@@ -136,11 +138,14 @@ private fun AiTile(target: AiTarget, modifier: Modifier = Modifier, onClick: () 
             .semantics(mergeDescendants = true) { contentDescription = description },
     ) {
         val icon = target.icon
-        if (icon != null) {
+        val logo = aiLogo(target.packageName)
+        if (logo != null) {
+            Image(painterResource(logo), contentDescription = null, modifier = Modifier.size(44.dp))
+        } else if (icon != null) {
             val bitmap = remember(icon) { icon.toBitmap(144, 144).asImageBitmap() }
             Image(bitmap, contentDescription = null, modifier = Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)))
         } else {
-            // No icon available (never for an installed app; used in previews): a monogram in the app's colour.
+            // Unknown app without an icon: a monogram in the app's colour.
             val (background, foreground) = monogramColors(target.packageName)
             Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(background), contentAlignment = Alignment.Center) {
                 Text(target.label.take(1), style = MaterialTheme.typography.titleMedium, color = foreground)
@@ -149,6 +154,16 @@ private fun AiTile(target: AiTarget, modifier: Modifier = Modifier, onClick: () 
         Spacer(Modifier.height(8.dp))
         Text(target.label, style = MaterialTheme.typography.labelMedium, color = colors.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
+}
+
+/** The assistant's own logo, bundled so the tile looks the same on every phone. */
+@DrawableRes
+private fun aiLogo(packageName: String): Int? = when (packageName) {
+    "com.anthropic.claude" -> R.drawable.ai_logo_claude
+    "com.openai.chatgpt" -> R.drawable.ai_logo_chatgpt
+    "com.google.android.apps.bard" -> R.drawable.ai_logo_gemini
+    "ai.x.grok" -> R.drawable.ai_logo_grok
+    else -> null
 }
 
 private fun monogramColors(packageName: String): Pair<Color, Color> = when (packageName) {

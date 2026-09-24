@@ -10,9 +10,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Favorite
@@ -142,37 +140,24 @@ fun ThermometerFill(color: Color, modifier: Modifier = Modifier, animate: Boolea
     }
 }
 
-/** The watch face with its two side keys glowing in turn (body composition needs both keys held). */
+/** Body composition in progress: the metric icon in a soft disc, with a ripple for the tiny current. */
 @Composable
 fun KeysContact(color: Color, modifier: Modifier = Modifier, animate: Boolean = true, content: @Composable () -> Unit = {}) {
     val phase = if (animate) {
-        val t = rememberInfiniteTransition(label = "keys")
-        val v by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1_400, easing = LinearEasing)), label = "phase")
+        val t = rememberInfiniteTransition(label = "current")
+        val v by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1_600, easing = LinearEasing)), label = "phase")
         v
     } else {
-        0.25f
+        0.45f
     }
-    Box(modifier) {
-    Canvas(Modifier.fillMaxSize()) {
-        // The watch seen from the front: its face, and the two side keys the fingers rest on.
-        val w = size.width
-        val h = size.height
-        val face = Offset(w * 0.40f, h * 0.5f)
-        val radius = w * 0.32f
-        drawCircle(color.copy(alpha = 0.14f), radius = radius, center = face)
-        drawCircle(color.copy(alpha = 0.55f), radius = radius, center = face, style = Stroke(2.dp.toPx()))
-        val keyW = w * 0.11f
-        val keyH = h * 0.17f
-        val keyX = face.x + radius + w * 0.05f
-        listOf(face.y - h * 0.2f, face.y + h * 0.2f).forEachIndexed { i, y ->
-            // Contact glow: the two keys pulse in turn while the current flows.
-            val glow = ((phase + i * 0.5f) % 1f).let { if (it < 0.5f) it * 2 else (1 - it) * 2 }
-            val centre = Offset(keyX + keyW / 2, y)
-            drawCircle(color.copy(alpha = 0.10f + 0.30f * glow), radius = keyH * (0.75f + 0.35f * glow), center = centre)
-            drawRoundRect(color, Offset(keyX, y - keyH / 2), Size(keyW, keyH), CornerRadius(keyW / 2))
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val r = size.minDimension / 2
+            val inner = r * 0.62f
+            drawCircle(color.copy(alpha = 0.35f * (1 - phase)), radius = inner + (r - inner) * phase, style = Stroke(2.dp.toPx()))
+            drawCircle(color.copy(alpha = 0.16f), radius = inner)
+            drawCircle(color.copy(alpha = 0.9f), radius = inner, style = Stroke(2.dp.toPx()))
         }
-    }
-        // The face is centred at 40 % of the width; [content] (the metric icon) sits in it.
-        Box(Modifier.fillMaxHeight().fillMaxWidth(0.8f).align(Alignment.CenterStart), contentAlignment = Alignment.Center) { content() }
+        content()
     }
 }
