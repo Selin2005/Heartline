@@ -197,13 +197,8 @@
     <string name="profile_birth_date">Date of birth</string>
     <string name="profile_birth_date_help">Tap to pick the exact day you were born.</string>
     <string name="profile_gender">Gender</string>
-    <string name="profile_gender_describe">Your gender</string>
     <string name="profile_calc_sex">Sex for body-composition calculations (optional)</string>
     <string name="profile_calc_sex_help">Body-composition formulas need a biological reference. It is used only for those calculations and is never shown anywhere. Skip it and everything except body composition still works.</string>
-    <string name="profile_report_name">Name on reports</string>
-    <string name="profile_report_name_help">Choose which name is printed on PDFs, exports and shares.</string>
-    <string name="profile_report_full">Full name</string>
-    <string name="profile_report_preferred">Preferred name</string>
     <string name="profile_female">Female</string>
     <string name="profile_male">Male</string>
     <string name="profile_skip">Skip</string>
@@ -220,13 +215,6 @@
     <string name="unit_lb">lb</string>
     <string name="gender_woman">Woman</string>
     <string name="gender_man">Man</string>
-    <string name="gender_non_binary">Non-binary</string>
-    <string name="gender_trans_woman">Trans woman</string>
-    <string name="gender_trans_man">Trans man</string>
-    <string name="gender_genderqueer">Genderqueer / genderfluid</string>
-    <string name="gender_agender">Agender</string>
-    <string name="gender_two_spirit">Two-Spirit</string>
-    <string name="gender_self_describe">Self-describe</string>
     <string name="gender_prefer_not">Prefer not to say</string>
     <string name="profile_err_first_name">Enter your first name.</string>
     <string name="profile_err_last_name">Enter your last name.</string>
@@ -235,7 +223,6 @@
     <string name="profile_err_too_young">You need to be at least 13 years old to use Heartline.</string>
     <string name="profile_err_too_old">Check the year: that would make you older than 120.</string>
     <string name="profile_err_gender">Choose the option that fits you best, or “Prefer not to say”.</string>
-    <string name="profile_err_gender_describe">Describe your gender, or pick another option.</string>
     <string name="profile_err_height_missing">Enter your height.</string>
     <string name="profile_err_height_range">Height must be between 100 and 250 cm (3 ft 4 in – 8 ft 2 in).</string>
     <string name="profile_err_weight_missing">Enter your weight.</string>
@@ -428,5 +415,12 @@
     <string name="settings_sharing">Sharing</string>
     <string name="settings_ai_prompt">Question sent to AI apps</string>
     <string name="settings_ai_prompt_default">Default: explain my results in plain language</string>
-    <string name="settings_ai_attach_pdf">Attach the PDF when the app accepts it</string>
+    <string name="settings_ai_attach_pdf">Attach the report (PDF or image) when the app accepts it</string>
+    <string name="settings_report_name">Name on reports and exports</string>
+    <string name="report_name_preferred">Preferred name (nickname)</string>
+    <string name="report_name_full">Full name</string>
+    <string name="report_name_none">No name</string>
+    <string name="share_format_pdf">PDF</string>
+    <string name="share_format_image">Image</string>
+    <string name="share_format_csv">CSV</string>
 </resources>

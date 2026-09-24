@@ -63,10 +63,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.heartline.phone.R
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.Dispatchers
 import com.heartline.phone.report.EcgReportBuilder
 import com.heartline.phone.share.ResultSummary
+import com.heartline.phone.ui.share.ShareFormat
 import com.heartline.phone.ui.share.ShareRequest
 import com.heartline.phone.ui.share.rememberShareSheet
 import com.heartline.phone.ui.ecg.EcgDetailScreen
@@ -211,9 +210,7 @@ fun HeartlineApp(
                             share(
                                 ShareRequest(
                                     kind = "Export",
-                                    extension = "csv",
-                                    mime = "text/csv",
-                                    buildFile = { name, _ -> vm.exportFile(exporter, name) },
+                                    formats = listOf(ShareFormat("csv", "text/csv", R.string.share_format_csv) { name, _, _ -> vm.exportFile(exporter, name) }),
                                     text = { _, _ -> "" },
                                     allowAi = false,
                                 ),
@@ -223,6 +220,7 @@ fun HeartlineApp(
                         sharing = sharingPrefs,
                         onAiPrompt = vm::setAiPrompt,
                         onAiAttachPdf = vm::setAiAttachPdf,
+                        onReportName = vm::setReportName,
                     )
                 }
                 composable(Routes.ECG) {
@@ -246,7 +244,7 @@ fun HeartlineApp(
                         onMeasureOnWatch = { openOnWatch(WatchRoutes.HEART_RATE) },
                         onShare = {
                             share(
-                                ShareRequest("HeartRate", null, null, null, { prompt, person ->
+                                ShareRequest("HeartRate", text = { prompt, person ->
                                     ResultSummary.heartRate(context.resources, state, person, prompt)
                                 }),
                             )
@@ -264,7 +262,7 @@ fun HeartlineApp(
                         onValidate = vm::validateLatest,
                         onShare = {
                             share(
-                                ShareRequest("BloodPressure", null, null, null, { prompt, person ->
+                                ShareRequest("BloodPressure", text = { prompt, person ->
                                     ResultSummary.bp(context.resources, state, person, prompt)
                                 }),
                             )
@@ -320,9 +318,10 @@ fun HeartlineApp(
                                 share(
                                     ShareRequest(
                                         kind = "ECG",
-                                        extension = "pdf",
-                                        mime = "application/pdf",
-                                        buildFile = { name, profile -> withContext(Dispatchers.IO) { reports.export(current, profile, name) } },
+                                        formats = listOf(
+                                            ShareFormat("pdf", "application/pdf", R.string.share_format_pdf) { file, name, profile -> reports.export(current, profile, name, file) },
+                                            ShareFormat("png", "image/png", R.string.share_format_image) { file, name, profile -> reports.exportImage(current, profile, name, file) },
+                                        ),
                                         text = { prompt, person -> ResultSummary.ecg(context.resources, current, person, prompt) },
                                     ),
                                 )

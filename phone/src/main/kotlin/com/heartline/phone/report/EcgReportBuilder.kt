@@ -12,8 +12,8 @@ import java.io.File
 
 /** Builds and exports the localised ECG report for a record. */
 class EcgReportBuilder(private val context: Context, private val exporter: EcgPdfExporter = EcgPdfExporter(context)) {
-    /** [profile] supplies the name the user chose for reports, plus their age. */
-    fun data(record: EcgRecordUi, profile: UserProfile? = null): EcgReportData {
+    /** [name] is the name to print (the user's choice in Settings, or null); [profile] adds the age. */
+    fun data(record: EcgRecordUi, profile: UserProfile? = null, name: String? = null): EcgReportData {
         val symptoms = record.symptoms.joinToString { context.getString(it.label) }.ifEmpty { context.getString(R.string.ecg_no_symptoms) }
         return EcgReportData(
             title = context.getString(R.string.report_title),
@@ -24,7 +24,7 @@ class EcgReportBuilder(private val context: Context, private val exporter: EcgPd
                 Severity.ALERT -> Palette.Light.STATUS_ALERT
                 Severity.NEUTRAL -> Palette.Light.ON_SURFACE_VARIANT
             }.toInt(),
-            recordedAt = listOfNotNull(patient(profile), "${record.date} · ${record.time}").joinToString(" · "),
+            recordedAt = listOfNotNull(patient(profile, name), "${record.date} · ${record.time}").joinToString(" · "),
             details = listOf(
                 context.getString(R.string.ecg_avg_hr) to (record.averageBpm?.let { context.getString(R.string.ecg_bpm_value, it) } ?: "–"),
                 context.getString(R.string.ecg_duration) to "${record.durationSec} ${context.getString(R.string.unit_seconds)}",
@@ -40,14 +40,16 @@ class EcgReportBuilder(private val context: Context, private val exporter: EcgPd
         )
     }
 
-    private fun patient(profile: UserProfile?): String? {
-        val name = profile?.reportDisplayName?.takeIf { it.isNotBlank() } ?: return null
-        val age = profile.age()?.let { context.resources.getQuantityString(R.plurals.profile_age, it, it) }
-        return listOfNotNull(name, age).joinToString(", ")
+    private fun patient(profile: UserProfile?, name: String?): String? {
+        val age = profile?.age()?.let { context.resources.getQuantityString(R.plurals.profile_age, it, it) }
+        return listOfNotNull(name?.takeIf { it.isNotBlank() }, age).joinToString(", ").ifEmpty { null }
     }
 
-    fun export(record: EcgRecordUi, profile: UserProfile? = null, fileName: String = "heartline-ecg-${record.id.take(8)}.pdf"): File =
-        exporter.export(data(record, profile), fileName)
+    fun export(record: EcgRecordUi, profile: UserProfile? = null, name: String? = null, fileName: String = "heartline-ecg-${record.id.take(8)}.pdf"): File =
+        exporter.export(data(record, profile, name), fileName)
+
+    fun exportImage(record: EcgRecordUi, profile: UserProfile? = null, name: String? = null, fileName: String = "heartline-ecg-${record.id.take(8)}.png"): File =
+        exporter.exportImage(data(record, profile, name), fileName)
 
     fun shareIntent(file: File) = exporter.shareIntent(file, context.getString(R.string.report_title))
 }

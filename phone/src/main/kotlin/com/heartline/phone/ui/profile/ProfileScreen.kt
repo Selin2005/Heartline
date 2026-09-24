@@ -54,7 +54,6 @@ import com.heartline.phone.ui.theme.HeartlineTheme
 import com.heartline.shared.profile.Gender
 import com.heartline.shared.profile.ProfileError
 import com.heartline.shared.profile.ProfileField
-import com.heartline.shared.profile.ReportName
 import com.heartline.shared.profile.Sex
 import com.heartline.shared.profile.UserProfile
 import kotlinx.coroutines.launch
@@ -131,7 +130,7 @@ fun ProfileScreen(
         }
         item(key = "gender") {
             RoundedCard(Modifier.gutter()) {
-                GenderSection(form, error(ProfileField.GENDER), error(ProfileField.GENDER_DESCRIPTION)) {
+                GenderSection(form, error(ProfileField.GENDER)) {
                     form = it
                     touch(ProfileField.GENDER)
                 }
@@ -174,7 +173,7 @@ fun ProfileScreen(
 private fun sectionIndex(field: ProfileField) = when (field) {
     ProfileField.FIRST_NAME, ProfileField.LAST_NAME -> 1
     ProfileField.BIRTH_DATE -> 2
-    ProfileField.GENDER, ProfileField.GENDER_DESCRIPTION -> 3
+    ProfileField.GENDER -> 3
     ProfileField.HEIGHT, ProfileField.WEIGHT -> 4
 }
 
@@ -227,7 +226,7 @@ private fun BirthDateField(value: LocalDate?, today: LocalDate, error: ProfileEr
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun GenderSection(form: ProfileForm, error: ProfileError?, descriptionError: ProfileError?, onChange: (ProfileForm) -> Unit) {
+private fun GenderSection(form: ProfileForm, error: ProfileError?, onChange: (ProfileForm) -> Unit) {
     val colors = HeartlineTheme.colors
     SectionTitle(stringResource(R.string.profile_gender))
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -236,16 +235,7 @@ private fun GenderSection(form: ProfileForm, error: ProfileError?, descriptionEr
         }
     }
     if (error != null) ErrorText(error)
-    if (form.gender == Gender.SELF_DESCRIBE) {
-        Spacer(Modifier.height(12.dp))
-        FormField(
-            stringResource(R.string.profile_gender_describe),
-            form.genderDescription,
-            { onChange(form.copy(genderDescription = it.take(40))) },
-            descriptionError
-        )
-    }
-    if (form.gender?.offersReportNameChoice == true) {
+    if (form.gender == Gender.PREFER_NOT_TO_SAY) {
         Spacer(Modifier.height(16.dp))
         Text(stringResource(R.string.profile_calc_sex), style = MaterialTheme.typography.titleSmall, color = colors.onBackground)
         Text(stringResource(R.string.profile_calc_sex_help), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
@@ -254,18 +244,6 @@ private fun GenderSection(form: ProfileForm, error: ProfileError?, descriptionEr
             Chip(stringResource(R.string.profile_female), form.sex == Sex.FEMALE) { onChange(form.copy(sex = Sex.FEMALE)) }
             Chip(stringResource(R.string.profile_male), form.sex == Sex.MALE) { onChange(form.copy(sex = Sex.MALE)) }
             Chip(stringResource(R.string.profile_skip), form.sex == null) { onChange(form.copy(sex = null)) }
-        }
-        Spacer(Modifier.height(16.dp))
-        Text(stringResource(R.string.profile_report_name), style = MaterialTheme.typography.titleSmall, color = colors.onBackground)
-        Text(stringResource(R.string.profile_report_name_help), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Chip(stringResource(R.string.profile_report_full), form.reportName == ReportName.FULL_NAME) {
-                onChange(form.copy(reportName = ReportName.FULL_NAME))
-            }
-            Chip(stringResource(R.string.profile_report_preferred), form.reportName == ReportName.PREFERRED_NAME) {
-                onChange(form.copy(reportName = ReportName.PREFERRED_NAME))
-            }
         }
     }
 }
@@ -408,13 +386,6 @@ private fun FormField(
 private val Gender.label: Int get() = when (this) {
     Gender.WOMAN -> R.string.gender_woman
     Gender.MAN -> R.string.gender_man
-    Gender.NON_BINARY -> R.string.gender_non_binary
-    Gender.TRANS_WOMAN -> R.string.gender_trans_woman
-    Gender.TRANS_MAN -> R.string.gender_trans_man
-    Gender.GENDERQUEER -> R.string.gender_genderqueer
-    Gender.AGENDER -> R.string.gender_agender
-    Gender.TWO_SPIRIT -> R.string.gender_two_spirit
-    Gender.SELF_DESCRIBE -> R.string.gender_self_describe
     Gender.PREFER_NOT_TO_SAY -> R.string.gender_prefer_not
 }
 
@@ -426,7 +397,6 @@ private val ProfileError.message: Int get() = when (this) {
     ProfileError.TOO_YOUNG -> R.string.profile_err_too_young
     ProfileError.TOO_OLD -> R.string.profile_err_too_old
     ProfileError.GENDER_MISSING -> R.string.profile_err_gender
-    ProfileError.GENDER_DESCRIPTION_MISSING -> R.string.profile_err_gender_describe
     ProfileError.HEIGHT_MISSING -> R.string.profile_err_height_missing
     ProfileError.HEIGHT_OUT_OF_RANGE -> R.string.profile_err_height_range
     ProfileError.WEIGHT_MISSING -> R.string.profile_err_weight_missing

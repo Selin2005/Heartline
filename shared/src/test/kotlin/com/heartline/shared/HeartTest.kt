@@ -53,6 +53,14 @@ class HeartTest {
     }
 
     @Test
+    fun oneEarlyArtefactDoesNotRejectTheRest() {
+        // A spurious short first beat used to become the reference and reject every real beat.
+        val ibis = listOf(420) + List(30) { if (it % 2 == 0) 800 else 840 }
+        assertEquals(30, Hrv.clean(ibis).size)
+        assertEquals(40.0, Hrv.compute(ibis)!!.rmssdMs, 1e-9)
+    }
+
+    @Test
     fun minutesAggregateOnBodySamples() {
         val samples = SyntheticHr.samples(0, 180, bpm = 60.0)
         val minutes = MinuteAggregator.aggregate(samples)

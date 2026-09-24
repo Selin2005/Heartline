@@ -2,7 +2,7 @@ package com.heartline.shared.profile
 
 import java.time.LocalDate
 
-enum class ProfileField { FIRST_NAME, LAST_NAME, BIRTH_DATE, GENDER, GENDER_DESCRIPTION, HEIGHT, WEIGHT }
+enum class ProfileField { FIRST_NAME, LAST_NAME, BIRTH_DATE, GENDER, HEIGHT, WEIGHT }
 
 /** One precise problem with one field, so the form can say exactly what is wrong and where. */
 enum class ProfileError(val field: ProfileField) {
@@ -13,7 +13,6 @@ enum class ProfileError(val field: ProfileField) {
     TOO_YOUNG(ProfileField.BIRTH_DATE),
     TOO_OLD(ProfileField.BIRTH_DATE),
     GENDER_MISSING(ProfileField.GENDER),
-    GENDER_DESCRIPTION_MISSING(ProfileField.GENDER_DESCRIPTION),
     HEIGHT_MISSING(ProfileField.HEIGHT),
     HEIGHT_OUT_OF_RANGE(ProfileField.HEIGHT),
     WEIGHT_MISSING(ProfileField.WEIGHT),
@@ -37,10 +36,7 @@ object ProfileValidator {
                 if (age > UserProfile.MAX_AGE) add(ProfileError.TOO_OLD)
             }
         }
-        when {
-            profile.gender == null -> add(ProfileError.GENDER_MISSING)
-            profile.gender == Gender.SELF_DESCRIBE && profile.genderDescription.isBlank() -> add(ProfileError.GENDER_DESCRIPTION_MISSING)
-        }
+        if (profile.gender == null) add(ProfileError.GENDER_MISSING)
         when {
             profile.heightCm <= 0f -> add(ProfileError.HEIGHT_MISSING)
             profile.heightCm !in UserProfile.HEIGHT_CM -> add(ProfileError.HEIGHT_OUT_OF_RANGE)

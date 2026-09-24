@@ -65,7 +65,7 @@ class SharingTest {
         install("com.anthropic.claude", "text/plain")
         val target = AiShare.available(context).single()
         val pdf = File(context.cacheDir, "reports/x.pdf").apply { parentFile!!.mkdirs(); writeText("%PDF") }
-        val intent = AiShare.intent(context, target, "Explain my ECG", pdf)
+        val intent = AiShare.intent(context, target, "Explain my ECG", pdf, "application/pdf")
         assertEquals("text/plain", intent.type)
         assertEquals("com.anthropic.claude", intent.`package`)
         assertEquals("Explain my ECG", intent.getStringExtra(Intent.EXTRA_TEXT))

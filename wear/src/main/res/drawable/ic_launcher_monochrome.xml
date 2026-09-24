@@ -1,21 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Themed-icon layer (Android 13+): heart outline with the ECG beat, one colour. -->
+<!-- Themed-icon layer (Android 13+): the heart outline with its pulse, one colour. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#00000000"
-        android:pathData="M54,77 C51.5,75.2 32,62.5 32,46.5 C32,38.6 37.9,32.8 45.2,32.8 C49.2,32.8 52.4,34.9 54,37.8 C55.6,34.9 58.8,32.8 62.8,32.8 C70.1,32.8 76,38.6 76,46.5 C76,62.5 56.5,75.2 54,77 Z"
-        android:strokeWidth="3.6"
-        android:strokeColor="#FF000000"
-        android:strokeLineJoin="round" />
-    <path
-        android:fillColor="#00000000"
-        android:pathData="M25,54.5 L40,54.5 L44,47 L49,63 L55,40.5 L60.5,60 L64,54.5 L83,54.5"
-        android:strokeWidth="3.6"
-        android:strokeColor="#FF000000"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
+    <group
+        android:pivotX="54"
+        android:pivotY="54.5"
+        android:scaleX="0.86"
+        android:scaleY="0.86">
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M54,76.5 C52.6,75.6 30,61.8 30,45.6 C30,38.2 35.6,32.5 42.8,32.5 C47.6,32.5 51.8,35.2 54,39.2 C56.2,35.2 60.4,32.5 65.2,32.5 C72.4,32.5 78,38.2 78,45.6 C78,61.8 55.4,75.6 54,76.5 Z"
+            android:strokeWidth="3.6"
+            android:strokeColor="#FF000000"
+            android:strokeLineJoin="round" />
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M37,54 L43.5,54 L47,48 L51.5,61 L56.5,43 L61,57.5 L63.5,54 L71,54"
+            android:strokeWidth="3.4"
+            android:strokeColor="#FF000000"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
 </vector>

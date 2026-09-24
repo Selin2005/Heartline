@@ -2,40 +2,47 @@ package com.heartline.shared.profile
 
 import java.time.LocalDate
 import java.time.Period
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 
 /** Sex used only for physiological calculations (body composition, reference ranges). */
 @Serializable
 enum class Sex { FEMALE, MALE }
 
 /** How the user describes their gender. Independent of [Sex]. */
-@Serializable
+@Serializable(with = GenderSerializer::class)
 enum class Gender {
     WOMAN,
     MAN,
-    NON_BINARY,
-    TRANS_WOMAN,
-    TRANS_MAN,
-    GENDERQUEER,
-    AGENDER,
-    TWO_SPIRIT,
-    SELF_DESCRIBE,
     PREFER_NOT_TO_SAY;
 
-    /** Woman and man imply the calculation sex; every other answer asks for it separately (optional). */
+    /** Woman and man imply the calculation sex; "prefer not to say" asks for it separately (optional). */
     val impliedSex: Sex? get() = when (this) {
         WOMAN -> Sex.FEMALE
         MAN -> Sex.MALE
-        else -> null
+        PREFER_NOT_TO_SAY -> null
     }
-
-    /** The name-on-reports choice is offered to people outside the woman/man binary. */
-    val offersReportNameChoice: Boolean get() = impliedSex == null
 }
 
-/** Which name is printed on exports (PDF, CSV, shares). */
+/** Reads profiles saved with the earlier, longer gender list: anything else becomes "prefer not to say". */
+object GenderSerializer : KSerializer<Gender> {
+    override val descriptor = PrimitiveSerialDescriptor("Gender", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: Gender) = encoder.encodeString(value.name)
+
+    override fun deserialize(decoder: Decoder): Gender {
+        val name = decoder.decodeString()
+        return Gender.entries.firstOrNull { it.name == name } ?: Gender.PREFER_NOT_TO_SAY
+    }
+}
+
+/** Which name is printed on exports (PDF, image, shares). A phone setting; the nickname by default. */
 @Serializable
-enum class ReportName { FULL_NAME, PREFERRED_NAME }
+enum class ReportName { PREFERRED_NAME, FULL_NAME, NONE }
 
 /**
  * The user's profile; edited on the phone and synced to the watch.
@@ -48,11 +55,9 @@ data class UserProfile(
     val preferredName: String = "",
     val birthDate: String? = null,
     val gender: Gender? = null,
-    val genderDescription: String = "",
     val sex: Sex? = null,
     val heightCm: Float = 0f,
     val weightKg: Float = 0f,
-    val reportName: ReportName = ReportName.FULL_NAME,
     val birthYear: Int? = null
 ) {
     val birthLocalDate: LocalDate? get() = birthDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
@@ -72,9 +77,12 @@ data class UserProfile(
 
     val fullName: String get() = listOf(firstName.trim(), lastName.trim()).filter { it.isNotEmpty() }.joinToString(" ")
 
-    /** The name printed on reports and exports. */
-    val reportDisplayName: String get() =
-        if (reportName == ReportName.PREFERRED_NAME && gender?.offersReportNameChoice == true) displayName else fullName
+    /** The name printed on reports and exports for the user's choice; null for "no name". */
+    fun reportName(choice: ReportName): String? = when (choice) {
+        ReportName.PREFERRED_NAME -> displayName
+        ReportName.FULL_NAME -> fullName
+        ReportName.NONE -> null
+    }?.takeIf { it.isNotBlank() }
 
     /** The sex used by calculations: the one implied by the gender, else the one the user chose (may be null). */
     val calcSex: Sex? get() = gender?.impliedSex ?: sex

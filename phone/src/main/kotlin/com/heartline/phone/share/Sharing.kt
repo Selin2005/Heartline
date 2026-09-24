@@ -36,7 +36,13 @@ object FileNames {
 }
 
 /** An AI assistant app that can receive a share, and what it accepts. */
-data class AiTarget(val packageName: String, val label: String, val icon: Drawable?, val acceptsPdf: Boolean)
+data class AiTarget(val packageName: String, val label: String, val icon: Drawable?, val acceptsPdf: Boolean, val acceptsImage: Boolean = false) {
+    fun accepts(mime: String) = when {
+        mime == "application/pdf" -> acceptsPdf
+        mime.startsWith("image/") -> acceptsImage
+        else -> false
+    }
+}
 
 /**
  * "Share with AI" targets. A button is offered only for apps that are installed and actually
@@ -55,24 +61,25 @@ object AiShare {
         return packages.mapNotNull { pkg ->
             val acceptsText = resolves(pm, pkg, "text/plain")
             val acceptsPdf = resolves(pm, pkg, "application/pdf")
-            if (!acceptsText && !acceptsPdf) return@mapNotNull null
+            val acceptsImage = resolves(pm, pkg, "image/png")
+            if (!acceptsText && !acceptsPdf && !acceptsImage) return@mapNotNull null
             val info = runCatching { pm.getApplicationInfo(pkg, 0) }.getOrNull() ?: return@mapNotNull null
-            AiTarget(pkg, pm.getApplicationLabel(info).toString(), runCatching { pm.getApplicationIcon(pkg) }.getOrNull(), acceptsPdf)
+            AiTarget(pkg, pm.getApplicationLabel(info).toString(), runCatching { pm.getApplicationIcon(pkg) }.getOrNull(), acceptsPdf, acceptsImage)
         }
     }
 
     private fun resolves(pm: PackageManager, pkg: String, mime: String): Boolean =
         pm.queryIntentActivities(Intent(Intent.ACTION_SEND).setType(mime).setPackage(pkg), 0).isNotEmpty()
 
-    /** Opens [target] with [text] (the results plus the user's prompt) and, if it takes PDFs, the report. */
-    fun intent(context: Context, target: AiTarget, text: String, pdf: File?): Intent {
+    /** Opens [target] with [text] (the results plus the user's prompt) and, when it takes that type, the report [file]. */
+    fun intent(context: Context, target: AiTarget, text: String, file: File?, mime: String? = null): Intent {
         val intent = Intent(Intent.ACTION_SEND).setPackage(target.packageName).putExtra(Intent.EXTRA_TEXT, text)
-        if (pdf != null && target.acceptsPdf) {
-            val uri = uriFor(context, pdf)
-            intent.setType("application/pdf")
+        if (file != null && mime != null && target.accepts(mime)) {
+            val uri = uriFor(context, file)
+            intent.setType(mime)
                 .putExtra(Intent.EXTRA_STREAM, uri)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            intent.clipData = ClipData.newRawUri(pdf.name, uri)
+            intent.clipData = ClipData.newRawUri(file.name, uri)
         } else {
             intent.setType("text/plain")
         }

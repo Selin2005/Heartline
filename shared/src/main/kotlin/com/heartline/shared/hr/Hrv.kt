@@ -7,15 +7,18 @@ data class HrvMetrics(val rmssdMs: Double, val sdnnMs: Double, val pnn50: Double
 
 /** Time-domain HRV from inter-beat intervals, with artefact rejection. */
 object Hrv {
-    /** Drops out-of-range IBIs and beats that differ > 20 % from the previous accepted beat. */
+    /**
+     * Drops out-of-range IBIs and beats more than 20 % from the local median (5 beats each side).
+     * The median, unlike "the previous accepted beat", can't be captured by one early artefact
+     * that would then reject every real beat after it.
+     */
     fun clean(ibiMs: List<Int>): List<Int> {
-        val out = mutableListOf<Int>()
-        for (ibi in ibiMs) {
-            if (ibi !in 300..2000) continue
-            val prev = out.lastOrNull()
-            if (prev == null || abs(ibi - prev) <= prev * 0.2) out += ibi
+        val inRange = ibiMs.filter { it in 300..2000 }
+        return inRange.filterIndexed { i, ibi ->
+            val window = inRange.subList(maxOf(0, i - 5), minOf(inRange.size, i + 6)).sorted()
+            val median = window[window.size / 2]
+            abs(ibi - median) <= median * 0.2
         }
-        return out
     }
 
     fun compute(ibiMs: List<Int>): HrvMetrics? {

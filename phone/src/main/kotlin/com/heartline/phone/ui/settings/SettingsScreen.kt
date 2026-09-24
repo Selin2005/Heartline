@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.rounded.Alarm
+import androidx.compose.material.icons.rounded.Badge
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material3.OutlinedTextField
@@ -51,6 +52,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.heartline.phone.R
+import com.heartline.shared.profile.ReportName
 import com.heartline.phone.ui.components.CardRow
 import com.heartline.phone.ui.components.IconBadge
 import com.heartline.phone.ui.components.ReachabilityScaffold
@@ -97,6 +99,7 @@ private sealed interface Picker {
     data object Low : Picker
     data object Time : Picker
     data object Temperature : Picker
+    data object Name : Picker
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -115,6 +118,7 @@ fun SettingsScreen(
     sharing: SettingsRepository.SharingPrefs = SettingsRepository.SharingPrefs(),
     onAiPrompt: (String?) -> Unit = {},
     onAiAttachPdf: (Boolean) -> Unit = {},
+    onReportName: (ReportName) -> Unit = {},
 ) {
     var editingPrompt by remember { mutableStateOf(false) }
     val colors = HeartlineTheme.colors
@@ -248,6 +252,13 @@ fun SettingsScreen(
         item {
             RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
                 CardRow(
+                    stringResource(R.string.settings_report_name),
+                    subtitle = stringResource(sharing.reportName.label),
+                    leading = { IconBadge(Icons.Rounded.Badge, colors.primary) },
+                    showDivider = true,
+                    onClick = { picker = Picker.Name },
+                )
+                CardRow(
                     stringResource(R.string.settings_ai_prompt),
                     subtitle = sharing.prompt ?: stringResource(R.string.settings_ai_prompt_default),
                     leading = { IconBadge(Icons.Rounded.AutoAwesome, colors.primary) },
@@ -336,6 +347,12 @@ fun SettingsScreen(
             monitor.temperatureFahrenheit,
             onDismiss = { picker = null },
         ) { onChange(SettingChange.Fahrenheit(it)) }
+        Picker.Name -> ChoiceDialog(
+            stringResource(R.string.settings_report_name),
+            ReportName.entries.map { stringResource(it.label) to it },
+            sharing.reportName,
+            onDismiss = { picker = null },
+        ) { onReportName(it) }
         Picker.Time -> {
             val state = rememberTimePickerState(monitor.dailyReminderMinute / 60, monitor.dailyReminderMinute % 60)
             AlertDialog(
@@ -353,6 +370,12 @@ fun SettingsScreen(
         }
         null -> Unit
     }
+}
+
+private val ReportName.label: Int get() = when (this) {
+    ReportName.PREFERRED_NAME -> R.string.report_name_preferred
+    ReportName.FULL_NAME -> R.string.report_name_full
+    ReportName.NONE -> R.string.report_name_none
 }
 
 private fun formatMinute(minute: Int): String =

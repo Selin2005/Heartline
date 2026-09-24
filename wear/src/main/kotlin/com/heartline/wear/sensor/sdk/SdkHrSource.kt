@@ -10,16 +10,39 @@ import com.heartline.wear.sensor.SensorProblem
 import com.samsung.android.service.health.tracking.HealthTracker
 import com.samsung.android.service.health.tracking.data.DataPoint
 import com.samsung.android.service.health.tracking.data.ValueKey
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 
-/** HEART_RATE_CONTINUOUS (sample: track-heart-rate-with-off-body-sensor.html). */
+/**
+ * HEART_RATE_CONTINUOUS (sample: track-heart-rate-with-off-body-sensor.html).
+ *
+ * The app has one heart-rate tracker, and each listener replaces the previous one. The live screen,
+ * stress and the background irregular-rhythm window could otherwise steal it from each other (and
+ * the first to finish would stop it for everyone), so all collectors share one listener.
+ */
 class SdkHrSource(private val gateway: SdkSensorGateway) : HrSource {
-    override fun stream(): Flow<HrSample> = callbackFlow {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    private val shared: SharedFlow<Result<HrSample>> = tracked()
+        .map { Result.success(it) }
+        .catch { emit(Result.failure(it)) }
+        .shareIn(scope, SharingStarted.WhileSubscribed(), replay = 0)
+
+    override fun stream(): Flow<HrSample> = shared.map { it.getOrThrow() }
+
+    private fun tracked(): Flow<HrSample> = callbackFlow {
         gateway.connect()
         val state = withTimeout(10_000) { gateway.state.first { it is GatewayState.Connected || it is GatewayState.Failed } }
         if (state is GatewayState.Failed) throw SensorException(state.problem)
@@ -48,8 +71,10 @@ class SdkHrSource(private val gateway: SdkSensorGateway) : HrSource {
         val status = getValue(ValueKey.HeartRateSet.HEART_RATE_STATUS) ?: 0
         val ibis = getValue(ValueKey.HeartRateSet.IBI_LIST).orEmpty()
         val ibiStatus = getValue(ValueKey.HeartRateSet.IBI_STATUS_LIST).orEmpty()
-        // IBI status 0 marks a reliable interval; others are dropped.
-        val good = ibis.filterIndexed { i, _ -> ibiStatus.getOrNull(i) == 0 }
+        // IBI status 0 marks a reliable interval. A missing status is not a rejection: Hrv.clean
+        // still drops implausible beats.
+        val good = ibis.filterIndexed { i, _ -> (ibiStatus.getOrNull(i) ?: 0) == 0 }
+        if (ibis.isNotEmpty()) Log.v(SdkSensorGateway.TAG, "HR status=$status ibis=$ibis ibiStatus=$ibiStatus")
         return HrSample(
             tsMs = timestamp,
             bpm = getValue(ValueKey.HeartRateSet.HEART_RATE) ?: 0,

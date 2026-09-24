@@ -2,6 +2,7 @@ package com.heartline.phone.ui.share
 
 import android.content.Intent
 import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -35,14 +36,20 @@ import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 import java.io.File
 
-/** What one screen can share: an optional file (built on demand under the chosen name) and a text summary. */
+/** One file a screen can produce, built on demand under the chosen name. */
+data class ShareFormat(
+    val extension: String,
+    val mime: String,
+    @StringRes val label: Int,
+    /** Writes the file; [name] is the name to print (the user's Settings choice) or null. */
+    val build: suspend (fileName: String, name: String?, profile: UserProfile?) -> File,
+)
+
+/** What one screen can share: files in one or more formats (optional) and a text summary. */
 data class ShareRequest(
     /** "ECG", "BloodPressure"… used in the default file name. */
     val kind: String,
-    val extension: String?,
-    val mime: String?,
-    /** Writes the file under the given (sanitised) name; null when only text is shared. */
-    val buildFile: (suspend (fileName: String, profile: UserProfile?) -> File)?,
+    val formats: List<ShareFormat> = emptyList(),
     /** The summary for AI apps: prompt + values; name included only when allowed. */
     val text: (prompt: String, person: String?) -> String,
     /** Offer AI apps (not for raw data exports). */
@@ -86,48 +93,51 @@ fun rememberShareSheet(vm: ShareViewModel = koinViewModel()): (ShareRequest) -> 
         }
     }
 
-    fun fileName(req: ShareRequest, typed: String) =
-        FileNames.sanitize(typed, req.extension ?: "txt", FileNames.default(req.kind, null, java.time.LocalDateTime.now()))
+    val name = profile?.reportName(prefs.reportName)
+
+    fun fileName(req: ShareRequest, format: ShareFormat, typed: String) =
+        FileNames.sanitize(typed, format.extension, FileNames.default(req.kind, null, java.time.LocalDateTime.now()))
+
+    suspend fun build(req: ShareRequest, format: ShareFormat, typed: String) =
+        withContext(Dispatchers.IO) { format.build(fileName(req, format, typed), name, profile) }
 
     fun sendToAi(req: ShareRequest, target: AiTarget, includeName: Boolean) = scope.launch {
         val p = vm.prefs()
-        val person = profile?.reportDisplayName?.takeIf { includeName && it.isNotBlank() }
+        val person = name.takeIf { includeName }
         val text = req.text(ResultSummary.prompt(context.resources, p.prompt), person)
-        val file = if (p.attachPdf && target.acceptsPdf && req.buildFile != null && req.mime == "application/pdf") {
-            req.buildFile.invoke(fileName(req, defaultName(req, profile)), profile.takeIf { includeName })
-        } else {
-            null
-        }
-        runCatching { context.startActivity(AiShare.intent(context, target, text, file)) }
+        // The report goes along when the app takes it: PDF first, else the image.
+        val format = if (p.attachPdf) req.formats.firstOrNull { target.accepts(it.mime) } else null
+        val file = format?.let { withContext(Dispatchers.IO) { it.build(fileName(req, it, defaultName(req, person)), person, profile) } }
+        runCatching { context.startActivity(AiShare.intent(context, target, text, file, format?.mime)) }
         request = null
     }
 
     request?.let { req ->
+        val formats = req.formats
         ModalBottomSheet(onDismissRequest = { request = null }, containerColor = HeartlineTheme.colors.surface) {
             ShareSheetContent(
-                defaultName = req.extension?.let { defaultName(req, profile) },
+                defaultName = if (formats.isNotEmpty()) defaultName(req, name) else null,
                 aiTargets = targets,
+                formats = formats.map { FormatOption(context.getString(it.label), it.extension) },
                 showAi = req.allowAi,
-                onSave = req.buildFile?.let {
-                    { typed ->
-                        scope.launch {
-                            val name = fileName(req, typed)
-                            pendingSave = it(name, profile)
-                            save.launch(name)
-                        }
+                includeNameDefault = name != null,
+                onSave = { typed, i ->
+                    scope.launch {
+                        val file = build(req, formats[i], typed)
+                        pendingSave = file
+                        save.launch(file.name)
                     }
                 },
-                onShare = req.buildFile?.let {
-                    { typed ->
-                        scope.launch {
-                            val file = it(fileName(req, typed), profile)
-                            val intent = Intent(Intent.ACTION_SEND)
-                                .setType(req.mime)
-                                .putExtra(Intent.EXTRA_STREAM, AiShare.uriFor(context, file))
-                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_via)))
-                            request = null
-                        }
+                onShare = { typed, i ->
+                    scope.launch {
+                        val format = formats[i]
+                        val file = build(req, format, typed)
+                        val intent = Intent(Intent.ACTION_SEND)
+                            .setType(format.mime)
+                            .putExtra(Intent.EXTRA_STREAM, AiShare.uriFor(context, file))
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_via)))
+                        request = null
                     }
                 },
                 onAi = { target, includeName ->
@@ -153,5 +163,4 @@ fun rememberShareSheet(vm: ShareViewModel = koinViewModel()): (ShareRequest) -> 
     }
 }
 
-private fun defaultName(req: ShareRequest, profile: UserProfile?) =
-    FileNames.default(req.kind, profile?.reportDisplayName?.takeIf { it.isNotBlank() }, java.time.LocalDateTime.now())
+private fun defaultName(req: ShareRequest, name: String?) = FileNames.default(req.kind, name, java.time.LocalDateTime.now())

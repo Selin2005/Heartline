@@ -49,28 +49,37 @@ class ProfileValidationTest {
         assertEquals(ProfileField.BIRTH_DATE to ProfileError.BIRTH_DATE_FUTURE, only(valid.copy(birthDate = "2027-01-01")).toPair())
         assertEquals(ProfileField.BIRTH_DATE to ProfileError.TOO_YOUNG, only(valid.copy(birthDate = "2020-01-01")).toPair())
         assertEquals(ProfileField.BIRTH_DATE to ProfileError.TOO_OLD, only(valid.copy(birthDate = "1890-01-01")).toPair())
-        assertEquals(
-            ProfileField.GENDER_DESCRIPTION to ProfileError.GENDER_DESCRIPTION_MISSING,
-            only(valid.copy(gender = Gender.SELF_DESCRIBE)).toPair()
-        )
     }
 
     @Test
     fun calcSexComesFromGenderOrExplicitChoice() {
         assertEquals(Sex.MALE, valid.calcSex)
-        val nb = valid.copy(gender = Gender.NON_BINARY)
+        val nb = valid.copy(gender = Gender.PREFER_NOT_TO_SAY)
         assertNull(nb.calcSex)
         assertEquals(Sex.FEMALE, nb.copy(sex = Sex.FEMALE).calcSex)
         assertTrue(ProfileValidator.errors(nb, today).isEmpty())
     }
 
     @Test
-    fun reportNameChoiceAppliesOnlyOutsideTheBinary() {
-        val nb = valid.copy(firstName = "Alex", preferredName = "Lex", gender = Gender.NON_BINARY, reportName = ReportName.PREFERRED_NAME)
-        assertEquals("Lex", nb.reportDisplayName)
-        assertEquals("Alex Rahimi", nb.copy(reportName = ReportName.FULL_NAME).reportDisplayName)
-        assertEquals("Sam Rahimi", valid.copy(reportName = ReportName.PREFERRED_NAME).reportDisplayName)
-        assertEquals("Alex", nb.copy(preferredName = " ").displayName)
+    fun reportNameFollowsTheChoice() {
+        val p = valid.copy(firstName = "Alex", preferredName = "Lex")
+        assertEquals("Lex", p.reportName(ReportName.PREFERRED_NAME))
+        assertEquals("Alex Rahimi", p.reportName(ReportName.FULL_NAME))
+        assertNull(p.reportName(ReportName.NONE))
+        // No nickname: the first name stands in.
+        assertEquals("Alex", p.copy(preferredName = " ").reportName(ReportName.PREFERRED_NAME))
+    }
+
+    @Test
+    fun legacyGendersReadAsPreferNotToSay() {
+        val old = Protocol.json.decodeFromString<UserProfile>(
+            """{"firstName":"Alex","gender":"NON_BINARY","genderDescription":"x","reportName":"FULL_NAME"}"""
+        )
+        assertEquals(Gender.PREFER_NOT_TO_SAY, old.gender)
+        assertEquals(
+            Gender.MAN,
+            Protocol.json.decodeFromString<UserProfile>(Protocol.json.encodeToString(UserProfile.serializer(), valid)).gender
+        )
     }
 
     @Test

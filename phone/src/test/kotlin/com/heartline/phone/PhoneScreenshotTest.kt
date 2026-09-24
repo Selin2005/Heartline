@@ -26,7 +26,6 @@ import com.heartline.shared.model.Metric
 import com.heartline.shared.profile.Gender
 import com.heartline.phone.link.WatchLinkUi
 import com.heartline.shared.sync.PeerProbe
-import com.heartline.shared.profile.ReportName
 import com.heartline.shared.profile.UserProfile
 import com.heartline.phone.ui.model.BpHomeUi
 import com.heartline.phone.ui.model.CalibrationUi
@@ -148,9 +147,9 @@ class PhoneScreenshotTest(private val theme: String) {
         )
     }
 
-    @Test fun profileNonBinary() = shot("profile_non_binary") {
+    @Test fun profilePreferNotToSay() = shot("profile_prefer_not_to_say") {
         ProfileScreen(
-            UserProfile("Alex", "Moradi", "Lex", "1995-01-30", Gender.NON_BINARY, heightCm = 172f, weightKg = 66f, reportName = ReportName.PREFERRED_NAME),
+            UserProfile("Alex", "Moradi", "Lex", "1995-01-30", Gender.PREFER_NOT_TO_SAY, heightCm = 172f, weightKg = 66f),
             onBack = {},
             today = profileToday,
             listState = rememberLazyListState(initialFirstVisibleItemIndex = 3)
@@ -169,6 +168,10 @@ class PhoneScreenshotTest(private val theme: String) {
         )
     }
 
+    @Test fun settingsSharing() = shot("settings_sharing") {
+        SettingsScreen(watchConnected = true, listState = rememberLazyListState(initialFirstVisibleItemIndex = 7))
+    }
+
     @Test fun onboarding() = shot("onboarding") { OnboardingScreen() }
 
     @Test fun shareSheet() = shot("share_sheet") {
@@ -179,9 +182,11 @@ class PhoneScreenshotTest(private val theme: String) {
                     com.heartline.phone.share.AiTarget("com.anthropic.claude", "Claude", null, acceptsPdf = true),
                     com.heartline.phone.share.AiTarget("com.openai.chatgpt", "ChatGPT", null, acceptsPdf = true),
                     com.heartline.phone.share.AiTarget("com.google.android.apps.bard", "Gemini", null, acceptsPdf = false),
+                    com.heartline.phone.share.AiTarget("ai.x.grok", "Grok", null, acceptsPdf = false),
                 ),
-                onSave = {},
-                onShare = {},
+                formats = listOf(com.heartline.phone.ui.share.FormatOption("PDF", "pdf"), com.heartline.phone.ui.share.FormatOption("Image", "png")),
+                onSave = { _, _ -> },
+                onShare = { _, _ -> },
             )
         }
     }

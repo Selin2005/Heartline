@@ -182,11 +182,11 @@ Do not edit by hand.
 ### profile_errors_light
 <img src="phone/profile_errors_light.png" width="280">
 
-### profile_non_binary_dark
-<img src="phone/profile_non_binary_dark.png" width="280">
+### profile_prefer_not_to_say_dark
+<img src="phone/profile_prefer_not_to_say_dark.png" width="280">
 
-### profile_non_binary_light
-<img src="phone/profile_non_binary_light.png" width="280">
+### profile_prefer_not_to_say_light
+<img src="phone/profile_prefer_not_to_say_light.png" width="280">
 
 ### profile_dark
 <img src="phone/profile_dark.png" width="280">
@@ -199,6 +199,12 @@ Do not edit by hand.
 
 ### settings_monitoring_light
 <img src="phone/settings_monitoring_light.png" width="280">
+
+### settings_sharing_dark
+<img src="phone/settings_sharing_dark.png" width="280">
+
+### settings_sharing_light
+<img src="phone/settings_sharing_light.png" width="280">
 
 ### settings_dark
 <img src="phone/settings_dark.png" width="280">

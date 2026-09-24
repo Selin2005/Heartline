@@ -152,6 +152,8 @@ class SettingsViewModel(
 
     fun setAiAttachPdf(on: Boolean) = viewModelScope.launch { settings.setAiAttachPdf(on) }
 
+    fun setReportName(choice: com.heartline.shared.profile.ReportName) = viewModelScope.launch { settings.setReportName(choice) }
+
     /** Saves the change here, pushes it to the watch and re-arms the phone reminders. */
     fun change(change: SettingChange) = viewModelScope.launch {
         val next = settings.update { change.applyTo(it) }

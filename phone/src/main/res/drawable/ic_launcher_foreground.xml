@@ -1,31 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Heartline mark: a white heart crossed by one ECG beat. Outside the heart the trace is white;
-  where it crosses the heart it turns red (the heart is clipped to itself), so the beat reads as
-  cut into the heart. Everything sits inside the 66 dp safe zone of the 108 dp canvas.
+  Heartline mark (One UI 8 style): one rounded heart in a coral-to-red gradient with a soft
+  highlight, and a single white pulse inside it. Kept well inside the 66 dp safe zone.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#00000000"
-        android:pathData="M25,54.5 L40,54.5 L44,47 L49,63 L55,40.5 L60.5,60 L64,54.5 L83,54.5"
-        android:strokeWidth="3.6"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M54,77 C51.5,75.2 32,62.5 32,46.5 C32,38.6 37.9,32.8 45.2,32.8 C49.2,32.8 52.4,34.9 54,37.8 C55.6,34.9 58.8,32.8 62.8,32.8 C70.1,32.8 76,38.6 76,46.5 C76,62.5 56.5,75.2 54,77 Z" />
-    <group>
-        <clip-path android:pathData="M54,77 C51.5,75.2 32,62.5 32,46.5 C32,38.6 37.9,32.8 45.2,32.8 C49.2,32.8 52.4,34.9 54,37.8 C55.6,34.9 58.8,32.8 62.8,32.8 C70.1,32.8 76,38.6 76,46.5 C76,62.5 56.5,75.2 54,77 Z" />
+    <group
+        android:pivotX="54"
+        android:pivotY="54.5"
+        android:scaleX="0.86"
+        android:scaleY="0.86">
+        <path android:pathData="M54,76.5 C52.6,75.6 30,61.8 30,45.6 C30,38.2 35.6,32.5 42.8,32.5 C47.6,32.5 51.8,35.2 54,39.2 C56.2,35.2 60.4,32.5 65.2,32.5 C72.4,32.5 78,38.2 78,45.6 C78,61.8 55.4,75.6 54,76.5 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:endX="70"
+                    android:endY="76"
+                    android:startX="36"
+                    android:startY="32"
+                    android:type="linear">
+                    <item android:color="#FFFF8A99" android:offset="0" />
+                    <item android:color="#FFF5405C" android:offset="0.55" />
+                    <item android:color="#FFE0223F" android:offset="1" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <group>
+            <clip-path android:pathData="M54,76.5 C52.6,75.6 30,61.8 30,45.6 C30,38.2 35.6,32.5 42.8,32.5 C47.6,32.5 51.8,35.2 54,39.2 C56.2,35.2 60.4,32.5 65.2,32.5 C72.4,32.5 78,38.2 78,45.6 C78,61.8 55.4,75.6 54,76.5 Z" />
+            <path android:pathData="M20,20 h68 v30 h-68 z">
+                <aapt:attr name="android:fillColor">
+                    <gradient
+                        android:centerX="42"
+                        android:centerY="36"
+                        android:gradientRadius="22"
+                        android:type="radial">
+                        <item android:color="#40FFFFFF" android:offset="0" />
+                        <item android:color="#00FFFFFF" android:offset="1" />
+                    </gradient>
+                </aapt:attr>
+            </path>
+        </group>
         <path
             android:fillColor="#00000000"
-            android:pathData="M25,54.5 L40,54.5 L44,47 L49,63 L55,40.5 L60.5,60 L64,54.5 L83,54.5"
-            android:strokeWidth="3.6"
-            android:strokeColor="#FFE8364F"
+            android:pathData="M37,54 L43.5,54 L47,48 L51.5,61 L56.5,43 L61,57.5 L63.5,54 L71,54"
+            android:strokeWidth="3.4"
+            android:strokeColor="#FFFFFFFF"
             android:strokeLineCap="round"
             android:strokeLineJoin="round" />
     </group>

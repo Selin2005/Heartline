@@ -2,6 +2,7 @@ package com.heartline.phone.report
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -189,18 +190,36 @@ class EcgReportPainter(private val regular: Typeface = Typeface.DEFAULT, private
 
 /** Writes the report to a PDF in the cache and builds a share intent via FileProvider. */
 class EcgPdfExporter(private val context: Context) {
+    private fun painter() = EcgReportPainter(
+        ResourcesCompat.getFont(context, R.font.inter_regular) ?: Typeface.DEFAULT,
+        ResourcesCompat.getFont(context, R.font.inter_semibold) ?: Typeface.DEFAULT_BOLD,
+    )
+
+    private fun target(fileName: String) = File(File(context.cacheDir, "reports").apply { mkdirs() }, fileName)
+
+    /** The same page as a PNG image, [scale]× the PDF size (3× ≈ 250 dpi, sharp on any phone). */
+    fun exportImage(data: EcgReportData, fileName: String, scale: Float = 3f): File {
+        val bitmap = Bitmap.createBitmap((EcgStripLayout.PAGE_WIDTH_PT * scale).toInt(), (EcgStripLayout.PAGE_HEIGHT_PT * scale).toInt(), Bitmap.Config.ARGB_8888)
+        try {
+            val canvas = Canvas(bitmap)
+            canvas.scale(scale, scale)
+            painter().draw(canvas, data)
+            val file = target(fileName)
+            file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            return file
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
     fun export(data: EcgReportData, fileName: String): File {
-        val painter = EcgReportPainter(
-            ResourcesCompat.getFont(context, R.font.inter_regular) ?: Typeface.DEFAULT,
-            ResourcesCompat.getFont(context, R.font.inter_semibold) ?: Typeface.DEFAULT_BOLD,
-        )
+        val painter = painter()
         val document = PdfDocument()
         try {
             val page = document.startPage(PdfDocument.PageInfo.Builder(EcgStripLayout.PAGE_WIDTH_PT, EcgStripLayout.PAGE_HEIGHT_PT, 1).create())
             painter.draw(page.canvas, data)
             document.finishPage(page)
-            val dir = File(context.cacheDir, "reports").apply { mkdirs() }
-            val file = File(dir, fileName)
+            val file = target(fileName)
             file.outputStream().use(document::writeTo)
             return file
         } finally {

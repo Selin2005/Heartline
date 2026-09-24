@@ -13,6 +13,8 @@ import com.heartline.wear.quick.QuickMeasureViewModel
 import com.heartline.wear.quick.QuickState
 import com.heartline.wear.quick.WatchProfileStore
 import com.heartline.wear.sensor.FakeHrSource
+import com.heartline.wear.sensor.HrSource
+import com.heartline.wear.sensor.QuickHint
 import com.heartline.wear.sensor.FakeQuickSource
 import com.heartline.wear.sensor.StressSource
 import kotlinx.coroutines.Dispatchers
@@ -82,11 +84,37 @@ class QuickMeasureTest {
 
     @Test
     fun stressFromOneMinuteOfHrv() = runBlocking {
-        val stress = StressSource(FakeHrSource(bpm = 70.0, irregularity = 0.06, periodMs = 0), seconds = 60)
+        val stress = StressSource(FakeHrSource(bpm = 70.0, irregularity = 0.06, periodMs = 1), seconds = 60, tickMs = 20)
         val vm = QuickMeasureViewModel(stress, profiles, store, { scheduled++ })
         vm.start()
         val done = withTimeout(10_000) { vm.state.first { it is QuickState.Done } } as QuickState.Done
         val summary = done.summary as RecordSummary.Stress
         assertTrue("$summary", summary.score in 0..100 && summary.rmssdMs!! > 0)
+    }
+
+    @Test
+    fun stressEndsWhenTheTrackerSendsNothing() = runBlocking {
+        val silent = object : HrSource {
+            override fun stream() = kotlinx.coroutines.flow.flow<com.heartline.shared.hr.HrSample> { kotlinx.coroutines.awaitCancellation() }
+        }
+        val vm = QuickMeasureViewModel(StressSource(silent, seconds = 60, tickMs = 5), profiles, store, { scheduled++ })
+        vm.start()
+        val failed = withTimeout(5_000) { vm.state.first { it is QuickState.Failed } } as QuickState.Failed
+        assertEquals(QuickHint.LOW_SIGNAL, failed.hint)
+    }
+
+    @Test
+    fun stressSurvivesATrackerThatPausesMidway() = runBlocking {
+        // Samples stop after 20 s (another listener took the tracker); the minute still ends on time.
+        val pausing = object : HrSource {
+            override fun stream() = kotlinx.coroutines.flow.flow {
+                com.heartline.shared.sample.SyntheticHr.samples(0, 20, 70.0, 0.06, 3).forEach { emit(it) }
+                kotlinx.coroutines.awaitCancellation()
+            }
+        }
+        val vm = QuickMeasureViewModel(StressSource(pausing, seconds = 60, tickMs = 5), profiles, store, { scheduled++ })
+        vm.start()
+        val done = withTimeout(5_000) { vm.state.first { it is QuickState.Done } } as QuickState.Done
+        assertTrue((done.summary as RecordSummary.Stress).rmssdMs!! > 0)
     }
 }

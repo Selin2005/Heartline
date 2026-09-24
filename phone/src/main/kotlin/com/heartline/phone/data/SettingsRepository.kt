@@ -9,6 +9,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.heartline.shared.hr.MonitorSettings
 import com.heartline.shared.sync.Protocol
 import kotlinx.serialization.encodeToString
+import com.heartline.shared.profile.ReportName
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -29,6 +30,7 @@ class SettingsRepository(private val context: Context, private val now: () -> Lo
         val AI_CONSENT = booleanPreferencesKey("ai_consent")
         val AI_PROMPT = stringPreferencesKey("ai_prompt")
         val AI_ATTACH_PDF = booleanPreferencesKey("ai_attach_pdf")
+        val REPORT_NAME = stringPreferencesKey("report_name")
     }
 
     /**
@@ -54,11 +56,25 @@ class SettingsRepository(private val context: Context, private val now: () -> Lo
         return first
     }
 
-    /** Phone-only sharing preferences for "Share with AI". */
-    data class SharingPrefs(val consent: Boolean = false, val prompt: String? = null, val attachPdf: Boolean = true)
+    /** Phone-only sharing preferences: "Share with AI", and the name printed on exports (nickname by default). */
+    data class SharingPrefs(
+        val consent: Boolean = false,
+        val prompt: String? = null,
+        val attachPdf: Boolean = true,
+        val reportName: ReportName = ReportName.PREFERRED_NAME,
+    )
 
     val sharing: Flow<SharingPrefs> = context.settingsStore.data.map {
-        SharingPrefs(it[Keys.AI_CONSENT] ?: false, it[Keys.AI_PROMPT], it[Keys.AI_ATTACH_PDF] ?: true)
+        SharingPrefs(
+            it[Keys.AI_CONSENT] ?: false,
+            it[Keys.AI_PROMPT],
+            it[Keys.AI_ATTACH_PDF] ?: true,
+            ReportName.entries.firstOrNull { name -> name.name == it[Keys.REPORT_NAME] } ?: ReportName.PREFERRED_NAME,
+        )
+    }
+
+    suspend fun setReportName(choice: ReportName) {
+        context.settingsStore.edit { it[Keys.REPORT_NAME] = choice.name }
     }
 
     suspend fun setAiConsent() {

@@ -8,9 +8,11 @@ import com.heartline.shared.profile.StressIndex
 import com.heartline.shared.profile.UserProfile
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.catch
+import android.util.Log
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.takeWhile
 import kotlin.random.Random
 
 /** Why a quick measurement is struggling; shown as a hint while measuring. */
@@ -36,39 +38,64 @@ interface QuickSource {
     fun measure(profile: UserProfile?): Flow<QuickEvent>
 }
 
-/** Stress from one minute of resting HRV (HEART_RATE_CONTINUOUS IBIs), plus EDA when available. */
+/**
+ * Stress from one minute of resting HRV (HEART_RATE_CONTINUOUS IBIs), plus EDA when available.
+ *
+ * The minute is timed by the clock, not by counting samples: the tracker can pause or deliver in
+ * bursts, and a sample count could then wait forever. No data at all within [noDataSeconds] ends
+ * the measurement with a hint instead of a stuck progress ring.
+ */
 class StressSource(
     private val hr: HrSource,
     private val skinConductance: suspend () -> Float? = { null },
     override val seconds: Int = 60,
+    private val tickMs: Long = 1_000,
+    private val noDataSeconds: Int = 15,
 ) : QuickSource {
     override val metric = Metric.STRESS
     override val kind = RecordKind.STRESS
 
-    override fun measure(profile: UserProfile?): Flow<QuickEvent> = flow {
+    override fun measure(profile: UserProfile?): Flow<QuickEvent> = channelFlow {
         val ibis = mutableListOf<Int>()
-        var n = 0
-        var error: Throwable? = null
-        hr.stream()
-            .catch { error = it }
-            .takeWhile { n < seconds }
-            .collect { sample ->
-                n++
+        var samples = 0
+        var offBody = false
+        val reader = launch {
+            hr.stream().collect { sample ->
+                samples++
+                offBody = !sample.onBody
+                if (!sample.onBody) return@collect
                 ibis += sample.ibiMs
-                emit(QuickEvent.Progress(n.toFloat() / seconds, if (!sample.onBody) QuickHint.WRIST_CONTACT else null))
-                if (sample.onBody && sample.bpm > 0) emit(QuickEvent.Live(sample.bpm, Hrv.compute(ibis)?.rmssdMs))
+                if (sample.bpm > 0) send(QuickEvent.Live(sample.bpm, Hrv.compute(ibis)?.rmssdMs))
             }
-        error?.let {
-            emit(QuickEvent.Failed((it as? SensorException)?.problem))
-            return@flow
         }
+        for (second in 1..seconds) {
+            delay(tickMs)
+            if (second == noDataSeconds && samples == 0) {
+                log("no heart-rate data after $noDataSeconds s")
+                reader.cancel()
+                send(QuickEvent.Failed(null, QuickHint.LOW_SIGNAL))
+                return@channelFlow
+            }
+            send(QuickEvent.Progress(second.toFloat() / seconds, if (offBody) QuickHint.WRIST_CONTACT else null))
+        }
+        reader.cancel()
         val hrv = Hrv.compute(ibis)
+        log("done: samples=$samples ibis=${ibis.size} clean=${Hrv.clean(ibis).size} rmssd=${hrv?.rmssdMs}")
         if (hrv == null) {
-            emit(QuickEvent.Failed(null, QuickHint.LOW_SIGNAL))
+            send(QuickEvent.Failed(null, QuickHint.LOW_SIGNAL))
         } else {
-            val eda = skinConductance()
-            emit(QuickEvent.Result(RecordSummary.Stress(StressIndex.score(hrv.rmssdMs, eda), hrv.rmssdMs, eda)))
+            val eda = withTimeoutOrNull(EDA_TIMEOUT_MS) { skinConductance() }
+            send(QuickEvent.Result(RecordSummary.Stress(StressIndex.score(hrv.rmssdMs, eda), hrv.rmssdMs, eda)))
         }
+    }
+
+    private fun log(message: String) {
+        runCatching { Log.i(TAG, message) }
+    }
+
+    private companion object {
+        const val TAG = "Heartline/Stress"
+        const val EDA_TIMEOUT_MS = 15_000L
     }
 }
 

@@ -51,4 +51,21 @@ class ReportExportTest {
             assertTrue("strip ${strip.index}", (left until right step 3).count(::hasTrace) > 60)
         }
     }
+
+    @Test
+    fun imageExportIsASharpPngOfThePage() {
+        val file = EcgReportBuilder(context).exportImage(SampleData.ecgRecords[0], name = "Sara", fileName = "ecg.png")
+        val bitmap = android.graphics.BitmapFactory.decodeFile(file.path)
+        assertEquals(EcgStripLayout.PAGE_WIDTH_PT * 3, bitmap.width)
+        assertEquals(EcgStripLayout.PAGE_HEIGHT_PT * 3, bitmap.height)
+        assertEquals(Color.WHITE, bitmap.getPixel(2, 2))
+    }
+
+    @Test
+    fun nameFollowsTheSettingsChoice() {
+        val profile = com.heartline.shared.profile.UserProfile("Sara", "Karimi", "Sari", "1990-06-12")
+        val builder = EcgReportBuilder(context)
+        assertTrue(builder.data(SampleData.ecgRecords[0], profile, "Sari").recordedAt.startsWith("Sari, "))
+        assertTrue(!builder.data(SampleData.ecgRecords[0], profile, null).recordedAt.contains("Sar"))
+    }
 }

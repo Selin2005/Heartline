@@ -5,7 +5,6 @@ import com.heartline.shared.profile.NumberInput
 import com.heartline.shared.profile.ProfileError
 import com.heartline.shared.profile.ProfileField
 import com.heartline.shared.profile.ProfileValidator
-import com.heartline.shared.profile.ReportName
 import com.heartline.shared.profile.Sex
 import com.heartline.shared.profile.UserProfile
 import java.time.LocalDate
@@ -22,15 +21,13 @@ data class ProfileForm(
     val preferredName: String = "",
     val birthDate: LocalDate? = null,
     val gender: Gender? = null,
-    val genderDescription: String = "",
     val sex: Sex? = null,
     val heightUnit: HeightUnit = HeightUnit.CM,
     val heightCm: String = "",
     val heightFt: String = "",
     val heightIn: String = "",
     val weightUnit: WeightUnit = WeightUnit.KG,
-    val weight: String = "",
-    val reportName: ReportName = ReportName.FULL_NAME
+    val weight: String = ""
 ) {
     fun toProfile(): UserProfile = UserProfile(
         firstName = firstName.trim(),
@@ -38,11 +35,9 @@ data class ProfileForm(
         preferredName = preferredName.trim(),
         birthDate = birthDate?.toString(),
         gender = gender,
-        genderDescription = if (gender == Gender.SELF_DESCRIBE) genderDescription.trim() else "",
-        sex = if (gender?.impliedSex != null) gender.impliedSex else sex,
+        sex = gender?.impliedSex ?: sex,
         heightCm = heightInCm() ?: 0f,
-        weightKg = weightInKg() ?: 0f,
-        reportName = if (gender?.offersReportNameChoice == true) reportName else ReportName.FULL_NAME
+        weightKg = weightInKg() ?: 0f
     )
 
     fun evaluate(today: LocalDate = LocalDate.now()): Map<ProfileField, ProfileError> = ProfileValidator.errors(toProfile(), today)
@@ -82,11 +77,9 @@ data class ProfileForm(
                 preferredName = profile.preferredName,
                 birthDate = profile.birthLocalDate,
                 gender = profile.gender,
-                genderDescription = profile.genderDescription,
                 sex = profile.sex,
                 heightCm = profile.heightCm.takeIf { it > 0f }?.roundToInt()?.toString().orEmpty(),
-                weight = profile.weightKg.takeIf { it > 0f }?.let { format1(it) }.orEmpty(),
-                reportName = profile.reportName
+                weight = profile.weightKg.takeIf { it > 0f }?.let { format1(it) }.orEmpty()
             )
         }
 
