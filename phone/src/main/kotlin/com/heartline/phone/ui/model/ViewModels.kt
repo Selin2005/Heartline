@@ -11,6 +11,7 @@ import com.heartline.phone.data.RecordRepository
 import com.heartline.phone.data.SettingsRepository
 import com.heartline.shared.hr.MonitorSettings
 import com.heartline.shared.model.Metric
+import com.heartline.phone.data.ProfileRepository
 import com.heartline.phone.report.EcgReportBuilder
 import com.heartline.shared.model.RecordKind
 import com.heartline.shared.model.Symptom
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -54,6 +56,7 @@ class EcgDetailViewModel(
     private val sync: PhoneSyncEngine,
     private val formatter: RecordFormatter,
     private val reports: EcgReportBuilder,
+    private val profiles: ProfileRepository,
 ) : ViewModel() {
     val state: StateFlow<EcgRecordUi?> = repository.observe(id)
         .flatMapLatest { record -> flow { emit(record?.let { formatter.ecg(it, repository.displayWave(it)) }) } }
@@ -64,7 +67,8 @@ class EcgDetailViewModel(
     /** Writes the PDF off the main thread and hands back a share intent. */
     fun sharePdf(onReady: (Intent) -> Unit) = viewModelScope.launch {
         val record = state.value ?: return@launch
-        val file = withContext(Dispatchers.IO) { reports.export(record) }
+        val profile = profiles.profile.first()
+        val file = withContext(Dispatchers.IO) { reports.export(record, profile) }
         onReady(reports.shareIntent(file))
     }
 

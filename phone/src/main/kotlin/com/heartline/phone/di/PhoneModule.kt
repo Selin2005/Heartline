@@ -79,7 +79,7 @@ val phoneModule = module {
     viewModel { HomeViewModel(get(), get(), get(), get(), get()) }
     viewModel { EcgListViewModel(get(), get()) }
     single { EcgReportBuilder(androidContext()) }
-    viewModel { params -> EcgDetailViewModel(params.get(), get(), get(), get(), get()) }
+    viewModel { params -> EcgDetailViewModel(params.get(), get(), get(), get(), get(), get()) }
     viewModel { SettingsViewModel(get(), get(), get(), get(), get()) }
     viewModel { HeartRateViewModel(get(), get()) }
     viewModel { BpHomeViewModel(get(), get()) }

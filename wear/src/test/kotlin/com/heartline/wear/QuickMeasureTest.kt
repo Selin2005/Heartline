@@ -5,7 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.heartline.shared.model.Metric
 import com.heartline.shared.model.RecordKind
 import com.heartline.shared.model.RecordSummary
-import com.heartline.shared.profile.Sex
+import com.heartline.shared.profile.Gender
 import com.heartline.shared.profile.UserProfile
 import com.heartline.wear.data.WatchDatabase
 import com.heartline.wear.data.WatchRecordStore
@@ -73,7 +73,7 @@ class QuickMeasureTest {
         vm.start()
         assertEquals(QuickState.NeedsProfile, vm.state.value)
 
-        profiles.update(UserProfile(1988, Sex.MALE, 180f, 80f))
+        profiles.update(UserProfile("Sam", "Lee", birthDate = "1988-05-04", gender = Gender.MAN, heightCm = 180f, weightKg = 80f))
         vm.reset()
         vm.start()
         val done = withTimeout(10_000) { vm.state.first { it is QuickState.Done } } as QuickState.Done

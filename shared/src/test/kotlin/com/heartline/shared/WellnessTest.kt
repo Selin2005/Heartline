@@ -3,6 +3,7 @@ package com.heartline.shared
 import com.heartline.shared.model.RecordKind
 import com.heartline.shared.model.RecordMeta
 import com.heartline.shared.model.RecordSummary
+import com.heartline.shared.profile.Gender
 import com.heartline.shared.profile.Sex
 import com.heartline.shared.profile.StressIndex
 import com.heartline.shared.profile.StressLevel
@@ -36,9 +37,11 @@ class WellnessTest {
 
     @Test
     fun profileValidationAndAge() {
-        val p = UserProfile(1990, Sex.FEMALE, 168f, 61f)
+        val p = UserProfile("Ada", "Lovelace", birthDate = "1990-03-01", gender = Gender.WOMAN, heightCm = 168f, weightKg = 61f)
         assertTrue(p.isComplete)
-        assertEquals(36, p.age(2026))
+        assertEquals(36, p.age(java.time.LocalDate.of(2026, 3, 1)))
+        assertEquals(35, p.age(java.time.LocalDate.of(2026, 2, 28)))
+        assertEquals(Sex.FEMALE, p.calcSex)
         assertFalse(p.copy(heightCm = 40f).isComplete)
     }
 

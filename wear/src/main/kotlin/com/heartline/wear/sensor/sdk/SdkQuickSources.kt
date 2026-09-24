@@ -26,7 +26,6 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
-import java.time.Year
 
 /**
  * Shared plumbing for on-demand SDK trackers: connect, check capability, attach a listener,
@@ -134,9 +133,10 @@ class SdkBiaSource(private val gateway: SdkSensorGateway) :
     SdkQuickSource(gateway, TrackerKind.BIA_ON_DEMAND, Metric.BODY_COMPOSITION, RecordKind.BODY_COMPOSITION, 15) {
     override fun create(profile: UserProfile?): HealthTracker? {
         val p = profile ?: throw SensorException(SensorProblem.NOT_SUPPORTED)
+        val sex = p.calcSex ?: throw SensorException(SensorProblem.NOT_SUPPORTED)
         val sdkProfile = TrackerUserProfile.Builder()
-            .setAge(p.age(Year.now().value))
-            .setGender(if (p.sex == Sex.MALE) 1 else 0)
+            .setAge(p.age() ?: throw SensorException(SensorProblem.NOT_SUPPORTED))
+            .setGender(if (sex == Sex.MALE) 1 else 0)
             .setHeight(p.heightCm)
             .setWeight(p.weightKg)
             .build()

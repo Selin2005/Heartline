@@ -1,6 +1,7 @@
 package com.heartline.phone.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -160,6 +161,7 @@ fun Chip(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick
         modifier = modifier
             .clip(RoundedCornerShape(50))
             .background(if (selected) colors.primary else colors.surface)
+            .border(1.dp, if (selected) colors.primary else colors.divider, RoundedCornerShape(50))
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 9.dp),
     )

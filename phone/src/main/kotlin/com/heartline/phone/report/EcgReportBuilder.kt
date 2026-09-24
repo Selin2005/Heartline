@@ -7,11 +7,13 @@ import com.heartline.phone.ui.components.label
 import com.heartline.phone.ui.model.EcgRecordUi
 import com.heartline.shared.design.Palette
 import com.heartline.shared.model.Severity
+import com.heartline.shared.profile.UserProfile
 import java.io.File
 
 /** Builds and exports the localised ECG report for a record. */
 class EcgReportBuilder(private val context: Context, private val exporter: EcgPdfExporter = EcgPdfExporter(context)) {
-    fun data(record: EcgRecordUi): EcgReportData {
+    /** [profile] supplies the name the user chose for reports, plus their age. */
+    fun data(record: EcgRecordUi, profile: UserProfile? = null): EcgReportData {
         val symptoms = record.symptoms.joinToString { context.getString(it.label) }.ifEmpty { context.getString(R.string.ecg_no_symptoms) }
         return EcgReportData(
             title = context.getString(R.string.report_title),
@@ -22,7 +24,7 @@ class EcgReportBuilder(private val context: Context, private val exporter: EcgPd
                 Severity.ALERT -> Palette.Light.STATUS_ALERT
                 Severity.NEUTRAL -> Palette.Light.ON_SURFACE_VARIANT
             }.toInt(),
-            recordedAt = "${record.date} · ${record.time}",
+            recordedAt = listOfNotNull(patient(profile), "${record.date} · ${record.time}").joinToString(" · "),
             details = listOf(
                 context.getString(R.string.ecg_avg_hr) to (record.averageBpm?.let { context.getString(R.string.ecg_bpm_value, it) } ?: "–"),
                 context.getString(R.string.ecg_duration) to "${record.durationSec} ${context.getString(R.string.unit_seconds)}",
@@ -36,7 +38,14 @@ class EcgReportBuilder(private val context: Context, private val exporter: EcgPd
         )
     }
 
-    fun export(record: EcgRecordUi): File = exporter.export(data(record), "heartline-ecg-${record.id.take(8)}.pdf")
+    private fun patient(profile: UserProfile?): String? {
+        val name = profile?.reportDisplayName?.takeIf { it.isNotBlank() } ?: return null
+        val age = profile.age()?.let { context.resources.getQuantityString(R.plurals.profile_age, it, it) }
+        return listOfNotNull(name, age).joinToString(", ")
+    }
+
+    fun export(record: EcgRecordUi, profile: UserProfile? = null): File =
+        exporter.export(data(record, profile), "heartline-ecg-${record.id.take(8)}.pdf")
 
     fun shareIntent(file: File) = exporter.shareIntent(file, context.getString(R.string.report_title))
 }

@@ -125,6 +125,18 @@ Do not edit by hand.
 ### onboarding_light
 <img src="phone/onboarding_light.png" width="280">
 
+### profile_errors_dark
+<img src="phone/profile_errors_dark.png" width="280">
+
+### profile_errors_light
+<img src="phone/profile_errors_light.png" width="280">
+
+### profile_non_binary_dark
+<img src="phone/profile_non_binary_dark.png" width="280">
+
+### profile_non_binary_light
+<img src="phone/profile_non_binary_light.png" width="280">
+
 ### profile_dark
 <img src="phone/profile_dark.png" width="280">
 

@@ -23,7 +23,8 @@ import com.heartline.phone.ui.heart.AlertsScreen
 import com.heartline.phone.ui.metric.MetricDetailScreen
 import com.heartline.phone.ui.profile.ProfileScreen
 import com.heartline.shared.model.Metric
-import com.heartline.shared.profile.Sex
+import com.heartline.shared.profile.Gender
+import com.heartline.shared.profile.ReportName
 import com.heartline.shared.profile.UserProfile
 import com.heartline.phone.ui.model.BpHomeUi
 import com.heartline.phone.ui.model.CalibrationUi
@@ -115,7 +116,34 @@ class PhoneScreenshotTest(private val theme: String) {
 
     @Test fun stress() = shot("stress") { MetricDetailScreen(SampleData.metricDetail(Metric.STRESS), onBack = {}) }
 
-    @Test fun profile() = shot("profile") { ProfileScreen(UserProfile(1990, Sex.FEMALE, 168f, 61.5f), onBack = {}) }
+    private val profileToday = java.time.LocalDate.of(2026, 9, 24)
+
+    @Test fun profile() = shot("profile") {
+        ProfileScreen(
+            UserProfile("Sara", "Karimi", "Sara", "1990-06-12", Gender.WOMAN, heightCm = 168f, weightKg = 61.5f),
+            onBack = {},
+            today = profileToday
+        )
+    }
+
+    @Test fun profileErrors() = shot("profile_errors") {
+        ProfileScreen(
+            UserProfile(firstName = "Sam", heightCm = 34f),
+            onBack = {},
+            today = profileToday,
+            initialShowErrors = true,
+            listState = rememberLazyListState(initialFirstVisibleItemIndex = 1)
+        )
+    }
+
+    @Test fun profileNonBinary() = shot("profile_non_binary") {
+        ProfileScreen(
+            UserProfile("Alex", "Moradi", "Lex", "1995-01-30", Gender.NON_BINARY, heightCm = 172f, weightKg = 66f, reportName = ReportName.PREFERRED_NAME),
+            onBack = {},
+            today = profileToday,
+            listState = rememberLazyListState(initialFirstVisibleItemIndex = 3)
+        )
+    }
 
     @Test fun about() = shot("about") { AboutScreen("0.1.0", onBack = {}) }
 
