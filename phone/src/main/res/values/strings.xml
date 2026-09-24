@@ -397,4 +397,7 @@
     </plurals>
     <string name="reminder_daily_title">Time for your daily check</string>
     <string name="reminder_daily_text">Take a moment to measure on your watch.</string>
+    <string name="period_day">Day</string>
+    <string name="period_week">Week</string>
+    <string name="period_month">Month</string>
 </resources>

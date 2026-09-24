@@ -5,7 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.heartline.phone.data.AlertEntity
 import com.heartline.phone.data.HeartRepository
 import com.heartline.phone.data.HrMinuteEntity
-import com.heartline.phone.ui.components.RangePoint
+import com.heartline.shared.hr.HrBuckets
+import com.heartline.shared.hr.RangeBucket
 import com.heartline.shared.hr.AlertKind
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -25,7 +26,14 @@ data class HeartRateUi(
     val restingBpm: Int? = null,
     val minBpm: Int? = null,
     val maxBpm: Int? = null,
-    val points: List<RangePoint> = emptyList(),
+    /** 30-minute min–max buckets for today (index 0..47). */
+    val day: List<RangeBucket> = emptyList(),
+    /** Daily min–max for the last 7 and 30 days (index = day, oldest first). */
+    val week: List<RangeBucket> = emptyList(),
+    val month: List<RangeBucket> = emptyList(),
+    /** Full date labels for week/month bars, shown when a bar is selected. */
+    val weekDates: List<String> = emptyList(),
+    val monthDates: List<String> = emptyList(),
     val hrvTodayMs: Int? = null,
     val hrvWeek: List<Float?> = emptyList(),
     val weekLabels: List<String> = emptyList(),
@@ -56,25 +64,43 @@ class HeartRateViewModel(
 ) : ViewModel() {
     private val dayStart = today.atStartOfDay(zone).toInstant().toEpochMilli()
     private val weekStart = today.minusDays(6).atStartOfDay(zone).toInstant().toEpochMilli()
+    private val monthStart = today.minusDays(29).atStartOfDay(zone).toInstant().toEpochMilli()
     private val dayEnd = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
 
     val state: StateFlow<HeartRateUi> = combine(
-        repository.minutes(weekStart, dayEnd),
+        repository.minutes(monthStart, dayEnd),
         repository.alerts,
-    ) { week, alerts ->
+    ) { month, alerts ->
+        val week = month.filter { it.minuteStartMs >= weekStart }
         val todays = week.filter { it.minuteStartMs >= dayStart }
         val latest = week.lastOrNull()
         val days = (0..6).map { today.minusDays(6L - it) }
+        val monthDays = (0..29).map { today.minusDays(29L - it) }
+        fun daily(from: Long, list: List<HrMinuteEntity>) = HrBuckets.of(
+            list.map { m ->
+                val dayIndex = ((m.minuteStartMs - from) / 86_400_000L).toInt()
+                HrBuckets.Slot(dayIndex, m.minBpm, m.maxBpm, m.avgBpm)
+            },
+            1,
+        )
+        val dateFormat = java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", locale)
         HeartRateUi(
             latestBpm = latest?.avgBpm,
             latestTime = latest?.let { "${formatter.date(it.minuteStartMs)} ${formatter.time(it.minuteStartMs)}" },
             restingBpm = HeartSummaries.resting(todays),
             minBpm = todays.minOfOrNull { it.minBpm },
             maxBpm = todays.maxOfOrNull { it.maxBpm },
-            points = todays.map {
-                val local = Instant.ofEpochMilli(it.minuteStartMs).atZone(zone)
-                RangePoint(local.hour * 60 + local.minute, it.avgBpm, it.minBpm, it.maxBpm)
-            },
+            day = HrBuckets.of(
+                todays.map {
+                    val local = Instant.ofEpochMilli(it.minuteStartMs).atZone(zone)
+                    HrBuckets.Slot(local.hour * 60 + local.minute, it.minBpm, it.maxBpm, it.avgBpm)
+                },
+                30,
+            ),
+            week = daily(weekStart, week),
+            month = daily(monthStart, month),
+            weekDates = days.map { it.format(dateFormat) },
+            monthDates = monthDays.map { it.format(dateFormat) },
             hrvTodayMs = HeartSummaries.hrv(todays),
             hrvWeek = days.map { day ->
                 val start = day.atStartOfDay(zone).toInstant().toEpochMilli()

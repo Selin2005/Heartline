@@ -36,6 +36,8 @@ import com.heartline.phone.ui.model.HeartRateUi
 import com.heartline.phone.ui.model.HomeState
 import com.heartline.phone.ui.settings.SettingsScreen
 import com.heartline.phone.ui.theme.HeartlineTheme
+import androidx.compose.foundation.background
+import androidx.compose.ui.unit.dp
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -168,6 +170,33 @@ class PhoneScreenshotTest(private val theme: String) {
     }
 
     @Test fun onboarding() = shot("onboarding") { OnboardingScreen() }
+
+    @Test fun hrChartSelected() = shot("hr_chart_selected") {
+        Box(Modifier.background(HeartlineTheme.colors.surface).padding(20.dp)) {
+            com.heartline.phone.ui.components.RangeBarChart(
+                SampleData.heartRate.day,
+                slots = 48,
+                color = HeartlineTheme.colors.heartRate,
+                xLabels = listOf("00", "06", "12", "18", "24"),
+                label = { i -> "%02d:%02d".format(i * 30 / 60, i * 30 % 60) },
+                resting = 56,
+                initiallySelected = 17,
+            )
+        }
+    }
+
+    @Test fun hrChartWeek() = shot("hr_chart_week") {
+        Box(Modifier.background(HeartlineTheme.colors.surface).padding(20.dp)) {
+            com.heartline.phone.ui.components.RangeBarChart(
+                SampleData.heartRate.week,
+                slots = 7,
+                color = HeartlineTheme.colors.heartRate,
+                xLabels = SampleData.heartRate.weekLabels,
+                label = { i -> SampleData.heartRate.weekDates[i] },
+                resting = 56,
+            )
+        }
+    }
 
     @Test fun connectWatchFound() = shot("connect_watch_found") {
         com.heartline.phone.ui.onboarding.ConnectWatchScreen(WatchLinkUi(PeerProbe.REACHABLE, "Galaxy Watch8"))

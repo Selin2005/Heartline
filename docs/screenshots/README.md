@@ -155,6 +155,18 @@ Do not edit by hand.
 ### home_light
 <img src="phone/home_light.png" width="280">
 
+### hr_chart_selected_dark
+<img src="phone/hr_chart_selected_dark.png" width="280">
+
+### hr_chart_selected_light
+<img src="phone/hr_chart_selected_light.png" width="280">
+
+### hr_chart_week_dark
+<img src="phone/hr_chart_week_dark.png" width="280">
+
+### hr_chart_week_light
+<img src="phone/hr_chart_week_light.png" width="280">
+
 ### onboarding_dark
 <img src="phone/onboarding_dark.png" width="280">
 

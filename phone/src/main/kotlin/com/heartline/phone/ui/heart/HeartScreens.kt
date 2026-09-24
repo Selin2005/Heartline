@@ -17,10 +17,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.heartline.phone.R
+import androidx.compose.foundation.layout.Arrangement
+import com.heartline.phone.ui.components.Chip
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.heartline.phone.ui.components.TonalPillButton
 import com.heartline.phone.ui.components.CardRow
 import com.heartline.phone.ui.components.CardTitle
-import com.heartline.phone.ui.components.DayRangeChart
+import com.heartline.phone.ui.components.RangeBarChart
 import com.heartline.phone.ui.components.IconBadge
 import com.heartline.phone.ui.components.MetricValue
 import com.heartline.phone.ui.components.ReachabilityScaffold
@@ -34,6 +40,8 @@ import com.heartline.phone.ui.model.AlertUi
 import com.heartline.phone.ui.model.HeartRateUi
 import com.heartline.phone.ui.theme.HeartlineTheme
 import com.heartline.shared.hr.AlertKind
+
+enum class HrPeriod(val label: Int) { DAY(R.string.period_day), WEEK(R.string.period_week), MONTH(R.string.period_month) }
 
 @Composable
 fun HeartRateScreen(state: HeartRateUi, onBack: (() -> Unit)? = null, onOpenAlerts: () -> Unit = {}, onMeasureOnWatch: (() -> Unit)? = null) {
@@ -55,11 +63,38 @@ fun HeartRateScreen(state: HeartRateUi, onBack: (() -> Unit)? = null, onOpenAler
                     Spacer(Modifier.height(8.dp))
                     MetricValue("${state.latestBpm}", stringResource(R.string.unit_bpm), large = true)
                     Spacer(Modifier.height(12.dp))
-                    DayRangeChart(
-                        state.points,
-                        colors.heartRate,
-                        contentDescription = stringResource(R.string.a11y_hr_chart, state.minBpm ?: 0, state.maxBpm ?: 0),
-                    )
+                    var period by rememberSaveable { mutableStateOf(HrPeriod.DAY) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        HrPeriod.entries.forEach { p -> Chip(stringResource(p.label), period == p) { period = p } }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    when (period) {
+                        HrPeriod.DAY -> RangeBarChart(
+                            state.day,
+                            slots = 48,
+                            color = colors.heartRate,
+                            xLabels = listOf("00", "06", "12", "18", "24"),
+                            label = { i -> "%02d:%02d–%02d:%02d".format(i * 30 / 60, i * 30 % 60, (i + 1) * 30 / 60 % 24, (i + 1) * 30 % 60) },
+                            resting = state.restingBpm,
+                            contentDescription = stringResource(R.string.a11y_hr_chart, state.minBpm ?: 0, state.maxBpm ?: 0),
+                        )
+                        HrPeriod.WEEK -> RangeBarChart(
+                            state.week,
+                            slots = 7,
+                            color = colors.heartRate,
+                            xLabels = state.weekLabels,
+                            label = { i -> state.weekDates.getOrElse(i) { "" } },
+                            resting = state.restingBpm,
+                        )
+                        HrPeriod.MONTH -> RangeBarChart(
+                            state.month,
+                            slots = 30,
+                            color = colors.heartRate,
+                            xLabels = state.monthDates.filterIndexed { i, _ -> i % 7 == 0 }.map { it.substringAfter(' ') },
+                            label = { i -> state.monthDates.getOrElse(i) { "" } },
+                            resting = state.restingBpm,
+                        )
+                    }
                     Spacer(Modifier.height(16.dp))
                     Row {
                         StatColumn(stringResource(R.string.hr_resting), state.restingBpm?.let { "$it" } ?: "–", Modifier.weight(1f))

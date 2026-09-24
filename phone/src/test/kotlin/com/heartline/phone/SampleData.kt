@@ -1,6 +1,5 @@
 package com.heartline.phone
 
-import com.heartline.phone.ui.components.RangePoint
 import com.heartline.phone.ui.model.AlertUi
 import com.heartline.phone.ui.model.BpHomeUi
 import com.heartline.phone.ui.model.MetricDetailUi
@@ -56,19 +55,23 @@ object SampleData {
 
     val heartRate: HeartRateUi by lazy {
         val random = kotlin.random.Random(4)
-        val points = (0 until 9 * 60 + 41 step 5).map { m ->
+        val minutes = (0 until 9 * 60 + 41).map { m ->
             val hour = m / 60.0
             val base = if (hour < 6) 54.0 else 66.0 + 12 * kotlin.math.sin((hour - 6) / 16.0 * Math.PI)
             val avg = (base + random.nextDouble(-3.0, 3.0)).toInt()
-            RangePoint(m, avg, avg - random.nextInt(2, 6), avg + random.nextInt(2, 8))
+            com.heartline.shared.hr.HrBuckets.Slot(m, avg - random.nextInt(1, 4), avg + random.nextInt(1, 6), avg)
         }
+        val day = com.heartline.shared.hr.HrBuckets.of(minutes, 30)
+        val week = (0 until 7).map { i -> com.heartline.shared.hr.RangeBucket(i, 48 + i % 3, 118 + (i * 7) % 20, 66) }
         HeartRateUi(
             latestBpm = 64,
             latestTime = "Today 9:41 AM",
             restingBpm = 56,
-            minBpm = points.minOf { it.min },
-            maxBpm = points.maxOf { it.max },
-            points = points,
+            minBpm = day.minOf { it.min },
+            maxBpm = day.maxOf { it.max },
+            day = day,
+            week = week,
+            weekDates = listOf("Thu 18 Sep", "Fri 19 Sep", "Sat 20 Sep", "Sun 21 Sep", "Mon 22 Sep", "Tue 23 Sep", "Wed 24 Sep"),
             hrvTodayMs = 34,
             hrvWeek = listOf(31f, 36f, 29f, null, 40f, 33f, 34f),
             weekLabels = listOf("T", "F", "S", "S", "M", "T", "W"),
