@@ -5,6 +5,9 @@ Do not edit by hand.
 
 ## phone
 
+### com.heartline.phone_IconScreenshotTest_launcherIcon
+<img src="phone/com.heartline.phone_IconScreenshotTest_launcherIcon.png" width="280">
+
 ### about_dark
 <img src="phone/about_dark.png" width="280">
 
