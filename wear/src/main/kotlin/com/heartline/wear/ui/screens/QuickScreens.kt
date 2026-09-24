@@ -114,7 +114,9 @@ fun QuickMeasuringScreen(
                     Icon(metric.icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
                 }
                 Metric.SKIN_TEMPERATURE -> ThermometerFill(color, Modifier.size(width = visual * 0.6f, height = visual), animate)
-                Metric.BODY_COMPOSITION -> KeysContact(color, Modifier.size(visual), animate)
+                Metric.BODY_COMPOSITION -> KeysContact(color, Modifier.size(visual), animate) {
+                    Icon(metric.icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
+                }
                 Metric.STRESS -> BreathingCircle(color, Modifier.size(visual), animate) {
                     BeatingHeart(bpm, color, 20.dp, animate)
                 }

@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -139,14 +140,23 @@ private fun AiTile(target: AiTarget, modifier: Modifier = Modifier, onClick: () 
             val bitmap = remember(icon) { icon.toBitmap(144, 144).asImageBitmap() }
             Image(bitmap, contentDescription = null, modifier = Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)))
         } else {
-            // No icon available (never for an installed app; used in previews): a monogram.
-            Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(colors.primary.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-                Text(target.label.take(1), style = MaterialTheme.typography.titleMedium, color = colors.primary)
+            // No icon available (never for an installed app; used in previews): a monogram in the app's colour.
+            val (background, foreground) = monogramColors(target.packageName)
+            Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(background), contentAlignment = Alignment.Center) {
+                Text(target.label.take(1), style = MaterialTheme.typography.titleMedium, color = foreground)
             }
         }
         Spacer(Modifier.height(8.dp))
         Text(target.label, style = MaterialTheme.typography.labelMedium, color = colors.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
+}
+
+private fun monogramColors(packageName: String): Pair<Color, Color> = when (packageName) {
+    "com.anthropic.claude" -> Color(0xFFD97757) to Color.White
+    "com.openai.chatgpt" -> Color(0xFF10A37F) to Color.White
+    "com.google.android.apps.bard" -> Color(0xFF4285F4) to Color.White
+    "ai.x.grok" -> Color(0xFF111114) to Color.White
+    else -> Color(0xFF3E7BFA) to Color.White
 }
 
 /** Shown before the first share to an AI app. */
