@@ -57,7 +57,7 @@
     <string name="channel_monitor">Heart monitoring</string>
     <string name="channel_alerts">Heart alerts</string>
     <string name="monitor_notification_title">Checking your heart rhythm</string>
-    <string name="monitor_notification_text">Heartline measures heart rate in the background.</string>
+    <string name="monitor_notification_text">A one-minute rhythm check. This disappears by itself.</string>
     <string name="alert_irn_title">Irregular rhythm</string>
     <string name="alert_irn_text">Your heart showed signs of an irregular rhythm. Take an ECG and talk to your doctor if this continues.</string>
     <string name="alert_high_title">High heart rate</string>

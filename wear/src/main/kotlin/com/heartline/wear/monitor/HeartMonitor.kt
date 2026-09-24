@@ -86,6 +86,11 @@ class HeartMonitor(
         if (unsent.size >= batchEveryMinutes) flushBatch()
     }
 
+    /** Drops a partly collected rhythm window (e.g. when a short background window ends). */
+    fun resetWindow() {
+        window.clear()
+    }
+
     suspend fun flushBatch() {
         if (unsent.isEmpty()) return
         output.enqueueBatch(HrBatch(newId(), unsent.toList()))

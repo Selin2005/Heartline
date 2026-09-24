@@ -52,7 +52,10 @@ import com.heartline.wear.ui.screens.HistoryScreen
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
-import com.heartline.wear.monitor.HeartMonitorService
+import androidx.compose.runtime.rememberCoroutineScope
+import com.heartline.wear.monitor.BackgroundMonitoring
+import com.heartline.wear.monitor.WatchSettingsStore
+import kotlinx.coroutines.launch
 import com.heartline.wear.ui.screens.LauncherScreen
 import com.heartline.wear.ui.screens.SensorErrorScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -133,10 +136,19 @@ fun HeartlineWearApp(startRoute: String? = null) {
     }
 
     var permissionDenials by rememberSaveable { mutableIntStateOf(0) }
+    val settingsStore: WatchSettingsStore = koinInject()
+    val scope = rememberCoroutineScope()
+    fun applyMonitoring() {
+        scope.launch { BackgroundMonitoring.sync(context, settingsStore.settings.value) }
+    }
+    // Background sensor access must be asked for on its own, after the foreground permission.
+    val background = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { applyMonitoring() }
     val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        if (!SetupPermissions.required.all { p -> it[p] == true || context.checkSelfPermission(p) == android.content.pm.PackageManager.PERMISSION_GRANTED }) permissionDenials++
-        HeartMonitorService.sync(context, enabled = true)
+        val granted = SetupPermissions.required.all { p -> context.checkSelfPermission(p) == android.content.pm.PackageManager.PERMISSION_GRANTED }
+        if (!granted) permissionDenials++
+        applyMonitoring()
         gate.onPermissionsResult()
+        if (granted && !BackgroundMonitoring.hasBackgroundPermission(context)) background.launch(BackgroundMonitoring.backgroundPermission)
     }
 
     HeartlineWearTheme {

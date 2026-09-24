@@ -23,7 +23,8 @@ import com.heartline.wear.sensor.sdk.readSkinConductance
 import com.heartline.wear.sensor.FakePpgSource
 import com.heartline.wear.sensor.PpgSource
 import com.heartline.wear.sensor.sdk.SdkPpgSource
-import com.heartline.wear.monitor.HeartMonitorService
+import com.heartline.wear.monitor.BackgroundHeart
+import com.heartline.wear.monitor.BackgroundMonitoring
 import com.heartline.wear.monitor.WatchMonitorOutput
 import com.heartline.wear.monitor.WatchNotifier
 import com.heartline.wear.monitor.WatchSettingsStore
@@ -76,6 +77,7 @@ val wearModule = module {
     single { WatchSettingsStore(androidContext()) }
     single { WatchNotifier(androidContext()) }
     single { WatchMonitorOutput(get(), get(), get(), get()) }
+    single { BackgroundHeart(get<WatchMonitorOutput>()) { get<WatchSettingsStore>().settings.value } }
     single<HrSource> {
         if (BuildConfig.USE_FAKE_SENSORS) FakeHrSource() else SdkHrSource(get<SensorGateway>() as SdkSensorGateway)
     }
@@ -87,7 +89,7 @@ val wearModule = module {
             onRemoteDelete = { get<WatchRecordStore>().delete(it) },
             onSettings = { settings ->
                 get<WatchSettingsStore>().update(settings)
-                HeartMonitorService.sync(androidContext(), settings.irregularRhythmEnabled || settings.heartRateAlertsEnabled)
+                BackgroundMonitoring.sync(androidContext(), settings)
             },
             onCalibration = { get<WatchBpStore>().setCalibration(it) },
             onProfile = { get<WatchProfileStore>().update(it) },

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-feature android:name="android.hardware.type.watch" />
 
@@ -12,6 +13,11 @@
     <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
     <uses-permission android:name="android.permission.health.READ_SKIN_TEMPERATURE" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- Background heart monitoring without a foreground service (passive HR, IRN windows). -->
+    <uses-permission
+        android:name="android.permission.BODY_SENSORS_BACKGROUND"
+        android:maxSdkVersion="35" />
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -22,6 +28,7 @@
 
     <queries>
         <package android:name="com.samsung.android.service.health" />
+        <package android:name="com.google.android.wearable.healthservices" />
     </queries>
 
     <application
@@ -58,10 +65,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Health Services passive heart rate: batches arrive here, no foreground service needed. -->
         <service
-            android:name=".monitor.HeartMonitorService"
-            android:exported="false"
-            android:foregroundServiceType="health" />
+            android:name=".monitor.PassiveHeartRateService"
+            android:exported="true"
+            android:permission="com.google.android.wearable.healthservices.permission.PASSIVE_DATA_BINDING" />
+
+        <!-- WorkManager runs an IRN window as a short health-type foreground service only without background permission. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="health"
+            tools:node="merge" />
 
         <service
             android:name=".tile.HeartTileService"

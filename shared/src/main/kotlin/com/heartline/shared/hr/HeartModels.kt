@@ -39,5 +39,12 @@ data class MonitorSettings(
     val irregularRhythmEnabled: Boolean = true,
     val heartRateAlertsEnabled: Boolean = true,
     val highBpm: Int = 120,
-    val lowBpm: Int = 40
-)
+    val lowBpm: Int = 40,
+    /** All-day heart rate for trends (passive, no notification). */
+    val backgroundHeartRate: Boolean = true,
+    /** Minutes between irregular-rhythm checks (each check listens for about a minute). */
+    val irnIntervalMinutes: Int = 15
+) {
+    /** Passive heart rate feeds trends and the high/low alerts. */
+    val passiveHeartRate: Boolean get() = backgroundHeartRate || heartRateAlertsEnabled
+}
