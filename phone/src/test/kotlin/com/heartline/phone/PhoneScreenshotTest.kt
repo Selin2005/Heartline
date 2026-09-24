@@ -157,7 +157,15 @@ class PhoneScreenshotTest(private val theme: String) {
 
     @Test fun about() = shot("about") { AboutScreen("0.1.0", onBack = {}) }
 
-    @Test fun settings() = shot("settings") { SettingsScreen() }
+    @Test fun settings() = shot("settings") { SettingsScreen(watchConnected = true) }
+
+    @Test fun settingsMonitoring() = shot("settings_monitoring") {
+        SettingsScreen(
+            com.heartline.shared.hr.MonitorSettings(dailyReminder = true),
+            watchConnected = true,
+            listState = rememberLazyListState(initialFirstVisibleItemIndex = 3),
+        )
+    }
 
     @Test fun onboarding() = shot("onboarding") { OnboardingScreen() }
 

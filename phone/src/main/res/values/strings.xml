@@ -270,7 +270,7 @@
     <string name="settings_irn_summary">Get notified when signs of an irregular rhythm are found</string>
     <string name="settings_hr_alerts">High and low heart rate alerts</string>
     <string name="settings_hr_alerts_summary">Above %1$d bpm or below %2$d bpm while resting</string>
-    <string name="settings_reminders">Calibration reminders</string>
+    <string name="settings_reminders">Calibration reminder</string>
     <string name="settings_device">Watch</string>
     <string name="settings_device_summary">Connected · Health Sensor Service 1.6.5</string>
     <string name="settings_units">Units</string>
@@ -366,4 +366,35 @@
     </plurals>
     <string name="bp_accuracy_compare">Compare latest reading with a cuff</string>
     <string name="bp_accuracy_dialog_body">Enter the cuff reading you took right after the watch reading, on the other arm, sitting still.</string>
+    <string name="state_on">On</string>
+    <string name="state_off">Off</string>
+    <string name="settings_watch_connected">Connected · settings sync automatically</string>
+    <string name="settings_watch_not_connected">Not connected · changes sync when it\'s back</string>
+    <string name="settings_monitoring">Heart monitoring on the watch</string>
+    <string name="settings_background_hr">All-day heart rate</string>
+    <string name="settings_background_hr_summary">Measures in the background for trends. No notification.</string>
+    <string name="settings_irn_interval">Rhythm check interval</string>
+    <string name="settings_every_minutes">Every %1$d minutes</string>
+    <string name="settings_high_threshold">High heart rate above</string>
+    <string name="settings_low_threshold">Low heart rate below</string>
+    <string name="settings_bpm">%1$d bpm</string>
+    <string name="settings_sync_note">These settings are shared with your watch. A change on either device applies to both.</string>
+    <string name="settings_watch_section">On the watch</string>
+    <string name="settings_haptics">Vibration feedback</string>
+    <string name="settings_live_wave">Live wave while measuring</string>
+    <string name="settings_live_wave_summary">Shows your ECG and pulse as they are recorded</string>
+    <string name="settings_reminders_section">Reminders</string>
+    <string name="settings_calibration_reminder_summary">3 days before blood pressure calibration expires</string>
+    <string name="settings_daily_reminder">Daily measurement reminder</string>
+    <string name="settings_temperature_unit">Temperature unit</string>
+    <string name="unit_celsius">Celsius (°C)</string>
+    <string name="unit_fahrenheit">Fahrenheit (°F)</string>
+    <string name="channel_reminders">Reminders</string>
+    <string name="reminder_calibration_title">Blood pressure calibration expires soon</string>
+    <plurals name="reminder_calibration_text">
+        <item quantity="one">%1$d day left. Calibrate again with your cuff to keep measuring.</item>
+        <item quantity="other">%1$d days left. Calibrate again with your cuff to keep measuring.</item>
+    </plurals>
+    <string name="reminder_daily_title">Time for your daily check</string>
+    <string name="reminder_daily_text">Take a moment to measure on your watch.</string>
 </resources>

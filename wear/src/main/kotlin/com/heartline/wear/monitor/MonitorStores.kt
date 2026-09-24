@@ -23,8 +23,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.encodeToString
 
-/** Monitoring settings received from the phone, persisted on the watch. */
-class WatchSettingsStore(context: Context) {
+/** Settings shared with the phone (newer copy wins), persisted on the watch. */
+class WatchSettingsStore(context: Context, private val now: () -> Long = System::currentTimeMillis) {
     private val prefs = context.getSharedPreferences("monitor", Context.MODE_PRIVATE)
     private val mutable = MutableStateFlow(load())
     val settings: StateFlow<MonitorSettings> = mutable.asStateFlow()
@@ -36,6 +36,17 @@ class WatchSettingsStore(context: Context) {
         prefs.edit().putString(KEY, Protocol.json.encodeToString(settings)).apply()
         mutable.value = settings
     }
+
+    /** A copy from the phone: kept only if newer. @return true when it replaced ours. */
+    fun offer(incoming: MonitorSettings): Boolean {
+        if (!incoming.isNewerThan(mutable.value)) return false
+        update(incoming)
+        return true
+    }
+
+    /** A change made on the watch, stamped now so it wins over the phone's older copy. */
+    fun change(transform: (MonitorSettings) -> MonitorSettings): MonitorSettings =
+        transform(mutable.value).copy(updatedAtMs = now()).also(::update)
 
     /** Latest background heart rate, for the complication and tile. */
     var latestHeartRate: Int?

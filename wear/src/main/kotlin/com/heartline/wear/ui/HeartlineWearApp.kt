@@ -48,6 +48,7 @@ import com.heartline.wear.sensor.SensorProblem
 import com.heartline.wear.ui.screens.DiagnosticsScreen
 import com.heartline.wear.ui.screens.HeartRateScreen
 import com.heartline.wear.ui.screens.WatchSettingsScreen
+import com.heartline.wear.ui.screens.WatchToggle
 import com.heartline.wear.ui.screens.HistoryScreen
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -241,7 +242,22 @@ private fun AppNavHost(nav: NavHostController, gate: SetupGateViewModel) {
         composable(Routes.SETTINGS) {
             val vm: WatchSettingsViewModel = koinViewModel()
             val state by vm.state.collectAsStateWithLifecycle()
-            WatchSettingsScreen(state, onDevMode = { nav.navigate(Routes.DEV_MODE) }, onDiagnostics = { nav.navigate(Routes.DIAGNOSTICS) })
+            WatchSettingsScreen(
+                state,
+                onToggle = { toggle, on ->
+                    vm.change { s ->
+                        when (toggle) {
+                            WatchToggle.IRREGULAR_RHYTHM -> s.copy(irregularRhythmEnabled = on)
+                            WatchToggle.HEART_RATE_ALERTS -> s.copy(heartRateAlertsEnabled = on)
+                            WatchToggle.BACKGROUND_HR -> s.copy(backgroundHeartRate = on)
+                            WatchToggle.HAPTICS -> s.copy(haptics = on)
+                            WatchToggle.LIVE_WAVE -> s.copy(liveWave = on)
+                        }
+                    }
+                },
+                onDevMode = { nav.navigate(Routes.DEV_MODE) },
+                onDiagnostics = { nav.navigate(Routes.DIAGNOSTICS) },
+            )
         }
         composable(Routes.DIAGNOSTICS) {
             val vm: WatchSettingsViewModel = koinViewModel()

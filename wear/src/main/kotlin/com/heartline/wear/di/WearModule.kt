@@ -88,8 +88,7 @@ val wearModule = module {
             get<WatchRecordStore>(),
             onRemoteDelete = { get<WatchRecordStore>().delete(it) },
             onSettings = { settings ->
-                get<WatchSettingsStore>().update(settings)
-                BackgroundMonitoring.sync(androidContext(), settings)
+                if (get<WatchSettingsStore>().offer(settings)) BackgroundMonitoring.sync(androidContext(), settings)
             },
             onCalibration = { get<WatchBpStore>().setCalibration(it) },
             onProfile = { get<WatchProfileStore>().update(it) },
@@ -116,7 +115,7 @@ val wearModule = module {
             get<DataLayerTransport>(),
             get(),
             get<WatchLinkStore>().latest,
-            hello = { Hello(appVersion = BuildConfig.VERSION_NAME, deviceName = Build.MODEL) },
+            hello = { Hello(appVersion = BuildConfig.VERSION_NAME, deviceName = Build.MODEL, settings = get<WatchSettingsStore>().settings.value) },
             log = { Log.i("Heartline/Link", it) },
         )
     }
@@ -151,7 +150,12 @@ val wearModule = module {
     }
     viewModel { HistoryViewModel(get()) }
     viewModel { HeartRateViewModel(get()) }
-    viewModel { WatchSettingsViewModel(get(), get()) }
+    viewModel {
+        WatchSettingsViewModel(get(), get()) { changed ->
+            BackgroundMonitoring.sync(androidContext(), changed)
+            get<WatchSyncEngine>().sendSettings(changed)
+        }
+    }
     viewModel { BpMeasureViewModel(get(), get(), get(), get()) }
     viewModel { params -> QuickMeasureViewModel(get<QuickSources>()[params.get<Metric>()]!!, get(), get(), get()) }
     viewModel { EcgMeasureViewModel(get(), get(), get()) }

@@ -30,12 +30,20 @@ import com.heartline.wear.ui.screens.EcgMeasuringScreen
 import com.heartline.wear.ui.screens.EcgResultScreen
 import com.heartline.wear.ui.screens.SensorErrorScreen
 import org.koin.androidx.compose.koinViewModel
+import com.heartline.wear.monitor.WatchSettingsStore
 import org.koin.compose.koinInject
 
 /** Instruction → permission → 30 s recording → result, as on SHM. */
 @Composable
-fun EcgFlow(onExit: () -> Unit, vm: EcgMeasureViewModel = koinViewModel(), gateway: SensorGateway = koinInject()) {
+fun EcgFlow(
+    onExit: () -> Unit,
+    vm: EcgMeasureViewModel = koinViewModel(),
+    gateway: SensorGateway = koinInject(),
+    settingsStore: WatchSettingsStore = koinInject(),
+) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val prefs by settingsStore.settings.collectAsStateWithLifecycle()
+    val buzz = prefs.haptics
     val context = LocalContext.current
     val activity = LocalActivity.current
     val haptics = LocalHapticFeedback.current
@@ -66,9 +74,9 @@ fun EcgFlow(onExit: () -> Unit, vm: EcgMeasureViewModel = koinViewModel(), gatew
     }
     // Buzz when contact is lost mid-recording, not while waiting for the first touch.
     LaunchedEffect(measuring?.leadOff) {
-        if (measuring?.leadOff == true && !measuring.waitingForTouch) haptics.performHapticFeedback(HapticFeedbackType.Reject)
+        if (measuring?.leadOff == true && !measuring.waitingForTouch) if (buzz) haptics.performHapticFeedback(HapticFeedbackType.Reject)
     }
-    LaunchedEffect(state is EcgMeasureState.Done) { if (state is EcgMeasureState.Done) haptics.performHapticFeedback(HapticFeedbackType.Confirm) }
+    LaunchedEffect(state is EcgMeasureState.Done) { if (state is EcgMeasureState.Done) if (buzz) haptics.performHapticFeedback(HapticFeedbackType.Confirm) }
 
     when (val s = state) {
         EcgMeasureState.Idle ->
@@ -85,6 +93,7 @@ fun EcgFlow(onExit: () -> Unit, vm: EcgMeasureViewModel = koinViewModel(), gatew
             bpm = s.bpm,
             endIndex = s.endIndex,
             waitingForTouch = s.waitingForTouch,
+            showWave = prefs.liveWave,
         )
         EcgMeasureState.Analyzing -> EcgAnalyzingScreen()
         is EcgMeasureState.Done -> EcgResultScreen(s.result, s.averageBpm, s.metrics, onDone = {

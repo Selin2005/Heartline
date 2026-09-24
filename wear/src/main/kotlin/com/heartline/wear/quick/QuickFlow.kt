@@ -25,6 +25,8 @@ import com.heartline.wear.ui.screens.QuickMeasuringScreen
 import com.heartline.wear.ui.screens.QuickResultScreen
 import com.heartline.wear.ui.screens.SensorErrorScreen
 import org.koin.androidx.compose.koinViewModel
+import com.heartline.wear.monitor.WatchSettingsStore
+import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
 
 @Composable
@@ -46,7 +48,8 @@ fun QuickFlow(metric: Metric, onExit: () -> Unit, vm: QuickMeasureViewModel = ko
         view.keepScreenOn = state is QuickState.Measuring
         onDispose { view.keepScreenOn = false }
     }
-    LaunchedEffect(state is QuickState.Done) { if (state is QuickState.Done) haptics.performHapticFeedback(HapticFeedbackType.Confirm) }
+    val prefs by koinInject<WatchSettingsStore>().settings.collectAsStateWithLifecycle()
+    LaunchedEffect(state is QuickState.Done) { if (state is QuickState.Done && prefs.haptics) haptics.performHapticFeedback(HapticFeedbackType.Confirm) }
     val done = {
         vm.reset()
         onExit()

@@ -179,6 +179,12 @@ Do not edit by hand.
 ### profile_light
 <img src="phone/profile_light.png" width="280">
 
+### settings_monitoring_dark
+<img src="phone/settings_monitoring_dark.png" width="280">
+
+### settings_monitoring_light
+<img src="phone/settings_monitoring_light.png" width="280">
+
 ### settings_dark
 <img src="phone/settings_dark.png" width="280">
 
@@ -379,6 +385,12 @@ Do not edit by hand.
 
 ### profile_needed_small
 <img src="wear/profile_needed_small.png" width="240">
+
+### settings_toggles_large
+<img src="wear/settings_toggles_large.png" width="240">
+
+### settings_toggles_small
+<img src="wear/settings_toggles_small.png" width="240">
 
 ### settings_large
 <img src="wear/settings_large.png" width="240">

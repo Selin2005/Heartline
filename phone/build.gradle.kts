@@ -76,6 +76,7 @@ dependencies {
     ksp(libs.room.compiler)
     implementation(libs.koin.android)
     implementation(libs.datastore.preferences)
+    implementation(libs.work.runtime.ktx)
     implementation(libs.koin.androidx.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.core.ktx)

@@ -182,4 +182,9 @@
     <string name="bp_out_of_range_title">Outside your calibration</string>
     <string name="bp_out_of_range_body">Your pulse differs a lot from calibration. Rest 5 minutes, then try again.</string>
     <string name="bp_recalibrate">Recalibrate</string>
+    <string name="settings_background_hr">All-day heart rate</string>
+    <string name="settings_hr_alerts_range"><string name="settings_hr_alerts_range">Above %1$d or below %2$d bpm</string>gt;%1$d · <string name="settings_hr_alerts_range">Above %1$d or below %2$d bpm</string>lt;%2$d bpm</string>
+    <string name="settings_haptics">Vibration</string>
+    <string name="settings_live_wave">Live wave</string>
+    <string name="settings_synced_with_phone">Synced with Heartline on your phone. Thresholds and reminders are on the phone.</string>
 </resources>

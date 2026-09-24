@@ -184,12 +184,20 @@ fun HeartlineApp(
                     val context = LocalContext.current
                     val exporter: DataExporter = koinInject()
                     val monitor by vm.monitor.collectAsStateWithLifecycle()
+                    val linkVm: WatchLinkViewModel = koinViewModel()
+                    val link by linkVm.link.collectAsStateWithLifecycle()
+                    LifecycleResumeEffect(Unit) {
+                        linkVm.refresh()
+                        onPauseOrDispose {}
+                    }
                     SettingsScreen(
                         monitor,
-                        onIrregularRhythm = { vm.setIrregularRhythm(it) },
-                        onHeartRateAlerts = { vm.setHeartRateAlerts(it) },
+                        versionName = BuildConfig.VERSION_NAME,
+                        watchConnected = link?.let { it.probe == com.heartline.shared.sync.PeerProbe.REACHABLE },
+                        onChange = vm::change,
                         onDeleteAll = { vm.deleteAll() },
                         onProfile = { navController.navigate(Routes.PROFILE) },
+                        onWatch = linkVm::refresh,
                         onExport = {
                             vm.export(exporter) { context.startActivity(Intent.createChooser(it, context.getString(R.string.settings_export))) }
                         },

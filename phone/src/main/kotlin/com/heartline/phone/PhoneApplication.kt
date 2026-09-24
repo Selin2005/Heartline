@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import com.heartline.phone.data.BpRepository
 import com.heartline.phone.link.PhoneStatusPublisher
+import com.heartline.phone.notify.Reminders
 import com.heartline.phone.data.DemoData
 import com.heartline.phone.data.HeartRepository
 import com.heartline.phone.data.HeartlineDatabase
@@ -46,5 +47,6 @@ class PhoneApplication : Application() {
             }
         }
         get<PhoneStatusPublisher>().start(scope)
+        scope.launch { Reminders.sync(this@PhoneApplication, get<SettingsRepository>().current()) }
     }
 }

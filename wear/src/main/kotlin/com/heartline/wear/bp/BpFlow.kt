@@ -42,6 +42,7 @@ import com.heartline.wear.ui.screens.MeasuringScreen
 import com.heartline.wear.ui.screens.SensorErrorScreen
 import com.heartline.wear.ui.theme.WearColors
 import org.koin.androidx.compose.koinViewModel
+import com.heartline.wear.monitor.WatchSettingsStore
 import org.koin.compose.koinInject
 
 /**
@@ -56,8 +57,11 @@ fun BpFlow(
     vm: BpMeasureViewModel = koinViewModel(),
     gateway: SensorGateway = koinInject(),
     phone: PhoneOpener = koinInject(),
+    settingsStore: WatchSettingsStore = koinInject(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val prefs by settingsStore.settings.collectAsStateWithLifecycle()
+    val buzz = prefs.haptics
     val capture by vm.pendingCapture.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var opened by remember { mutableStateOf<Boolean?>(null) }
@@ -85,7 +89,7 @@ fun BpFlow(
         onDispose { view.keepScreenOn = false }
     }
     LaunchedEffect(state is BpState.Done || state is BpState.CalibrationRecorded) {
-        if (state is BpState.Done || state is BpState.CalibrationRecorded) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+        if (state is BpState.Done || state is BpState.CalibrationRecorded) if (buzz) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
     }
     val done = {
         vm.reset()

@@ -5,6 +5,7 @@ import com.heartline.datalayer.DataLayerTransport
 import com.heartline.datalayer.RemoteOpener
 import com.heartline.phone.link.PhoneStatusPublisher
 import com.heartline.phone.link.WatchOpener
+import com.heartline.phone.notify.Reminders
 import com.heartline.phone.ui.model.WatchLinkViewModel
 import com.heartline.phone.R
 import com.heartline.phone.data.HeartlineDatabase
@@ -67,6 +68,8 @@ val phoneModule = module {
                 // The watch says hello on start and on every link check: reply with everything it gates on.
                 Log.i("Heartline/Link", "hello from watch: $hello")
                 val sync = get<PhoneSyncEngine>()
+                // Settings changed on the watch while the phone was away may be newer than ours.
+                hello.settings?.let { get<SettingsRepository>().applyRemote(it) }
                 sync.sendStatus(get<PhoneStatusPublisher>().current())
                 sync.sendSettings(get<SettingsRepository>().current())
                 get<BpRepository>().resendCalibration(orNull = true)
@@ -74,6 +77,12 @@ val phoneModule = module {
             },
             onCaptureResult = { get<BpRepository>().onCaptureResult(it) },
             onSetupRequest = { get<PhoneNotifier>().setupRequest(it.target) },
+            onSettings = { incoming ->
+                if (get<SettingsRepository>().applyRemote(incoming)) {
+                    Log.i("Heartline/Settings", "changed on watch: $incoming")
+                    Reminders.sync(androidContext(), incoming)
+                }
+            },
         )
     }
     single { PhoneStatusPublisher(get(), get(), get(), { get() }) }
@@ -92,7 +101,7 @@ val phoneModule = module {
     viewModel { EcgListViewModel(get(), get()) }
     single { EcgReportBuilder(androidContext()) }
     viewModel { params -> EcgDetailViewModel(params.get(), get(), get(), get(), get(), get()) }
-    viewModel { SettingsViewModel(get(), get(), get(), get(), get()) }
+    viewModel { SettingsViewModel(get(), get(), get(), get(), get()) { Reminders.sync(androidContext(), it) } }
     viewModel { HeartRateViewModel(get(), get()) }
     viewModel { BpHomeViewModel(get(), get()) }
     viewModel { CalibrationViewModel(get(), openOnWatch = { get<WatchOpener>().open(it) }) }

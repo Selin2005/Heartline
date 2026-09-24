@@ -112,6 +112,7 @@ fun EcgMeasuringScreen(
     endIndex: Long = samples.size.toLong(),
     waitingForTouch: Boolean = false,
     sampleRateHz: Int = 500,
+    showWave: Boolean = true,
 ) {
     val color = WearColors.ecg
     Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
@@ -135,13 +136,21 @@ fun EcgMeasuringScreen(
                     modifier = Modifier.padding(start = 3.dp, bottom = 6.dp),
                 )
             }
-            SweepTrace(
-                samples = samples,
-                endIndex = endIndex,
-                windowSamples = sampleRateHz * 3,
-                color = color,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp).height(if (isSmallRound()) 58.dp else 70.dp),
-            )
+            val waveHeight = if (isSmallRound()) 58.dp else 70.dp
+            if (showWave) {
+                SweepTrace(
+                    samples = samples,
+                    endIndex = endIndex,
+                    windowSamples = sampleRateHz * 3,
+                    color = color,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp).height(waveHeight),
+                )
+            } else {
+                // Live wave turned off in settings: a quiet heart instead.
+                Box(Modifier.height(waveHeight), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Favorite, contentDescription = null, tint = color.copy(alpha = if (leadOff) 0.35f else 1f), modifier = Modifier.size(34.dp))
+                }
+            }
             Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(18.dp)) {
                 if (bpm != null && !leadOff) {

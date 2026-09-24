@@ -14,7 +14,9 @@ data class Hello(
     val capabilities: List<Metric> = emptyList(),
     val sensorServiceVersion: String? = null,
     val role: Role = Role.WATCH,
-    val deviceName: String? = null
+    val deviceName: String? = null,
+    /** The watch's settings: changed on the watch while the phone was away, they may be newer. */
+    val settings: com.heartline.shared.hr.MonitorSettings? = null
 ) {
     fun isCompatible() = protocol == Protocol.VERSION
 }

@@ -43,8 +43,29 @@ data class MonitorSettings(
     /** All-day heart rate for trends (passive, no notification). */
     val backgroundHeartRate: Boolean = true,
     /** Minutes between irregular-rhythm checks (each check listens for about a minute). */
-    val irnIntervalMinutes: Int = 15
+    val irnIntervalMinutes: Int = 15,
+    /** Remind 3 days before the BP calibration expires. */
+    val calibrationReminder: Boolean = true,
+    /** Daily reminder to take a measurement, at [dailyReminderMinute] (minutes after midnight). */
+    val dailyReminder: Boolean = false,
+    val dailyReminderMinute: Int = 9 * 60,
+    /** Vibrate on results and contact loss on the watch. */
+    val haptics: Boolean = true,
+    /** Show the live wave while measuring on the watch (off: countdown only). */
+    val liveWave: Boolean = true,
+    val temperatureFahrenheit: Boolean = false,
+    /** When these settings were last changed (either device); the newer copy wins. */
+    val updatedAtMs: Long = 0
 ) {
     /** Passive heart rate feeds trends and the high/low alerts. */
     val passiveHeartRate: Boolean get() = backgroundHeartRate || heartRateAlertsEnabled
+
+    /** Last writer wins: a copy changed later on either device replaces an older one. */
+    fun isNewerThan(other: MonitorSettings) = updatedAtMs > other.updatedAtMs
+
+    companion object {
+        val IRN_INTERVALS = listOf(15, 30, 60)
+        val HIGH_BPM_RANGE = 100..150
+        val LOW_BPM_RANGE = 35..50
+    }
 }

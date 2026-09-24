@@ -57,6 +57,10 @@ class WatchSyncEngine(
     private val onOpen: suspend (String) -> Unit = {},
     private val onStatus: suspend (PhoneStatus) -> Unit = {}
 ) {
+    /** Watch → phone: settings changed on the watch (the phone keeps the newer copy). */
+    suspend fun sendSettings(settings: MonitorSettings): Boolean =
+        transport.send(Protocol.SETTINGS, Protocol.json.encodeToString(settings).encodeToByteArray())
+
     /** @return number of records handed to the transport. */
     suspend fun flush(): Int {
         var sent = 0
@@ -112,7 +116,8 @@ class PhoneSyncEngine(
     private val heart: HeartDataSink? = null,
     private val onHello: suspend (Hello) -> Unit = {},
     private val onCaptureResult: suspend (CaptureResult) -> Unit = {},
-    private val onSetupRequest: suspend (SetupRequest) -> Unit = {}
+    private val onSetupRequest: suspend (SetupRequest) -> Unit = {},
+    private val onSettings: suspend (MonitorSettings) -> Unit = {}
 ) {
     private val metas = mutableMapOf<String, RecordMeta>()
     private val waves = mutableMapOf<String, FloatArray>()
@@ -146,6 +151,9 @@ class PhoneSyncEngine(
                 ack(alert.id)
             }
             envelope.path == Protocol.HELLO -> onHello(Protocol.json.decodeFromString<Hello>(envelope.data.decodeToString()))
+            envelope.path == Protocol.SETTINGS -> onSettings(
+                Protocol.json.decodeFromString<MonitorSettings>(envelope.data.decodeToString())
+            )
             envelope.path == Protocol.SETUP_REQUEST -> onSetupRequest(
                 Protocol.json.decodeFromString<SetupRequest>(envelope.data.decodeToString())
             )

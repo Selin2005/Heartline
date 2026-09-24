@@ -12,6 +12,7 @@ import com.heartline.phone.data.SettingsRepository
 import com.heartline.shared.hr.MonitorSettings
 import com.heartline.shared.model.Metric
 import com.heartline.phone.data.ProfileRepository
+import com.heartline.phone.ui.settings.SettingChange
 import com.heartline.phone.link.OpenResult
 import com.heartline.phone.link.PhoneStatusPublisher
 import com.heartline.phone.link.WatchLinkUi
@@ -151,15 +152,15 @@ class SettingsViewModel(
     private val bp: BpRepository,
     private val settings: SettingsRepository,
     private val sync: PhoneSyncEngine,
+    private val onApplied: (MonitorSettings) -> Unit = {},
 ) : ViewModel() {
     val monitor: StateFlow<MonitorSettings> = settings.monitor.stateIn(viewModelScope, WHILE_SUBSCRIBED, MonitorSettings())
 
-    fun setIrregularRhythm(enabled: Boolean) = update { it.copy(irregularRhythmEnabled = enabled) }
-
-    fun setHeartRateAlerts(enabled: Boolean) = update { it.copy(heartRateAlertsEnabled = enabled) }
-
-    private fun update(transform: (MonitorSettings) -> MonitorSettings) = viewModelScope.launch {
-        sync.sendSettings(settings.update(transform))
+    /** Saves the change here, pushes it to the watch and re-arms the phone reminders. */
+    fun change(change: SettingChange) = viewModelScope.launch {
+        val next = settings.update { change.applyTo(it) }
+        sync.sendSettings(next)
+        onApplied(next)
     }
 
     fun export(exporter: DataExporter, onReady: (Intent) -> Unit) = viewModelScope.launch {

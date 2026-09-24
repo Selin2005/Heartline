@@ -25,6 +25,9 @@ class PhoneNotifier(private val context: Context) {
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_ALERTS, context.getString(R.string.channel_alerts), NotificationManager.IMPORTANCE_HIGH),
         )
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_REMINDERS, context.getString(R.string.channel_reminders), NotificationManager.IMPORTANCE_DEFAULT),
+        )
     }
 
     fun alert(alert: HealthAlert) {
@@ -81,7 +84,44 @@ class PhoneNotifier(private val context: Context) {
         )
     }
 
+    fun calibrationReminder(daysLeft: Int) = simple(
+        CALIBRATION_ID,
+        context.getString(R.string.reminder_calibration_title),
+        context.resources.getQuantityString(R.plurals.reminder_calibration_text, daysLeft, daysLeft),
+        DeepLinks.phone(SetupTarget.BP_CALIBRATION.phoneRoute),
+    )
+
+    fun dailyReminder() = simple(
+        DAILY_ID,
+        context.getString(R.string.reminder_daily_title),
+        context.getString(R.string.reminder_daily_text),
+        DeepLinks.phone(SetupTarget.HOME.phoneRoute),
+    )
+
+    private fun simple(id: Int, title: String, text: String, link: String) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        val open = PendingIntent.getActivity(
+            context,
+            id,
+            Intent(Intent.ACTION_VIEW, Uri.parse(link), context, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        manager.notify(
+            id,
+            NotificationCompat.Builder(context, CHANNEL_REMINDERS)
+                .setSmallIcon(R.drawable.ic_heart)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setAutoCancel(true)
+                .setContentIntent(open)
+                .build(),
+        )
+    }
+
     companion object {
+        const val CALIBRATION_ID = 7_002
+        const val DAILY_ID = 7_003
+        const val CHANNEL_REMINDERS = "reminders"
         const val SETUP_ID = 7_001
         const val CHANNEL_ALERTS = "alerts"
         const val EXTRA_OPEN_ALERTS = "open_alerts"
