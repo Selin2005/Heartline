@@ -1,6 +1,9 @@
 package com.heartline.phone
 
 import android.app.Application
+import android.util.Log
+import com.heartline.phone.data.BpRepository
+import com.heartline.phone.link.PhoneStatusPublisher
 import com.heartline.phone.data.DemoData
 import com.heartline.phone.data.HeartRepository
 import com.heartline.phone.data.HeartlineDatabase
@@ -15,19 +18,33 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 
 class PhoneApplication : Application() {
+    /** Removes the sample records, alert, heart-rate history and BP calibration older debug builds seeded. */
+    private suspend fun purgeDemoData() {
+        val db = get<HeartlineDatabase>()
+        val records = db.records().deleteDemo()
+        val calibrations = db.bp().deleteDemo()
+        db.heart().deleteDemoAlerts()
+        // Demo minutes have no ids; no real minute could have arrived before this fix (the link never worked).
+        db.heart().deleteMinutes()
+        Log.i("Heartline/Data", "purged demo data: records=$records calibrations=$calibrations")
+        if (calibrations > 0) get<BpRepository>().resendCalibration(orNull = true)
+    }
+
     override fun onCreate() {
         super.onCreate()
         startKoin {
             androidContext(this@PhoneApplication)
             modules(phoneModule)
         }
-        // Debug builds start with sample records so the UI can be explored without a watch.
-        if (BuildConfig.DEBUG) {
-            get<CoroutineScope>(APP_SCOPE).launch {
-                if (get<SettingsRepository>().claimDemoSeed()) {
-                    DemoData.seedIfEmpty(get<RecordRepository>(), HeartRepository(get()), get<HeartlineDatabase>().bp())
-                }
+        val scope = get<CoroutineScope>(APP_SCOPE)
+        scope.launch {
+            val settings = get<SettingsRepository>()
+            if (settings.claimDemoPurge()) purgeDemoData()
+            // Only builds made with -Pheartline.demoData=true start with sample records.
+            if (BuildConfig.DEMO_DATA && settings.claimDemoSeed()) {
+                DemoData.seedIfEmpty(get<RecordRepository>(), HeartRepository(get()))
             }
         }
+        get<PhoneStatusPublisher>().start(scope)
     }
 }

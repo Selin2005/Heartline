@@ -17,6 +17,8 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+        // `-Pheartline.demoData=true` seeds sample records on first launch (UI exploration without a watch).
+        buildConfigField("boolean", "DEMO_DATA", (findProperty("heartline.demoData") ?: "false").toString())
     }
 
     signingConfigs {

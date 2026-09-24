@@ -79,7 +79,7 @@ val BpCategory.label: Int
     }
 
 @Composable
-fun BpHomeScreen(state: BpHomeUi, onBack: (() -> Unit)? = null, onCalibrate: () -> Unit = {}) {
+fun BpHomeScreen(state: BpHomeUi, onBack: (() -> Unit)? = null, onCalibrate: () -> Unit = {}, onMeasureOnWatch: (() -> Unit)? = null) {
     val colors = HeartlineTheme.colors
     ReachabilityScaffold(
         title = stringResource(R.string.metric_bp),
@@ -110,9 +110,14 @@ fun BpHomeScreen(state: BpHomeUi, onBack: (() -> Unit)? = null, onCalibrate: () 
                 }
                 Spacer(Modifier.height(14.dp))
                 if (state.calibrated) {
+                    onMeasureOnWatch?.let { measure ->
+                        PillButton(stringResource(R.string.action_measure_on_watch), onClick = measure, color = colors.bp)
+                        Spacer(Modifier.height(8.dp))
+                    }
                     TonalPillButton(stringResource(R.string.bp_recalibrate), onClick = onCalibrate)
                 } else {
-                    PillButton(stringResource(R.string.bp_calibrate), onClick = onCalibrate, color = colors.bp)
+                    // The watch never measures without a valid calibration: this is the only way forward.
+                    PillButton(stringResource(R.string.bp_calibrate_first), onClick = onCalibrate, color = colors.bp)
                 }
             }
         }

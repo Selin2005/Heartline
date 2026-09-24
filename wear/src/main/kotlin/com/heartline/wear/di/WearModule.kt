@@ -47,6 +47,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
+import android.content.pm.PackageManager
+import android.os.Build
+import android.util.Log
+import androidx.core.content.ContextCompat
+import com.heartline.datalayer.RemoteOpener
+import com.heartline.shared.sync.Hello
+import com.heartline.shared.sync.WatchLinkChecker
+import com.heartline.wear.MainActivity
+import com.heartline.wear.link.AppForeground
+import com.heartline.wear.link.PhoneOpener
+import com.heartline.wear.link.WatchCommandBus
+import com.heartline.wear.link.WatchLinkStore
+import com.heartline.wear.ui.setup.SetupGateViewModel
+import com.heartline.wear.ui.setup.SetupPermissions
 import org.koin.core.qualifier.named
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -77,11 +91,31 @@ val wearModule = module {
             },
             onCalibration = { get<WatchBpStore>().setCalibration(it) },
             onProfile = { get<WatchProfileStore>().update(it) },
-            onOpen = { route -> get<WatchNotifier>().openRequest(route) },
+            // The phone opens screens directly; these messages are the fallback. In the foreground
+            // they navigate at once, in the background they leave one deep-linking notification.
+            onOpen = { route -> if (AppForeground.resumed) get<WatchCommandBus>().post(route) else get<WatchNotifier>().openRequest(route) },
             onCaptureRequest = { request ->
                 get<WatchBpStore>().setPendingCapture(request)
-                get<WatchNotifier>().calibrationRequest(request.round)
+                if (AppForeground.resumed) {
+                    get<WatchCommandBus>().post(MainActivity.ROUTE_BP_CALIBRATION)
+                } else {
+                    get<WatchNotifier>().calibrationRequest(request.round)
+                }
             },
+            onStatus = { get<WatchLinkStore>().update(it) },
+        )
+    }
+    single { WatchLinkStore(androidContext()) }
+    single { WatchCommandBus() }
+    single { RemoteOpener(androidContext(), get()) }
+    single { PhoneOpener(get(), get()) }
+    single {
+        WatchLinkChecker(
+            get<DataLayerTransport>(),
+            get(),
+            get<WatchLinkStore>().latest,
+            hello = { Hello(appVersion = BuildConfig.VERSION_NAME, deviceName = Build.MODEL) },
+            log = { Log.i("Heartline/Link", it) },
         )
     }
     single<SensorGateway> {
@@ -107,6 +141,12 @@ val wearModule = module {
         if (BuildConfig.USE_FAKE_SENSORS) FakePpgSource() else SdkPpgSource(get<SensorGateway>() as SdkSensorGateway)
     }
     viewModel { LauncherViewModel(get(), get()) }
+    viewModel {
+        val context = androidContext()
+        SetupGateViewModel(get(), get(), get(), get()) {
+            SetupPermissions.required.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
+        }
+    }
     viewModel { HistoryViewModel(get()) }
     viewModel { HeartRateViewModel(get()) }
     viewModel { WatchSettingsViewModel(get(), get()) }

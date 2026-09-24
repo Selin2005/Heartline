@@ -100,8 +100,8 @@ fun BpResultScreen(systolic: Int, diastolic: Int, pulse: Int, category: BpCatego
 }
 
 @Composable
-fun BpNeedsCalibrationScreen(onDone: () -> Unit = {}) {
-    ActionScreen(stringResource(R.string.action_done), onDone) {
+fun BpNeedsCalibrationScreen(onOpenOnPhone: () -> Unit = {}, opened: Boolean? = null) {
+    ActionScreen(stringResource(R.string.action_open_on_phone), onOpenOnPhone, wideAction = true, compactLabel = stringResource(R.string.action_open_short)) {
         Badge(Icons.Rounded.PhoneAndroid, WearColors.metric(Metric.BLOOD_PRESSURE))
         Text(
             stringResource(R.string.bp_needs_calibration_title),
@@ -110,6 +110,15 @@ fun BpNeedsCalibrationScreen(onDone: () -> Unit = {}) {
             modifier = Modifier.padding(top = 6.dp),
         )
         Body(stringResource(R.string.bp_needs_calibration_body))
+        opened?.let {
+            Text(
+                stringResource(if (it) R.string.opened_on_phone else R.string.open_on_phone_failed),
+                style = MaterialTheme.typography.bodySmall,
+                color = WearColors.primary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
     }
 }
 

@@ -12,7 +12,7 @@ import kotlinx.serialization.encodeToString
 /** The active BP calibration (sent by the phone) and any pending calibration capture. */
 class WatchBpStore(context: Context) {
     private val prefs = context.getSharedPreferences("bp", Context.MODE_PRIVATE)
-    private val calibrationState = MutableStateFlow(read<BpCalibration>(KEY_CAL))
+    private val calibrationState = MutableStateFlow(read<BpCalibration>(KEY_CAL)?.takeUnless { it.isDemo })
     private val captureState = MutableStateFlow(read<CaptureRequest>(KEY_CAPTURE))
 
     val calibration: StateFlow<BpCalibration?> = calibrationState.asStateFlow()
@@ -21,7 +21,9 @@ class WatchBpStore(context: Context) {
     private inline fun <reified T> read(key: String): T? =
         prefs.getString(key, null)?.let { runCatching { Protocol.json.decodeFromString<T>(it) }.getOrNull() }
 
-    fun setCalibration(value: BpCalibration?) {
+    /** A synthetic calibration from an old debug phone build is never used: it pinned every reading. */
+    fun setCalibration(incoming: BpCalibration?) {
+        val value = incoming?.takeUnless { it.isDemo }
         prefs.edit().putString(KEY_CAL, value?.let { Protocol.json.encodeToString(it) }).apply()
         calibrationState.value = value
     }
@@ -30,6 +32,8 @@ class WatchBpStore(context: Context) {
         prefs.edit().putString(KEY_CAPTURE, value?.let { Protocol.json.encodeToString(it) }).apply()
         captureState.value = value
     }
+
+    private val BpCalibration.isDemo get() = id.startsWith("demo")
 
     private companion object {
         const val KEY_CAL = "calibration"

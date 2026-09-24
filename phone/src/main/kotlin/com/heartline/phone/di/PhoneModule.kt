@@ -1,6 +1,11 @@
 package com.heartline.phone.di
 
+import android.util.Log
 import com.heartline.datalayer.DataLayerTransport
+import com.heartline.datalayer.RemoteOpener
+import com.heartline.phone.link.PhoneStatusPublisher
+import com.heartline.phone.link.WatchOpener
+import com.heartline.phone.ui.model.WatchLinkViewModel
 import com.heartline.phone.R
 import com.heartline.phone.data.HeartlineDatabase
 import com.heartline.phone.data.BpRepository
@@ -58,15 +63,22 @@ val phoneModule = module {
             get(),
             get<RecordRepository>(),
             get<HeartRepository>(),
-            onSettingsRequested = {
-                // The watch says hello on start: reply with settings and the active calibration.
-                get<PhoneSyncEngine>().sendSettings(get<SettingsRepository>().current())
-                get<BpRepository>().resendCalibration()
+            onHello = { hello ->
+                // The watch says hello on start and on every link check: reply with everything it gates on.
+                Log.i("Heartline/Link", "hello from watch: $hello")
+                val sync = get<PhoneSyncEngine>()
+                sync.sendStatus(get<PhoneStatusPublisher>().current())
+                sync.sendSettings(get<SettingsRepository>().current())
+                get<BpRepository>().resendCalibration(orNull = true)
                 get<ProfileRepository>().resend()
             },
             onCaptureResult = { get<BpRepository>().onCaptureResult(it) },
+            onSetupRequest = { get<PhoneNotifier>().setupRequest(it.target) },
         )
     }
+    single { PhoneStatusPublisher(get(), get(), get(), { get() }) }
+    single { RemoteOpener(androidContext(), get()) }
+    single { WatchOpener(get(), get()) { get() } }
     factory {
         val ctx = androidContext()
         RecordFormatter(
@@ -83,10 +95,11 @@ val phoneModule = module {
     viewModel { SettingsViewModel(get(), get(), get(), get(), get()) }
     viewModel { HeartRateViewModel(get(), get()) }
     viewModel { BpHomeViewModel(get(), get()) }
-    viewModel { CalibrationViewModel(get()) }
+    viewModel { CalibrationViewModel(get(), openOnWatch = { get<WatchOpener>().open(it) }) }
     viewModel { params -> MetricDetailViewModel(params.get(), get(), get()) }
     viewModel { ProfileViewModel(get()) }
     viewModel { OpenOnWatchViewModel(get()) }
+    viewModel { WatchLinkViewModel(get(), get()) }
     viewModel { OnboardingViewModel(get()) }
     single { DataExporter(androidContext()) }
     viewModel { AlertsViewModel(get(), get()) }

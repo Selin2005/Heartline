@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.EdgeButton
 import androidx.wear.compose.material3.EdgeButtonSize
+import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
 
@@ -25,7 +26,13 @@ import androidx.wear.compose.material3.Text
  * first frame and never overlaps the content.
  */
 @Composable
-fun ActionScreen(actionLabel: String, onAction: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+fun ActionScreen(
+    actionLabel: String,
+    onAction: () -> Unit,
+    wideAction: Boolean = false,
+    compactLabel: String? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val scroll = rememberScrollState()
     val screen = LocalConfiguration.current.screenHeightDp.dp
     ScreenScaffold(scrollState = scroll) {
@@ -45,8 +52,18 @@ fun ActionScreen(actionLabel: String, onAction: () -> Unit, content: @Composable
                     content = content,
                 )
             }
-            EdgeButton(onClick = onAction, buttonSize = if (isSmallRound()) EdgeButtonSize.ExtraSmall else EdgeButtonSize.Small) {
-                Text(actionLabel, maxLines = 1)
+            // Longer labels ("Open on phone") need the wider medium edge button to avoid an ellipsis.
+            // On small screens a long label switches to [compactLabel] rather than a taller button.
+            val small = isSmallRound()
+            val label = if (small && compactLabel != null) compactLabel else actionLabel
+            val wide = wideAction && !(small && compactLabel != null)
+            val size = when {
+                wide -> EdgeButtonSize.Medium
+                small -> EdgeButtonSize.ExtraSmall
+                else -> EdgeButtonSize.Small
+            }
+            EdgeButton(onClick = onAction, buttonSize = size) {
+                Text(label, maxLines = 1, style = if (wide) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge)
             }
         }
     }

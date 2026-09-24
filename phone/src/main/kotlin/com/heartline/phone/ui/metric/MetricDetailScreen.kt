@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.heartline.phone.R
+import com.heartline.phone.ui.components.TonalPillButton
 import com.heartline.phone.ui.components.CardRow
 import com.heartline.phone.ui.components.CardTitle
 import com.heartline.phone.ui.components.MetricValue
@@ -44,7 +45,7 @@ private val Metric.valueLabel: Int
 
 /** Shared detail layout for SpO2, skin temperature, body composition and stress. */
 @Composable
-fun MetricDetailScreen(state: MetricDetailUi, onBack: (() -> Unit)? = null) {
+fun MetricDetailScreen(state: MetricDetailUi, onBack: (() -> Unit)? = null, onMeasureOnWatch: (() -> Unit)? = null) {
     val colors = HeartlineTheme.colors
     val color = colors.metric(state.metric)
     ReachabilityScaffold(
@@ -52,6 +53,9 @@ fun MetricDetailScreen(state: MetricDetailUi, onBack: (() -> Unit)? = null) {
         subtitle = state.latest?.let { stringResource(R.string.bp_last_measured, "${it.date} ${it.time}") },
         onBack = onBack,
     ) {
+        onMeasureOnWatch?.let { measure ->
+            item { TonalPillButton(stringResource(R.string.action_measure_on_watch), onClick = measure, modifier = Modifier.gutter(), color = color) }
+        }
         val latest = state.latest
         if (latest == null) {
             item { EmptyCard(stringResource(R.string.ecg_empty_title), stringResource(R.string.metric_empty_body)) }

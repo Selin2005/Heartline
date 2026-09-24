@@ -1,8 +1,5 @@
 package com.heartline.phone.data
 
-import com.heartline.shared.bp.BpCalibration
-import com.heartline.shared.bp.CalibrationPoint
-import com.heartline.shared.bp.PpgFeatures
 import com.heartline.shared.hr.AlertKind
 import com.heartline.shared.hr.HealthAlert
 import com.heartline.shared.hr.HrBatch
@@ -13,9 +10,6 @@ import com.heartline.shared.model.RecordMeta
 import com.heartline.shared.model.RecordSummary
 import com.heartline.shared.model.Symptom
 import com.heartline.shared.sample.SyntheticEcg
-import com.heartline.shared.sample.SyntheticPpg
-import com.heartline.shared.sync.Protocol
-import kotlinx.serialization.encodeToString
 import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.random.Random
@@ -100,25 +94,16 @@ object DemoData {
         }
     }
 
-    fun calibration(now: Long): BpCalibration {
-        val features = PpgFeatures.extract(SyntheticPpg.generate(20.0, 68.0, 0.5), SyntheticPpg.SAMPLE_RATE_HZ)!!
-        return BpCalibration("demo-cal", now - 7 * DAY, List(3) { CalibrationPoint(features, 120 + it, 78 + it, 66) })
-    }
-
     suspend fun seedIfEmpty(
         repository: RecordRepository,
         heart: HeartRepository? = null,
-        bpDao: BpDao? = null,
         now: Long = System.currentTimeMillis(),
     ) {
         if (!repository.isEmpty()) return
         ecgRecords(now).forEach { (meta, wave) -> repository.save(meta, wave) }
         bpReadings(now).forEach { repository.save(it, null) }
         wellnessRecords(now).forEach { repository.save(it, null) }
-        bpDao?.let { dao ->
-            val cal = calibration(now)
-            dao.insert(BpCalibrationEntity(cal.id, cal.createdAtMs, Protocol.json.encodeToString(cal)))
-        }
+        // No demo BP calibration: a synthetic one would be sent to the watch and pin every reading.
         heart?.saveBatch(heartBatch(now))
         heart?.saveAlert(alert(now))
     }

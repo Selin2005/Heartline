@@ -14,7 +14,13 @@ import com.samsung.android.service.health.tracking.HealthTrackingService
 import com.samsung.android.service.health.tracking.data.HealthTrackerType
 import com.samsung.android.service.health.tracking.data.PpgType
 import com.samsung.android.service.health.tracking.data.TrackerUserProfile
+import com.samsung.android.service.health.tracking.data.DataPoint
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -66,6 +72,48 @@ class SdkSensorGateway(private val context: Context) : SensorGateway {
         lastException?.takeIf { it.hasResolution() }?.resolve(activity)
     }
 
+    override suspend fun probeHealth(): SensorProblem? {
+        connect()
+        val connected = withTimeoutOrNull(CONNECT_TIMEOUT_MS) { state.first { it is GatewayState.Connected || it is GatewayState.Failed } }
+        val result = when (connected) {
+            null -> SensorProblem.NOT_SUPPORTED
+            is GatewayState.Failed -> connected.problem
+            is GatewayState.Connected -> {
+                // Any tracker surfaces the policy/permission errors; heart rate exists on every Galaxy Watch.
+                val kind = PROBE_TRACKERS.firstOrNull { it in connected.trackers }
+                val tracker = kind?.let { runCatching { tracker(it) }.getOrNull() }
+                if (tracker == null) null else probe(tracker)
+            }
+            else -> SensorProblem.NOT_SUPPORTED
+        }
+        Log.i(TAG, "health probe -> ${result ?: "OK"}")
+        return result
+    }
+
+    /** Listens briefly: an error means a problem; data or silence means the tracker is allowed to run. */
+    private suspend fun probe(tracker: HealthTracker): SensorProblem? = withContext(Dispatchers.Main) {
+        val outcome = CompletableDeferred<SensorProblem?>()
+        tracker.setEventListener(
+            object : HealthTracker.TrackerEventListener {
+                override fun onDataReceived(points: List<DataPoint>) {
+                    outcome.complete(null)
+                }
+
+                override fun onFlushCompleted() = Unit
+
+                override fun onError(error: HealthTracker.TrackerError) {
+                    Log.w(TAG, "probe tracker error: $error")
+                    outcome.complete(mapError(error))
+                }
+            },
+        )
+        try {
+            withTimeoutOrNull(PROBE_TIMEOUT_MS) { outcome.await() }
+        } finally {
+            runCatching { tracker.unsetEventListener() }
+        }
+    }
+
     fun ppgTracker(types: Set<PpgType>): HealthTracker? = service?.getHealthTracker(HealthTrackerType.PPG_ON_DEMAND, types)
 
     fun trackerWithProfile(kind: TrackerKind, profile: TrackerUserProfile): HealthTracker? = service?.getHealthTracker(kind.toSdk(), profile)
@@ -74,7 +122,10 @@ class SdkSensorGateway(private val context: Context) : SensorGateway {
     fun tracker(kind: TrackerKind): HealthTracker? = service?.getHealthTracker(kind.toSdk())
 
     companion object {
-        const val TAG = "SensorSdk"
+        const val TAG = "Heartline/Sensor"
+        private const val CONNECT_TIMEOUT_MS = 10_000L
+        private const val PROBE_TIMEOUT_MS = 5_000L
+        private val PROBE_TRACKERS = listOf(TrackerKind.HEART_RATE_CONTINUOUS, TrackerKind.PPG_CONTINUOUS, TrackerKind.ECG_ON_DEMAND)
 
         fun HealthTrackerType.toKind(): TrackerKind? = TrackerKind.entries.firstOrNull { it.name == name }
 

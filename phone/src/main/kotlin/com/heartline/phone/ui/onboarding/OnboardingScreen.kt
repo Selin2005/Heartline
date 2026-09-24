@@ -34,7 +34,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.heartline.phone.R
+import com.heartline.phone.link.WatchLinkUi
+import com.heartline.phone.ui.components.WatchLinkCard
+import com.heartline.phone.ui.model.ProfileViewModel
+import com.heartline.phone.ui.model.WatchLinkViewModel
+import com.heartline.phone.ui.profile.ProfileScreen
+import com.heartline.shared.sync.PeerProbe
+import org.koin.androidx.compose.koinViewModel
 import com.heartline.phone.ui.components.IconBadge
 import com.heartline.phone.ui.components.PillButton
 import com.heartline.phone.ui.components.icon
@@ -122,18 +131,47 @@ private fun HeroHeart() {
     }
 }
 
-/** First run: welcome, then the profile (can be skipped), then the app. */
+/** First run: welcome, the profile, then connecting the watch, then the app. */
 @Composable
 fun OnboardingFlow(onFinished: () -> Unit) {
     var step by rememberSaveable { mutableIntStateOf(0) }
-    if (step == 0) {
-        OnboardingScreen(onGetStarted = { step = 1 })
-    } else {
-        val vm: com.heartline.phone.ui.model.ProfileViewModel = org.koin.androidx.compose.koinViewModel()
-        com.heartline.phone.ui.profile.ProfileScreen(
-            profile = null,
-            onBack = onFinished,
-            onSave = { vm.save(it, onFinished) },
-        )
+    when (step) {
+        0 -> OnboardingScreen(onGetStarted = { step = 1 })
+        1 -> {
+            val vm: ProfileViewModel = koinViewModel()
+            val profile by vm.profile.collectAsStateWithLifecycle()
+            ProfileScreen(profile = profile, onBack = { step = 0 }, onSave = { vm.save(it) { step = 2 } })
+        }
+        else -> {
+            val vm: WatchLinkViewModel = koinViewModel()
+            val link by vm.link.collectAsStateWithLifecycle()
+            LifecycleResumeEffect(Unit) {
+                vm.refresh()
+                onPauseOrDispose {}
+            }
+            ConnectWatchScreen(link, onRetry = vm::refresh, onOpenWatch = vm::openWatchApp, onContinue = onFinished)
+        }
+    }
+}
+
+@Composable
+fun ConnectWatchScreen(link: WatchLinkUi?, onRetry: () -> Unit = {}, onOpenWatch: () -> Unit = {}, onContinue: () -> Unit = {}) {
+    val colors = HeartlineTheme.colors
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.background)
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(horizontal = 24.dp, vertical = 24.dp),
+    ) {
+        Spacer(Modifier.weight(0.4f))
+        Text(stringResource(R.string.onboarding_watch_title), style = MaterialTheme.typography.displaySmall, color = colors.onBackground)
+        Spacer(Modifier.height(12.dp))
+        Text(stringResource(R.string.onboarding_watch_body), style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant)
+        Spacer(Modifier.height(24.dp))
+        WatchLinkCard(link, onRetry = onRetry, onOpenWatch = onOpenWatch)
+        Spacer(Modifier.weight(1f))
+        val ready = link?.probe == PeerProbe.REACHABLE
+        PillButton(stringResource(if (ready) R.string.action_continue else R.string.action_skip_for_now), onClick = onContinue)
     }
 }

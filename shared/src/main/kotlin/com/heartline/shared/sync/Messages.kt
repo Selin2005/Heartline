@@ -4,14 +4,56 @@ import com.heartline.shared.model.Metric
 import kotlinx.serialization.Serializable
 
 @Serializable
+enum class Role { PHONE, WATCH }
+
+/** Watch → phone on every app start and every link check; the phone answers with [PhoneStatus]. */
+@Serializable
 data class Hello(
     val protocol: Int = Protocol.VERSION,
     val appVersion: String,
     val capabilities: List<Metric> = emptyList(),
-    val sensorServiceVersion: String? = null
+    val sensorServiceVersion: String? = null,
+    val role: Role = Role.WATCH,
+    val deviceName: String? = null
 ) {
     fun isCompatible() = protocol == Protocol.VERSION
 }
+
+@Serializable
+enum class CalibrationStatus { MISSING, VALID, EXPIRED }
+
+/**
+ * Phone → watch: what the phone knows about setup. Sent in reply to [Hello] and whenever the
+ * profile, onboarding or BP calibration changes, so the watch can gate its features on it.
+ */
+@Serializable
+data class PhoneStatus(
+    val protocol: Int = Protocol.VERSION,
+    val appVersion: String = "",
+    val onboarded: Boolean = false,
+    val profileComplete: Boolean = false,
+    val displayName: String = "",
+    val calcSexKnown: Boolean = false,
+    val calibration: CalibrationStatus = CalibrationStatus.MISSING,
+    val calibrationDaysLeft: Int? = null
+) {
+    fun isCompatible() = protocol == Protocol.VERSION
+
+    val setupComplete: Boolean get() = onboarded && profileComplete
+}
+
+/** Where the watch sends the user on the phone. */
+@Serializable
+enum class SetupTarget(val phoneRoute: String) {
+    HOME("home"),
+    PROFILE("profile"),
+    BP_CALIBRATION("bp/calibrate"),
+    DEV_MODE_HELP("help/dev-mode")
+}
+
+/** Watch → phone: "open this on the phone" (fallback when the remote activity launch fails). */
+@Serializable
+data class SetupRequest(val target: SetupTarget)
 
 @Serializable
 data class Ack(val id: String, val ok: Boolean)

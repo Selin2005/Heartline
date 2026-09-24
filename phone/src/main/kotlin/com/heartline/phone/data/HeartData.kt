@@ -52,6 +52,9 @@ interface HeartDao {
     @Query("DELETE FROM hr_minutes")
     suspend fun deleteMinutes()
 
+    @Query("DELETE FROM alerts WHERE id LIKE 'demo-%'")
+    suspend fun deleteDemoAlerts(): Int
+
     @Query("DELETE FROM alerts")
     suspend fun deleteAlerts()
 }

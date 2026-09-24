@@ -37,4 +37,10 @@ interface SensorGateway {
 
     /** Opens the store to install/update Health Sensor Service when the failure allows it. */
     fun resolve(activity: Activity)
+
+    /**
+     * Connects and briefly starts a tracker to find problems before the user picks a feature:
+     * most importantly SDK_POLICY (Health Platform developer mode off). null means ready.
+     */
+    suspend fun probeHealth(): SensorProblem?
 }

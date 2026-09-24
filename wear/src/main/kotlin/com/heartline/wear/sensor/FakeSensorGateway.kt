@@ -24,4 +24,9 @@ class FakeSensorGateway(
     }
 
     override fun resolve(activity: Activity) = Unit
+
+    override suspend fun probeHealth(): SensorProblem? {
+        connect()
+        return failure
+    }
 }

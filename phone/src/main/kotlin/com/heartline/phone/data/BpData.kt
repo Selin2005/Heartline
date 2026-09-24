@@ -33,6 +33,9 @@ interface BpDao {
 
     @Query("DELETE FROM bp_calibrations")
     suspend fun deleteAll()
+
+    @Query("DELETE FROM bp_calibrations WHERE id LIKE 'demo%'")
+    suspend fun deleteDemo(): Int
 }
 
 /** Blood-pressure calibration (source of truth on the phone) and readings from the watch. */
@@ -59,9 +62,10 @@ class BpRepository(
         sync().sendCalibration(calibration)
     }
 
-    /** Re-sends the active calibration (after the watch says hello). */
-    suspend fun resendCalibration() {
-        calibration.first()?.let { sync().sendCalibration(it) }
+    /** Re-sends the active calibration (after the watch says hello); [orNull] also tells the watch to drop its copy when there is none. */
+    suspend fun resendCalibration(orNull: Boolean = false) {
+        val current = calibration.first()
+        if (current != null || orNull) sync().sendCalibration(current)
     }
 
     suspend fun deleteAll() {

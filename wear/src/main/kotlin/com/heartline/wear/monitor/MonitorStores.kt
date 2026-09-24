@@ -5,6 +5,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import com.heartline.datalayer.DeepLinks
 import androidx.core.app.NotificationCompat
 import com.heartline.shared.hr.AlertKind
 import com.heartline.shared.hr.HealthAlert
@@ -101,14 +103,20 @@ class WatchNotifier(private val context: Context) {
         )
     }
 
-    /** The phone asked for a calibration round; the watch can't open UI from the background. */
+    /** Opens [route] in the app (heartline://watch/<route>), not just the home screen. */
+    private fun deepLink(requestCode: Int, route: String) = PendingIntent.getActivity(
+        context,
+        requestCode,
+        Intent(Intent.ACTION_VIEW, Uri.parse(DeepLinks.watch(route)), context, MainActivity::class.java),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+
+    /**
+     * Fallback only: the phone opens the calibration screen directly, and an open screen runs each
+     * round by itself. This shows when the app was closed; it replaces (never stacks on) the last one.
+     */
     fun calibrationRequest(round: Int) {
-        val open = PendingIntent.getActivity(
-            context,
-            1,
-            Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_ROUTE, MainActivity.ROUTE_BP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
+        val open = deepLink(1, MainActivity.ROUTE_BP_CALIBRATION)
         manager.notify(
             CALIBRATION_ID,
             NotificationCompat.Builder(context, CHANNEL_ALERTS)
@@ -116,20 +124,18 @@ class WatchNotifier(private val context: Context) {
                 .setContentTitle(context.getString(R.string.bp_calibration_round, round))
                 .setContentText(context.getString(R.string.bp_calibrate_notification, round))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setOnlyAlertOnce(true)
                 .setAutoCancel(true)
                 .setContentIntent(open)
                 .build(),
         )
     }
 
-    /** The phone asked to start a measurement here ("Open on watch"). */
+    fun cancelCalibrationRequest() = manager.cancel(CALIBRATION_ID)
+
+    /** Fallback when the phone's direct launch failed: tapping opens the requested screen itself. */
     fun openRequest(route: String) {
-        val open = PendingIntent.getActivity(
-            context,
-            4,
-            Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_ROUTE, route),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
+        val open = deepLink(4, route)
         manager.notify(
             OPEN_ID,
             NotificationCompat.Builder(context, CHANNEL_ALERTS)
@@ -138,6 +144,7 @@ class WatchNotifier(private val context: Context) {
                 .setContentText(context.getString(R.string.open_request_text))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setAutoCancel(true)
+                .setOnlyAlertOnce(true)
                 .setContentIntent(open)
                 .build(),
         )

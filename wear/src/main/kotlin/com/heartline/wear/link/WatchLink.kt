@@ -1,0 +1,71 @@
+package com.heartline.wear.link
+
+import android.content.Context
+import android.util.Log
+import com.heartline.datalayer.DeepLinks
+import com.heartline.datalayer.RemoteOpener
+import com.heartline.shared.sync.PhoneStatus
+import com.heartline.shared.sync.Protocol
+import com.heartline.shared.sync.SetupRequest
+import com.heartline.shared.sync.SetupTarget
+import com.heartline.shared.sync.StampedStatus
+import com.heartline.shared.sync.SyncTransport
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.encodeToString
+
+/**
+ * The last [PhoneStatus] the phone sent, kept across restarts so the watch can still open (offline)
+ * once it has been set up with the phone at least once.
+ */
+class WatchLinkStore(context: Context, private val now: () -> Long = System::currentTimeMillis) {
+    private val prefs = context.getSharedPreferences("link", Context.MODE_PRIVATE)
+    private val cached: PhoneStatus? = prefs.getString(KEY_STATUS, null)?.let { runCatching { Protocol.json.decodeFromString<PhoneStatus>(it) }.getOrNull() }
+
+    // The cached copy is stamped 0 so it never counts as a fresh reply to a new hello.
+    private val mutable = MutableStateFlow(cached?.let { StampedStatus(it, 0L) })
+    val latest: StateFlow<StampedStatus?> = mutable.asStateFlow()
+
+    fun update(status: PhoneStatus) {
+        Log.i(TAG, "phone status: $status")
+        prefs.edit().putString(KEY_STATUS, Protocol.json.encodeToString(status)).apply()
+        mutable.value = StampedStatus(status, now())
+    }
+
+    /** True once the phone has confirmed a complete setup at least once. */
+    val wasSetUp: Boolean get() = latest.value?.status?.setupComplete == true
+
+    private companion object {
+        const val TAG = "Heartline/Link"
+        const val KEY_STATUS = "status"
+    }
+}
+
+/** Whether a Heartline activity is on screen, so phone requests can navigate instead of notifying. */
+object AppForeground {
+    @Volatile
+    var resumed: Boolean = false
+}
+
+/** Routes pushed by the phone while the app is open; the nav graph follows them immediately. */
+class WatchCommandBus {
+    private val routes = MutableSharedFlow<String>(extraBufferCapacity = 4, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    val navigate: SharedFlow<String> = routes.asSharedFlow()
+
+    fun post(route: String) {
+        routes.tryEmit(route)
+    }
+}
+
+/** Sends the user to a screen on the phone: a direct launch, or a notification there as fallback. */
+class PhoneOpener(private val opener: RemoteOpener, private val transport: SyncTransport) {
+    suspend fun open(target: SetupTarget): Boolean {
+        if (opener.open(DeepLinks.phone(target.phoneRoute))) return true
+        return transport.send(Protocol.SETUP_REQUEST, Protocol.json.encodeToString(SetupRequest(target)).encodeToByteArray())
+    }
+}

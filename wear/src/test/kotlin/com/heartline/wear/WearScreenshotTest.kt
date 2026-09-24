@@ -18,7 +18,16 @@ import com.heartline.wear.ui.screens.BpNeedsCalibrationScreen
 import com.heartline.wear.ui.screens.BpResultScreen
 import com.heartline.shared.model.RecordSummary
 import com.heartline.wear.sensor.QuickHint
-import com.heartline.wear.ui.screens.DevModeGuideScreen
+import com.heartline.wear.ui.setup.DevModeGuideScreen
+import com.heartline.wear.ui.setup.CheckingScreen
+import com.heartline.wear.ui.setup.CheckingSensorsScreen
+import com.heartline.wear.ui.setup.PermissionsScreen
+import com.heartline.wear.ui.setup.PhoneProblemScreen
+import com.heartline.wear.ui.setup.SetupIncompleteScreen
+import com.heartline.shared.sync.LinkStage
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.wear.compose.foundation.lazy.TransformingLazyColumnState
 import com.heartline.wear.ui.screens.DiagnosticsScreen
 import com.heartline.wear.ui.screens.HeartRateScreen
 import com.heartline.wear.ui.screens.WatchSettingsScreen
@@ -113,6 +122,8 @@ class WearScreenshotTest(private val size: String) {
 
     @Test fun bpNeedsCalibration() = shot("bp_needs_calibration") { BpNeedsCalibrationScreen() }
 
+    @Test fun bpNeedsCalibrationOpened() = shot("bp_needs_calibration_opened") { BpNeedsCalibrationScreen(opened = true) }
+
     @Test fun bpCalibrationRecorded() = shot("bp_calibration_recorded") { BpCalibrationRecordedScreen(2) }
 
     @Test fun spo2Instruction() = shot("spo2_instruction") { QuickInstructionScreen(Metric.SPO2) }
@@ -138,6 +149,24 @@ class WearScreenshotTest(private val size: String) {
     @Test fun diagnostics() = shot("diagnostics") { DiagnosticsScreen(settingsUi) }
 
     @Test fun devMode() = shot("dev_mode") { DevModeGuideScreen() }
+
+    @Test fun devModeEnd() = shot("dev_mode_end") { DevModeGuideScreen(state = TransformingLazyColumnState(initialAnchorItemIndex = 9)) }
+
+    @Test fun setupCheckingPhone() = shot("setup_checking_phone") {
+        CheckingScreen(Icons.Rounded.PhoneAndroid, "Connecting to phone", "Making sure Heartline on your phone and watch know each other.", animate = false)
+    }
+
+    @Test fun setupNoPhone() = shot("setup_no_phone") { PhoneProblemScreen(LinkStage.NO_DEVICE) }
+
+    @Test fun setupAppMissing() = shot("setup_app_missing") { PhoneProblemScreen(LinkStage.APP_MISSING) }
+
+    @Test fun setupNoResponse() = shot("setup_no_response") { PhoneProblemScreen(LinkStage.NO_RESPONSE, opened = true) }
+
+    @Test fun setupIncomplete() = shot("setup_incomplete") { SetupIncompleteScreen("Sara") }
+
+    @Test fun setupPermissions() = shot("setup_permissions") { PermissionsScreen() }
+
+    @Test fun setupCheckingSensors() = shot("setup_checking_sensors") { CheckingSensorsScreen(animate = false) }
 
     @Test fun errorPolicy() = shot("error_sdk_policy") { SensorErrorScreen(SensorProblem.SDK_POLICY) }
 

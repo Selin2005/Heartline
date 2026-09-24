@@ -24,6 +24,8 @@ import com.heartline.phone.ui.metric.MetricDetailScreen
 import com.heartline.phone.ui.profile.ProfileScreen
 import com.heartline.shared.model.Metric
 import com.heartline.shared.profile.Gender
+import com.heartline.phone.link.WatchLinkUi
+import com.heartline.shared.sync.PeerProbe
 import com.heartline.shared.profile.ReportName
 import com.heartline.shared.profile.UserProfile
 import com.heartline.phone.ui.model.BpHomeUi
@@ -150,4 +152,16 @@ class PhoneScreenshotTest(private val theme: String) {
     @Test fun settings() = shot("settings") { SettingsScreen() }
 
     @Test fun onboarding() = shot("onboarding") { OnboardingScreen() }
+
+    @Test fun connectWatchFound() = shot("connect_watch_found") {
+        com.heartline.phone.ui.onboarding.ConnectWatchScreen(WatchLinkUi(PeerProbe.REACHABLE, "Galaxy Watch8"))
+    }
+
+    @Test fun connectWatchMissingApp() = shot("connect_watch_app_missing") {
+        com.heartline.phone.ui.onboarding.ConnectWatchScreen(WatchLinkUi(PeerProbe.APP_MISSING))
+    }
+
+    @Test fun homeNoWatch() = shot("home_no_watch") { HomeScreen(SampleData.home, watchLink = WatchLinkUi(PeerProbe.NO_DEVICE)) }
+
+    @Test fun devModeHelp() = shot("dev_mode_help") { com.heartline.phone.ui.help.DevModeHelpScreen(onBack = {}) }
 }

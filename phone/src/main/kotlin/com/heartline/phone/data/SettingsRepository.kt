@@ -21,6 +21,20 @@ class SettingsRepository(private val context: Context) {
         val LOW = intPreferencesKey("low_bpm")
         val ONBOARDED = booleanPreferencesKey("onboarded")
         val DEMO_SEEDED = booleanPreferencesKey("demo_seeded")
+        val DEMO_PURGED = booleanPreferencesKey("demo_purged")
+    }
+
+    /**
+     * Earlier debug builds always seeded demo data, including a synthetic BP calibration that made
+     * every watch reading come out the same. Returns true once, for installs that were seeded.
+     */
+    suspend fun claimDemoPurge(): Boolean {
+        var purge = false
+        context.settingsStore.edit {
+            purge = it[Keys.DEMO_SEEDED] == true && it[Keys.DEMO_PURGED] != true
+            it[Keys.DEMO_PURGED] = true
+        }
+        return purge
     }
 
     /** Debug builds seed demo data once; after "Delete all data" it must not come back. */

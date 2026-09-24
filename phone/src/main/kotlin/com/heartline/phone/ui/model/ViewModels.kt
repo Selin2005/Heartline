@@ -12,6 +12,15 @@ import com.heartline.phone.data.SettingsRepository
 import com.heartline.shared.hr.MonitorSettings
 import com.heartline.shared.model.Metric
 import com.heartline.phone.data.ProfileRepository
+import com.heartline.phone.link.OpenResult
+import com.heartline.phone.link.PhoneStatusPublisher
+import com.heartline.phone.link.WatchLinkUi
+import com.heartline.phone.link.WatchOpener
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import com.heartline.phone.report.EcgReportBuilder
 import com.heartline.shared.model.RecordKind
 import com.heartline.shared.model.Symptom
@@ -166,8 +175,23 @@ class SettingsViewModel(
 }
 
 /** "Record on watch" buttons: asks the watch to show a tap-to-open notification. */
-class OpenOnWatchViewModel(private val sync: PhoneSyncEngine) : ViewModel() {
-    fun open(route: String) = viewModelScope.launch { sync.openOnWatch(route) }
+/** "Measure on watch" buttons: opens the screen on the watch and reports how it went. */
+class OpenOnWatchViewModel(private val opener: WatchOpener) : ViewModel() {
+    private val results = MutableSharedFlow<OpenResult>(extraBufferCapacity = 4)
+    val events: SharedFlow<OpenResult> = results.asSharedFlow()
+
+    fun open(route: String) = viewModelScope.launch { results.emit(opener.open(route)) }
+}
+
+/** The watch connection card (Home, onboarding). Re-probed whenever the screen asks. */
+class WatchLinkViewModel(private val opener: WatchOpener, status: PhoneStatusPublisher) : ViewModel() {
+    private val probe = MutableStateFlow<WatchLinkUi?>(null)
+    val link: StateFlow<WatchLinkUi?> = probe.asStateFlow()
+    val setupComplete: StateFlow<Boolean> = status.status.map { it.setupComplete }.stateIn(viewModelScope, WHILE_SUBSCRIBED, false)
+
+    fun refresh() = viewModelScope.launch { probe.value = opener.probe() }
+
+    fun openWatchApp() = viewModelScope.launch { opener.open("") }
 }
 
 class OnboardingViewModel(private val settings: SettingsRepository) : ViewModel() {

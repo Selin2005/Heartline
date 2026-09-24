@@ -2,7 +2,36 @@ package com.heartline.wear.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.activity.compose.LocalActivity
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.compose.ui.res.stringResource
+import androidx.navigation.NavHostController
+import com.heartline.shared.sync.SetupTarget
+import com.heartline.wear.R
+import com.heartline.wear.link.WatchCommandBus
+import com.heartline.wear.sensor.SensorGateway
+import com.heartline.wear.ui.setup.CheckingScreen
+import com.heartline.wear.ui.setup.CheckingSensorsScreen
+import com.heartline.wear.ui.setup.DevModeGuideScreen
+import com.heartline.wear.ui.setup.GateState
+import com.heartline.wear.ui.setup.PermissionsScreen
+import com.heartline.wear.ui.setup.PhoneProblemScreen
+import com.heartline.wear.ui.setup.ServiceProblemScreen
+import com.heartline.wear.ui.setup.SetupGateViewModel
+import com.heartline.wear.ui.setup.SetupIncompleteScreen
+import com.heartline.wear.ui.setup.SetupPermissions
+import org.koin.compose.koinInject
 import androidx.wear.compose.material3.AppScaffold
 import androidx.wear.compose.material3.TimeText
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
@@ -16,7 +45,6 @@ import com.heartline.shared.model.Metric
 import com.heartline.shared.sample.SyntheticEcg
 import com.heartline.wear.ui.screens.LauncherEntry
 import com.heartline.wear.sensor.SensorProblem
-import com.heartline.wear.ui.screens.DevModeGuideScreen
 import com.heartline.wear.ui.screens.DiagnosticsScreen
 import com.heartline.wear.ui.screens.HeartRateScreen
 import com.heartline.wear.ui.screens.WatchSettingsScreen
@@ -51,83 +79,182 @@ private object Routes {
     const val HISTORY = "history"
     const val HEART_RATE = MainActivity.ROUTE_HEART_RATE
     const val BLOOD_PRESSURE = MainActivity.ROUTE_BP
+    const val BP_CALIBRATION = MainActivity.ROUTE_BP_CALIBRATION
     const val QUICK = "quick/{metric}"
     const val SETTINGS = "settings"
     const val DEV_MODE = "dev_mode"
     const val DIAGNOSTICS = "diagnostics"
 
     fun quick(metric: Metric) = "quick/${metric.name}"
+
+    /** Screens the phone, notifications, tiles and complications may open. */
+    fun isExternal(route: String) = route in setOf(ECG, HEART_RATE, BLOOD_PRESSURE, BP_CALIBRATION, HISTORY) ||
+        (route.startsWith("quick/") && Metric.entries.any { route == quick(it) })
+}
+
+/** Opens [route] on top of the launcher (so back always lands on the launcher). */
+private fun NavHostController.openExternal(route: String) {
+    if (route == Routes.LAUNCHER || !Routes.isExternal(route)) {
+        popBackStack(Routes.LAUNCHER, inclusive = false)
+        return
+    }
+    navigate(route) {
+        popUpTo(Routes.LAUNCHER)
+        launchSingleTop = true
+    }
 }
 
 @Composable
 fun HeartlineWearApp(startRoute: String? = null) {
+    val gate: SetupGateViewModel = koinViewModel()
+    val gateState by gate.state.collectAsStateWithLifecycle()
+    val openedOnPhone by gate.openedOnPhone.collectAsStateWithLifecycle()
+    val gateway: SensorGateway = koinInject()
+    val bus: WatchCommandBus = koinInject()
+    val context = LocalContext.current
+    val activity = LocalActivity.current
+    val nav = rememberSwipeDismissableNavController()
+    // Every start re-checks the phone link; once set up this runs quietly in the background.
+    LifecycleEventEffect(Lifecycle.Event.ON_START) { gate.check() }
+
+    var pendingRoute by rememberSaveable { mutableStateOf(startRoute) }
+    LaunchedEffect(bus) { bus.navigate.collect { pendingRoute = it } }
+    val ready = gateState is GateState.Ready
+    LaunchedEffect(pendingRoute, ready) {
+        val route = pendingRoute ?: return@LaunchedEffect
+        if (route == MainActivity.ROUTE_SETUP) {
+            // "Open the check on my watch" from the phone's help page.
+            pendingRoute = null
+            gate.recheckSensors()
+        } else if (ready) {
+            pendingRoute = null
+            nav.openExternal(route)
+        }
+    }
+
+    var permissionDenials by rememberSaveable { mutableIntStateOf(0) }
+    val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        if (!SetupPermissions.required.all { p -> it[p] == true || context.checkSelfPermission(p) == android.content.pm.PackageManager.PERMISSION_GRANTED }) permissionDenials++
+        HeartMonitorService.sync(context, enabled = true)
+        gate.onPermissionsResult()
+    }
+
+    HeartlineWearTheme {
+        AppScaffold(timeText = { TimeText() }) {
+            when (val g = gateState) {
+                GateState.CheckingPhone -> CheckingScreen(
+                    Icons.Rounded.PhoneAndroid,
+                    stringResource(R.string.link_checking_title),
+                    stringResource(R.string.link_checking_body),
+                )
+                is GateState.PhoneProblem -> PhoneProblemScreen(
+                    g.stage,
+                    onRetry = { gate.check() },
+                    onOpenOnPhone = { gate.openOnPhone(SetupTarget.HOME) },
+                    opened = openedOnPhone,
+                )
+                is GateState.SetupIncomplete -> SetupIncompleteScreen(
+                    g.status.displayName.ifBlank { null },
+                    onOpenOnPhone = { gate.openOnPhone(SetupTarget.PROFILE) },
+                    opened = openedOnPhone,
+                )
+                GateState.NeedsPermissions -> PermissionsScreen(onAllow = {
+                    if (permissionDenials >= 2) {
+                        // The system stops showing the dialog after repeated denials: open app settings instead.
+                        context.startActivity(
+                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    } else {
+                        permissions.launch(SetupPermissions.requested)
+                    }
+                })
+                GateState.CheckingSensors -> CheckingSensorsScreen()
+                is GateState.SensorIssue -> when (g.problem) {
+                    SensorProblem.SDK_POLICY -> DevModeGuideScreen(
+                        problemFound = true,
+                        onCheckAgain = { gate.recheckSensors() },
+                        onShowOnPhone = { gate.openOnPhone(SetupTarget.DEV_MODE_HELP) },
+                    )
+                    SensorProblem.SERVICE_MISSING, SensorProblem.SERVICE_OUTDATED -> ServiceProblemScreen(
+                        outdated = g.problem == SensorProblem.SERVICE_OUTDATED,
+                        onAction = { activity?.let(gateway::resolve) },
+                    )
+                    SensorProblem.PERMISSION -> PermissionsScreen(onAllow = { permissions.launch(SetupPermissions.requested) })
+                    else -> SensorErrorScreen(g.problem, onAction = { gate.recheckSensors() })
+                }
+                is GateState.Ready -> AppNavHost(nav, gate)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppNavHost(nav: NavHostController, gate: SetupGateViewModel) {
     val launcher: LauncherViewModel = koinViewModel()
     val launcherState by launcher.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { launcher.connect() }
-    val nav = rememberSwipeDismissableNavController()
-    val context = LocalContext.current
-    // First launch: ask for the permissions background monitoring needs, then start it.
-    val monitorPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        HeartMonitorService.sync(context, enabled = true)
-    }
-    LaunchedEffect(Unit) {
-        if (!HeartMonitorService.canRun(context)) monitorPermissions.launch(HeartMonitorService.monitoringPermissions)
-        // Opened from a notification, tile or complication.
-        if (startRoute in setOf(Routes.BLOOD_PRESSURE, Routes.ECG, Routes.HEART_RATE)) nav.navigate(startRoute!!)
-    }
-    HeartlineWearTheme {
-        AppScaffold(timeText = { TimeText() }) {
-            SwipeDismissableNavHost(navController = nav, startDestination = Routes.LAUNCHER) {
-                composable(Routes.LAUNCHER) {
-                    when (val state = launcherState) {
-                        is LauncherState.Ready ->
-                            LauncherScreen(
-                                state.entries,
-                                onOpen = {
-                                    when (it) {
-                                        Metric.ECG -> nav.navigate(Routes.ECG)
-                                        Metric.HEART_RATE -> nav.navigate(Routes.HEART_RATE)
-                                        Metric.BLOOD_PRESSURE -> nav.navigate(Routes.BLOOD_PRESSURE)
-                                        else -> nav.navigate(Routes.quick(it))
-                                    }
-                                },
-                                onHistory = { nav.navigate(Routes.HISTORY) },
-                                onSettings = { nav.navigate(Routes.SETTINGS) },
-                            )
-                        is LauncherState.Problem -> SensorErrorScreen(state.problem, onAction = {
-                            if (state.problem == SensorProblem.SDK_POLICY) nav.navigate(Routes.DEV_MODE) else launcher.connect()
-                        })
-                        LauncherState.Loading -> LauncherScreen(emptyList())
-                    }
-                }
-                composable(Routes.ECG) { EcgFlow(onExit = { nav.popBackStack() }) }
-                composable(Routes.BLOOD_PRESSURE) { BpFlow(onExit = { nav.popBackStack() }) }
-                composable(Routes.QUICK) { entry ->
-                    val metric = Metric.valueOf(entry.arguments?.getString("metric") ?: Metric.SPO2.name)
-                    QuickFlow(metric, onExit = { nav.popBackStack() })
-                }
-                composable(Routes.SETTINGS) {
-                    val vm: WatchSettingsViewModel = koinViewModel()
-                    val state by vm.state.collectAsStateWithLifecycle()
-                    WatchSettingsScreen(state, onDevMode = { nav.navigate(Routes.DEV_MODE) }, onDiagnostics = { nav.navigate(Routes.DIAGNOSTICS) })
-                }
-                composable(Routes.DIAGNOSTICS) {
-                    val vm: WatchSettingsViewModel = koinViewModel()
-                    val state by vm.state.collectAsStateWithLifecycle()
-                    DiagnosticsScreen(state)
-                }
-                composable(Routes.DEV_MODE) { DevModeGuideScreen() }
-                composable(Routes.HEART_RATE) {
-                    val vm: HeartRateViewModel = koinViewModel()
-                    val hr by vm.state.collectAsStateWithLifecycle()
-                    HeartRateScreen(hr.bpm, hr.recent, hr.onBody)
-                }
-                composable(Routes.HISTORY) {
-                    val vm: HistoryViewModel = koinViewModel()
-                    val items by vm.items.collectAsStateWithLifecycle()
-                    HistoryScreen(items)
-                }
+    SwipeDismissableNavHost(navController = nav, startDestination = Routes.LAUNCHER) {
+        composable(Routes.LAUNCHER) {
+            when (val state = launcherState) {
+                is LauncherState.Ready ->
+                    LauncherScreen(
+                        state.entries,
+                        onOpen = {
+                            when (it) {
+                                Metric.ECG -> nav.navigate(Routes.ECG)
+                                Metric.HEART_RATE -> nav.navigate(Routes.HEART_RATE)
+                                Metric.BLOOD_PRESSURE -> nav.navigate(Routes.BLOOD_PRESSURE)
+                                else -> nav.navigate(Routes.quick(it))
+                            }
+                        },
+                        onHistory = { nav.navigate(Routes.HISTORY) },
+                        onSettings = { nav.navigate(Routes.SETTINGS) },
+                    )
+                is LauncherState.Problem -> SensorErrorScreen(state.problem, onAction = {
+                    if (state.problem == SensorProblem.SDK_POLICY) nav.navigate(Routes.DEV_MODE) else launcher.connect()
+                })
+                LauncherState.Loading -> LauncherScreen(emptyList())
             }
+        }
+        composable(Routes.ECG) { EcgFlow(onExit = { nav.popBackStack() }) }
+        composable(Routes.BLOOD_PRESSURE) {
+            BpFlow(onExit = { nav.popBackStack() }, onStartCalibration = { nav.openExternal(Routes.BP_CALIBRATION) })
+        }
+        composable(Routes.BP_CALIBRATION) { BpFlow(onExit = { nav.popBackStack() }, calibrationSession = true) }
+        composable(Routes.QUICK) { entry ->
+            val metric = Metric.valueOf(entry.arguments?.getString("metric") ?: Metric.SPO2.name)
+            QuickFlow(metric, onExit = { nav.popBackStack() })
+        }
+        composable(Routes.SETTINGS) {
+            val vm: WatchSettingsViewModel = koinViewModel()
+            val state by vm.state.collectAsStateWithLifecycle()
+            WatchSettingsScreen(state, onDevMode = { nav.navigate(Routes.DEV_MODE) }, onDiagnostics = { nav.navigate(Routes.DIAGNOSTICS) })
+        }
+        composable(Routes.DIAGNOSTICS) {
+            val vm: WatchSettingsViewModel = koinViewModel()
+            val state by vm.state.collectAsStateWithLifecycle()
+            DiagnosticsScreen(state)
+        }
+        composable(Routes.DEV_MODE) {
+            DevModeGuideScreen(
+                problemFound = false,
+                onCheckAgain = {
+                    nav.popBackStack(Routes.LAUNCHER, inclusive = false)
+                    gate.recheckSensors()
+                },
+                onShowOnPhone = { gate.openOnPhone(SetupTarget.DEV_MODE_HELP) },
+            )
+        }
+        composable(Routes.HEART_RATE) {
+            val vm: HeartRateViewModel = koinViewModel()
+            val hr by vm.state.collectAsStateWithLifecycle()
+            HeartRateScreen(hr.bpm, hr.recent, hr.onBody)
+        }
+        composable(Routes.HISTORY) {
+            val vm: HistoryViewModel = koinViewModel()
+            val items by vm.items.collectAsStateWithLifecycle()
+            HistoryScreen(items)
         }
     }
 }

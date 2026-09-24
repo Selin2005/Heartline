@@ -17,6 +17,9 @@ import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.heartline.phone.link.WatchLinkUi
+import com.heartline.phone.ui.components.WatchLinkCard
+import com.heartline.shared.sync.PeerProbe
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -42,13 +45,25 @@ fun HomeScreen(
     onOpenEcg: () -> Unit = {},
     onOpenMetric: (Metric) -> Unit = {},
     listState: LazyListState = rememberLazyListState(),
+    watchLink: WatchLinkUi? = null,
+    onWatchRetry: () -> Unit = {},
+    onOpenWatch: () -> Unit = {},
 ) {
     val latest = state.latestEcg
+    // A live probe wins over the stored name, so the header never says "connected" above a "no watch" card.
+    val connectedName = when {
+        watchLink == null -> state.watchName
+        watchLink.probe == PeerProbe.REACHABLE -> watchLink.name ?: stringResource(R.string.link_your_watch)
+        else -> null
+    }
     ReachabilityScaffold(
         title = stringResource(R.string.app_name),
-        subtitle = state.watchName?.let { stringResource(R.string.home_watch_connected, it) },
+        subtitle = connectedName?.let { stringResource(R.string.home_watch_connected, it) },
         listState = listState,
     ) {
+        if (watchLink != null && watchLink.probe != PeerProbe.REACHABLE) {
+            item { WatchLinkCard(watchLink, onRetry = onWatchRetry, onOpenWatch = onOpenWatch, modifier = Modifier.gutter()) }
+        }
         item {
             MetricCard(
                 Metric.ECG,

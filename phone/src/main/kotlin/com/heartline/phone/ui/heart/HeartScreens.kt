@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.heartline.phone.R
+import com.heartline.phone.ui.components.TonalPillButton
 import com.heartline.phone.ui.components.CardRow
 import com.heartline.phone.ui.components.CardTitle
 import com.heartline.phone.ui.components.DayRangeChart
@@ -35,13 +36,16 @@ import com.heartline.phone.ui.theme.HeartlineTheme
 import com.heartline.shared.hr.AlertKind
 
 @Composable
-fun HeartRateScreen(state: HeartRateUi, onBack: (() -> Unit)? = null, onOpenAlerts: () -> Unit = {}) {
+fun HeartRateScreen(state: HeartRateUi, onBack: (() -> Unit)? = null, onOpenAlerts: () -> Unit = {}, onMeasureOnWatch: (() -> Unit)? = null) {
     val colors = HeartlineTheme.colors
     ReachabilityScaffold(
         title = stringResource(R.string.metric_hr),
         subtitle = state.latestTime?.let { stringResource(R.string.hr_last_measured, it) },
         onBack = onBack,
     ) {
+        onMeasureOnWatch?.let { measure ->
+            item { TonalPillButton(stringResource(R.string.action_measure_on_watch), onClick = measure, modifier = Modifier.gutter(), color = colors.heartRate) }
+        }
         if (state.latestBpm == null) {
             item { EmptyCard(stringResource(R.string.hr_empty_title), stringResource(R.string.hr_empty_body)) }
         } else {

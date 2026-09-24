@@ -8,7 +8,17 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import com.heartline.shared.sync.SetupTarget
+import com.heartline.wear.link.PhoneOpener
+import com.heartline.wear.ui.setup.CheckingScreen
+import kotlinx.coroutines.launch
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -33,10 +43,23 @@ import com.heartline.wear.ui.theme.WearColors
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 
+/**
+ * Blood pressure on the watch. With [calibrationSession] the screen stays open for the whole
+ * phone-driven calibration: each round the phone starts begins measuring here automatically.
+ */
 @Composable
-fun BpFlow(onExit: () -> Unit, vm: BpMeasureViewModel = koinViewModel(), gateway: SensorGateway = koinInject()) {
+fun BpFlow(
+    onExit: () -> Unit,
+    calibrationSession: Boolean = false,
+    onStartCalibration: () -> Unit = {},
+    vm: BpMeasureViewModel = koinViewModel(),
+    gateway: SensorGateway = koinInject(),
+    phone: PhoneOpener = koinInject(),
+) {
     val state by vm.state.collectAsStateWithLifecycle()
     val capture by vm.pendingCapture.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    var opened by remember { mutableStateOf<Boolean?>(null) }
     val context = LocalContext.current
     val activity = LocalActivity.current
     val haptics = LocalHapticFeedback.current
@@ -47,7 +70,11 @@ fun BpFlow(onExit: () -> Unit, vm: BpMeasureViewModel = koinViewModel(), gateway
         if (missing.isEmpty()) vm.start() else launcher.launch(missing.toTypedArray())
     }
 
-    LaunchedEffect(Unit) { vm.checkReady() }
+    LaunchedEffect(Unit) { if (!calibrationSession) vm.checkReady() }
+    // A round requested by the phone starts right away while this screen is open.
+    LaunchedEffect(calibrationSession, capture, state is BpState.Idle || state is BpState.CalibrationRecorded) {
+        if (calibrationSession && capture != null && (state is BpState.Idle || state is BpState.CalibrationRecorded)) start()
+    }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { if (state is BpState.Measuring) vm.cancel() }
     DisposableEffect(Unit) { onDispose { vm.cancel() } }
     val measuring = state as? BpState.Measuring
@@ -65,8 +92,20 @@ fun BpFlow(onExit: () -> Unit, vm: BpMeasureViewModel = koinViewModel(), gateway
     }
 
     when (val s = state) {
-        BpState.Idle -> BpInstructionScreen(capture?.round, onStart = ::start)
-        BpState.NeedsCalibration -> BpNeedsCalibrationScreen(onDone = done)
+        BpState.Idle -> if (calibrationSession && capture == null) {
+            CheckingScreen(Icons.Rounded.PhoneAndroid, stringResource(R.string.bp_waiting_phone_title), stringResource(R.string.bp_waiting_phone_body))
+        } else {
+            BpInstructionScreen(capture?.round, onStart = ::start)
+        }
+        BpState.NeedsCalibration -> BpNeedsCalibrationScreen(
+            onOpenOnPhone = {
+                scope.launch {
+                    opened = phone.open(SetupTarget.BP_CALIBRATION)
+                    if (opened == true) onStartCalibration()
+                }
+            },
+            opened = opened,
+        )
         is BpState.Measuring -> MeasuringScreen(
             title = stringResource(R.string.metric_bp),
             color = WearColors.metric(Metric.BLOOD_PRESSURE),

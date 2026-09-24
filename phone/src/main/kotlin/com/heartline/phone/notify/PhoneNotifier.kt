@@ -7,6 +7,9 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import com.heartline.datalayer.DeepLinks
+import com.heartline.shared.sync.SetupTarget
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.heartline.phone.MainActivity
@@ -50,7 +53,36 @@ class PhoneNotifier(private val context: Context) {
         )
     }
 
+    /** Fallback for a watch "open on phone" request when the direct launch didn't happen. */
+    fun setupRequest(target: SetupTarget) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        val (title, text) = when (target) {
+            SetupTarget.PROFILE -> R.string.setup_notif_profile_title to R.string.setup_notif_profile_text
+            SetupTarget.BP_CALIBRATION -> R.string.setup_notif_calibration_title to R.string.setup_notif_calibration_text
+            SetupTarget.DEV_MODE_HELP -> R.string.setup_notif_devmode_title to R.string.setup_notif_devmode_text
+            SetupTarget.HOME -> R.string.setup_notif_home_title to R.string.setup_notif_home_text
+        }
+        val open = PendingIntent.getActivity(
+            context,
+            target.ordinal + 100,
+            Intent(Intent.ACTION_VIEW, Uri.parse(DeepLinks.phone(target.phoneRoute)), context, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        manager.notify(
+            SETUP_ID,
+            NotificationCompat.Builder(context, CHANNEL_ALERTS)
+                .setSmallIcon(R.drawable.ic_heart)
+                .setContentTitle(context.getString(title))
+                .setContentText(context.getString(text))
+                .setAutoCancel(true)
+                .setOnlyAlertOnce(true)
+                .setContentIntent(open)
+                .build(),
+        )
+    }
+
     companion object {
+        const val SETUP_ID = 7_001
         const val CHANNEL_ALERTS = "alerts"
         const val EXTRA_OPEN_ALERTS = "open_alerts"
     }

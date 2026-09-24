@@ -19,6 +19,8 @@ object Protocol {
     const val HR_BATCH = "$ROOT/hr/batch"
     const val ALERT = "$ROOT/alert"
     const val OPEN = "$ROOT/open"
+    const val STATUS = "$ROOT/status"
+    const val SETUP_REQUEST = "$ROOT/setup-request"
 
     /** Capability name both apps advertise so each can find the other node. */
     const val CAPABILITY_PHONE = "heartline_phone"

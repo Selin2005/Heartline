@@ -59,6 +59,24 @@ Do not edit by hand.
 ### bp_calibration_waiting_light
 <img src="phone/bp_calibration_waiting_light.png" width="280">
 
+### connect_watch_found_dark
+<img src="phone/connect_watch_found_dark.png" width="280">
+
+### connect_watch_found_light
+<img src="phone/connect_watch_found_light.png" width="280">
+
+### connect_watch_app_missing_dark
+<img src="phone/connect_watch_app_missing_dark.png" width="280">
+
+### connect_watch_app_missing_light
+<img src="phone/connect_watch_app_missing_light.png" width="280">
+
+### dev_mode_help_dark
+<img src="phone/dev_mode_help_dark.png" width="280">
+
+### dev_mode_help_light
+<img src="phone/dev_mode_help_light.png" width="280">
+
 ### ecg_detail_afib_dark
 <img src="phone/ecg_detail_afib_dark.png" width="280">
 
@@ -106,6 +124,12 @@ Do not edit by hand.
 
 ### home_empty_light
 <img src="phone/home_empty_light.png" width="280">
+
+### home_no_watch_dark
+<img src="phone/home_no_watch_dark.png" width="280">
+
+### home_no_watch_light
+<img src="phone/home_no_watch_light.png" width="280">
 
 ### home_scrolled_dark
 <img src="phone/home_scrolled_dark.png" width="280">
@@ -212,6 +236,12 @@ Do not edit by hand.
 ### bp_measuring_small
 <img src="wear/bp_measuring_small.png" width="240">
 
+### bp_needs_calibration_opened_large
+<img src="wear/bp_needs_calibration_opened_large.png" width="240">
+
+### bp_needs_calibration_opened_small
+<img src="wear/bp_needs_calibration_opened_small.png" width="240">
+
 ### bp_needs_calibration_large
 <img src="wear/bp_needs_calibration_large.png" width="240">
 
@@ -223,6 +253,12 @@ Do not edit by hand.
 
 ### bp_result_small
 <img src="wear/bp_result_small.png" width="240">
+
+### dev_mode_end_large
+<img src="wear/dev_mode_end_large.png" width="240">
+
+### dev_mode_end_small
+<img src="wear/dev_mode_end_small.png" width="240">
 
 ### dev_mode_large
 <img src="wear/dev_mode_large.png" width="240">
@@ -319,6 +355,48 @@ Do not edit by hand.
 
 ### settings_small
 <img src="wear/settings_small.png" width="240">
+
+### setup_app_missing_large
+<img src="wear/setup_app_missing_large.png" width="240">
+
+### setup_app_missing_small
+<img src="wear/setup_app_missing_small.png" width="240">
+
+### setup_checking_phone_large
+<img src="wear/setup_checking_phone_large.png" width="240">
+
+### setup_checking_phone_small
+<img src="wear/setup_checking_phone_small.png" width="240">
+
+### setup_checking_sensors_large
+<img src="wear/setup_checking_sensors_large.png" width="240">
+
+### setup_checking_sensors_small
+<img src="wear/setup_checking_sensors_small.png" width="240">
+
+### setup_incomplete_large
+<img src="wear/setup_incomplete_large.png" width="240">
+
+### setup_incomplete_small
+<img src="wear/setup_incomplete_small.png" width="240">
+
+### setup_no_phone_large
+<img src="wear/setup_no_phone_large.png" width="240">
+
+### setup_no_phone_small
+<img src="wear/setup_no_phone_small.png" width="240">
+
+### setup_no_response_large
+<img src="wear/setup_no_response_large.png" width="240">
+
+### setup_no_response_small
+<img src="wear/setup_no_response_small.png" width="240">
+
+### setup_permissions_large
+<img src="wear/setup_permissions_large.png" width="240">
+
+### setup_permissions_small
+<img src="wear/setup_permissions_small.png" width="240">
 
 ### spo2_instruction_large
 <img src="wear/spo2_instruction_large.png" width="240">

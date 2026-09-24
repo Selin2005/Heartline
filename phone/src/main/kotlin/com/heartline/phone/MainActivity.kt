@@ -2,7 +2,11 @@ package com.heartline.phone
 
 import android.Manifest
 import android.os.Build
+import android.content.Intent
 import android.os.Bundle
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.heartline.datalayer.DeepLinks
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
@@ -19,9 +23,19 @@ import com.heartline.phone.ui.HeartlineApp
 import com.heartline.phone.ui.theme.HeartlineTheme
 
 class MainActivity : ComponentActivity() {
+    /** heartline://phone/<route> from the watch or a notification; consumed once navigated. */
+    private var deepLink by mutableStateOf<String?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        DeepLinks.route(intent.data, DeepLinks.PHONE_HOST)?.let { deepLink = it }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (savedInstanceState == null) deepLink = DeepLinks.route(intent?.data, DeepLinks.PHONE_HOST)
         val openAlerts = intent?.getBooleanExtra(PhoneNotifier.EXTRA_OPEN_ALERTS, false) == true
         setContent {
             HeartlineTheme {
@@ -35,7 +49,7 @@ class MainActivity : ComponentActivity() {
                 when (onboarded) {
                     null -> Unit
                     false -> OnboardingFlow(onFinished = onboarding::finish)
-                    true -> HeartlineApp(openAlerts = openAlerts)
+                    true -> HeartlineApp(openAlerts = openAlerts, deepLink = deepLink, onDeepLinkHandled = { deepLink = null })
                 }
             }
         }

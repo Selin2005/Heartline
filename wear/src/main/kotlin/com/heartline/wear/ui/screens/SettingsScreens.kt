@@ -88,26 +88,6 @@ fun DiagnosticsScreen(state: WatchSettingsUi) {
     }
 }
 
-/** How to enable Developer mode in Health Sensor Service (needed until Heartline is a Samsung partner app). */
-@Composable
-fun DevModeGuideScreen() {
-    val list = rememberTransformingLazyColumnState()
-    val steps = listOf(R.string.dev_step_1, R.string.dev_step_2, R.string.dev_step_3, R.string.dev_step_4, R.string.dev_step_5)
-    ScreenScaffold(scrollState = list) { padding ->
-        TransformingLazyColumn(state = list, contentPadding = padding) {
-            item { ListHeader { Text(stringResource(R.string.dev_mode_title)) } }
-            steps.forEachIndexed { i, step ->
-                item {
-                    Centered("${i + 1}. ${stringResource(step)}")
-                }
-            }
-            item {
-                Centered(stringResource(R.string.dev_mode_note), small = true)
-            }
-        }
-    }
-}
-
 /** Body text for round screens: centred, inset from the curved edge. */
 @Composable
 private fun Centered(text: String, small: Boolean = false) = Text(

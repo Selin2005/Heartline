@@ -54,7 +54,8 @@ class WatchSyncEngine(
     private val onCalibration: suspend (BpCalibration?) -> Unit = {},
     private val onCaptureRequest: suspend (CaptureRequest) -> Unit = {},
     private val onProfile: suspend (UserProfile) -> Unit = {},
-    private val onOpen: suspend (String) -> Unit = {}
+    private val onOpen: suspend (String) -> Unit = {},
+    private val onStatus: suspend (PhoneStatus) -> Unit = {}
 ) {
     /** @return number of records handed to the transport. */
     suspend fun flush(): Int {
@@ -92,6 +93,7 @@ class WatchSyncEngine(
                 envelope.data.decodeToString().takeIf { it != "null" }?.let { Protocol.json.decodeFromString<BpCalibration>(it) }
             )
             Protocol.OPEN -> onOpen(envelope.data.decodeToString())
+            Protocol.STATUS -> onStatus(Protocol.json.decodeFromString<PhoneStatus>(envelope.data.decodeToString()))
             Protocol.PROFILE -> onProfile(Protocol.json.decodeFromString<UserProfile>(envelope.data.decodeToString()))
             Protocol.BP_CALIBRATION_CAPTURE -> onCaptureRequest(
                 Protocol.json.decodeFromString<CaptureRequest>(envelope.data.decodeToString())
@@ -108,8 +110,9 @@ class PhoneSyncEngine(
     private val transport: SyncTransport,
     private val sink: RecordSink,
     private val heart: HeartDataSink? = null,
-    private val onSettingsRequested: suspend () -> Unit = {},
-    private val onCaptureResult: suspend (CaptureResult) -> Unit = {}
+    private val onHello: suspend (Hello) -> Unit = {},
+    private val onCaptureResult: suspend (CaptureResult) -> Unit = {},
+    private val onSetupRequest: suspend (SetupRequest) -> Unit = {}
 ) {
     private val metas = mutableMapOf<String, RecordMeta>()
     private val waves = mutableMapOf<String, FloatArray>()
@@ -142,7 +145,10 @@ class PhoneSyncEngine(
                 heart?.saveAlert(alert)
                 ack(alert.id)
             }
-            envelope.path == Protocol.HELLO -> onSettingsRequested()
+            envelope.path == Protocol.HELLO -> onHello(Protocol.json.decodeFromString<Hello>(envelope.data.decodeToString()))
+            envelope.path == Protocol.SETUP_REQUEST -> onSetupRequest(
+                Protocol.json.decodeFromString<SetupRequest>(envelope.data.decodeToString())
+            )
             envelope.path == Protocol.BP_CALIBRATION_CAPTURE -> {
                 val result = Protocol.json.decodeFromString<CaptureResult>(envelope.data.decodeToString())
                 onCaptureResult(result)
@@ -168,6 +174,9 @@ class PhoneSyncEngine(
 
     suspend fun sendProfile(profile: UserProfile): Boolean =
         transport.send(Protocol.PROFILE, Protocol.json.encodeToString(profile).encodeToByteArray())
+
+    suspend fun sendStatus(status: PhoneStatus): Boolean =
+        transport.send(Protocol.STATUS, Protocol.json.encodeToString(status).encodeToByteArray())
 
     suspend fun sendSettings(settings: MonitorSettings): Boolean =
         transport.send(Protocol.SETTINGS, Protocol.json.encodeToString(settings).encodeToByteArray())

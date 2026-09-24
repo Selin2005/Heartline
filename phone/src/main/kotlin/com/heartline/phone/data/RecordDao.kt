@@ -30,6 +30,9 @@ interface RecordDao {
     @Query("DELETE FROM records WHERE id = :id")
     suspend fun delete(id: String)
 
+    @Query("DELETE FROM records WHERE id LIKE 'demo-%'")
+    suspend fun deleteDemo(): Int
+
     @Query("DELETE FROM records")
     suspend fun deleteAll()
 

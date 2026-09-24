@@ -67,6 +67,8 @@ data class CalibrationUi(
 
 class CalibrationViewModel(
     private val repository: BpRepository,
+    /** Opens the calibration screen on the watch right away (it then runs each round by itself). */
+    private val openOnWatch: suspend (String) -> Unit = {},
     private val now: () -> Long = System::currentTimeMillis,
     private val newId: () -> String = { UUID.randomUUID().toString() },
 ) : ViewModel() {
@@ -88,10 +90,11 @@ class CalibrationViewModel(
         }
     }
 
-    /** Asks the watch to record this round (the user then taps the watch notification). */
+    /** Asks the watch to record this round; the open calibration screen there starts measuring at once. */
     fun startRound() = viewModelScope.launch {
         mutable.value = mutable.value.copy(phase = CalibrationUi.Phase.WAITING_FOR_WATCH, inputError = false)
         repository.requestCapture(CaptureRequest(captureId, mutable.value.round))
+        openOnWatch(CALIBRATION_ROUTE)
     }
 
     fun submitCuff(systolic: Int?, diastolic: Int?, pulse: Int?) = viewModelScope.launch {
@@ -107,9 +110,14 @@ class CalibrationViewModel(
         if (points.size < BpCalibration.REQUIRED_POINTS) {
             mutable.value = CalibrationUi(round = ui.round + 1, phase = CalibrationUi.Phase.WAITING_FOR_WATCH, completedRounds = points.size)
             repository.requestCapture(CaptureRequest(captureId, ui.round + 1))
+            openOnWatch(CALIBRATION_ROUTE)
         } else {
             repository.saveCalibration(BpCalibration(newId(), now(), points.toList()))
             mutable.value = ui.copy(phase = CalibrationUi.Phase.DONE, completedRounds = points.size, inputError = false)
         }
+    }
+
+    private companion object {
+        const val CALIBRATION_ROUTE = "bp_calibration"
     }
 }
