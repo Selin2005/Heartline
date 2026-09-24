@@ -1,5 +1,6 @@
 package com.heartline.wear.ui.screens
 
+import com.heartline.wear.ui.components.CenteredValue
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -50,15 +51,7 @@ fun HeartRateScreen(bpm: Int?, recent: List<Int>, onBody: Boolean, animate: Bool
                 )
                 bpm == null -> Text(stringResource(R.string.hr_measuring), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
                 else -> {
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        Text("$bpm", style = MaterialTheme.typography.displayLarge)
-                        Text(
-                            stringResource(R.string.unit_bpm),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = WearColors.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 3.dp, bottom = 7.dp),
-                        )
-                    }
+                    CenteredValue("$bpm", stringResource(R.string.unit_bpm), MaterialTheme.typography.displayLarge, MaterialTheme.typography.bodySmall)
                     Text(stringResource(R.string.hr_now), style = MaterialTheme.typography.bodySmall, color = WearColors.onSurfaceVariant)
                 }
             }

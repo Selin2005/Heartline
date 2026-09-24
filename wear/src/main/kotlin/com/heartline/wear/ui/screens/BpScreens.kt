@@ -1,5 +1,6 @@
 package com.heartline.wear.ui.screens
 
+import com.heartline.wear.ui.components.CenteredValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -145,15 +146,7 @@ fun BpMeasuringScreen(
                 style = MaterialTheme.typography.labelMedium,
                 color = color,
             )
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text("$secondsLeft", style = MaterialTheme.typography.displayMedium)
-                Text(
-                    stringResource(R.string.unit_sec),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = WearColors.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 3.dp, bottom = 6.dp),
-                )
-            }
+            CenteredValue("$secondsLeft", stringResource(R.string.unit_sec), MaterialTheme.typography.displayMedium, MaterialTheme.typography.bodySmall)
             val waveHeight = if (isSmallRound()) 44.dp else 54.dp
             if (showWave) {
                 SweepTrace(trace, endIndex, windowSamples = 300, color = color, paper = false, centered = false, minRange = 0f, modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp).height(waveHeight))

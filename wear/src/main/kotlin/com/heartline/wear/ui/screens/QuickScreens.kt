@@ -1,5 +1,6 @@
 package com.heartline.wear.ui.screens
 
+import com.heartline.wear.ui.components.CenteredValue
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -122,15 +123,7 @@ fun QuickMeasuringScreen(
                 }
                 else -> Icon(metric.icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
             }
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text("$secondsLeft", style = MaterialTheme.typography.displayMedium)
-                Text(
-                    stringResource(R.string.unit_sec),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = WearColors.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 3.dp, bottom = 6.dp),
-                )
-            }
+            CenteredValue("$secondsLeft", stringResource(R.string.unit_sec), MaterialTheme.typography.displayMedium, MaterialTheme.typography.bodySmall)
             val live = listOfNotNull(
                 bpm?.let { stringResource(R.string.live_bpm, it) },
                 hrvMs?.takeIf { metric == Metric.STRESS }?.let { stringResource(R.string.live_hrv, it.roundToInt()) },
@@ -193,10 +186,7 @@ val StressLevel.label: Int
 
 @Composable
 private fun BigValue(value: String, unit: String) {
-    Row(verticalAlignment = Alignment.Bottom) {
-        Text(value, style = if (isSmallRound()) MaterialTheme.typography.displayMedium else MaterialTheme.typography.displayLarge)
-        Text(unit, style = MaterialTheme.typography.bodyMedium, color = WearColors.onSurfaceVariant, modifier = Modifier.padding(start = 3.dp, bottom = 8.dp))
-    }
+    CenteredValue(value, unit, if (isSmallRound()) MaterialTheme.typography.displayMedium else MaterialTheme.typography.displayLarge, MaterialTheme.typography.bodyMedium)
 }
 
 @Composable

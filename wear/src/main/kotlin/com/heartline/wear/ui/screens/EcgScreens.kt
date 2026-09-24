@@ -1,5 +1,6 @@
 package com.heartline.wear.ui.screens
 
+import com.heartline.wear.ui.components.CenteredValue
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -127,15 +128,7 @@ fun EcgMeasuringScreen(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 18.dp),
         ) {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text("$secondsLeft", style = MaterialTheme.typography.displayMedium)
-                Text(
-                    stringResource(R.string.unit_sec),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = WearColors.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 3.dp, bottom = 6.dp),
-                )
-            }
+            CenteredValue("$secondsLeft", stringResource(R.string.unit_sec), MaterialTheme.typography.displayMedium, MaterialTheme.typography.bodySmall)
             val waveHeight = if (isSmallRound()) 58.dp else 70.dp
             if (showWave) {
                 SweepTrace(
@@ -208,15 +201,7 @@ fun MeasuringScreen(
             modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 20.dp),
         ) {
             Text(title, style = MaterialTheme.typography.titleSmall, color = color)
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text("$secondsLeft", style = MaterialTheme.typography.displayLarge)
-                Text(
-                    stringResource(R.string.unit_sec),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = WearColors.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 3.dp, bottom = 7.dp),
-                )
-            }
+            CenteredValue("$secondsLeft", stringResource(R.string.unit_sec), MaterialTheme.typography.displayLarge, MaterialTheme.typography.bodySmall)
             LiveWave(samples, color, Modifier.fillMaxWidth().padding(horizontal = 10.dp).height(44.dp), fixedRangeMv)
             Spacer(Modifier.height(6.dp))
             // Narrower than the wave so the text stays inside the round ring on small screens.
