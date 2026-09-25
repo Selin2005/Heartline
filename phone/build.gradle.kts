@@ -22,6 +22,11 @@ android {
         buildConfigField("boolean", "DEMO_DATA", (findProperty("heartline.demoData") ?: "false").toString())
     }
 
+    // ECGFounder is opened with AssetManager.openFd (size check), which needs the file stored uncompressed.
+    androidResources {
+        noCompress += "onnx"
+    }
+
     signingConfigs {
         getByName("debug") {
             storeFile = rootProject.file("keystore/debug.keystore")
@@ -38,6 +43,8 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("debug")
+            // Phones paired with a Galaxy Watch are ARM; ONNX Runtime's x86 libraries (≈ 46 MB) are for emulators only.
+            ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         }
     }
 

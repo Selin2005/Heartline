@@ -15,6 +15,7 @@ import com.heartline.shared.model.EcgResult
 import com.heartline.shared.model.RecordKind
 import com.heartline.shared.model.RecordMeta
 import com.heartline.shared.model.RecordSummary
+import java.io.File
 import java.nio.FloatBuffer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -25,9 +26,9 @@ fun interface EcgFounder {
 }
 
 /**
- * ECGFounder single-lead (Li et al., NEJM AI 2025; MIT licence) with ONNX Runtime. fp16 weights
- * (62 MB): 8-bit quantization distorted its outputs (tools/ecg-ml/README.md), so it isn't bundled
- * by default; when `assets/ecg/ecgfounder_1lead_fp16.onnx` is present, the phone uses it.
+ * ECGFounder single-lead (Li et al., NEJM AI 2025; MIT licence) with ONNX Runtime, bundled as fp16
+ * (62 MB): 8-bit quantization distorted its outputs (tools/ecg-ml/README.md). The asset is copied
+ * once to app storage so the session maps the file instead of holding a 62 MB array on the heap.
  */
 class OnnxEcgFounder private constructor(private val session: OrtSession) : EcgFounder {
     private val env = OrtEnvironment.getEnvironment()
@@ -53,17 +54,24 @@ class OnnxEcgFounder private constructor(private val session: OrtSession) : EcgF
         private const val TAG = "Heartline/ECG"
 
         fun fromAssets(context: Context): OnnxEcgFounder? = runCatching {
-            val bytes = context.assets.open(ASSET).use { it.readBytes() }
-            OnnxEcgFounder(OrtEnvironment.getEnvironment().createSession(bytes, OrtSession.SessionOptions()))
-        }.onFailure { Log.i(TAG, "ECGFounder not installed: ${it.message}") }.getOrNull()
+            val file = File(context.noBackupFilesDir, ASSET.substringAfterLast('/'))
+            val size = context.assets.openFd(ASSET).use { it.length }
+            if (!file.exists() || file.length() != size) {
+                val tmp = File(file.path + ".tmp")
+                context.assets.open(ASSET).use { input -> tmp.outputStream().use { input.copyTo(it) } }
+                check(tmp.renameTo(file)) { "can't install $file" }
+            }
+            OnnxEcgFounder(OrtEnvironment.getEnvironment().createSession(file.path, OrtSession.SessionOptions()))
+        }.onFailure { Log.w(TAG, "ECGFounder unavailable: ${it.message}") }.getOrNull()
     }
 }
 
 /**
  * The phone's second opinion on a watch ECG: the app's own analysis of the stored recording plus
  * ECGFounder's label probabilities, through a model trained on both (tools/ecg-ml,
- * train_second_opinion.py; cross-validated on CinC 2017: AFib 86 % vs 80 % without ECGFounder at
- * the same 1 % false AFib on normal recordings). Shown next to the watch's result, never instead.
+ * train_second_opinion.py; cross-validated on CinC 2017, MIT-BIH, AFDB and CPSC 2021 it finds
+ * more AFib with fewer false alarms than the watch model on each of them, docs/ECG_ALGORITHM.md).
+ * Shown next to the watch's result, never instead.
  */
 class EcgSecondOpinion(
     private val founder: () -> EcgFounder?,

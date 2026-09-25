@@ -58,49 +58,61 @@ out "poor", and 12–16 % of recordings with extra beats or other arrhythmias we
 - The final decision comes from a **learned model** over 24 recording features (RR irregularity
   before and after removing early beats, P-wave ratio, early/other-shape beat shares, Lorenz
   shape, noise indices…): gradient-boosted trees (150 × 4 trees, depth 3), 373 kB JSON, pure
-  Kotlin, so it runs on the watch. Trained on CinC 2017 + MIT-BIH (`tools/ecg-eval`), with the
-  exact features the app computes (checked: identical). Thresholds: AFib only where ≤ 1 % of
-  normal recordings would be called AFib; noisy where ≤ 3 % of normal ones would be.
+  Kotlin, so it runs on the watch. Trained on CinC 2017, MIT-BIH, the MIT-BIH AF Database and
+  CPSC 2021 lead I (≈ 18 000 recordings, `tools/ecg-eval`), with the exact features the app
+  computes (checked: identical). Thresholds: AFib only where ≤ 1 % of short single-lead normal
+  recordings (CinC, MIT-BIH) would be called AFib (≤ 4 % on each Holter database, whose "normal"
+  stretches are noisier); noisy where ≤ 3 % of normal ones would be.
 - AFib is classified up to 150 bpm. Inconclusive comes with a reason (`EcgNote`): extra beats,
   frequent extra beats, irregular but not like AFib, no clear P wave, rate above 150, pauses,
   too noisy to call AFib.
 
 ## Results
 
-Cross-validated (5 folds, grouped by patient; `tools/ecg-eval/results/train-cv.txt`). CinC 2017
-recordings shorter than 20 s are left out (the watch always records 30 s). "Old" is algorithm 2
-on the same recordings (`results/baseline-algorithm2-*.txt`).
+Cross-validated (5 folds, grouped by patient: all segments of one recording or CPSC patient stay
+in one fold; `tools/ecg-eval/results/train-cv.txt`). CinC 2017 recordings shorter than 20 s are
+left out (the watch always records 30 s). AFDB and CPSC 2021 segments are 30 s samples of Holter
+recordings; segments with AFib for only part of the 30 s are left out of training. "Old" is
+algorithm 2 on the same recordings (`results/baseline-algorithm2-*.txt`).
 
-| | Old | Algorithm 3 |
-|---|---|---|
-| CinC AFib recognised | 66 % | **83 %** |
-| CinC AFib → poor | 9 % | 6 % |
-| CinC normal → called AFib | 1 % | 1 % |
-| CinC normal → sinus rhythm | 78 % | **84 %** |
-| CinC other rhythms → called AFib | 16 % | **9 %** |
-| CinC noisy → poor | 85 % | 81 % |
-| MIT-BIH AFib recognised | 96 % | **100 %** |
-| MIT-BIH ectopic beats → called AFib | 12 % | **3 %** |
-| MIT-BIH other rhythms → called AFib | 19 % | 17 % |
-| NSTDB (noise stress, never trained on) → called AFib, 12–24 dB | 6–12 % | **0–2 %** |
+| | Old | Algorithm 3 (watch) | + ECGFounder (phone) |
+|---|---|---|---|
+| CinC AFib recognised | 66 % | 81 % | **82 %** |
+| CinC normal → called AFib | 1 % | 1 % | 1 % |
+| CinC normal → sinus rhythm | 78 % | 83 % | **85 %** |
+| CinC other rhythms → called AFib | 16 % | 7 % | 6 % |
+| CinC noisy → poor | 85 % | 80 % | **94 %** |
+| MIT-BIH AFib recognised | 96 % | **100 %** | **100 %** |
+| MIT-BIH normal → sinus rhythm | – | 83 % | **91 %** |
+| MIT-BIH ectopic beats → called AFib | 12 % | 4 % | **1 %** |
+| MIT-BIH other rhythms → called AFib | 19 % | 8 % | 10 % |
+| AF Database AFib recognised | – | 93 % | **94 %** |
+| CPSC 2021 (lead I) AFib recognised | – | 89 % | **91 %** |
+| CPSC 2021 normal → called AFib | – | 3 % | **1 %** |
+| CPSC 2021 ectopic beats → called AFib | – | 8 % | **2 %** |
+| NSTDB (noise stress, never trained on) → called AFib, 12–24 dB | 6–12 % | 2–4 % | **0 %** |
 
+- Before AFDB and CPSC 2021 were added, the watch model (trained on CinC + MIT-BIH only) found
+  87 % of AFDB's and 86 % of CPSC's AFib and called 5 % of CPSC normals AFib; the extra Holter
+  data made it generalise better (93 %, 89 %, 3 %) at the cost of 2 points on CinC.
 - Results at wrist amplitude (signal × 0.3) are the same as at full amplitude.
 - QRS detection F1 (MIT-BIH, ± 75 ms) is 0.994–0.997 on normal, AFib and ectopic recordings, and
-  0.95 on other rhythms (paced and flutter records). Under NSTDB noise it is 0.94 at 12 dB and
-  0.70 at 6 dB, the same as before; those recordings are now called poor instead of AFib.
-- **Trade-off, stated plainly:** recordings with extra beats now mostly come out *inconclusive
-  with "extra beats"* (MIT-BIH 88 %), where algorithm 2 said sinus (35 %) or AFib (12 %).
+  0.95 on other rhythms (paced and flutter records); 0.95–0.99 on AFDB and CPSC 2021. Under NSTDB
+  noise it is 0.94 at 12 dB and 0.70 at 6 dB; those recordings are called poor instead of AFib.
+- **Trade-off, stated plainly:** recordings with extra beats mostly come out *inconclusive
+  with "extra beats"* (MIT-BIH 87 %), where algorithm 2 said sinus (35 %) or AFib (12 %).
   That is deliberate: such a recording isn't normal sinus rhythm, and "not AFib, extra beats seen"
   is the useful answer.
 
 ### Second opinion on the phone (ECGFounder)
 
-The ECGFounder foundation model (NEJM AI 2025) was tested as extra input to the rhythm model on
-all the data above (same CV). It cut false AFib on other arrhythmias (MIT-BIH 17 % → 8 %) and
-recognised more normal recordings (MIT-BIH 78 % → 87 %), but found no more AFib (CinC 83 → 84 %,
-MIT-BIH 100 → 89 %). It needs 62 MB (fp16; 8-bit versions distorted its outputs), so it isn't
-bundled. The phone code runs it as a "Second opinion (phone AI)" as soon as the model file is
-added. Details: `tools/ecg-ml/README.md`.
+The phone runs the ECGFounder foundation model (NEJM AI 2025, MIT licence; single-lead, fp16,
+62 MB in the APK) on every synced ECG and feeds its 150 label probabilities, with the app's own
+features, into a second tree model (`phone/src/main/assets/ecg/second_opinion_model.json`). Its
+result is shown as "Second opinion (phone AI)" next to the watch's, never instead of it. On CinC +
+MIT-BIH alone it lost AFib on MIT-BIH (100 → 89 %: five AFib patients are too few to learn from);
+with AFDB and CPSC 2021 it is better than the watch model on every dataset above. Details:
+`tools/ecg-ml/README.md`.
 
 ## Re-running
 
@@ -124,4 +136,5 @@ Pan & Tompkins 1985 (QRS); Li, McSharry & Clifford 2008 and Clifford et al. 2012
 Zhang 2018 (single-lead SQI fusion); Makowski et al. 2021 (NeuroKit2 gradient detector); Petrėnas
 et al. 2015 (ectopic filtering); "Regularity within irregularity", Sensors 2023;23:9283; Clifford
 et al. 2017 (PhysioNet/CinC Challenge); Moody & Mark 2001 (MIT-BIH); Moody, Muldrow & Mark 1984
-(NSTDB); Li et al. 2025 (ECGFounder, NEJM AI).
+(NSTDB); Moody & Mark 1983 (MIT-BIH AF Database); Wang et al. 2021 (CPSC 2021, paroxysmal AF
+challenge); Li et al. 2025 (ECGFounder, NEJM AI).

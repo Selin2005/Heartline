@@ -35,7 +35,28 @@ def load(paths):
 
 def group(row):
     rid = row["id"]
-    return "_".join(rid.split("_")[:2]) if rid.startswith(("mitdb", "nstdb")) else rid
+    # Segments of one recording (MIT-BIH, NSTDB, AFDB) or one patient (CPSC 2021: cpsc_<patient>_…) stay together.
+    return "_".join(rid.split("_")[:2]) if rid.startswith(("mitdb", "nstdb", "afdb", "cpsc")) else rid
+
+
+HOLTER = ("afdb", "cpsc2021")
+
+
+def af_threshold(p_af, rows, y):
+    """Lowest AFib threshold with false AFib on normal recordings ≤ 1 % on the short single-lead
+    recordings (CinC, MIT-BIH: closest to a watch ECG) and ≤ 4 % on each Holter database, only a
+    guard: their "normal" stretches are noisy ambulatory channels, and ~2 % of AFDB's are called
+    AFib at any threshold (unlabelled ectopy or AFib around episode boundaries)."""
+    groups = np.array([r["group"] for r in rows])
+    normal = y == 0
+    short = normal & ~np.isin(groups, HOLTER)
+
+    def ok(t):
+        if short.any() and np.mean(p_af[short] >= t) > 0.01:
+            return False
+        return all(np.mean(p_af[normal & (groups == h)] >= t) <= 0.04 for h in HOLTER if (normal & (groups == h)).any())
+
+    return next((t for t in np.arange(0.05, 0.99, 0.01) if ok(t)), 0.99)
 
 
 def decide(p, bpm, reason, t):
@@ -112,10 +133,10 @@ def main():
         m = make().fit(X[tr], y[tr], sample_weight=w[tr])
         oof[te] = m.predict_proba(X[te])
 
-    # Thresholds: false AF on normal recordings ≤ 1 %, then the most AF found; noisy flagged at ≤ 3 % of normal.
+    # Thresholds: the most AF found within the false-AF limits (af_threshold); noisy flagged at ≤ 3 % of normal.
     normal = y == 0
-    t_af = next(t for t in np.arange(0.3, 0.99, 0.01) if np.mean(oof[normal, 1] >= t) <= 0.01)
-    t_noisy = next(t for t in np.arange(0.3, 0.99, 0.01) if np.mean(oof[normal, 3] >= t) <= 0.03)
+    t_af = af_threshold(oof[:, 1], train, y)
+    t_noisy = next(t for t in np.arange(0.05, 0.99, 0.01) if np.mean(oof[normal, 3] >= t) <= 0.03)
     t = {"af": round(float(t_af), 2), "noisy": round(float(t_noisy), 2), "normal": 0.5}
     report("cross-validated", train, oof, t)
 

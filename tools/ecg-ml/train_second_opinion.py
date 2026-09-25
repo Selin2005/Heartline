@@ -17,7 +17,7 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import StratifiedGroupKFold
 
 sys.path.insert(0, __file__.rsplit("/", 2)[0] + "/ecg-eval")
-from train_rhythm import CLASSES, LABEL, export, group, load, report  # noqa: E402
+from train_rhythm import CLASSES, LABEL, af_threshold, export, group, load, report  # noqa: E402
 
 
 def main():
@@ -49,8 +49,8 @@ def main():
         oof[te] = make().fit(X[tr], y[tr], sample_weight=w[tr]).predict_proba(X[te])
     normal = y == 0
     t = {
-        "af": round(float(next(t for t in np.arange(0.3, 0.99, 0.01) if np.mean(oof[normal, 1] >= t) <= 0.01)), 2),
-        "noisy": round(float(next(t for t in np.arange(0.3, 0.99, 0.01) if np.mean(oof[normal, 3] >= t) <= 0.03)), 2),
+        "af": round(float(af_threshold(oof[:, 1], rows, y)), 2),
+        "noisy": round(float(next(t for t in np.arange(0.05, 0.99, 0.01) if np.mean(oof[normal, 3] >= t) <= 0.03)), 2),
         "normal": 0.5,
     }
     report("cross-validated (app + ECGFounder)", rows, oof, t)
@@ -59,7 +59,7 @@ def main():
         Xn = np.array([[float(r[n]) for n in names] + fmap[r["id"]] for r in nstdb])
         report("NSTDB (never trained on)", nstdb, final.predict_proba(Xn), t)
     if a.out:
-        info = f"GBT on app features + ECGFounder (1-lead) probabilities, {len(y)} CinC 2017 + MIT-BIH recordings, CV grouped by patient"
+        info = f"GBT on app features + ECGFounder (1-lead) probabilities, {len(y)} CinC 2017 + MIT-BIH + AFDB + CPSC 2021 recordings, CV grouped by patient"
         with open(a.out, "w") as f:
             json.dump(export(final, names + fnames, t, info), f, separators=(",", ":"))
         print("wrote", a.out)
