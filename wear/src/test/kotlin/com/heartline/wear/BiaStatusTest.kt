@@ -1,6 +1,7 @@
 package com.heartline.wear
 
 import com.heartline.wear.sensor.QuickHint
+import com.heartline.wear.sensor.sdk.biaFraction
 import com.heartline.wear.sensor.sdk.biaHint
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -18,5 +19,15 @@ class BiaStatusTest {
         assertEquals(QuickHint.HOLD_STILL, biaHint(17))
         assertEquals(QuickHint.WRIST_CONTACT, biaHint(4))
         assertEquals(QuickHint.WRIST_CONTACT, biaHint(10))
+    }
+
+    /** The Galaxy Watch8 reports progress 0–1 (1.0 = done); 0–100 is accepted too. */
+    @Test
+    fun progressIsAFractionOnEitherScale() {
+        assertEquals(0.4f, biaFraction(0.4f), 1e-6f)
+        assertEquals(1f, biaFraction(1.0f), 1e-6f)
+        assertEquals(0.4f, biaFraction(40f), 1e-6f)
+        assertEquals(1f, biaFraction(100f), 1e-6f)
+        assertEquals(0f, biaFraction(null), 1e-6f)
     }
 }

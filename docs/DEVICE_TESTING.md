@@ -74,3 +74,23 @@ tools/device/collect-logs.sh dump      # یا بعد از تست
     - اول با اپ خود Samsung Health (Body composition) امتحان کنید. اگر آن هم انگشت‌ها را تشخیص نمی‌دهد، مشکل از اپ نیست: کلیدها و پشت ساعت را تمیز و خشک کنید، ساعت را محکم ببندید و انگشت‌های وسط و حلقه را صاف روی دو کلید بگذارید.
     - در Heartline پیام می‌گوید کدام کلید انگشت را حس نمی‌کند: «Upper key…» (کلید ساعت ۲، وضعیت ۷ SDK)، «Lower key…» (کلید ساعت ۴، وضعیت ۸) یا «Keep both fingers on the keys» (هر دو، وضعیت ۹).
     - لاگ را بفرستید: `adb logcat -s Heartline/Sensor`. خط‌های `BIA points=… status=[…] impedance=…` و خلاصه‌ی پایانی `BIA statuses seen: {…}`. این‌ها دقیقاً نشان می‌دهند سنسور سامسونگ چه گزارش داده است.
+
+## ۴) لاگ دقیق سنسورها (ECG و Body composition)
+
+در build های dev همه‌ی مقادیر خام سنسورها با تگ‌های جدا لاگ می‌شوند:
+
+| تگ | محتوا |
+|---|---|
+| `Heartline/EcgRaw` | شروع ترکر ECG؛ ۲۰ دسته‌ی اول و هر دسته‌ای که وضعیت تماس در آن عوض شد به‌طور کامل (LEAD_OFF تک‌تک نقاط، بازه‌ی mV، آستانه‌های SDK، SEQUENCE، PPG)؛ خلاصه‌ی هر ثانیه؛ جمع کل در پایان |
+| `Heartline/EcgRec` | فازهای ضبط (WAITING/ARMING/RECORDING/PAUSED)؛ هر ثانیه در ARMING نتیجه‌ی بررسی سیگنال: دلیل رد، دامنه، kurtosis، تعداد ضربان، RR، نسبت ارتفاع |
+| `Heartline/BiaRaw` | پروفایل ارسالی (سن، جنس، قد، وزن) و همه‌ی مقادیر هر نقطه‌ی BIA (STATUS، PROGRESS، چربی، عضله، آب، BMR، امپدانس و فاز) |
+| `Heartline/QuickRaw` | مقادیر خام SpO2 و دمای پوست |
+| `Heartline/Sensor` | اتصال، خطاها و خلاصه‌ها |
+
+روش گرفتن لاگ:
+1. بافر را بزرگ کنید، وگرنه لاگ‌های قدیمی‌تر پاک می‌شوند: `adb logcat -G 16M`، سپس `adb logcat -c`.
+2. `adb logcat -v time -s Heartline/EcgRaw Heartline/EcgRec Heartline/BiaRaw Heartline/QuickRaw Heartline/Sensor > heartline.log`
+3. ECG: صفحه را باز کنید و Start بزنید، ۱۰ ثانیه دست به دکمه نزنید، ۱۵ ثانیه انگشت روی دکمه بگذارید، انگشت را بردارید، از صفحه خارج شوید.
+4. Body composition: یک اندازه‌گیری کامل.
+5. فایل `heartline.log` را بفرستید.
+

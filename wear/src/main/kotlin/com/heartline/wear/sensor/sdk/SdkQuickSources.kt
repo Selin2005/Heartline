@@ -104,12 +104,22 @@ abstract class SdkQuickSource(
     }
 }
 
+/** Raw values of every point from the quick trackers (SpO2, skin temperature), for device debugging. */
+private const val QUICK_RAW_TAG = "Heartline/QuickRaw"
+
 /** SPO2_ON_DEMAND: status 0 calculating, 2 complete, -4 moved, -5 low signal, -6 timeout. */
 class SdkSpo2Source(private val gateway: SdkSensorGateway) :
     SdkQuickSource(gateway, TrackerKind.SPO2_ON_DEMAND, Metric.SPO2, RecordKind.SPO2, 30) {
     override fun create(profile: UserProfile?) = gateway.tracker(TrackerKind.SPO2_ON_DEMAND)
 
     override fun ProducerScope<QuickEvent>.onData(points: List<DataPoint>): Boolean {
+        points.forEach {
+            Log.i(
+                QUICK_RAW_TAG,
+                "SpO2 status=${it.getValue(ValueKey.SpO2Set.STATUS)} spo2=${it.getValue(ValueKey.SpO2Set.SPO2)} " +
+                    "hr=${it.getValue(ValueKey.SpO2Set.HEART_RATE)} t=${it.timestamp}",
+            )
+        }
         val p = points.last()
         return when (p.getValue(ValueKey.SpO2Set.STATUS)) {
             2 -> {
@@ -145,6 +155,14 @@ class SdkSkinTempSource(private val gateway: SdkSensorGateway) :
     override fun create(profile: UserProfile?) = gateway.tracker(TrackerKind.SKIN_TEMPERATURE_ON_DEMAND)
 
     override fun ProducerScope<QuickEvent>.onData(points: List<DataPoint>): Boolean {
+        points.forEach {
+            Log.i(
+                QUICK_RAW_TAG,
+                "SkinTemp status=${it.getValue(ValueKey.SkinTemperatureSet.STATUS)} " +
+                    "object=${it.getValue(ValueKey.SkinTemperatureSet.OBJECT_TEMPERATURE)} " +
+                    "ambient=${it.getValue(ValueKey.SkinTemperatureSet.AMBIENT_TEMPERATURE)} t=${it.timestamp}",
+            )
+        }
         val p = points.last()
         if (p.getValue(ValueKey.SkinTemperatureSet.STATUS) != 0) {
             trySendBlocking(QuickEvent.Failed(null, QuickHint.WRIST_CONTACT))
@@ -168,8 +186,10 @@ class SdkBiaSource(private val gateway: SdkSensorGateway) :
     override fun create(profile: UserProfile?): HealthTracker? {
         val p = profile ?: throw SensorException(SensorProblem.NOT_SUPPORTED)
         val sex = p.calcSex ?: throw SensorException(SensorProblem.NOT_SUPPORTED)
+        val age = p.age() ?: throw SensorException(SensorProblem.NOT_SUPPORTED)
+        Log.i(RAW_TAG, "profile age=$age sex=$sex heightCm=${p.heightCm} weightKg=${p.weightKg}")
         val sdkProfile = TrackerUserProfile.Builder()
-            .setAge(p.age() ?: throw SensorException(SensorProblem.NOT_SUPPORTED))
+            .setAge(age)
             .setGender(if (sex == Sex.MALE) 1 else 0)
             .setHeight(p.heightCm)
             .setWeight(p.weightKg)
@@ -187,32 +207,34 @@ class SdkBiaSource(private val gateway: SdkSensorGateway) :
     }
 
     override fun ProducerScope<QuickEvent>.onData(points: List<DataPoint>): Boolean {
-        points.forEach { statuses.merge(it.getValue(ValueKey.BiaSet.STATUS), 1, Int::plus) }
+        points.forEach { point ->
+            statuses.merge(point.getValue(ValueKey.BiaSet.STATUS), 1, Int::plus)
+            Log.i(RAW_TAG, rawBia(point))
+        }
         val p = points.last()
         val status = p.getValue(ValueKey.BiaSet.STATUS)
-        val progress = p.getValue(ValueKey.BiaSet.PROGRESS)
-        Log.i(
-            SdkSensorGateway.TAG,
-            "BIA points=${points.size} status=${points.map { it.getValue(ValueKey.BiaSet.STATUS) }} progress=$progress " +
-                "impedance=${p.getValue(ValueKey.BiaSet.BODY_IMPEDANCE_MAGNITUDE)}",
-        )
+        val fraction = biaFraction(p.getValue(ValueKey.BiaSet.PROGRESS))
         return when (status) {
-            0 -> if (progress != null && progress < 100f) {
-                problem = null
-                sdkProgress = progress / 100f
-                false
-            } else {
-                trySendBlocking(
-                    QuickEvent.Result(
-                        RecordSummary.BodyComposition(
-                            p.getValue(ValueKey.BiaSet.BODY_FAT_RATIO) ?: 0f,
-                            p.getValue(ValueKey.BiaSet.SKELETAL_MUSCLE_MASS),
-                            p.getValue(ValueKey.BiaSet.TOTAL_BODY_WATER),
-                            p.getValue(ValueKey.BiaSet.BASAL_METABOLIC_RATE)?.toInt(),
+            0 -> {
+                val fat = p.getValue(ValueKey.BiaSet.BODY_FAT_RATIO)
+                if (fraction < 1f || fat == null || fat <= 0f) {
+                    // Still measuring (or finished without values yet: wait for the next point).
+                    problem = null
+                    sdkProgress = fraction
+                    false
+                } else {
+                    trySendBlocking(
+                        QuickEvent.Result(
+                            RecordSummary.BodyComposition(
+                                fat,
+                                p.getValue(ValueKey.BiaSet.SKELETAL_MUSCLE_MASS),
+                                p.getValue(ValueKey.BiaSet.TOTAL_BODY_WATER),
+                                p.getValue(ValueKey.BiaSet.BASAL_METABOLIC_RATE)?.toInt(),
+                            ),
                         ),
-                    ),
-                )
-                true
+                    )
+                    true
+                }
             }
             18 -> {
                 // Final: the profile doesn't match the body (e.g. age or weight wrong).
@@ -227,6 +249,28 @@ class SdkBiaSource(private val gateway: SdkSensorGateway) :
             }
         }
     }
+
+    private fun rawBia(p: DataPoint) = "status=${p.getValue(ValueKey.BiaSet.STATUS)} progress=${p.getValue(ValueKey.BiaSet.PROGRESS)} " +
+        "fat%=${p.getValue(ValueKey.BiaSet.BODY_FAT_RATIO)} fatKg=${p.getValue(ValueKey.BiaSet.BODY_FAT_MASS)} " +
+        "muscleKg=${p.getValue(ValueKey.BiaSet.SKELETAL_MUSCLE_MASS)} muscle%=${p.getValue(ValueKey.BiaSet.SKELETAL_MUSCLE_RATIO)} " +
+        "waterL=${p.getValue(ValueKey.BiaSet.TOTAL_BODY_WATER)} bmr=${p.getValue(ValueKey.BiaSet.BASAL_METABOLIC_RATE)} " +
+        "fatFreeKg=${p.getValue(ValueKey.BiaSet.FAT_FREE_MASS)} fatFree%=${p.getValue(ValueKey.BiaSet.FAT_FREE_RATIO)} " +
+        "impedance=${p.getValue(ValueKey.BiaSet.BODY_IMPEDANCE_MAGNITUDE)} phase=${p.getValue(ValueKey.BiaSet.BODY_IMPEDANCE_DEGREE)} " +
+        "t=${p.timestamp}"
+
+    private companion object {
+        const val RAW_TAG = "Heartline/BiaRaw"
+    }
+}
+
+/**
+ * BIA progress as a 0–1 fraction. The Galaxy Watch8 reports 0–1 (1.0 = done, see
+ * logs/wear_full_logcat_20260925-215013.log); a 0–100 value is accepted too.
+ */
+internal fun biaFraction(progress: Float?): Float = when {
+    progress == null || !progress.isFinite() -> 0f
+    progress > 1.5f -> (progress / 100f).coerceAtMost(1f)
+    else -> progress.coerceIn(0f, 1f)
 }
 
 internal fun biaHint(status: Int?): QuickHint = when (status) {

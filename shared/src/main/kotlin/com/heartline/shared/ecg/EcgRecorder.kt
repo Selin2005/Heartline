@@ -36,8 +36,8 @@ class EcgRecorder(
     val liftDebounceMs: Int = 300,
     val verifySeconds: Double = 3.0,
     val verifyFallbackSeconds: Double = 6.0,
-    /** (window, lenient) → does it look like an ECG? */
-    private val verify: (FloatArray, Boolean) -> Boolean = { x, lenient -> EcgContactCheck.looksLikeEcg(x, sampleRateHz, lenient) }
+    /** (window, lenient) → does it look like an ECG? Null: [EcgContactCheck.diagnose], kept in [lastCheck]. */
+    private val verify: ((FloatArray, Boolean) -> Boolean)? = null
 ) {
     private val target = sampleRateHz * targetSeconds
     private val buffer = FloatArray(target)
@@ -55,6 +55,13 @@ class EcgRecorder(
 
     var phase = ContactPhase.WAITING
         private set
+
+    /** The latest ECG-shape check while arming (for diagnostics logs). */
+    var lastCheck: EcgContactCheck.Diagnosis? = null
+        private set
+
+    /** Seconds of signal received since contact was confirmed (arming), for diagnostics. */
+    val armedSeconds: Double get() = armedSamples.toDouble() / sampleRateHz
 
     /** Counting isn't running (no contact, or contact not yet confirmed). */
     val leadOff: Boolean get() = phase != ContactPhase.RECORDING
@@ -161,7 +168,9 @@ class EcgRecorder(
         armedSamples += samples.size
         if (arming.size < verifyWindow) return
         val window = arming.toFloatArray()
-        if (!verify(window, armedSamples >= verifyFallbackSeconds * sampleRateHz)) return
+        val lenient = armedSamples >= verifyFallbackSeconds * sampleRateHz
+        val ok = verify?.invoke(window, lenient) ?: EcgContactCheck.diagnose(window, sampleRateHz, lenient).also { lastCheck = it }.accepted
+        if (!ok) return
         phase = ContactPhase.RECORDING
         needsNewSegment = true
         consecutiveLeadOff = 0
@@ -204,26 +213,48 @@ object EcgContactCheck {
     const val MIN_P2P_MV = 0.05
     const val MAX_P2P_MV = 5.0
 
+    /** What [looksLikeEcg] measured on a window, and the first test it failed ([rejected], null = accepted). */
+    data class Diagnosis(
+        val p2pMv: Double?,
+        val kurtosis: Double?,
+        val peaks: Int,
+        val rrMs: List<Int>,
+        val heightRatio: Double?,
+        val lenient: Boolean,
+        val rejected: String?
+    ) {
+        val accepted: Boolean get() = rejected == null
+    }
+
     /**
      * @param lenient after a long unbroken contact: kurtosis only ≥ [LENIENT_KURTOSIS] and no
      * R-height check (both can fail on a real wrist ECG with extra beats or a big T wave).
      */
-    fun looksLikeEcg(raw: FloatArray, fs: Int, lenient: Boolean = false): Boolean {
-        if (raw.size < 2 * fs || raw.any { !it.isFinite() }) return false
+    fun looksLikeEcg(raw: FloatArray, fs: Int, lenient: Boolean = false): Boolean = diagnose(raw, fs, lenient).accepted
+
+    fun diagnose(raw: FloatArray, fs: Int, lenient: Boolean = false): Diagnosis {
+        fun no(reason: String, p2p: Double? = null, k: Double? = null, peaks: Int = 0, rr: List<Int> = emptyList(), h: Double? = null) =
+            Diagnosis(p2p, k, peaks, rr, h, lenient, reason)
+        if (raw.size < 2 * fs) return no("too short")
+        if (raw.any { !it.isFinite() }) return no("non-finite samples")
         val clean = EcgFilter.clean(raw, fs)
         // The filters' first and last 200 ms are unreliable on such a short window.
         val edge = (0.2 * fs).toInt()
         val core = clean.copyOfRange(edge, clean.size - edge)
-        val p2p = core.max() - core.min()
-        if (p2p < MIN_P2P_MV || p2p > MAX_P2P_MV) return false
-        if (kurtosis(core) < if (lenient) LENIENT_KURTOSIS else MIN_KURTOSIS) return false
+        val p2p = (core.max() - core.min()).toDouble()
+        if (p2p < MIN_P2P_MV) return no("amplitude < $MIN_P2P_MV mV", p2p)
+        if (p2p > MAX_P2P_MV) return no("amplitude > $MAX_P2P_MV mV", p2p)
+        val k = kurtosis(core)
+        val minK = if (lenient) LENIENT_KURTOSIS else MIN_KURTOSIS
+        if (k < minK) return no("kurtosis < $minK", p2p, k)
         val peaks = RPeakDetector.detect(clean, fs).filter { it in edge until clean.size - edge }
-        if (peaks.size < 2) return false
-        val rr = peaks.zipWithNext { a, b -> (b - a) * 1000.0 / fs }
-        if (rr.any { it !in 250.0..2200.0 }) return false
-        if (lenient) return true
+        val rr = peaks.zipWithNext { a, b -> ((b - a) * 1000.0 / fs).toInt() }
+        if (peaks.size < 2) return no("fewer than 2 beats", p2p, k, peaks.size, rr)
+        if (rr.any { it !in 250..2200 }) return no("beat interval outside 250-2200 ms", p2p, k, peaks.size, rr)
         val heights = peaks.map { abs(clean[it]).toDouble() }
-        return heights.max() <= 3 * heights.min()
+        val ratio = heights.max() / heights.min()
+        if (!lenient && ratio > 3) return no("beat heights differ > 3x", p2p, k, peaks.size, rr, ratio)
+        return Diagnosis(p2p, k, peaks.size, rr, ratio, lenient, null)
     }
 
     /** ECG is spiky (kurtosis well above 3); noise and drift are not. */

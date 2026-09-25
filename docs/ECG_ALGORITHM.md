@@ -23,13 +23,13 @@ out "poor", and 12–16 % of recordings with extra beats or other arrhythmias we
 
 ### Contact (`EcgRecorder`, `SdkEcgSource`)
 
-- Contact per SDK batch from `LEAD_OFF` (`batchContact`): the SDK sets it on the **first point of
-  each batch only** (the rest read null, as in Samsung's ECG sample, which reads `list[0]`).
-  Contact only when the values present are 0 (documented: 0 = contact, anything else = none); a
-  batch without a value keeps the previous state. (A first version of algorithm 3 required 0 on
-  every point, so no batch ever counted as contact and the ECG never started.) Samples beyond the
-  SDK's `MIN/MAX_THRESHOLD_MV` are saturated and don't count. The LEAD_OFF values seen on first
-  and other points are logged per session.
+- Contact per SDK batch from `LEAD_OFF` (`batchContact`): **no contact only when a point says 5**,
+  as in Samsung's ECG sample. Algorithm 3 first required 0 (the documented "contact" value); on a
+  Galaxy Watch8 the ECG then never started, so the rule is back to the one that worked, and whether
+  a finger is really there is decided by the recorder below (debounce, settling, ECG-shape check).
+  Samples beyond the SDK's `MIN/MAX_THRESHOLD_MV` are saturated and don't count. Raw values are
+  logged under `Heartline/EcgRaw` and the recorder's decisions under `Heartline/EcgRec`
+  (docs/DEVICE_TESTING.md).
 - States: **waiting → arming → recording ⇄ paused**. Contact must hold 500 ms; the next 1 s is
   electrode settling and is dropped; then the last 3 s must **look like an ECG**
   (`EcgContactCheck`: 0.05–5 mV, kurtosis ≥ 4, ≥ 2 QRS with plausible intervals and similar

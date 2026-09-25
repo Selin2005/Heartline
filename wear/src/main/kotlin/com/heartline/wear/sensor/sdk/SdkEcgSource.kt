@@ -1,5 +1,6 @@
 package com.heartline.wear.sensor.sdk
 
+import android.os.SystemClock
 import android.util.Log
 import com.heartline.shared.sensor.TrackerKind
 import com.heartline.wear.sensor.EcgChunk
@@ -27,11 +28,9 @@ class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
         if (TrackerKind.ECG_ON_DEMAND !in (state as GatewayState.Connected).trackers) throw SensorException(SensorProblem.NOT_SUPPORTED)
         val tracker = gateway.tracker(TrackerKind.ECG_ON_DEMAND) ?: throw SensorException(SensorProblem.NOT_SUPPORTED)
 
+        Log.i(EcgRawLog.TAG, "ECG tracker started")
         var missing = 0
-        var contact = false
-        // LEAD_OFF values seen (null included) on the first point of each batch and on the others.
-        val firstValues = mutableMapOf<Int?, Int>()
-        val otherValues = mutableMapOf<Int?, Int>()
+        val raw = EcgRawLog()
         tracker.setEventListener(
             object : HealthTracker.TrackerEventListener {
                 override fun onDataReceived(points: List<DataPoint>) {
@@ -39,12 +38,8 @@ class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
                     // A point without a value is skipped: a substituted 0 mV would be a spike after filtering.
                     val values = points.mapNotNull { it.getValue(ValueKey.EcgSet.ECG_MV)?.takeIf { v -> v.isFinite() } }
                     if (values.size < points.size) missing += points.size - values.size
-                    // LEAD_OFF comes on the first point of a batch only (batchContact).
                     val flags = points.map { it.getValue(ValueKey.EcgSet.LEAD_OFF) }
-                    firstValues.merge(flags.first(), 1, Int::plus)
-                    flags.drop(1).forEach { otherValues.merge(it, 1, Int::plus) }
-                    contact = batchContact(flags, contact)
-                    val leadOff = !contact
+                    val leadOff = !batchContact(flags)
                     val max = points.firstNotNullOfOrNull { it.getValue(ValueKey.EcgSet.MAX_THRESHOLD_MV) }
                     val min = points.firstNotNullOfOrNull { it.getValue(ValueKey.EcgSet.MIN_THRESHOLD_MV) }
                     val saturated = values.any { (max != null && it >= max) || (min != null && it <= min) }
@@ -55,6 +50,7 @@ class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
                     } else {
                         null
                     }
+                    raw.batch(points, flags, values, min, max, leadOff, saturated, ppg != null)
                     if (values.isNotEmpty()) trySendBlocking(EcgChunk(values.toFloatArray(), leadOff, points.last().timestamp, ppg, saturated))
                 }
 
@@ -69,11 +65,97 @@ class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
         awaitClose {
             tracker.unsetEventListener()
             if (missing > 0) Log.w(SdkSensorGateway.TAG, "ECG: $missing points had no ECG_MV value")
-            Log.i(SdkSensorGateway.TAG, "ECG LEAD_OFF values seen: first point $firstValues, other points $otherValues")
+            raw.end()
         }
     }
 
     private companion object {
         const val CONNECT_TIMEOUT_MS = 10_000L
+    }
+}
+
+/**
+ * Raw ECG values for device debugging (tag [TAG]): the first [FULL_BATCHES] batches and every batch
+ * where contact changes in full (LEAD_OFF of every point, mV range, SDK thresholds, sequence), a
+ * summary every second, and totals at the end.
+ */
+private class EcgRawLog {
+    private var batches = 0
+    private var lastLeadOff: Boolean? = null
+    private var secondStart = 0L
+    private val secondFlags = mutableMapOf<Int?, Int>()
+    private var secondPoints = 0
+    private var secondMissing = 0
+    private var secondMin = Float.MAX_VALUE
+    private var secondMax = -Float.MAX_VALUE
+    private var secondLeadOffBatches = 0
+    private var secondBatches = 0
+    private val firstFlags = mutableMapOf<Int?, Int>()
+    private val otherFlags = mutableMapOf<Int?, Int>()
+    private var contactBatches = 0
+    private var saturatedBatches = 0
+
+    fun batch(
+        points: List<DataPoint>,
+        flags: List<Int?>,
+        values: List<Float>,
+        min: Float?,
+        max: Float?,
+        leadOff: Boolean,
+        saturated: Boolean,
+        ppg: Boolean,
+    ) {
+        batches++
+        firstFlags.merge(flags.first(), 1, Int::plus)
+        flags.drop(1).forEach { otherFlags.merge(it, 1, Int::plus) }
+        if (!leadOff) contactBatches++
+        if (saturated) saturatedBatches++
+        if (batches <= FULL_BATCHES || leadOff != lastLeadOff) {
+            Log.i(
+                TAG,
+                "batch#$batches n=${points.size} LEAD_OFF=$flags leadOff=$leadOff saturated=$saturated " +
+                    "mV=[${values.minOrNull()}..${values.maxOrNull()}] thresholds=[$min..$max] ppg=$ppg " +
+                    "seq=${points.first().getValue(ValueKey.EcgSet.SEQUENCE)}..${points.last().getValue(ValueKey.EcgSet.SEQUENCE)} " +
+                    "t=${points.first().timestamp}..${points.last().timestamp}",
+            )
+        }
+        lastLeadOff = leadOff
+        val now = SystemClock.elapsedRealtime()
+        if (secondStart == 0L) secondStart = now
+        flags.forEach { secondFlags.merge(it, 1, Int::plus) }
+        secondPoints += points.size
+        secondMissing += points.size - values.size
+        values.minOrNull()?.let { secondMin = minOf(secondMin, it) }
+        values.maxOrNull()?.let { secondMax = maxOf(secondMax, it) }
+        secondBatches++
+        if (leadOff) secondLeadOffBatches++
+        if (now - secondStart >= 1_000) {
+            Log.i(
+                TAG,
+                "1s: points=$secondPoints missingMv=$secondMissing LEAD_OFF=$secondFlags " +
+                    "leadOffBatches=$secondLeadOffBatches/$secondBatches mV=[$secondMin..$secondMax]",
+            )
+            secondStart = now
+            secondFlags.clear()
+            secondPoints = 0
+            secondMissing = 0
+            secondMin = Float.MAX_VALUE
+            secondMax = -Float.MAX_VALUE
+            secondLeadOffBatches = 0
+            secondBatches = 0
+        }
+    }
+
+    fun end() {
+        Log.i(
+            TAG,
+            "end: batches=$batches contact=$contactBatches saturated=$saturatedBatches " +
+                "LEAD_OFF first point=$firstFlags other points=$otherFlags",
+        )
+    }
+
+    companion object {
+        const val TAG = "Heartline/EcgRaw"
+        const val FULL_BATCHES = 20
     }
 }

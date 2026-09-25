@@ -67,6 +67,18 @@ class EcgContactTest {
     }
 
     @Test
+    fun diagnosisSaysWhichTestFailed() {
+        val ok = EcgContactCheck.diagnose(ecg(3.0), fs)
+        assertTrue(ok.accepted)
+        assertTrue(ok.peaks >= 2)
+        assertEquals("amplitude < ${EcgContactCheck.MIN_P2P_MV} mV", EcgContactCheck.diagnose(FloatArray(3 * fs), fs).rejected)
+        assertEquals("beat heights differ > 3x", EcgContactCheck.diagnose(unevenEcg(3.0), fs).rejected)
+        val recorder = EcgRecorder(fs)
+        recorder.feed(ecg(5.0))
+        assertTrue(recorder.lastCheck?.accepted == true)
+    }
+
+    @Test
     fun lenientCheckAcceptsUnevenBeats() {
         val x = unevenEcg(3.0)
         assertFalse("strict", EcgContactCheck.looksLikeEcg(x, fs))

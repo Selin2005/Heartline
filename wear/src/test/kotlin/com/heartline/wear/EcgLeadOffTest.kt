@@ -5,27 +5,24 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** LEAD_OFF as the SDK sends it: on the first point of each batch only, the others read null. */
+/**
+ * LEAD_OFF: only 5 means "no contact" (Samsung's sample and the rule that worked on a Galaxy Watch8).
+ * Requiring 0 kept the ECG from ever starting there; the recorder's checks decide the rest.
+ */
 class EcgLeadOffTest {
-    private fun batch(first: Int?) = listOf(first) + List(9) { null }
+    private fun batch(first: Int?, rest: Int? = null) = listOf(first) + List(9) { rest }
 
     @Test
-    fun firstPointDecidesTheBatch() {
-        // The regression: requiring 0 on every point made every batch "no contact".
-        assertTrue(batchContact(batch(0), previous = false))
-        assertFalse(batchContact(batch(5), previous = true))
-        assertFalse(batchContact(batch(3), previous = true)) // undocumented values are no contact
+    fun fiveAnywhereInTheBatchIsNoContact() {
+        assertFalse(batchContact(batch(5)))
+        assertFalse(batchContact(batch(0, rest = 5)))
+        assertFalse(batchContact(listOf(null, null, 5)))
     }
 
     @Test
-    fun batchWithoutValueKeepsThePreviousState() {
-        assertTrue(batchContact(batch(null), previous = true))
-        assertFalse(batchContact(batch(null), previous = false))
-    }
-
-    @Test
-    fun anyNonZeroValueInABatchIsNoContact() {
-        assertFalse(batchContact(listOf(0, null, 5, null), previous = true))
-        assertTrue(batchContact(listOf(0, 0, 0), previous = false))
+    fun zeroNullAndOtherValuesDoNotBlockContact() {
+        assertTrue(batchContact(batch(0)))
+        assertTrue(batchContact(batch(null)))
+        assertTrue(batchContact(batch(1, rest = 1)))
     }
 }

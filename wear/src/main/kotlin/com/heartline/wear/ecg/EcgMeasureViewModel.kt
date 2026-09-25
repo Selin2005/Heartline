@@ -89,6 +89,9 @@ class EcgMeasureViewModel(
         var lastBpmAt = 0L
         var bpm: Int? = null
         val paired = PairedPpg(fs * recorder.targetSeconds)
+        var lastPhase = recorder.phase
+        var lastCheckLog = 0L
+        Log.i(REC_TAG, "start: phase=${recorder.phase} target=${recorder.targetSeconds}s fs=$fs")
         mutable.value = EcgMeasureState.Measuring(0f, recorder.secondsLeft, FloatArray(0), leadOff = true, waitingForTouch = true)
         job = viewModelScope.launch {
             var failure: SensorProblem? = null
@@ -97,6 +100,8 @@ class EcgMeasureViewModel(
                 .takeWhile { !recorder.isComplete && !recorder.isAbandoned }
                 .collect { chunk ->
                     recorder.accept(chunk.samples, chunk.leadOff, chunk.saturated)
+                    logRecorder(recorder, lastPhase, now() - startedAt, now() - lastCheckLog >= 1_000)?.let { lastCheckLog = it }
+                    lastPhase = recorder.phase
                     val counting = recorder.phase == ContactPhase.RECORDING
                     if (counting) paired.add(chunk.samples, chunk.ppg)
                     live.add(chunk.samples, chunk.leadOff)
@@ -131,6 +136,25 @@ class EcgMeasureViewModel(
             mutable.value = EcgMeasureState.Analyzing
             mutable.value = finish(recorder, startedAt, rate.hz(), paired)
         }
+    }
+
+    /** Phase changes, and once a second while arming why the signal isn't accepted yet. @return time logged, if the check was. */
+    private fun logRecorder(recorder: EcgRecorder, before: ContactPhase, elapsedMs: Long, checkDue: Boolean): Long? {
+        if (recorder.phase != before) {
+            Log.i(
+                REC_TAG,
+                "t=${elapsedMs}ms phase $before -> ${recorder.phase} collected=${"%.1f".format(recorder.progress * recorder.targetSeconds)}s " +
+                    "segments=${recorder.segmentStarts.size} leadOffSeconds=${"%.1f".format(recorder.leadOffSeconds)}",
+            )
+        }
+        if (recorder.phase != ContactPhase.ARMING || !checkDue) return null
+        val c = recorder.lastCheck
+        Log.i(
+            REC_TAG,
+            "t=${elapsedMs}ms arming ${"%.1f".format(recorder.armedSeconds)}s check=" +
+                (c?.let { "${it.rejected ?: "OK"} lenient=${it.lenient} p2p=${it.p2pMv?.let { v -> "%.3f".format(v) }}mV kurtosis=${it.kurtosis?.let { v -> "%.2f".format(v) }} beats=${it.peaks} rr=${it.rrMs} heightRatio=${it.heightRatio?.let { v -> "%.2f".format(v) }}" } ?: "not yet (settling / filling 3 s)"),
+        )
+        return now()
     }
 
     fun cancel() {
@@ -259,6 +283,8 @@ class EcgMeasureViewModel(
     }
 
     private companion object {
+        const val REC_TAG = "Heartline/EcgRec"
+
         const val TAG = "Heartline/ECG"
         const val MIN_STORED_SEC = 10
     }
