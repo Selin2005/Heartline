@@ -129,6 +129,7 @@ val wearModule = module {
     single { SyncScheduler { SyncWorker.enqueue(androidContext()) } }
     single { WatchBpStore(androidContext()) }
     single { WatchProfileStore(androidContext()) }
+    single { com.heartline.wear.tile.TileUpdates(androidContext(), get(), get(), get()) }
     single {
         val hr = StressSource(get(), skinConductance = { (get<SensorGateway>() as? SdkSensorGateway)?.readSkinConductance() })
         if (BuildConfig.USE_FAKE_SENSORS) {

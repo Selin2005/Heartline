@@ -54,6 +54,7 @@ glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = 
 glance-material3 = { module = "androidx.glance:glance-material3", version.ref = "glance" }
 glance-appwidget-testing = { module = "androidx.glance:glance-appwidget-testing", version.ref = "glance" }
 wear-tiles = { module = "androidx.wear.tiles:tiles", version.ref = "wearTiles" }
+wear-tiles-renderer = { module = "androidx.wear.tiles:tiles-renderer", version.ref = "wearTiles" }
 wear-protolayout = { module = "androidx.wear.protolayout:protolayout", version.ref = "protolayout" }
 wear-protolayout-material3 = { module = "androidx.wear.protolayout:protolayout-material3", version.ref = "protolayout" }
 wear-protolayout-expression = { module = "androidx.wear.protolayout:protolayout-expression", version.ref = "protolayout" }

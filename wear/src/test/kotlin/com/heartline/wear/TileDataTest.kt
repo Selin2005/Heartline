@@ -24,4 +24,26 @@ class TileDataTest {
         assertEquals(21, data.bpDaysLeft)
         assertNull(TileData.from(emptyList(), null, null) { null }.lastEcg)
     }
+
+    @Test
+    fun wellnessValuesAndTodaysRange() {
+        val recent = listOf(
+            RecordMeta("s", RecordKind.STRESS, 9, 0, 0, 0, RecordSummary.Stress(72, 18.0)),
+            RecordMeta("o", RecordKind.SPO2, 8, 0, 0, 0, RecordSummary.Spo2(96, 70, false)),
+            RecordMeta("t3", RecordKind.SKIN_TEMPERATURE, 7, 0, 0, 0, RecordSummary.SkinTemperature(33.4f, null)),
+            RecordMeta("t2", RecordKind.SKIN_TEMPERATURE, 6, 0, 0, 0, RecordSummary.SkinTemperature(33.0f, null)),
+            RecordMeta("t1", RecordKind.SKIN_TEMPERATURE, 5, 0, 0, 0, RecordSummary.SkinTemperature(33.1f, null)),
+            RecordMeta("t0", RecordKind.SKIN_TEMPERATURE, 4, 0, 0, 0, RecordSummary.SkinTemperature(33.2f, null)),
+        )
+        val data = TileData.from(recent, 64, null, com.heartline.wear.monitor.HeartToday(70, 52, 118)) { null }
+        assertEquals(70, data.heartRate)
+        assertEquals(52, data.heartMin)
+        assertEquals(118, data.heartMax)
+        assertEquals(96, data.spo2)
+        assertEquals(72, data.stressScore)
+        assertEquals(com.heartline.shared.profile.StressLevel.HIGH, data.stressLevel)
+        assertEquals(18, data.hrvMs)
+        // 33.4 against the median of the previous readings (33.1).
+        assertEquals("+0.3°", data.temperature)
+    }
 }

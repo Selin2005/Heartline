@@ -53,6 +53,30 @@ class WatchSettingsStore(context: Context, private val now: () -> Long = System:
         get() = prefs.getInt(KEY_HR, -1).takeIf { it > 0 }
         set(value) = prefs.edit().putInt(KEY_HR, value ?: -1).apply()
 
+    private val heartState = MutableStateFlow(heartToday())
+
+    /** Today's heart rate (latest, lowest, highest) for tiles and complications; changes once a minute. */
+    val heart: StateFlow<HeartToday?> = heartState.asStateFlow()
+
+    fun recordHeartRate(bpm: Int, day: Long = localDay()) {
+        val today = heartToday()?.takeIf { prefs.getLong(KEY_HR_DAY, -1) == day }
+        prefs.edit()
+            .putInt(KEY_HR, bpm)
+            .putLong(KEY_HR_DAY, day)
+            .putInt(KEY_HR_MIN, minOf(today?.min ?: bpm, bpm))
+            .putInt(KEY_HR_MAX, maxOf(today?.max ?: bpm, bpm))
+            .apply()
+        heartState.value = heartToday()
+    }
+
+    private fun localDay() = java.time.Instant.ofEpochMilli(now()).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toEpochDay()
+
+    fun heartToday(): HeartToday? {
+        val bpm = latestHeartRate ?: return null
+        val sameDay = prefs.getLong(KEY_HR_DAY, -1) == localDay()
+        return HeartToday(bpm, prefs.getInt(KEY_HR_MIN, -1).takeIf { sameDay && it > 0 }, prefs.getInt(KEY_HR_MAX, -1).takeIf { sameDay && it > 0 })
+    }
+
     var irnState: IrnState
         get() = prefs.getString(KEY_IRN, null)?.let { runCatching { Protocol.json.decodeFromString<IrnState>(it) }.getOrNull() } ?: IrnState()
         set(value) = prefs.edit().putString(KEY_IRN, Protocol.json.encodeToString(value)).apply()
@@ -61,8 +85,14 @@ class WatchSettingsStore(context: Context, private val now: () -> Long = System:
         const val KEY = "settings"
         const val KEY_IRN = "irn_state"
         const val KEY_HR = "latest_hr"
+        const val KEY_HR_DAY = "hr_day"
+        const val KEY_HR_MIN = "hr_min"
+        const val KEY_HR_MAX = "hr_max"
     }
 }
+
+/** Latest background heart rate with today's range (null before the first reading today). */
+data class HeartToday(val bpm: Int, val min: Int?, val max: Int?)
 
 /** Watch notifications: the ongoing monitoring notice and heart alerts. */
 class WatchNotifier(private val context: Context) {
@@ -195,6 +225,6 @@ class WatchMonitorOutput(
     override fun notify(alert: HealthAlert) = notifier.alert(alert)
 
     override fun latestMinute(bpm: Int) {
-        settings.latestHeartRate = bpm
+        settings.recordHeartRate(bpm)
     }
 }

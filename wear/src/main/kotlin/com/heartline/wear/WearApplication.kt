@@ -28,6 +28,7 @@ class WearApplication : Application() {
         SyncWorker.enqueue(this)
         val settings = get<WatchSettingsStore>().settings.value
         get<CoroutineScope>(APP_SCOPE).launch { BackgroundMonitoring.sync(this@WearApplication, settings) }
+        get<com.heartline.wear.tile.TileUpdates>().start(get(APP_SCOPE))
         // The hello handshake (status, settings, calibration, profile) runs from the setup gate on every app start.
     }
 }

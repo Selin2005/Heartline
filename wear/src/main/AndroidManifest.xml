@@ -108,6 +108,48 @@
         </service>
 
         <service
+            android:name=".tile.QuickMeasureTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_metric_ecg"
+            android:label="@string/tile_quick_description"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.wear.tiles.PREVIEW"
+                android:resource="@drawable/tile_preview_quick" />
+        </service>
+
+        <service
+            android:name=".tile.WellnessTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_metric_spo2"
+            android:label="@string/tile_wellness_description"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.wear.tiles.PREVIEW"
+                android:resource="@drawable/tile_preview_wellness" />
+        </service>
+
+        <service
+            android:name=".tile.StressTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_metric_stress"
+            android:label="@string/tile_stress_description"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.wear.tiles.PREVIEW"
+                android:resource="@drawable/tile_preview_stress" />
+        </service>
+
+        <service
             android:name=".tile.HeartRateComplicationService"
             android:exported="true"
             android:icon="@drawable/ic_heart"

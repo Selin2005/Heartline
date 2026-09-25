@@ -106,6 +106,8 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
+    // Tile render test only; its resources must be merged, so it is a debug (not test) dependency.
+    debugImplementation(libs.wear.tiles.renderer)
     testImplementation(libs.room.testing)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.androidx.test.ext.junit)
