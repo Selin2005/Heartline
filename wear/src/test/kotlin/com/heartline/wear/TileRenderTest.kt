@@ -1,6 +1,10 @@
 package com.heartline.wear
 
+import android.app.Activity
 import android.content.Context
+import android.os.Handler
+import android.view.PixelCopy
+import android.view.ViewGroup
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -31,6 +35,7 @@ import com.heartline.wear.tile.WellnessTileService
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
@@ -78,7 +83,7 @@ class TileRenderTest {
         // Renderable stand-ins for the variable-font styles (see TileType).
         TileType.big = Typography.TITLE_LARGE
         TileType.value = Typography.TITLE_MEDIUM
-        TileType.button = Typography.LABEL_MEDIUM
+        TileType.button = Typography.TITLE_SMALL
         val out = File("build/tile-shots").apply { mkdirs() }
         val publish = System.getenv("HEARTLINE_TILE_SHOTS") != null
         val root = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "settings.gradle.kts").exists() }
@@ -112,17 +117,34 @@ class TileRenderTest {
             .build()
         val element = materialScope(context, device, defaultColorScheme = TileColors.scheme) { with(tile) { layout(context, data) } }
         val layout = LayoutElementBuilders.Layout.Builder().setRoot(element).build()
-        val parent = FrameLayout(context)
-        val renderer = TileRenderer(context, Runnable::run) {}
+        // Drawn by the hardware renderer through a real window, like on the watch: a software
+        // canvas ignores the outline clipping that rounds cards and the edge button.
+        System.setProperty("robolectric.pixelCopyRenderMode", "hardware")
+        val controller = Robolectric.buildActivity(Activity::class.java)
+        controller.get().setTheme(android.R.style.Theme_DeviceDefault_NoActionBar_Fullscreen)
+        val activity = controller.setup().get()
+        val parent = FrameLayout(activity).apply { setBackgroundColor(Color.BLACK) }
+        activity.setContentView(parent, ViewGroup.LayoutParams(size, size))
+        val renderer = TileRenderer(activity, Runnable::run) {}
         val future = renderer.inflateAsync(layout, TileIcons.resources(), parent)
         shadowOf(android.os.Looper.getMainLooper()).idle()
         future.get(10, TimeUnit.SECONDS)
         parent.measure(View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY))
         parent.layout(0, 0, size, size)
-        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+        fixAutoSize(parent)
+        parent.measure(View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY))
+        parent.layout(0, 0, size, size)
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+        if (System.getenv("TILE_DUMP") != null) dump(parent, 0)
+        val window = Bitmap.createBitmap(activity.window.decorView.width, activity.window.decorView.height, Bitmap.Config.ARGB_8888)
+        var copied = -1
+        PixelCopy.request(activity.window, window, { copied = it }, Handler(android.os.Looper.getMainLooper()))
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+        check(copied == PixelCopy.SUCCESS) { "pixel copy failed: $copied" }
+        val at = IntArray(2).also(parent::getLocationInWindow)
+        val bitmap = Bitmap.createBitmap(window, at[0], at[1], size, size).copy(Bitmap.Config.ARGB_8888, true)
         val canvas = Canvas(bitmap)
-        canvas.drawColor(Color.BLACK)
-        parent.draw(canvas)
         // Round watch mask.
         val mask = Path().apply {
             addRect(0f, 0f, size.toFloat(), size.toFloat(), Path.Direction.CW)
@@ -130,6 +152,22 @@ class TileRenderTest {
         }
         canvas.drawPath(mask, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(24, 24, 28) })
         return bitmap
+    }
+
+    /** Robolectric can't auto-size text (the edge button label comes out infinitely large and invisible). */
+    private fun fixAutoSize(v: View) {
+        if (v is android.widget.TextView && !v.textSize.isFinite()) {
+            v.setAutoSizeTextTypeWithDefaults(android.widget.TextView.AUTO_SIZE_TEXT_TYPE_NONE)
+            v.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f)
+            v.layoutParams = v.layoutParams.apply { width = ViewGroup.LayoutParams.WRAP_CONTENT; height = ViewGroup.LayoutParams.WRAP_CONTENT }
+        }
+        if (v is ViewGroup) for (i in 0 until v.childCount) fixAutoSize(v.getChildAt(i))
+    }
+
+    private fun dump(v: View, depth: Int) {
+        val at = IntArray(2).also(v::getLocationInWindow)
+        println("  ".repeat(depth) + v.javaClass.simpleName + " ${at[0]},${at[1]} ${v.width}x${v.height} vis=${v.visibility} " + ((v as? android.widget.TextView)?.let { "'${it.text}' color=${Integer.toHexString(it.currentTextColor)} size=${it.textSize}" } ?: ""))
+        if (v is ViewGroup) for (i in 0 until v.childCount) dump(v.getChildAt(i), depth + 1)
     }
 
     private fun distinct(bitmap: Bitmap): Int {

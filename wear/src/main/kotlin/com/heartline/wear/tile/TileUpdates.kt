@@ -77,6 +77,7 @@ class TileUpdates(
             BpComplicationService::class.java,
             StressComplicationService::class.java,
             Spo2ComplicationService::class.java,
+            EcgShortcutComplicationService::class.java,
         )
     }
 }
