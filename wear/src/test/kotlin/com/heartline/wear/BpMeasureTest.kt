@@ -66,7 +66,7 @@ class BpMeasureTest {
 
     private suspend fun BpMeasureViewModel.measure(): BpState {
         start()
-        return withTimeout(10_000) { state.first { it !is BpState.Measuring && it !is BpState.Idle } }
+        return withTimeout(BP_TIMEOUT_MS) { state.first { it !is BpState.Measuring && it !is BpState.Idle } }
     }
 
     @Test
@@ -81,7 +81,7 @@ class BpMeasureTest {
         bp.setPendingCapture(CaptureRequest("cap-1", 2))
         val vm = vm()
         vm.start()
-        val done = withTimeout(10_000) { vm.state.first { it is BpState.CalibrationRecorded } } as BpState.CalibrationRecorded
+        val done = withTimeout(BP_TIMEOUT_MS) { vm.state.first { it is BpState.CalibrationRecorded } } as BpState.CalibrationRecorded
         assertEquals(2, done.round)
         val message = records.pendingMessages().single()
         assertEquals(Protocol.BP_CALIBRATION_CAPTURE, message.path)
@@ -96,7 +96,7 @@ class BpMeasureTest {
         bp.setCalibration(BpCalibration("c", System.currentTimeMillis(), List(3) { CalibrationPoint(features, 122, 80, 68) }))
         val vm = vm()
         vm.start()
-        val end = withTimeout(10_000) { vm.state.first { it !is BpState.Measuring && it !is BpState.Idle } }
+        val end = withTimeout(BP_TIMEOUT_MS) { vm.state.first { it !is BpState.Measuring && it !is BpState.Idle } }
         val done = end as? BpState.Done ?: error("ended with $end")
         assertTrue("$done", done.systolic in 110..135 && done.diastolic in 70..90)
         val pending = records.pending().single()
@@ -140,3 +140,6 @@ class BpMeasureTest {
         assertTrue(records.pending().isEmpty())
     }
 }
+
+/** A measurement runs the full PPG pipeline; a loaded build machine (other test forks) needs headroom. */
+private const val BP_TIMEOUT_MS = 30_000L

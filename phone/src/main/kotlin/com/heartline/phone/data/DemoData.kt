@@ -87,11 +87,32 @@ object DemoData {
                 RecordMeta("demo-temp-$i", RecordKind.SKIN_TEMPERATURE, at + 60_000, 10_000, 0, 0, RecordSummary.SkinTemperature(33.0f + random.nextFloat() * 0.8f, 23.5f)),
                 RecordMeta("demo-stress-$i", RecordKind.STRESS, at + 120_000, 60_000, 0, 0, RecordSummary.Stress(20 + random.nextInt(0, 50), 25.0 + random.nextInt(0, 30), null)),
             ) + if (i % 3 == 0) {
-                listOf(RecordMeta("demo-body-$i", RecordKind.BODY_COMPOSITION, at + 180_000, 15_000, 0, 0, RecordSummary.BodyComposition(21.4f + i * 0.1f, 29.8f, 38.6f, 1540)))
+                listOf(RecordMeta("demo-body-$i", RecordKind.BODY_COMPOSITION, at + 180_000, 15_000, 0, 0, demoBody(i)))
             } else {
                 emptyList()
             }
         }
+    }
+
+    /** A body composition result [daysAgo] days back: slowly losing fat and gaining a little muscle. */
+    fun demoBody(daysAgo: Int): RecordSummary.BodyComposition {
+        val weight = 76.4f + daysAgo * 0.06f
+        val fat = 21.4f + daysAgo * 0.035f
+        val muscle = 33.8f - daysAgo * 0.008f
+        return RecordSummary.BodyComposition(
+            bodyFatPercent = fat,
+            skeletalMuscleKg = muscle,
+            bodyWaterKg = weight * 0.565f,
+            bmrKcal = (1650 - daysAgo * 0.4f).toInt(),
+            weightKg = weight,
+            heightCm = 178f,
+            bodyFatMassKg = weight * fat / 100f,
+            skeletalMusclePercent = 100f * muscle / weight,
+            fatFreeMassKg = weight * (1 - fat / 100f),
+            fatFreePercent = 100f - fat,
+            impedanceOhm = 486f + daysAgo * 0.3f,
+            phaseAngleDeg = -6.6f,
+        )
     }
 
     suspend fun seedIfEmpty(

@@ -23,7 +23,19 @@ object CsvFormat {
             is RecordSummary.BodyComposition -> Triple(
                 "${summary.bodyFatPercent}",
                 "%",
-                "muscle_kg=${summary.skeletalMuscleKg ?: ""};water_kg=${summary.bodyWaterKg ?: ""};bmr=${summary.bmrKcal ?: ""}",
+                listOf(
+                    "weight_kg" to summary.weightKg,
+                    "height_cm" to summary.heightCm,
+                    "fat_mass_kg" to summary.bodyFatMassKg,
+                    "muscle_kg" to summary.skeletalMuscleKg,
+                    "muscle_pct" to summary.skeletalMusclePercent,
+                    "water_kg" to summary.bodyWaterKg,
+                    "fat_free_kg" to summary.fatFreeMassKg,
+                    "fat_free_pct" to summary.fatFreePercent,
+                    "bmr" to summary.bmrKcal,
+                    "impedance_ohm" to summary.impedanceOhm,
+                    "phase_angle_deg" to summary.phaseAngleDeg,
+                ).joinToString(";") { (k, v) -> "$k=${v ?: ""}" },
             )
             is RecordSummary.Stress -> Triple("${summary.score}", "score", "rmssd_ms=${summary.rmssdMs ?: ""}")
         }

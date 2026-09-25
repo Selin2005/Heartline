@@ -1,6 +1,10 @@
 package com.heartline.phone
 
 import com.heartline.phone.ui.model.AlertUi
+import com.heartline.phone.ui.model.BodyDetailUi
+import com.heartline.phone.ui.model.BodyEntryUi
+import com.heartline.shared.body.BodyComposition
+import com.heartline.shared.profile.Sex
 import com.heartline.phone.ui.model.BpHomeUi
 import com.heartline.phone.ui.model.MetricDetailUi
 import com.heartline.phone.ui.model.MetricReadingUi
@@ -123,6 +127,17 @@ object SampleData {
             }
         }
         return MetricDetailUi(metric, rows)
+    }
+
+    /** Eight results over three months, newest first. */
+    val body: BodyDetailUi = run {
+        val day = 86_400_000L
+        val now = 1_790_000_000_000L
+        val entries = listOf(0, 9, 18, 30, 44, 58, 72, 88).mapIndexed { i, daysAgo ->
+            val report = BodyComposition.report(com.heartline.phone.data.DemoData.demoBody(daysAgo), Sex.MALE, 34)
+            BodyEntryUi("b$i", now - daysAgo * day, if (i == 0) "Today" else "Sep ${24 - i}", "7:1$i AM", report)
+        }
+        BodyDetailUi(entries, 76.4f)
     }
 
     val alerts = listOf(

@@ -20,6 +20,7 @@ import com.heartline.phone.ui.bp.BpCalibrationScreen
 import com.heartline.phone.ui.bp.BpHomeScreen
 import com.heartline.phone.ui.about.AboutScreen
 import com.heartline.phone.ui.heart.AlertsScreen
+import com.heartline.phone.ui.body.BodyCompositionScreen
 import com.heartline.phone.ui.metric.MetricDetailScreen
 import com.heartline.phone.ui.profile.ProfileScreen
 import com.heartline.shared.model.Metric
@@ -123,7 +124,15 @@ class PhoneScreenshotTest(private val theme: String) {
 
     @Test fun skinTemperature() = shot("skin_temperature") { MetricDetailScreen(SampleData.metricDetail(Metric.SKIN_TEMPERATURE), onBack = {}) }
 
-    @Test fun bodyComposition() = shot("body_composition") { MetricDetailScreen(SampleData.metricDetail(Metric.BODY_COMPOSITION), onBack = {}) }
+    @Test fun bodyComposition() = shot("body_composition") { BodyCompositionScreen(SampleData.body, onBack = {}, animate = false) }
+
+    @Test fun bodyCompositionMeasures() = shot("body_composition_measures") {
+        BodyCompositionScreen(SampleData.body, onBack = {}, animate = false, listState = rememberLazyListState(initialFirstVisibleItemIndex = 3))
+    }
+
+    @Test fun bodyCompositionMore() = shot("body_composition_more") {
+        BodyCompositionScreen(SampleData.body, onBack = {}, animate = false, listState = rememberLazyListState(initialFirstVisibleItemIndex = 8), advancedOpen = true)
+    }
 
     @Test fun stress() = shot("stress") { MetricDetailScreen(SampleData.metricDetail(Metric.STRESS), onBack = {}) }
 

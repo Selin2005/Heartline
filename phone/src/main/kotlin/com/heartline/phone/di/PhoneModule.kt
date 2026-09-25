@@ -17,6 +17,7 @@ import com.heartline.phone.data.ProfileRepository
 import com.heartline.phone.export.DataExporter
 import com.heartline.phone.ui.model.OnboardingViewModel
 import com.heartline.phone.ui.model.OpenOnWatchViewModel
+import com.heartline.phone.ui.model.BodyCompositionViewModel
 import com.heartline.phone.ui.model.MetricDetailViewModel
 import com.heartline.phone.ui.model.ProfileViewModel
 import com.heartline.phone.ui.model.BpHomeViewModel
@@ -79,6 +80,7 @@ val phoneModule = module {
                     records.save(meta, wave)
                     runCatching { get<BpRepository>().onRecordSaved(meta, wave) }.onFailure { Log.w("Heartline/BP", "refine failed", it) }
                     runCatching { get<EcgSecondOpinion>().onRecordSaved(records, meta, wave) }.onFailure { Log.w("Heartline/ECG", "second opinion failed", it) }
+                    runCatching { get<ProfileRepository>().onRecordSaved(meta) }.onFailure { Log.w("Heartline/Body", "weight update failed", it) }
                 }
             },
             get<HeartRepository>(),
@@ -124,6 +126,7 @@ val phoneModule = module {
     viewModel { BpHomeViewModel(get(), get()) }
     viewModel { CalibrationViewModel(get(), openOnWatch = { get<WatchOpener>().open(it) }) }
     viewModel { params -> MetricDetailViewModel(params.get(), get(), get()) }
+    viewModel { BodyCompositionViewModel(get(), get(), get()) }
     viewModel { ProfileViewModel(get()) }
     viewModel { OpenOnWatchViewModel(get()) }
     viewModel { WatchLinkViewModel(get(), get()) }

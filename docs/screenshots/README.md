@@ -44,6 +44,18 @@ Do not edit by hand.
 ### body_composition_light
 <img src="phone/body_composition_light.png" width="280">
 
+### body_composition_measures_dark
+<img src="phone/body_composition_measures_dark.png" width="280">
+
+### body_composition_measures_light
+<img src="phone/body_composition_measures_light.png" width="280">
+
+### body_composition_more_dark
+<img src="phone/body_composition_more_dark.png" width="280">
+
+### body_composition_more_light
+<img src="phone/body_composition_more_light.png" width="280">
+
 ### bp_calibration_cuff_dark
 <img src="phone/bp_calibration_cuff_dark.png" width="280">
 
@@ -274,6 +286,18 @@ Do not edit by hand.
 
 ### body_result_small
 <img src="wear/body_result_small.png" width="240">
+
+### body_result_cards_large
+<img src="wear/body_result_cards_large.png" width="240">
+
+### body_result_cards_small
+<img src="wear/body_result_cards_small.png" width="240">
+
+### body_weight_large
+<img src="wear/body_weight_large.png" width="240">
+
+### body_weight_small
+<img src="wear/body_weight_small.png" width="240">
 
 ### bp_calibration_recorded_large
 <img src="wear/bp_calibration_recorded_large.png" width="240">

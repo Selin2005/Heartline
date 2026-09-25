@@ -36,7 +36,9 @@ import com.heartline.phone.ui.help.DevModeHelpScreen
 import com.heartline.phone.ui.model.OpenOnWatchViewModel
 import com.heartline.phone.ui.model.WatchLinkViewModel
 import org.koin.compose.koinInject
+import com.heartline.phone.ui.body.BodyCompositionScreen
 import com.heartline.phone.ui.metric.MetricDetailScreen
+import com.heartline.phone.ui.model.BodyCompositionViewModel
 import com.heartline.phone.ui.model.MetricDetailViewModel
 import com.heartline.phone.ui.model.ProfileViewModel
 import com.heartline.phone.ui.profile.ProfileScreen
@@ -291,9 +293,15 @@ fun HeartlineApp(
                 }
                 composable(Routes.METRIC) { entry ->
                     val metric = Metric.valueOf(entry.arguments?.getString("metric") ?: Metric.SPO2.name)
-                    val vm: MetricDetailViewModel = koinViewModel(key = metric.name) { parametersOf(metric) }
-                    val state by vm.state.collectAsStateWithLifecycle()
-                    MetricDetailScreen(state, onBack = { navController.popBackStack() }, onMeasureOnWatch = { openOnWatch(WatchRoutes.quick(metric)) })
+                    if (metric == Metric.BODY_COMPOSITION) {
+                        val vm: BodyCompositionViewModel = koinViewModel()
+                        val state by vm.state.collectAsStateWithLifecycle()
+                        BodyCompositionScreen(state, onBack = { navController.popBackStack() }, onMeasureOnWatch = { openOnWatch(WatchRoutes.quick(metric)) })
+                    } else {
+                        val vm: MetricDetailViewModel = koinViewModel(key = metric.name) { parametersOf(metric) }
+                        val state by vm.state.collectAsStateWithLifecycle()
+                        MetricDetailScreen(state, onBack = { navController.popBackStack() }, onMeasureOnWatch = { openOnWatch(WatchRoutes.quick(metric)) })
+                    }
                 }
                 composable(Routes.PROFILE) {
                     val vm: ProfileViewModel = koinViewModel()
