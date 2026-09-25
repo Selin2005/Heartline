@@ -1,0 +1,15 @@
+skipped 0 records shorter than 20 s
+ECG dataset report (scale 1.0, 3192 recordings)
+== mitdb
+  A    n=205   sinus=0% afib=96% high=1% low=0% inconc=2% poor=0% qrsF1=0.995 Se=0.991 PPV=0.998  poor[]
+  E    n=662   sinus=35% afib=12% high=0% low=2% inconc=49% poor=2% qrsF1=0.994 Se=0.993 PPV=0.995  poor[MUSCLE_NOISE:11,TOO_FEW_BEATS:5]
+  N    n=1197  sinus=75% afib=1% high=0% low=3% inconc=20% poor=1% qrsF1=0.996 Se=0.999 PPV=0.994  poor[MUSCLE_NOISE:9,TOO_FEW_BEATS:1]
+  O    n=816   sinus=25% afib=19% high=0% low=5% inconc=43% poor=8% qrsF1=0.950 Se=0.953 PPV=0.947  poor[MUSCLE_NOISE:46,TOO_FEW_BEATS:17]
+== nstdb
+  -6   n=52    sinus=0% afib=0% high=0% low=0% inconc=0% poor=100% qrsF1=0.300 Se=0.391 PPV=0.243  poor[MOTION:36,MUSCLE_NOISE:16]
+  00   n=52    sinus=0% afib=0% high=0% low=0% inconc=0% poor=100% qrsF1=0.491 Se=0.658 PPV=0.392  poor[MUSCLE_NOISE:41,MOTION:10,TOO_FEW_BEATS:1]
+  06   n=52    sinus=0% afib=0% high=0% low=0% inconc=2% poor=98% qrsF1=0.694 Se=0.875 PPV=0.575  poor[MUSCLE_NOISE:50,TOO_FEW_BEATS:1]
+  12   n=52    sinus=17% afib=6% high=0% low=0% inconc=8% poor=69% qrsF1=0.932 Se=0.984 PPV=0.885  poor[MUSCLE_NOISE:36]
+  18   n=52    sinus=52% afib=4% high=0% low=0% inconc=25% poor=19% qrsF1=0.999 Se=0.999 PPV=0.998  poor[MUSCLE_NOISE:8,TOO_FEW_BEATS:2]
+  24   n=52    sinus=62% afib=12% high=0% low=0% inconc=27% poor=0% qrsF1=1.000 Se=1.000 PPV=0.999  poor[]
+MIT-BIH ectopy: false AF=12%  poor=2%

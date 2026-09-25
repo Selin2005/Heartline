@@ -27,6 +27,8 @@ class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
         val tracker = gateway.tracker(TrackerKind.ECG_ON_DEMAND) ?: throw SensorException(SensorProblem.NOT_SUPPORTED)
 
         var missing = 0
+        // Every LEAD_OFF value seen (null included) and how often: the SDK documents 0 and 5 only.
+        val leadOffValues = mutableMapOf<Int?, Int>()
         tracker.setEventListener(
             object : HealthTracker.TrackerEventListener {
                 override fun onDataReceived(points: List<DataPoint>) {
@@ -34,7 +36,13 @@ class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
                     // A point without a value is skipped: a substituted 0 mV would be a spike after filtering.
                     val values = points.mapNotNull { it.getValue(ValueKey.EcgSet.ECG_MV)?.takeIf { v -> v.isFinite() } }
                     if (values.size < points.size) missing += points.size - values.size
-                    val leadOff = points.any { it.getValue(ValueKey.EcgSet.LEAD_OFF) == LEAD_OFF_NO_CONTACT }
+                    // Contact only when every point says 0 ("in contact"); 5, null or anything else is no contact.
+                    val flags = points.map { it.getValue(ValueKey.EcgSet.LEAD_OFF) }
+                    flags.forEach { leadOffValues.merge(it, 1, Int::plus) }
+                    val leadOff = flags.any { it != LEAD_OFF_CONTACT }
+                    val max = points.firstNotNullOfOrNull { it.getValue(ValueKey.EcgSet.MAX_THRESHOLD_MV) }
+                    val min = points.firstNotNullOfOrNull { it.getValue(ValueKey.EcgSet.MIN_THRESHOLD_MV) }
+                    val saturated = values.any { (max != null && it >= max) || (min != null && it <= min) }
                     // The PPG channel reported with each ECG sample (pulse arrival time); only kept when
                     // every point has both, so the two stay sample-aligned.
                     val ppg = if (values.size == points.size) {
@@ -42,7 +50,7 @@ class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
                     } else {
                         null
                     }
-                    if (values.isNotEmpty()) trySendBlocking(EcgChunk(values.toFloatArray(), leadOff, points.last().timestamp, ppg))
+                    if (values.isNotEmpty()) trySendBlocking(EcgChunk(values.toFloatArray(), leadOff, points.last().timestamp, ppg, saturated))
                 }
 
                 override fun onFlushCompleted() = Unit
@@ -56,12 +64,13 @@ class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
         awaitClose {
             tracker.unsetEventListener()
             if (missing > 0) Log.w(SdkSensorGateway.TAG, "ECG: $missing points had no ECG_MV value")
+            Log.i(SdkSensorGateway.TAG, "ECG LEAD_OFF values seen: $leadOffValues")
         }
     }
 
     private companion object {
-        /** LEAD_OFF value when the electrodes aren't both touched (Samsung ECG sample). */
-        const val LEAD_OFF_NO_CONTACT = 5
+        /** LEAD_OFF value when both electrodes are in contact (Samsung ECG sample: 0 = contact, 5 = none). */
+        const val LEAD_OFF_CONTACT = 0
         const val CONNECT_TIMEOUT_MS = 10_000L
     }
 }

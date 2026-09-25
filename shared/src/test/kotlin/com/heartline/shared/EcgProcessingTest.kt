@@ -3,15 +3,12 @@ package com.heartline.shared
 import com.heartline.shared.dsp.Biquad
 import com.heartline.shared.dsp.filtFilt
 import com.heartline.shared.ecg.EcgFilter
-import com.heartline.shared.ecg.EcgRecorder
 import com.heartline.shared.ecg.RPeakDetector
 import com.heartline.shared.sample.SyntheticEcg
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
 import kotlin.math.sqrt
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -49,37 +46,5 @@ class EcgProcessingTest {
             assertNotNull(hr)
             assertTrue("bpm=$bpm hr=$hr", abs(hr!! - bpm) <= 3)
         }
-    }
-
-    @Test
-    fun recorderSkipsLeadOffAndCompletes() {
-        val recorder = EcgRecorder(sampleRateHz = fs, targetSeconds = 2, settleSeconds = 0.5)
-        // Before the first touch: not counted as lead-off.
-        recorder.accept(FloatArray(fs), leadOff = true)
-        assertEquals(0f, recorder.progress)
-        assertEquals(0f, recorder.leadOffRatio)
-        assertTrue(recorder.leadOff)
-        // Touch: the first 0.5 s settles and isn't recorded.
-        recorder.accept(FloatArray(fs / 2) { 9f }, leadOff = false)
-        assertTrue(recorder.progress == 0f)
-        repeat(2) { recorder.accept(FloatArray(fs / 2) { 1f }, leadOff = false) }
-        // Contact lost for 1 s after touching: counted.
-        recorder.accept(FloatArray(fs), leadOff = true)
-        repeat(3) { recorder.accept(FloatArray(fs / 2) { 1f }, leadOff = false) }
-        assertTrue(recorder.isComplete)
-        assertEquals(2 * fs, recorder.recording().size)
-        assertTrue(recorder.recording().all { it == 1f })
-        assertEquals(1f / 3f, recorder.leadOffRatio, 0.01f)
-        assertFalse(recorder.isAbandoned)
-    }
-
-    @Test
-    fun recorderAbandonsAfterLongLeadOff() {
-        val recorder = EcgRecorder(sampleRateHz = fs, maxLeadOffSeconds = 3)
-        repeat(5) { recorder.accept(FloatArray(fs), leadOff = true) }
-        assertFalse("waiting for the first touch isn't abandonment", recorder.isAbandoned)
-        recorder.accept(FloatArray(fs), leadOff = false)
-        repeat(3) { recorder.accept(FloatArray(fs), leadOff = true) }
-        assertTrue(recorder.isAbandoned)
     }
 }

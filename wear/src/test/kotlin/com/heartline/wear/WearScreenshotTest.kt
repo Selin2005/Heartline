@@ -94,6 +94,22 @@ class WearScreenshotTest(private val size: String) {
 
     @Test fun ecgAnalyzing() = shot("ecg_analyzing") { EcgAnalyzingScreen() }
 
+    @Test fun ecgArming() = shot("ecg_arming") { EcgMeasuringScreen(0f, 30, WearSample.liveEcg.copyOf(900), leadOff = true, arming = true) }
+
+    @Test fun ecgStruggling() = shot("ecg_struggling") { EcgMeasuringScreen(0f, 30, WearSample.liveEcg.copyOf(900), leadOff = true, arming = true, struggling = true) }
+
+    @Test fun ecgResultInconclusiveWithNote() = shot("ecg_result_inconclusive_note") {
+        EcgResultScreen(
+            EcgResult.INCONCLUSIVE,
+            78,
+            com.heartline.shared.model.EcgMetrics(
+                0, 31_000, 30f, 29f, 1f, 0f, 1f, 0f, 78, 70, 84, 38, 770, 60, 70, 92,
+                com.heartline.shared.model.EcgPoorReason.NONE, sampleRateHz = 500f, ectopicBeats = 9, ventricularLikeBeats = 9,
+                note = com.heartline.shared.model.EcgNote.FREQUENT_EXTRA_BEATS,
+            ),
+        )
+    }
+
     @Test fun ecgResultSinus() = shot("ecg_result_sinus") { EcgResultScreen(EcgResult.SINUS_RHYTHM, 72) }
 
     @Test fun ecgResultAfib() = shot("ecg_result_afib") { EcgResultScreen(EcgResult.AFIB_SIGNS, 94) }

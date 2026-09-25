@@ -192,6 +192,8 @@
     <string name="bp_waiting_phone_body">Start the round on your phone. The watch begins measuring by itself.</string>
     <string name="action_open_short">Open</string>
     <string name="ecg_touch_to_start">Touch the top key to start</string>
+    <string name="ecg_hold_starting">Hold still, starting…</string>
+    <string name="ecg_touch_lighter">Rest your fingertip lightly on the key, arm still</string>
     <string name="ecg_detail_recorded">Recorded</string>
     <string name="ecg_detail_duration">Duration</string>
     <string name="ecg_detail_usable">Usable</string>
@@ -200,9 +202,18 @@
     <string name="ecg_detail_beats">Beats</string>
     <string name="ecg_detail_rmssd">HRV (RMSSD)</string>
     <string name="ecg_detail_quality">Signal quality</string>
+    <string name="ecg_detail_extra_beats">Extra beats</string>
     <string name="value_seconds">%1$d s</string>
     <string name="value_seconds_percent">%1$d s · %2$d%%</string>
     <string name="value_ms">%1$d ms</string>
+    <string name="ecg_note_extra_beats">Some extra (early) beats were seen.</string>
+    <string name="ecg_note_frequent_extra_beats">Frequent extra beats: the rhythm can\'t be classified.</string>
+    <string name="ecg_note_irregular_pattern">Irregular, but not in the way typical of AFib.</string>
+    <string name="ecg_note_no_p_wave">Regular, but no clear P wave was found.</string>
+    <string name="ecg_note_rate_above_150">Heart rate above 150: the rhythm isn\'t classified.</string>
+    <string name="ecg_note_fast_regular">Regular rhythm between 100 and 120 bpm.</string>
+    <string name="ecg_note_pauses">A pause of more than 2 seconds was seen.</string>
+    <string name="ecg_note_noisy_rhythm">Irregular, but too noisy to call AFib. Try again.</string>
     <string name="ecg_poor_motion">Too much movement. Rest your arm on a table and keep still.</string>
     <string name="ecg_poor_muscle">Muscle noise. Relax your arm and touch the key lightly, don\'t press.</string>
     <string name="ecg_poor_low">Signal too weak. Wear the watch snugly and keep your fingertip on the key.</string>

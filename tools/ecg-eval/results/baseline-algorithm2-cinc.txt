@@ -1,0 +1,8 @@
+skipped 616 records shorter than 20 s
+ECG dataset report (scale 1.0, 7912 recordings)
+== cinc2017
+  A    n=674   sinus=0% afib=66% high=13% low=1% inconc=11% poor=9%  poor[MUSCLE_NOISE:58,TOO_FEW_BEATS:1]
+  N    n=4768  sinus=78% afib=1% high=0% low=0% inconc=14% poor=7%  poor[MUSCLE_NOISE:320,TOO_FEW_BEATS:9,LOW_AMPLITUDE:1]
+  O    n=2302  sinus=33% afib=16% high=4% low=7% inconc=33% poor=7%  poor[MUSCLE_NOISE:154,TOO_FEW_BEATS:13]
+  ~    n=168   sinus=7% afib=2% high=0% low=0% inconc=6% poor=85%  poor[MUSCLE_NOISE:139,TOO_FEW_BEATS:2,LOW_AMPLITUDE:1,MOTION:1]
+CinC summary: AF sens=66% (of AF)  AF spec=99% (N not called AF)  N→sinus=78%  O→poor=7%  O→AF=16%  noisy→poor=85%  unclassified(N+A+O)=26%

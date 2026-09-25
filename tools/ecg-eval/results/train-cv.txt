@@ -1,0 +1,18 @@
+-- cross-validated thresholds {'af': 0.33, 'noisy': 0.37, 'normal': 0.5}
+  cinc2017     A   n=674   SINUS=2% AF=83% HIGH=3% LOW=0% INC=7% POOR=6%
+  cinc2017     N   n=4768  SINUS=84% AF=1% HIGH=0% LOW=0% INC=10% POOR=5%
+  cinc2017     O   n=2302  SINUS=20% AF=9% HIGH=3% LOW=4% INC=55% POOR=9%
+  cinc2017     ~   n=168   SINUS=5% AF=4% HIGH=0% LOW=0% INC=10% POOR=81%
+  mitdb        A   n=205   SINUS=0% AF=100% HIGH=0% LOW=0% INC=0% POOR=0%
+  mitdb        E   n=662   SINUS=6% AF=3% HIGH=0% LOW=1% INC=88% POOR=1%
+  mitdb        N   n=1197  SINUS=78% AF=0% HIGH=0% LOW=3% INC=17% POOR=3%
+  mitdb        O   n=816   SINUS=16% AF=17% HIGH=1% LOW=3% INC=57% POOR=6%
+-- NSTDB (never trained on) thresholds {'af': 0.33, 'noisy': 0.37, 'normal': 0.5}
+  nstdb        -6  n=52    SINUS=0% AF=0% HIGH=0% LOW=0% INC=0% POOR=100%
+  nstdb        00  n=52    SINUS=0% AF=0% HIGH=0% LOW=0% INC=0% POOR=100%
+  nstdb        06  n=52    SINUS=2% AF=0% HIGH=0% LOW=0% INC=21% POOR=77%
+  nstdb        12  n=52    SINUS=2% AF=2% HIGH=0% LOW=0% INC=77% POOR=19%
+  nstdb        18  n=52    SINUS=2% AF=0% HIGH=0% LOW=0% INC=98% POOR=0%
+  nstdb        24  n=52    SINUS=4% AF=0% HIGH=0% LOW=0% INC=96% POOR=0%
+top features [('valid_beat_share', 0.184), ('noise', 0.149), ('clean_nrmssd', 0.126), ('nrmssd', 0.11), ('entropy', 0.08), ('bpm', 0.063), ('sd1_sd2', 0.049), ('p_ratio', 0.027)]
+wrote shared/src/main/resources/ecg/rhythm_model.json

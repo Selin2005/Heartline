@@ -40,6 +40,7 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ProgressIndicatorDefaults
 import androidx.wear.compose.material3.Text
 import com.heartline.shared.model.EcgMetrics
+import com.heartline.shared.model.EcgNote
 import com.heartline.shared.model.EcgPoorReason
 import com.heartline.shared.model.EcgResult
 import com.heartline.shared.model.Severity
@@ -114,6 +115,8 @@ fun EcgMeasuringScreen(
     waitingForTouch: Boolean = false,
     sampleRateHz: Int = 500,
     showWave: Boolean = true,
+    arming: Boolean = false,
+    struggling: Boolean = false,
 ) {
     val color = WearColors.ecg
     Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
@@ -158,13 +161,16 @@ fun EcgMeasuringScreen(
             Text(
                 stringResource(
                     when {
+                        // The countdown only starts once the touch is confirmed as a real ECG.
+                        struggling -> R.string.ecg_touch_lighter
+                        arming -> R.string.ecg_hold_starting
                         waitingForTouch -> R.string.ecg_touch_to_start
                         leadOff -> R.string.ecg_lead_off
                         else -> R.string.ecg_keep_finger
                     },
                 ),
                 style = MaterialTheme.typography.bodySmall,
-                color = if (leadOff && !waitingForTouch) WearColors.warn else WearColors.onSurfaceVariant,
+                color = if ((leadOff && !waitingForTouch && !arming) || struggling) WearColors.warn else WearColors.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 modifier = Modifier.padding(horizontal = 22.dp),
@@ -252,9 +258,32 @@ fun EcgResultScreen(result: EcgResult, averageBpm: Int?, metrics: EcgMetrics? = 
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
+        metrics?.note?.text?.let { note ->
+            Text(
+                stringResource(note),
+                style = MaterialTheme.typography.bodySmall,
+                color = WearColors.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
         metrics?.let { EcgDetails(it) }
     }
 }
+
+/** What else the recording shows, or why it stayed inconclusive (algorithm 3). */
+val EcgNote.text: Int?
+    get() = when (this) {
+        EcgNote.EXTRA_BEATS -> R.string.ecg_note_extra_beats
+        EcgNote.FREQUENT_EXTRA_BEATS -> R.string.ecg_note_frequent_extra_beats
+        EcgNote.IRREGULAR_PATTERN -> R.string.ecg_note_irregular_pattern
+        EcgNote.NO_CLEAR_P_WAVE -> R.string.ecg_note_no_p_wave
+        EcgNote.RATE_ABOVE_150 -> R.string.ecg_note_rate_above_150
+        EcgNote.FAST_REGULAR -> R.string.ecg_note_fast_regular
+        EcgNote.PAUSES -> R.string.ecg_note_pauses
+        EcgNote.NOISY_RHYTHM -> R.string.ecg_note_noisy_rhythm
+        EcgNote.NONE -> null
+    }
 
 @Composable
 private fun EcgDetails(m: EcgMetrics) {
@@ -266,6 +295,7 @@ private fun EcgDetails(m: EcgMetrics) {
     DetailRow(stringResource(R.string.ecg_detail_noise), stringResource(R.string.value_seconds, m.noiseSec.roundToInt()))
     if (m.minBpm != null && m.maxBpm != null) DetailRow(stringResource(R.string.ecg_detail_range), "${m.minBpm}–${m.maxBpm}")
     DetailRow(stringResource(R.string.ecg_detail_beats), "${m.beats}")
+    if (m.ectopicBeats > 0) DetailRow(stringResource(R.string.ecg_detail_extra_beats), "${m.ectopicBeats}")
     m.rmssdMs?.let { DetailRow(stringResource(R.string.ecg_detail_rmssd), stringResource(R.string.value_ms, it)) }
     DetailRow(stringResource(R.string.ecg_detail_quality), "${m.qualityScore}/100")
 }

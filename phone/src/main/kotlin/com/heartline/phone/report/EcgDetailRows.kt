@@ -3,6 +3,7 @@ package com.heartline.phone.report
 import android.content.res.Resources
 import com.heartline.phone.R
 import com.heartline.shared.model.EcgMetrics
+import com.heartline.shared.model.EcgNote
 import com.heartline.shared.model.EcgPoorReason
 import java.time.Instant
 import java.time.ZoneId
@@ -27,11 +28,15 @@ object EcgDetailRows {
         m.averageBpm?.let { add(res.getString(R.string.ecg_avg_hr) to res.getString(R.string.ecg_bpm_value, it)) }
         if (m.minBpm != null && m.maxBpm != null) add(res.getString(R.string.ecg_detail_range) to res.getString(R.string.value_bpm_range, m.minBpm, m.maxBpm))
         add(res.getString(R.string.ecg_detail_beats) to "${m.beats}")
+        if (m.ectopicBeats > 0) add(res.getString(R.string.ecg_detail_extra_beats) to "${m.ectopicBeats}")
+        if (m.pauses > 0) add(res.getString(R.string.ecg_detail_pauses) to "${m.pauses} (${res.getString(R.string.value_ms, m.longestPauseMs ?: 0)})")
+        if (m.segments > 1) add(res.getString(R.string.ecg_detail_segments) to "${m.segments}")
         m.meanRrMs?.let { add(res.getString(R.string.ecg_detail_rr) to res.getString(R.string.value_ms, it)) }
         m.sdnnMs?.let { add(res.getString(R.string.ecg_detail_sdnn) to res.getString(R.string.value_ms, it)) }
         m.rmssdMs?.let { add(res.getString(R.string.ecg_detail_rmssd) to res.getString(R.string.value_ms, it)) }
         add(res.getString(R.string.ecg_detail_quality) to "${m.qualityScore}/100")
         if (m.poorReason != EcgPoorReason.NONE) add(res.getString(R.string.ecg_detail_why) to res.getString(reason(m.poorReason)))
+        note(m.note)?.let { add(res.getString(R.string.ecg_detail_note) to res.getString(it)) }
         add(res.getString(R.string.ecg_detail_sampling) to res.getString(R.string.value_hz, m.sampleRateHz.roundToInt()))
     }
 
@@ -42,6 +47,18 @@ object EcgDetailRows {
         }
         val total = res.getString(R.string.value_seconds_1, m.noiseSec)
         return if (parts.isEmpty()) total else "$total (${parts.joinToString(", ")})"
+    }
+
+    fun note(n: EcgNote): Int? = when (n) {
+        EcgNote.NONE -> null
+        EcgNote.EXTRA_BEATS -> R.string.ecg_note_extra_beats
+        EcgNote.FREQUENT_EXTRA_BEATS -> R.string.ecg_note_frequent_extra_beats
+        EcgNote.IRREGULAR_PATTERN -> R.string.ecg_note_irregular_pattern
+        EcgNote.NO_CLEAR_P_WAVE -> R.string.ecg_note_no_p_wave
+        EcgNote.RATE_ABOVE_150 -> R.string.ecg_note_rate_above_150
+        EcgNote.FAST_REGULAR -> R.string.ecg_note_fast_regular
+        EcgNote.PAUSES -> R.string.ecg_note_pauses
+        EcgNote.NOISY_RHYTHM -> R.string.ecg_note_noisy_rhythm
     }
 
     fun reason(r: EcgPoorReason): Int = when (r) {

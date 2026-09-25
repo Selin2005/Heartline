@@ -325,6 +325,10 @@
     <string name="ecg_detail_rr">Average RR interval</string>
     <string name="ecg_detail_sdnn">HRV (SDNN)</string>
     <string name="ecg_detail_rmssd">HRV (RMSSD)</string>
+    <string name="ecg_detail_note">Finding</string>
+    <string name="ecg_detail_extra_beats">Extra beats</string>
+    <string name="ecg_detail_pauses">Pauses over 2 s</string>
+    <string name="ecg_detail_segments">Contact segments</string>
     <string name="ecg_detail_quality">Signal quality</string>
     <string name="ecg_detail_why">Why it\'s poor</string>
     <string name="ecg_detail_sampling">Sampling rate</string>
@@ -336,6 +340,14 @@
     <string name="value_hz">%1$d Hz</string>
     <string name="value_bpm_range">%1$d–%2$d bpm</string>
     <string name="ecg_noise_legend">Shaded seconds were too noisy and weren\'t used.</string>
+    <string name="ecg_note_extra_beats">Some extra (early) beats were seen.</string>
+    <string name="ecg_note_frequent_extra_beats">Frequent extra beats: the rhythm can\'t be classified.</string>
+    <string name="ecg_note_irregular_pattern">Irregular, but not in the way typical of AFib.</string>
+    <string name="ecg_note_no_p_wave">Regular, but no clear P wave was found.</string>
+    <string name="ecg_note_rate_above_150">Heart rate above 150: the rhythm isn\'t classified.</string>
+    <string name="ecg_note_fast_regular">Regular rhythm between 100 and 120 bpm.</string>
+    <string name="ecg_note_pauses">A pause of more than 2 seconds was seen.</string>
+    <string name="ecg_note_noisy_rhythm">Irregular, but too noisy to call AFib. Try again.</string>
     <string name="ecg_poor_motion">Too much movement. Rest your arm on a table and keep still.</string>
     <string name="ecg_poor_muscle">Muscle noise. Relax your arm and touch the key lightly instead of pressing.</string>
     <string name="ecg_poor_low">The signal was too weak. Wear the watch snugly above the wrist bone and keep your fingertip on the key.</string>

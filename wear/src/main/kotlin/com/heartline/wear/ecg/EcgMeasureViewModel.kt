@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.heartline.shared.dsp.StreamingEcgFilter
 import com.heartline.shared.ecg.EcgAnalyzer
 import com.heartline.shared.bp.PulseArrival
+import com.heartline.shared.ecg.ContactPhase
 import com.heartline.shared.ecg.EcgRecorder
 import com.heartline.shared.ecg.EcgSession
 import com.heartline.shared.ecg.RPeakDetector
@@ -44,6 +45,12 @@ sealed interface EcgMeasureState {
         val leadOff: Boolean,
         val waitingForTouch: Boolean = false,
         val bpm: Int? = null,
+        /** Contact reported; the signal is settling and being checked before the countdown starts. */
+        val arming: Boolean = false,
+        /** Contact reported for a while but the signal still isn't a clean ECG: ask for a lighter, steadier touch. */
+        val struggling: Boolean = false,
+        /** Counting has started at least once (for the start haptic). */
+        val started: Boolean = false,
         /** Total live samples so far: positions the sweep's write head. */
         val endIndex: Long = trace.size.toLong(),
     ) : EcgMeasureState
@@ -81,7 +88,6 @@ class EcgMeasureViewModel(
         var lastUi = 0L
         var lastBpmAt = 0L
         var bpm: Int? = null
-        var touched = false
         val paired = PairedPpg(fs * recorder.targetSeconds)
         mutable.value = EcgMeasureState.Measuring(0f, recorder.secondsLeft, FloatArray(0), leadOff = true, waitingForTouch = true)
         job = viewModelScope.launch {
@@ -90,17 +96,17 @@ class EcgMeasureViewModel(
                 .catch { e -> failure = (e as? SensorException)?.problem ?: SensorProblem.NOT_SUPPORTED }
                 .takeWhile { !recorder.isComplete && !recorder.isAbandoned }
                 .collect { chunk ->
-                    recorder.accept(chunk.samples, chunk.leadOff)
-                    if (!chunk.leadOff) paired.add(chunk.samples, chunk.ppg)
+                    recorder.accept(chunk.samples, chunk.leadOff, chunk.saturated)
+                    val counting = recorder.phase == ContactPhase.RECORDING
+                    if (counting) paired.add(chunk.samples, chunk.ppg)
                     live.add(chunk.samples, chunk.leadOff)
                     rate.add(chunk.samples.size, chunk.leadOff, chunk.timestampMs)
-                    if (!chunk.leadOff) touched = true
                     val t = now()
-                    if (!chunk.leadOff && t - lastBpmAt >= 1_000 && recorder.progress * recorder.targetSeconds >= 4) {
+                    if (counting && t - lastBpmAt >= 1_000 && recorder.progress * recorder.targetSeconds >= 4) {
                         lastBpmAt = t
                         bpm = liveBpm(live.recent(6.0), fs)
                     }
-                    if (chunk.leadOff) bpm = null
+                    if (!counting) bpm = null
                     if (t - lastUi >= uiIntervalMs || recorder.isComplete) {
                         lastUi = t
                         mutable.value = EcgMeasureState.Measuring(
@@ -108,9 +114,12 @@ class EcgMeasureViewModel(
                             recorder.secondsLeft,
                             live.recent(3.0),
                             recorder.leadOff,
-                            waitingForTouch = !touched,
+                            waitingForTouch = recorder.phase == ContactPhase.WAITING,
                             bpm = bpm,
                             endIndex = live.total,
+                            arming = recorder.phase == ContactPhase.ARMING,
+                            struggling = recorder.isStruggling,
+                            started = recorder.segmentStarts.isNotEmpty(),
                         )
                     }
                 }
@@ -142,6 +151,7 @@ class EcgMeasureViewModel(
             leadOffSec = recorder.leadOffSeconds,
             leadOffRatio = recorder.leadOffRatio,
             measuredRateHz = measuredHz,
+            segmentStarts = recorder.segmentStarts,
         )
         val analysis = withContext(Dispatchers.Default) { EcgAnalyzer.analyze(recording, recorder.sampleRateHz, session) }
         val pat = paired?.takeIf { it.usable }?.let { p -> withContext(Dispatchers.Default) { PulseArrival.compute(p.ecg(), p.ppg(), recorder.sampleRateHz) } }

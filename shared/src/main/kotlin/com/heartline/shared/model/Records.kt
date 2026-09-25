@@ -71,6 +71,39 @@ data class RecordMeta(
     val summary: RecordSummary
 )
 
+/**
+ * What else the recording shows, or why a usable one stayed inconclusive (algorithm 3). Wellness
+ * wording only: these are observations, not diagnoses.
+ */
+@Serializable
+enum class EcgNote {
+    NONE,
+
+    /** Some early (ectopic) beats in an otherwise regular rhythm. */
+    EXTRA_BEATS,
+
+    /** Many early beats (≥ 10 % or a repeating pattern): rhythm can't be judged reliably. */
+    FREQUENT_EXTRA_BEATS,
+
+    /** Irregular, but in a patterned way that isn't typical of AFib. */
+    IRREGULAR_PATTERN,
+
+    /** Regular, but no clear P wave was found. */
+    NO_CLEAR_P_WAVE,
+
+    /** Heart rate above 150 bpm: rhythm isn't classified. */
+    RATE_ABOVE_150,
+
+    /** Heart rate 100–120 with a regular rhythm. */
+    FAST_REGULAR,
+
+    /** One or more pauses longer than 2 s. */
+    PAUSES,
+
+    /** Looked irregular, but the recording was too noisy to call AFib. */
+    NOISY_RHYTHM
+}
+
 /** Why a recording couldn't be classified (NONE for a usable one). */
 @Serializable
 enum class EcgPoorReason { NONE, TOO_SHORT, LEAD_OFF, MOTION, MUSCLE_NOISE, LOW_AMPLITUDE, TOO_FEW_BEATS }
@@ -108,7 +141,14 @@ data class EcgMetrics(
      * usable PPG channel alongside the ECG. Collected to validate PAT for blood pressure.
      */
     val pulseArrivalMs: Double? = null,
-    val pulseArrivalBeats: Int? = null
+    val pulseArrivalBeats: Int? = null,
+    /** Algorithm 3 findings: early beats (and how many had a different, wider shape), pauses, splices. */
+    val ectopicBeats: Int = 0,
+    val ventricularLikeBeats: Int = 0,
+    val pauses: Int = 0,
+    val longestPauseMs: Int? = null,
+    val segments: Int = 1,
+    val note: EcgNote = EcgNote.NONE
 ) {
     val usablePercent: Int get() = if (durationSec <= 0f) 0 else (usableSec / durationSec * 100f).toInt()
 }

@@ -72,9 +72,13 @@ fun EcgFlow(
         view.keepScreenOn = measuring != null
         onDispose { view.keepScreenOn = false }
     }
-    // Buzz when contact is lost mid-recording, not while waiting for the first touch.
+    // Buzz when contact is lost mid-recording (not while waiting for or confirming the first touch).
     LaunchedEffect(measuring?.leadOff) {
-        if (measuring?.leadOff == true && !measuring.waitingForTouch) if (buzz) haptics.performHapticFeedback(HapticFeedbackType.Reject)
+        if (measuring?.leadOff == true && measuring.started && !measuring.arming) if (buzz) haptics.performHapticFeedback(HapticFeedbackType.Reject)
+    }
+    // One short buzz when the countdown really starts: the touch was confirmed as an ECG.
+    LaunchedEffect(measuring?.started) {
+        if (measuring?.started == true) if (buzz) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
     }
     LaunchedEffect(state is EcgMeasureState.Done) { if (state is EcgMeasureState.Done) if (buzz) haptics.performHapticFeedback(HapticFeedbackType.Confirm) }
 
@@ -94,6 +98,8 @@ fun EcgFlow(
             endIndex = s.endIndex,
             waitingForTouch = s.waitingForTouch,
             showWave = prefs.liveWave,
+            arming = s.arming,
+            struggling = s.struggling,
         )
         EcgMeasureState.Analyzing -> EcgAnalyzingScreen()
         is EcgMeasureState.Done -> EcgResultScreen(s.result, s.averageBpm, s.metrics, onDone = {
