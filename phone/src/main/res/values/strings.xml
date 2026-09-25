@@ -560,4 +560,25 @@
     <string name="widget_short_temp">Temp</string>
     <string name="widget_short_body">Body</string>
     <string name="widget_short_stress">Stress</string>
+    <string name="widget_ecg_short_sinus">Sinus</string>
+    <string name="widget_ecg_short_afib">AFib</string>
+    <string name="widget_ecg_short_high">High HR</string>
+    <string name="widget_ecg_short_low">Low HR</string>
+    <string name="widget_ecg_short_inconclusive">Unclear</string>
+    <string name="widget_ecg_short_poor">Poor</string>
+    <string name="widget_weight">Weight %1$.1f kg</string>
+    <string name="widget_measure_metric">Measure %1$s</string>
+    <string name="widget_dashboard_named">%1$s\'s heart</string>
+    <string name="widget_name_metric_tile">Health tile</string>
+    <string name="widget_desc_metric_tile">One reading of your choice with its trend</string>
+    <string name="widget_name_metric_tile_small">Health tile (small)</string>
+    <string name="widget_desc_metric_tile_small">One reading of your choice in a single cell</string>
+    <string name="widget_name_metric_tile_slim">Health tile (slim)</string>
+    <string name="widget_desc_metric_tile_slim">One reading of your choice in one row</string>
+    <string name="widget_name_measure">Measure button</string>
+    <string name="widget_desc_measure">One tap starts a measurement of your choice on your watch</string>
+    <string name="widget_theme_wallpaper">Wallpaper colours</string>
+    <string name="widget_style_metric">Show</string>
+    <string name="widget_style_measure_metric">Measure</string>
+    <string name="widget_style_preview">Preview</string>
 </resources>

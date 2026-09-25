@@ -153,5 +153,49 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_heart_day_info" />
         </receiver>
+        <receiver
+            android:name=".widget.MetricTileSmallReceiver"
+            android:exported="true"
+            android:label="@string/widget_name_metric_tile_small">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_metric_tile_small_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.MetricTileSlimReceiver"
+            android:exported="true"
+            android:label="@string/widget_name_metric_tile_slim">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_metric_tile_slim_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.MetricTileReceiver"
+            android:exported="true"
+            android:label="@string/widget_name_metric_tile">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_metric_tile_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.MeasureButtonReceiver"
+            android:exported="true"
+            android:label="@string/widget_name_measure">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_measure_info" />
+        </receiver>
     </application>
 </manifest>

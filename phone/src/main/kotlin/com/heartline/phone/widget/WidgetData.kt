@@ -13,6 +13,8 @@ import com.heartline.shared.bp.BpCategory
 import com.heartline.shared.hr.HrBuckets
 import com.heartline.shared.hr.RangeBucket
 import com.heartline.shared.model.EcgResult
+import com.heartline.shared.model.Metric
+import com.heartline.shared.model.Severity
 import com.heartline.shared.model.RecordKind
 import com.heartline.shared.model.RecordSummary
 import com.heartline.shared.profile.StressIndex
@@ -31,6 +33,14 @@ data class WidgetSnapshot(
     val temperature: Reading? = null,
     val body: Reading? = null,
     val stress: Stress? = null,
+    /** Up to the last seven readings of each metric, oldest first, for the small trend lines. */
+    val history: Map<Metric, List<Float>> = emptyMap(),
+    /** Severity of up to the last seven ECGs, oldest first. */
+    val ecgRecent: List<Severity> = emptyList(),
+    /** Latest body-composition weight, when it was recorded with one. */
+    val weightKg: Float? = null,
+    /** The name the user is greeted with (empty when they chose not to show it on widgets). */
+    val name: String? = null,
 ) {
     /** [day]: today's 30-minute min–max buckets (index 0..47). */
     data class HeartRate(
@@ -106,6 +116,17 @@ object WidgetSnapshots {
             val s = r.summary as RecordSummary.Stress
             WidgetSnapshot.Stress(s.score, StressIndex.level(s.score), s.rmssdMs?.toInt(), at(r.entity.startedAtMs))
         }
+        fun trend(kind: RecordKind, value: (RecordSummary) -> Float?) =
+            records[kind].orEmpty().take(HISTORY).mapNotNull { value(it.summary) }.reversed()
+        val history = mapOf(
+            Metric.BLOOD_PRESSURE to trend(RecordKind.BLOOD_PRESSURE) { (it as? RecordSummary.BloodPressure)?.systolic?.toFloat() },
+            Metric.SPO2 to trend(RecordKind.SPO2) { (it as? RecordSummary.Spo2)?.percent?.toFloat() },
+            Metric.SKIN_TEMPERATURE to trend(RecordKind.SKIN_TEMPERATURE) { (it as? RecordSummary.SkinTemperature)?.skinCelsius },
+            Metric.BODY_COMPOSITION to trend(RecordKind.BODY_COMPOSITION) { (it as? RecordSummary.BodyComposition)?.bodyFatPercent },
+            Metric.STRESS to trend(RecordKind.STRESS) { (it as? RecordSummary.Stress)?.score?.toFloat() },
+            Metric.ECG to trend(RecordKind.ECG) { (it as? RecordSummary.Ecg)?.averageBpm?.toFloat() },
+            Metric.HEART_RATE to heartRate?.day.orEmpty().takeLast(HISTORY).map { it.avg.toFloat() },
+        ).filterValues { it.isNotEmpty() }
         return WidgetSnapshot(
             heartRate = heartRate,
             ecg = ecg,
@@ -119,8 +140,13 @@ object WidgetSnapshots {
             temperature = reading(RecordKind.SKIN_TEMPERATURE),
             body = reading(RecordKind.BODY_COMPOSITION),
             stress = stress,
+            history = history,
+            ecgRecent = records[RecordKind.ECG].orEmpty().take(HISTORY).mapNotNull { (it.summary as? RecordSummary.Ecg)?.result?.severity }.reversed(),
+            weightKg = (records[RecordKind.BODY_COMPOSITION].orEmpty().firstOrNull()?.summary as? RecordSummary.BodyComposition)?.weightKg,
         )
     }
+
+    const val HISTORY = 7
 }
 
 /** Reads the repositories for [WidgetSnapshots.build]. */

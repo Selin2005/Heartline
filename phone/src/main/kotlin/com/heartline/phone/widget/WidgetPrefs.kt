@@ -5,12 +5,17 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.heartline.shared.model.Metric
 import kotlinx.coroutines.flow.first
 
-enum class WidgetTheme { SYSTEM, LIGHT, DARK }
+/** WALLPAPER: One UI / Material You colours taken from the wallpaper (Android 12+), light or dark with the phone. */
+enum class WidgetTheme { SYSTEM, LIGHT, DARK, WALLPAPER }
 
-/** Per-widget style chosen on the configure screen (One UI widgets offer the same two settings). */
-data class WidgetStyle(val opacity: Int = 100, val theme: WidgetTheme = WidgetTheme.SYSTEM)
+/**
+ * Per-widget style chosen on the configure screen (One UI widgets offer the same settings).
+ * [metric]: what a single-metric tile shows or measures (null: the widget's default).
+ */
+data class WidgetStyle(val opacity: Int = 100, val theme: WidgetTheme = WidgetTheme.SYSTEM, val metric: Metric? = null)
 
 private val Context.widgetStore by preferencesDataStore("widgets")
 
@@ -19,11 +24,14 @@ object WidgetPrefs {
 
     private fun themeKey(id: Int) = stringPreferencesKey("theme_$id")
 
+    private fun metricKey(id: Int) = stringPreferencesKey("metric_$id")
+
     suspend fun load(context: Context, appWidgetId: Int): WidgetStyle {
         val prefs = context.widgetStore.data.first()
         return WidgetStyle(
             opacity = prefs[opacityKey(appWidgetId)] ?: 100,
             theme = WidgetTheme.entries.firstOrNull { it.name == prefs[themeKey(appWidgetId)] } ?: WidgetTheme.SYSTEM,
+            metric = Metric.entries.firstOrNull { it.name == prefs[metricKey(appWidgetId)] },
         )
     }
 
@@ -31,6 +39,7 @@ object WidgetPrefs {
         context.widgetStore.edit {
             it[opacityKey(appWidgetId)] = style.opacity.coerceIn(0, 100)
             it[themeKey(appWidgetId)] = style.theme.name
+            style.metric?.let { m -> it[metricKey(appWidgetId)] = m.name }
         }
     }
 
@@ -39,6 +48,7 @@ object WidgetPrefs {
             appWidgetIds.forEach {
                 prefs.remove(opacityKey(it))
                 prefs.remove(themeKey(it))
+                prefs.remove(metricKey(it))
             }
         }
     }

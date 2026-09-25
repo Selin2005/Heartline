@@ -61,6 +61,8 @@ class WidgetUpdater(
             StressWidget().updateAll(context)
             QuickMeasureWidget().updateAll(context)
             HeartDayWidget().updateAll(context)
+            MetricTileWidget().updateAll(context)
+            MeasureButtonWidget().updateAll(context)
         }.onFailure { Log.w(HeartlineWidget.TAG, "widget update failed", it) }
     }
 
@@ -82,6 +84,10 @@ class WidgetUpdater(
             StressWidgetReceiver::class,
             QuickMeasureWidgetReceiver::class,
             HeartDayWidgetReceiver::class,
+            MetricTileSmallReceiver::class,
+            MetricTileSlimReceiver::class,
+            MetricTileReceiver::class,
+            MeasureButtonReceiver::class,
         )
     }
 }

@@ -6,15 +6,12 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceModifier
-import androidx.glance.Image
-import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
-import androidx.glance.background
+import androidx.glance.action.clickable
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
-import androidx.glance.layout.ContentScale
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxHeight
@@ -24,18 +21,18 @@ import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
+import androidx.glance.semantics.contentDescription
+import androidx.glance.semantics.semantics
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
+import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import com.heartline.phone.R
 import com.heartline.phone.link.PhoneRoutes
 import com.heartline.phone.link.WatchRoutes
 import com.heartline.phone.ui.bp.label
 import com.heartline.phone.ui.components.label
-import com.heartline.shared.bp.BpCategory
 import com.heartline.shared.model.Metric
-import com.heartline.shared.model.Severity
-import com.heartline.shared.profile.StressLevel
 
 /** Phone routes the widgets open (handled by HeartlineApp's deep-link mapping). */
 object WidgetRoutes {
@@ -59,87 +56,258 @@ object WidgetRoutes {
     }
 }
 
-private val SMALL = DpSize(110.dp, 110.dp)
-private val WIDE = DpSize(250.dp, 110.dp)
-private val TALL = DpSize(250.dp, 250.dp)
-
-private fun Context.bitmapPx(dp: Float) = (dp * resources.displayMetrics.density).toInt()
-
-private fun BpCategory.severity() = when (this) {
-    BpCategory.NORMAL -> Severity.NORMAL
-    BpCategory.ELEVATED, BpCategory.HIGH_STAGE_1 -> Severity.WARN
-    BpCategory.HIGH_STAGE_2, BpCategory.CRISIS -> Severity.ALERT
+/** Launcher cell sizes (One UI phones): 1×1, 2×1, 2×2, 4×1, 4×2, 4×4. */
+internal object Cells {
+    val ONE = DpSize(50.dp, 50.dp)
+    val TWO_BY_ONE = DpSize(110.dp, 50.dp)
+    val SMALL = DpSize(110.dp, 110.dp)
+    val FOUR_BY_ONE = DpSize(250.dp, 50.dp)
+    val WIDE = DpSize(250.dp, 110.dp)
+    val TALL = DpSize(250.dp, 250.dp)
 }
 
-/** Short names for the round buttons, where full names don't fit. */
-private val Metric.shortLabel: Int
-    get() = when (this) {
-        Metric.ECG -> R.string.widget_short_ecg
-        Metric.BLOOD_PRESSURE -> R.string.widget_short_bp
-        Metric.HEART_RATE -> R.string.widget_short_hr
-        Metric.SPO2 -> R.string.widget_short_spo2
-        Metric.SKIN_TEMPERATURE -> R.string.widget_short_temp
-        Metric.BODY_COMPOSITION -> R.string.widget_short_body
-        Metric.STRESS -> R.string.widget_short_stress
+private fun Context.px(dp: Float) = (dp * resources.displayMetrics.density).toInt()
+
+private val Context.density get() = resources.displayMetrics.density
+
+/** Measures [metric] on the watch; without a watch, opens it in the app. */
+private fun measure(metric: Metric) = measureOnWatch(WidgetRoutes.watch(metric), WidgetRoutes.metric(metric))
+
+/** The metric's small picture for a tile: its own chart where it has one, else the last readings' trend. */
+@Composable
+private fun MetricVisual(model: WidgetModel, metric: Metric, widthDp: Float, heightDp: Float) {
+    val context = LocalContext.current
+    val s = model.snapshot
+    val colors = model.colors
+    val modifier = GlanceModifier.size(widthDp.dp, heightDp.dp)
+    when {
+        // Range bars need some height to read; a small tile shows the trend line instead.
+        metric == Metric.HEART_RATE && s.heartRate != null && heightDp >= 40f -> Chart(
+            WidgetCharts.rangeBars(s.heartRate.recent(model.nowSlot), 12, context.px(widthDp), context.px(heightDp), context.density, axisLabels = false),
+            metric,
+            colors,
+            modifier,
+            context.getString(R.string.widget_hr_recent),
+        )
+        metric == Metric.ECG && s.ecgRecent.isNotEmpty() -> Box(modifier, contentAlignment = Alignment.CenterStart) { ResultDots(s.ecgRecent, colors) }
+        metric == Metric.BLOOD_PRESSURE && s.bp != null -> Chart(
+            WidgetCharts.bandBar(BpBar.bands, BpBar.position(s.bp.systolic, s.bp.diastolic), context.px(widthDp), context.px(heightDp.coerceAtMost(18f)), context.density),
+            metric,
+            colors,
+            GlanceModifier.size(widthDp.dp, heightDp.coerceAtMost(18f).dp),
+        )
+        (s.history[metric]?.size ?: 0) >= 2 -> Chart(
+            WidgetCharts.sparkline(s.history.getValue(metric), context.px(widthDp), context.px(heightDp), context.density),
+            metric,
+            colors,
+            modifier,
+        )
+        else -> Spacer(modifier)
+    }
+}
+
+/**
+ * One metric as a Samsung Health–style tile, at any size from 1×1 to 4×2: the value large, its
+ * status, and a small chart. The metric is chosen when the widget is added.
+ */
+class MetricTileWidget : HeartlineWidget() {
+    override val sizes = setOf(Cells.ONE, Cells.TWO_BY_ONE, Cells.SMALL, Cells.FOUR_BY_ONE, Cells.WIDE)
+
+    @Composable
+    override fun Content(model: WidgetModel) {
+        val context = LocalContext.current
+        val metric = model.style.metric ?: Metric.HEART_RATE
+        val info = WidgetMetrics.info(context, model.snapshot, metric)
+        val size = LocalSize.current
+        when {
+            size.height < Cells.SMALL.height && size.width < Cells.TWO_BY_ONE.width -> TinyTile(model, info)
+            size.height < Cells.SMALL.height -> SlimTile(model, info, wide = size.width >= Cells.FOUR_BY_ONE.width)
+            size.width < Cells.WIDE.width -> SquareTile(model, info)
+            else -> WideTile(model, info)
+        }
     }
 
-private fun StressLevel.severity() = when (this) {
-    StressLevel.LOW -> Severity.NORMAL
-    StressLevel.MEDIUM -> Severity.WARN
-    StressLevel.HIGH -> Severity.ALERT
+    /** 1×1: the icon above a short value, like One UI's single-cell widgets. */
+    @Composable
+    private fun TinyTile(model: WidgetModel, info: MetricInfo) {
+        val context = LocalContext.current
+        val colors = model.colors
+        WidgetSurface(colors, openApp(context, WidgetRoutes.metric(info.metric)), padding = 4.dp, description = listOfNotNull(info.title, info.value, info.unit).joinToString(" ")) {
+            Column(GlanceModifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalAlignment = Alignment.CenterVertically) {
+                MetricIcon(info.metric, colors, if (info.hasData) 16.dp else 24.dp)
+                info.tinyValue?.let {
+                    Spacer(GlanceModifier.height(2.dp))
+                    Text(
+                        it,
+                        style = TextStyle(
+                            color = info.severity?.let(colors::severity) ?: colors.onBackground,
+                            fontSize = if (it.length > 5) 12.sp else 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                        ),
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
+
+    /** 2×1 and 4×1: badge, value and status in a row; 4×1 adds the trend. */
+    @Composable
+    private fun SlimTile(model: WidgetModel, info: MetricInfo, wide: Boolean) {
+        val context = LocalContext.current
+        val colors = model.colors
+        WidgetSurface(colors, openApp(context, WidgetRoutes.metric(info.metric)), padding = 8.dp) {
+            Row(GlanceModifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                MetricBadge(info.metric, colors, 32.dp)
+                Spacer(GlanceModifier.width(8.dp))
+                Column(GlanceModifier.defaultWeight()) {
+                    if (info.hasData) {
+                        ValueText(info.value!!, info.unit, colors, size = if (info.value.length > 7) 15.sp else 20.sp, color = info.severity?.takeIf { info.metric == Metric.ECG }?.let(colors::severity) ?: colors.onBackground)
+                        Caption(if (wide) listOfNotNull(info.title, info.at).joinToString(" · ") else info.shortTitle, colors)
+                    } else {
+                        Text(info.title, style = TextStyle(color = colors.onBackground, fontSize = 13.sp, fontWeight = FontWeight.Medium), maxLines = 1)
+                        Caption(context.getString(R.string.widget_none_yet), colors)
+                    }
+                }
+                if (wide && info.hasData) {
+                    Spacer(GlanceModifier.width(8.dp))
+                    MetricVisual(model, info.metric, 80f, 30f)
+                }
+            }
+        }
+    }
+
+    /** 2×2: header, big value, status and the metric's small chart. */
+    @Composable
+    private fun SquareTile(model: WidgetModel, info: MetricInfo) {
+        val context = LocalContext.current
+        val colors = model.colors
+        WidgetSurface(colors, openApp(context, WidgetRoutes.metric(info.metric))) {
+            Column(GlanceModifier.fillMaxSize()) {
+                MetricHeader(info.metric, info.title, colors)
+                Spacer(GlanceModifier.defaultWeight())
+                if (!info.hasData) {
+                    Caption(context.getString(R.string.widget_none_yet), colors, maxLines = 2, size = 12.sp)
+                    Spacer(GlanceModifier.height(8.dp))
+                    PillButton(context.getString(R.string.widget_measure), measure(info.metric), colors, background = colors.metric(info.metric))
+                } else {
+                    TileValue(info, colors)
+                    Spacer(GlanceModifier.height(6.dp))
+                    MetricVisual(model, info.metric, (LocalSize.current.width.value - 28f).coerceAtLeast(60f), 22f)
+                    Spacer(GlanceModifier.height(4.dp))
+                    info.at?.let { Caption(it, colors) }
+                }
+            }
+        }
+    }
+
+    /** 4×2: header with time, value and status on the left, a larger chart on the right. */
+    @Composable
+    private fun WideTile(model: WidgetModel, info: MetricInfo) {
+        val context = LocalContext.current
+        val colors = model.colors
+        WidgetSurface(colors, openApp(context, WidgetRoutes.metric(info.metric))) {
+            Column(GlanceModifier.fillMaxSize()) {
+                MetricHeader(info.metric, info.title, colors, trailing = info.at)
+                Spacer(GlanceModifier.defaultWeight())
+                if (!info.hasData) {
+                    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Caption(context.getString(R.string.widget_none_yet), colors, size = 12.sp)
+                        Spacer(GlanceModifier.defaultWeight())
+                        PillButton(context.getString(R.string.widget_measure), measure(info.metric), colors, GlanceModifier.width(110.dp), background = colors.metric(info.metric))
+                    }
+                } else {
+                    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                        Column(GlanceModifier.defaultWeight()) { TileValue(info, colors) }
+                        Spacer(GlanceModifier.width(10.dp))
+                        MetricVisual(model, info.metric, (LocalSize.current.width.value * 0.45f).coerceAtMost(160f), 48f)
+                    }
+                }
+            }
+        }
+    }
 }
 
-private fun StressLevel.label() = when (this) {
-    StressLevel.LOW -> R.string.widget_stress_low
-    StressLevel.MEDIUM -> R.string.widget_stress_medium
-    StressLevel.HIGH -> R.string.widget_stress_high
-}
-
+/** A tile's value line and its status below it. */
 @Composable
-private fun Dot(colors: WidgetColors, severity: Severity) {
-    Box(GlanceModifier.size(10.dp).shape(R.drawable.widget_shape_circle, colors.severity(severity))) {}
+private fun TileValue(info: MetricInfo, colors: WidgetColors) {
+    if (info.metric == Metric.ECG) {
+        Text(info.value!!, style = TextStyle(color = colors.onBackground, fontSize = 18.sp, fontWeight = FontWeight.Bold), maxLines = 2)
+    } else {
+        ValueText(info.value!!, info.unit, colors, size = if (info.value.length > 5) 26.sp else 32.sp)
+    }
+    info.status?.let { status ->
+        val severity = info.severity
+        if (severity != null) StatusLine(status, severity, colors) else Caption(status, colors, size = 12.sp)
+    }
 }
 
-/** Heart rate: current value, today's resting and range; wide adds the last six hours. */
+/**
+ * 1×1 (or 2×1) button that starts one measurement on the watch, like a Samsung app shortcut.
+ * The metric is chosen when the widget is added.
+ */
+class MeasureButtonWidget : HeartlineWidget() {
+    override val sizes = setOf(Cells.ONE, Cells.TWO_BY_ONE)
+
+    @Composable
+    override fun Content(model: WidgetModel) {
+        val context = LocalContext.current
+        val colors = model.colors
+        val metric = model.style.metric ?: Metric.ECG
+        val label = context.getString(R.string.widget_measure_metric, context.getString(metric.shortLabel))
+        val size = LocalSize.current
+        WidgetSurface(colors, measure(metric), padding = 4.dp, description = label) {
+            if (size.width < Cells.TWO_BY_ONE.width) {
+                Box(GlanceModifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    RoundMetricButton(metric, null, measure(metric), colors, size = 40.dp)
+                }
+            } else {
+                Row(GlanceModifier.fillMaxSize().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    RoundMetricButton(metric, null, measure(metric), colors, size = 36.dp)
+                    Spacer(GlanceModifier.width(8.dp))
+                    Column(GlanceModifier.defaultWeight()) {
+                        Text(context.getString(R.string.widget_measure), style = TextStyle(color = colors.onBackground, fontSize = 14.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+                        Caption(context.getString(metric.title), colors)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Heart rate: current value, today's resting and range, and the last six hours as bars. */
 class HeartRateWidget : HeartlineWidget() {
-    override val sizes = setOf(SMALL, WIDE)
+    override val sizes = setOf(Cells.SMALL, Cells.WIDE)
 
     @Composable
     override fun Content(model: WidgetModel) {
         val context = LocalContext.current
         val colors = model.colors
         val hr = model.snapshot.heartRate
+        val size = LocalSize.current
         WidgetSurface(colors, openApp(context, WidgetRoutes.HEART_RATE)) {
             Column(GlanceModifier.fillMaxSize()) {
-                MetricHeader(Metric.HEART_RATE, context.getString(R.string.metric_hr), colors)
+                MetricHeader(Metric.HEART_RATE, context.getString(R.string.metric_hr), colors, trailing = hr?.at?.takeIf { size.width >= Cells.WIDE.width })
                 Spacer(GlanceModifier.defaultWeight())
                 if (hr == null) {
-                    Caption(context.getString(R.string.widget_no_data), colors, maxLines = 2)
+                    Caption(context.getString(R.string.widget_no_data), colors, maxLines = 2, size = 12.sp)
                     Spacer(GlanceModifier.height(8.dp))
-                    PillButton(context.getString(R.string.widget_measure), measureOnWatch(WatchRoutes.HEART_RATE, WidgetRoutes.HEART_RATE), colors)
-                } else {
-                    Row(verticalAlignment = Alignment.Bottom, modifier = GlanceModifier.fillMaxWidth()) {
+                    PillButton(context.getString(R.string.widget_measure), measure(Metric.HEART_RATE), colors, background = colors.metric(Metric.HEART_RATE))
+                } else if (size.width >= Cells.WIDE.width) {
+                    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                         Column(GlanceModifier.defaultWeight()) {
                             ValueText("${hr.bpm}", context.getString(R.string.unit_bpm), colors, size = 34.sp)
-                            Caption(rangeCaption(context, hr), colors)
-                            Caption(hr.at, colors)
+                            Caption(rangeCaption(context, hr), colors, size = 12.sp)
                         }
-                        if (LocalSize.current.width >= WIDE.width) {
-                            Spacer(GlanceModifier.width(10.dp))
-                            val w = 120f
-                            val h = 56f
-                            val bitmap = WidgetCharts.rangeBars(
-                                hr.recent(model.nowSlot),
-                                12,
-                                context.bitmapPx(w),
-                                context.bitmapPx(h),
-                                WidgetColors.metricArgb(Metric.HEART_RATE).first.toInt(),
-                                context.resources.displayMetrics.density,
-                                axisLabels = false,
-                            )
-                            Image(ImageProvider(bitmap), context.getString(R.string.widget_hr_recent), GlanceModifier.size(w.dp, h.dp))
-                        }
+                        Spacer(GlanceModifier.width(10.dp))
+                        MetricVisual(model, Metric.HEART_RATE, 130f, 56f)
                     }
+                } else {
+                    ValueText("${hr.bpm}", context.getString(R.string.unit_bpm), colors, size = 32.sp)
+                    Caption(rangeCaption(context, hr), colors)
+                    Spacer(GlanceModifier.height(6.dp))
+                    MetricVisual(model, Metric.HEART_RATE, (size.width.value - 28f).coerceAtLeast(60f), 24f)
                 }
             }
         }
@@ -151,9 +319,9 @@ private fun rangeCaption(context: Context, hr: WidgetSnapshot.HeartRate): String
     if (hr.min != null && hr.max != null) "${hr.min}–${hr.max}" else null,
 ).joinToString(" · ")
 
-/** ECG: last result with its colour, and a button that starts an ECG on the watch. */
+/** ECG: last result with its colour, the last few results, and a button that records on the watch. */
 class EcgWidget : HeartlineWidget() {
-    override val sizes = setOf(SMALL)
+    override val sizes = setOf(Cells.SMALL)
 
     @Composable
     override fun Content(model: WidgetModel) {
@@ -165,29 +333,26 @@ class EcgWidget : HeartlineWidget() {
                 MetricHeader(Metric.ECG, context.getString(R.string.metric_ecg), colors)
                 Spacer(GlanceModifier.defaultWeight())
                 if (ecg == null) {
-                    Caption(context.getString(R.string.widget_no_ecg), colors, maxLines = 2)
+                    Caption(context.getString(R.string.widget_no_ecg), colors, maxLines = 2, size = 12.sp)
                 } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Dot(colors, ecg.result.severity)
+                    Text(context.getString(ecg.result.label), style = TextStyle(color = colors.onBackground, fontSize = 18.sp, fontWeight = FontWeight.Bold), maxLines = 2)
+                    Spacer(GlanceModifier.height(4.dp))
+                    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        ResultDots(model.snapshot.ecgRecent, colors, 7.dp)
                         Spacer(GlanceModifier.width(6.dp))
-                        Text(
-                            context.getString(ecg.result.label),
-                            style = TextStyle(color = colors.onBackground, fontSize = 17.sp, fontWeight = FontWeight.Bold),
-                            maxLines = 2,
-                        )
+                        Caption(ecg.at, colors)
                     }
-                    Caption(listOfNotNull(ecg.at, ecg.bpm?.let { context.getString(R.string.widget_bpm_value, it) }).joinToString(" · "), colors)
                 }
                 Spacer(GlanceModifier.height(8.dp))
-                PillButton(context.getString(R.string.widget_record_ecg), measureOnWatch(WatchRoutes.ECG, WidgetRoutes.ECG), colors, background = colors.metric(Metric.ECG))
+                PillButton(context.getString(R.string.widget_record_ecg), measure(Metric.ECG), colors, background = colors.metric(Metric.ECG))
             }
         }
     }
 }
 
-/** Blood pressure: last reading and category, calibration state, and the right next step. */
+/** Blood pressure: last reading on the category bar, calibration state, and the right next step. */
 class BpWidget : HeartlineWidget() {
-    override val sizes = setOf(SMALL)
+    override val sizes = setOf(Cells.SMALL)
 
     @Composable
     override fun Content(model: WidgetModel) {
@@ -201,23 +366,16 @@ class BpWidget : HeartlineWidget() {
                 Spacer(GlanceModifier.defaultWeight())
                 if (bp != null) {
                     ValueText("${bp.systolic}/${bp.diastolic}", context.getString(R.string.unit_mmhg), colors, size = 26.sp)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Dot(colors, bp.category.severity())
-                        Spacer(GlanceModifier.width(5.dp))
-                        Caption(context.getString(bp.category.label), colors)
-                    }
+                    StatusLine(context.getString(bp.category.label), bp.category.severity(), colors)
+                    Spacer(GlanceModifier.height(4.dp))
+                    MetricVisual(model, Metric.BLOOD_PRESSURE, (LocalSize.current.width.value - 28f).coerceAtLeast(60f), 14f)
                 } else {
-                    Caption(context.getString(R.string.widget_no_bp), colors, maxLines = 2)
+                    Caption(context.getString(R.string.widget_no_bp), colors, maxLines = 2, size = 12.sp)
+                    Caption(calibrationText(context, calibration), colors)
                 }
-                Caption(calibrationText(context, calibration), colors)
                 Spacer(GlanceModifier.height(8.dp))
                 if (calibration is WidgetSnapshot.Calibration.Valid) {
-                    PillButton(
-                        context.getString(R.string.widget_measure),
-                        measureOnWatch(WatchRoutes.BLOOD_PRESSURE, WidgetRoutes.BLOOD_PRESSURE),
-                        colors,
-                        background = colors.metric(Metric.BLOOD_PRESSURE),
-                    )
+                    PillButton(context.getString(R.string.widget_measure), measure(Metric.BLOOD_PRESSURE), colors, background = colors.metric(Metric.BLOOD_PRESSURE))
                 } else {
                     PillButton(context.getString(R.string.widget_calibrate), openApp(context, WidgetRoutes.BP_CALIBRATION), colors, background = colors.metric(Metric.BLOOD_PRESSURE))
                 }
@@ -226,15 +384,9 @@ class BpWidget : HeartlineWidget() {
     }
 }
 
-private fun calibrationText(context: Context, calibration: WidgetSnapshot.Calibration) = when (calibration) {
-    is WidgetSnapshot.Calibration.Valid -> context.getString(R.string.widget_calibration_days, calibration.daysLeft)
-    WidgetSnapshot.Calibration.Expired -> context.getString(R.string.widget_calibration_expired)
-    WidgetSnapshot.Calibration.None -> context.getString(R.string.widget_calibration_needed)
-}
-
 /** Stress: three-colour gauge with the score, level and HRV. */
 class StressWidget : HeartlineWidget() {
-    override val sizes = setOf(SMALL)
+    override val sizes = setOf(Cells.SMALL)
 
     @Composable
     override fun Content(model: WidgetModel) {
@@ -248,30 +400,17 @@ class StressWidget : HeartlineWidget() {
                 val w = 120f
                 val h = 64f
                 Box(GlanceModifier.size(w.dp, h.dp), contentAlignment = Alignment.BottomCenter) {
-                    Image(
-                        ImageProvider(WidgetCharts.gauge(stress?.score, context.bitmapPx(w), context.bitmapPx(h), context.resources.displayMetrics.density)),
-                        contentDescription = null,
-                        modifier = GlanceModifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit,
-                    )
-                    Text(
-                        stress?.score?.toString() ?: "–",
-                        style = TextStyle(color = colors.onBackground, fontSize = 24.sp, fontWeight = FontWeight.Bold),
-                    )
+                    Chart(WidgetCharts.gauge(stress?.score, context.px(w), context.px(h), context.density), Metric.STRESS, colors, GlanceModifier.fillMaxSize())
+                    Text(stress?.score?.toString() ?: "–", style = TextStyle(color = colors.onBackground, fontSize = 24.sp, fontWeight = FontWeight.Bold))
                 }
                 Spacer(GlanceModifier.height(4.dp))
                 if (stress == null) {
-                    PillButton(
-                        context.getString(R.string.widget_measure),
-                        measureOnWatch(WidgetRoutes.watch(Metric.STRESS), WidgetRoutes.metric(Metric.STRESS)),
-                        colors,
-                        background = colors.metric(Metric.STRESS),
-                    )
+                    PillButton(context.getString(R.string.widget_measure), measure(Metric.STRESS), colors, background = colors.metric(Metric.STRESS))
                 } else {
-                    Caption(
+                    StatusLine(
                         listOfNotNull(context.getString(stress.level.label()), stress.hrvMs?.let { context.getString(R.string.widget_hrv, it) }).joinToString(" · "),
+                        stress.level.severity(),
                         colors,
-                        color = colors.severity(stress.level.severity()),
                     )
                     Caption(stress.at, colors)
                 }
@@ -280,9 +419,9 @@ class StressWidget : HeartlineWidget() {
     }
 }
 
-/** A row of round buttons, each opening that measurement straight on the watch. */
+/** Measurement shortcuts on the watch: round buttons when narrow, labelled chips when there is room. */
 class QuickMeasureWidget : HeartlineWidget() {
-    override val sizes = setOf(DpSize(110.dp, 50.dp), DpSize(250.dp, 50.dp), WIDE)
+    override val sizes = setOf(Cells.TWO_BY_ONE, Cells.FOUR_BY_ONE, Cells.WIDE)
 
     private val all = listOf(Metric.ECG, Metric.BLOOD_PRESSURE, Metric.SPO2, Metric.STRESS, Metric.SKIN_TEMPERATURE, Metric.BODY_COMPOSITION)
 
@@ -291,27 +430,30 @@ class QuickMeasureWidget : HeartlineWidget() {
         val context = LocalContext.current
         val colors = model.colors
         val size = LocalSize.current
-        val metrics = if (size.width < 250.dp) all.take(3) else all
-        val labelled = size.height >= 110.dp
         WidgetSurface(colors, onClick = null, padding = 8.dp, description = context.getString(R.string.widget_quick_title)) {
-            Column(GlanceModifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                if (labelled) {
+            when {
+                // 4×2: a title and two rows of labelled chips.
+                size.height >= Cells.WIDE.height -> Column(GlanceModifier.fillMaxSize()) {
                     Text(
                         context.getString(R.string.widget_quick_title),
                         style = TextStyle(color = colors.onBackground, fontSize = 13.sp, fontWeight = FontWeight.Medium),
-                        modifier = GlanceModifier.padding(start = 6.dp, bottom = 8.dp),
+                        modifier = GlanceModifier.padding(start = 6.dp, top = 2.dp, bottom = 6.dp),
                     )
+                    all.chunked(3).forEachIndexed { i, row ->
+                        if (i > 0) Spacer(GlanceModifier.height(6.dp))
+                        Row(GlanceModifier.fillMaxWidth()) {
+                            row.forEachIndexed { j, metric ->
+                                if (j > 0) Spacer(GlanceModifier.width(6.dp))
+                                MetricChip(metric, context.getString(metric.shortLabel), measure(metric), colors, GlanceModifier.defaultWeight())
+                            }
+                        }
+                    }
                 }
-                Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                else -> Row(GlanceModifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                    val metrics = if (size.width < Cells.FOUR_BY_ONE.width) all.take(3) else all
                     metrics.forEach { metric ->
                         Box(GlanceModifier.defaultWeight(), contentAlignment = Alignment.Center) {
-                            RoundMetricButton(
-                                metric,
-                                context.getString(metric.shortLabel).takeIf { labelled },
-                                measureOnWatch(WidgetRoutes.watch(metric), WidgetRoutes.metric(metric)),
-                                colors,
-                                size = if (labelled) 44.dp else 38.dp,
-                            )
+                            RoundMetricButton(metric, null, measure(metric), colors, size = 38.dp, modifier = GlanceModifier.semantics { contentDescription = context.getString(metric.title) })
                         }
                     }
                 }
@@ -322,7 +464,7 @@ class QuickMeasureWidget : HeartlineWidget() {
 
 /** Today's heart-rate range chart with resting, min and max. */
 class HeartDayWidget : HeartlineWidget() {
-    override val sizes = setOf(WIDE, TALL)
+    override val sizes = setOf(Cells.WIDE, Cells.TALL)
 
     @Composable
     override fun Content(model: WidgetModel) {
@@ -341,22 +483,18 @@ class HeartDayWidget : HeartlineWidget() {
                 Spacer(GlanceModifier.height(6.dp))
                 if (hr == null) {
                     Spacer(GlanceModifier.defaultWeight())
-                    Caption(context.getString(R.string.widget_no_data), colors, maxLines = 2)
+                    Caption(context.getString(R.string.widget_no_data), colors, maxLines = 2, size = 12.sp)
                     Spacer(GlanceModifier.defaultWeight())
                 } else {
                     val chartW = (size.width.value - 28f).coerceAtLeast(80f)
-                    val chartH = (size.height.value - 28f - 22f - 30f - 14f).coerceAtLeast(40f)
-                    val bitmap = WidgetCharts.rangeBars(
-                        hr.day,
-                        48,
-                        context.bitmapPx(chartW),
-                        context.bitmapPx(chartH),
-                        WidgetColors.metricArgb(Metric.HEART_RATE).first.toInt(),
-                        context.resources.displayMetrics.density,
-                        resting = hr.resting,
-                        xLabels = listOf("00", "06", "12", "18", "24"),
+                    val chartH = (size.height.value - 28f - 22f - 34f - 14f).coerceAtLeast(40f)
+                    Chart(
+                        WidgetCharts.rangeBars(hr.day, 48, context.px(chartW), context.px(chartH), context.density, resting = hr.resting, xLabels = listOf("00", "06", "12", "18", "24")),
+                        Metric.HEART_RATE,
+                        colors,
+                        GlanceModifier.fillMaxWidth().defaultWeight(),
+                        context.getString(R.string.widget_hr_chart),
                     )
-                    Image(ImageProvider(bitmap), context.getString(R.string.widget_hr_chart), GlanceModifier.fillMaxWidth().defaultWeight(), contentScale = ContentScale.FillBounds)
                     Spacer(GlanceModifier.height(6.dp))
                     Row(GlanceModifier.fillMaxWidth()) {
                         Stat(context.getString(R.string.hr_resting), hr.resting, colors, GlanceModifier.defaultWeight())
@@ -373,91 +511,88 @@ class HeartDayWidget : HeartlineWidget() {
 private fun Stat(label: String, value: Int?, colors: WidgetColors, modifier: GlanceModifier) {
     Column(modifier) {
         Caption(label, colors)
-        Text(value?.toString() ?: "–", style = TextStyle(color = colors.onBackground, fontSize = 15.sp, fontWeight = FontWeight.Bold))
+        Text(value?.toString() ?: "–", style = TextStyle(color = colors.onBackground, fontSize = 16.sp, fontWeight = FontWeight.Bold))
     }
 }
 
-/** Dashboard: the app's Home at a glance; 4×2 shows four cards, 4×4 six cards plus measure-on-watch buttons. */
+/**
+ * Dashboard: the app's Home at a glance, as a grid of metric cells on one surface (no cards
+ * within the card). 4×4 adds a greeting and measure-on-watch buttons.
+ */
 class DashboardWidget : HeartlineWidget() {
-    override val sizes = setOf(DpSize(180.dp, 110.dp), WIDE, TALL)
+    override val sizes = setOf(DpSize(180.dp, 110.dp), Cells.WIDE, Cells.TALL)
+
+    private val order = listOf(Metric.HEART_RATE, Metric.ECG, Metric.BLOOD_PRESSURE, Metric.SPO2, Metric.STRESS, Metric.SKIN_TEMPERATURE)
 
     @Composable
     override fun Content(model: WidgetModel) {
         val context = LocalContext.current
         val colors = model.colors
         val size = LocalSize.current
-        val cards = cards(context, model.snapshot)
-        WidgetSurface(colors, onClick = null, padding = 10.dp, description = context.getString(R.string.widget_dashboard_title)) {
+        val infos = order.map { WidgetMetrics.info(context, model.snapshot, it) }
+        WidgetSurface(colors, onClick = null, padding = 12.dp, description = context.getString(R.string.widget_dashboard_title)) {
             when {
-                size.height >= TALL.height -> Column(GlanceModifier.fillMaxSize()) {
-                    cards.take(6).chunked(2).forEach { row ->
-                        CardRow(row, colors, GlanceModifier.fillMaxWidth().defaultWeight())
-                        Spacer(GlanceModifier.height(8.dp))
+                size.height >= Cells.TALL.height -> Column(GlanceModifier.fillMaxSize()) {
+                    Row(GlanceModifier.fillMaxWidth().clickable(openApp(context, "")), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            model.snapshot.name?.let { context.getString(R.string.widget_dashboard_named, it) } ?: context.getString(R.string.widget_dashboard_title),
+                            style = TextStyle(color = colors.onBackground, fontSize = 15.sp, fontWeight = FontWeight.Bold),
+                            maxLines = 1,
+                            modifier = GlanceModifier.defaultWeight(),
+                        )
                     }
+                    Spacer(GlanceModifier.height(8.dp))
+                    infos.chunked(2).forEach { row ->
+                        CellRow(row, colors, GlanceModifier.fillMaxWidth().defaultWeight())
+                    }
+                    Spacer(GlanceModifier.height(8.dp))
                     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         listOf(Metric.ECG, Metric.BLOOD_PRESSURE, Metric.SPO2, Metric.STRESS, Metric.BODY_COMPOSITION).forEach { metric ->
                             Box(GlanceModifier.defaultWeight(), contentAlignment = Alignment.Center) {
-                                RoundMetricButton(metric, null, measureOnWatch(WidgetRoutes.watch(metric), WidgetRoutes.metric(metric)), colors, size = 36.dp)
+                                RoundMetricButton(metric, null, measure(metric), colors, size = 36.dp, modifier = GlanceModifier.semantics { contentDescription = context.getString(metric.title) })
                             }
                         }
                     }
                 }
-                size.width >= WIDE.width -> Column(GlanceModifier.fillMaxSize()) {
-                    CardRow(cards.take(2), colors, GlanceModifier.fillMaxWidth().defaultWeight(), compact = true)
-                    Spacer(GlanceModifier.height(8.dp))
-                    CardRow(cards.drop(2).take(2), colors, GlanceModifier.fillMaxWidth().defaultWeight(), compact = true)
+                size.width >= Cells.WIDE.width -> Column(GlanceModifier.fillMaxSize()) {
+                    CellRow(infos.take(2), colors, GlanceModifier.fillMaxWidth().defaultWeight())
+                    CellRow(infos.drop(2).take(2), colors, GlanceModifier.fillMaxWidth().defaultWeight())
                 }
-                else -> CardRow(cards.take(2), colors, GlanceModifier.fillMaxSize(), compact = true, iconOnly = true)
+                else -> Column(GlanceModifier.fillMaxSize()) {
+                    CellRow(infos.take(1), colors, GlanceModifier.fillMaxWidth().defaultWeight())
+                    CellRow(infos.drop(2).take(1), colors, GlanceModifier.fillMaxWidth().defaultWeight())
+                }
             }
         }
     }
 
-    private data class CardData(val metric: Metric, val title: String, val value: String, val unit: String?, val caption: String, val severity: Severity? = null)
-
-    private fun cards(context: Context, s: WidgetSnapshot): List<CardData> {
-        val none = context.getString(R.string.widget_none_yet)
-        return listOf(
-            CardData(Metric.HEART_RATE, context.getString(R.string.metric_hr), s.heartRate?.bpm?.toString() ?: "–", context.getString(R.string.unit_bpm), s.heartRate?.at ?: none),
-            s.ecg?.let { CardData(Metric.ECG, context.getString(R.string.metric_ecg), context.getString(it.result.label), null, it.at, it.result.severity) }
-                ?: CardData(Metric.ECG, context.getString(R.string.metric_ecg), "–", null, none),
-            CardData(
-                Metric.BLOOD_PRESSURE,
-                context.getString(R.string.metric_bp),
-                s.bp?.let { "${it.systolic}/${it.diastolic}" } ?: "–",
-                context.getString(R.string.unit_mmhg),
-                s.bp?.at ?: calibrationText(context, s.calibration),
-            ),
-            CardData(Metric.SPO2, context.getString(R.string.metric_spo2), s.spo2?.value ?: "–", s.spo2?.unit, s.spo2?.at ?: none),
-            CardData(Metric.STRESS, context.getString(R.string.metric_stress), s.stress?.score?.toString() ?: "–", null, s.stress?.at ?: none),
-            CardData(Metric.SKIN_TEMPERATURE, context.getString(R.string.metric_skin_temp), s.temperature?.value ?: "–", s.temperature?.unit, s.temperature?.at ?: none),
-            CardData(Metric.BODY_COMPOSITION, context.getString(R.string.metric_body), s.body?.value ?: "–", s.body?.unit, s.body?.at ?: none),
-        )
+    @Composable
+    private fun CellRow(row: List<MetricInfo>, colors: WidgetColors, modifier: GlanceModifier) {
+        Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+            row.forEachIndexed { i, info ->
+                if (i > 0) Spacer(GlanceModifier.width(8.dp))
+                Cell(info, colors, GlanceModifier.defaultWeight().fillMaxHeight())
+            }
+        }
     }
 
+    /** Badge, then the value with the metric's name under it. */
     @Composable
-    private fun CardRow(row: List<CardData>, colors: WidgetColors, modifier: GlanceModifier, compact: Boolean = false, iconOnly: Boolean = false) {
+    private fun Cell(info: MetricInfo, colors: WidgetColors, modifier: GlanceModifier) {
         val context = LocalContext.current
-        Row(modifier) {
-            row.forEachIndexed { i, card ->
-                WidgetCard(colors, openApp(context, WidgetRoutes.metric(card.metric)), GlanceModifier.defaultWeight().fillMaxHeight()) {
-                    // Compact cards (4×2, 2×2) drop the time; the smallest keeps only the icon as header.
-                    if (iconOnly) MetricBadge(card.metric, colors, 22.dp) else MetricHeader(card.metric, card.title, colors)
-                    Spacer(GlanceModifier.defaultWeight())
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        card.severity?.let {
-                            Dot(colors, it)
-                            Spacer(GlanceModifier.width(5.dp))
-                        }
-                        ValueText(card.value, card.unit, colors, size = if (card.severity != null) 15.sp else 22.sp)
+        Row(modifier.clickable(openApp(context, WidgetRoutes.metric(info.metric))), verticalAlignment = Alignment.CenterVertically) {
+            MetricBadge(info.metric, colors, 30.dp)
+            Spacer(GlanceModifier.width(8.dp))
+            Column(GlanceModifier.defaultWeight()) {
+                val value = if (info.metric == Metric.ECG) info.tinyValue else info.value
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (info.metric == Metric.ECG && info.severity != null) {
+                        Dot(colors, info.severity, 7.dp)
+                        Spacer(GlanceModifier.width(4.dp))
                     }
-                    if (!compact) Caption(card.caption, colors)
+                    ValueText(value ?: "–", info.unit?.takeIf { value != null && (value.length) <= 4 }, colors, size = 18.sp)
                 }
-                if (i < row.lastIndex) Spacer(GlanceModifier.width(8.dp))
-            }
-            // Keep a lone last card half-width.
-            if (row.size == 1) {
-                Spacer(GlanceModifier.width(8.dp))
-                Box(GlanceModifier.defaultWeight()) {}
+                Caption(info.shortTitle, colors)
             }
         }
     }
