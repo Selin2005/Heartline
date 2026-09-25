@@ -85,7 +85,7 @@
     <string name="bp_calibrate_notification">Tap to take calibration round %1$d</string>
     <string name="spo2_instruction">Rest your arm on a table, watch face up, and keep still.</string>
     <string name="temp_instruction">Wear your watch snugly for a few minutes, then keep still.</string>
-    <string name="body_instruction">Touch both keys with your middle and ring fingers.</string>
+    <string name="body_instruction">Middle and ring fingers on the two keys. Touch nothing else.</string>
     <string name="stress_instruction">Sit still and breathe normally for one minute.</string>
     <string name="hint_measuring">Measuring…</string>
     <string name="hint_finishing">Almost done…</string>
@@ -93,6 +93,10 @@
     <string name="hint_low_signal">Signal too weak. Tighten your band.</string>
     <string name="hint_touch_keys">Keep both fingers on the keys</string>
     <string name="hint_wrist_contact">Wear your watch snugly</string>
+    <string name="hint_dry_skin">Fingertips too dry. Moisten them slightly.</string>
+    <string name="hint_hands_apart">Keep your arms apart, away from your body</string>
+    <string name="hint_keys_only">Touch only the two keys, not the watch body</string>
+    <string name="hint_check_profile">Result out of range. Check height, weight and birth date in your profile.</string>
     <string name="temp_ambient">Ambient %1$s °C</string>
     <string name="body_fat">Body fat</string>
     <string name="body_muscle">Skeletal muscle %1$s kg</string>

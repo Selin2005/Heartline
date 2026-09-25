@@ -17,7 +17,24 @@ import kotlinx.coroutines.flow.flow
 import kotlin.random.Random
 
 /** Why a quick measurement is struggling; shown as a hint while measuring. */
-enum class QuickHint { HOLD_STILL, LOW_SIGNAL, TOUCH_KEYS, WRIST_CONTACT }
+enum class QuickHint {
+    HOLD_STILL,
+    LOW_SIGNAL,
+    TOUCH_KEYS,
+    WRIST_CONTACT,
+
+    /** Body composition: fingertips too dry for the electrodes. */
+    DRY_SKIN,
+
+    /** Body composition: the two hands (or arms) touch each other. */
+    HANDS_APART,
+
+    /** Body composition: fingers also touch the metal frame, not just the keys. */
+    KEYS_ONLY,
+
+    /** Body composition: the result was implausible for the profile (height, weight, age). */
+    CHECK_PROFILE,
+}
 
 sealed interface QuickEvent {
     data class Progress(val fraction: Float, val hint: QuickHint? = null) : QuickEvent

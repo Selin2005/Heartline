@@ -60,6 +60,10 @@ val QuickHint.text: Int
         QuickHint.LOW_SIGNAL -> R.string.hint_low_signal
         QuickHint.TOUCH_KEYS -> R.string.hint_touch_keys
         QuickHint.WRIST_CONTACT -> R.string.hint_wrist_contact
+        QuickHint.DRY_SKIN -> R.string.hint_dry_skin
+        QuickHint.HANDS_APART -> R.string.hint_hands_apart
+        QuickHint.KEYS_ONLY -> R.string.hint_keys_only
+        QuickHint.CHECK_PROFILE -> R.string.hint_check_profile
     }
 
 @Composable

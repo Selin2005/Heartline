@@ -152,7 +152,10 @@ class SdkSkinTempSource(private val gateway: SdkSensorGateway) :
 
 /**
  * BIA_ON_DEMAND with the user profile (TrackerUserProfile: gender 1 = male, 0 = female).
- * Status 0 success; 4/10 wrist contact; 7/8/9 finger(s) off the keys.
+ * Status (ValueKey.BiaSet): 0 success, 4 wrist electrode detached, 7/8 a finger off the 2 or
+ * 4 o'clock key, 9 both fingers off, 10 wrist loose, 11 dry skin, 13 impedance out of range,
+ * 14 hands touching, 15 fingers on the metal frame, 17 unstable impedance, 18 body fat out of
+ * range for the profile.
  */
 class SdkBiaSource(private val gateway: SdkSensorGateway) :
     SdkQuickSource(gateway, TrackerKind.BIA_ON_DEMAND, Metric.BODY_COMPOSITION, RecordKind.BODY_COMPOSITION, 15) {
@@ -191,19 +194,28 @@ class SdkBiaSource(private val gateway: SdkSensorGateway) :
                 )
                 true
             }
-            7, 8, 9 -> {
-                // Fingers off the keys: the watch restarts the measurement once they're back.
-                problem = QuickHint.TOUCH_KEYS
-                sdkProgress = 0f
-                false
+            18 -> {
+                // Final: the profile doesn't match the body (e.g. age or weight wrong).
+                trySendBlocking(QuickEvent.Failed(null, QuickHint.CHECK_PROFILE))
+                true
             }
             else -> {
-                problem = QuickHint.WRIST_CONTACT
+                // Contact problems: the watch restarts the measurement once they're fixed.
+                problem = biaHint(status)
                 sdkProgress = 0f
                 false
             }
         }
     }
+}
+
+internal fun biaHint(status: Int?): QuickHint = when (status) {
+    7, 8, 9 -> QuickHint.TOUCH_KEYS
+    11 -> QuickHint.DRY_SKIN
+    14 -> QuickHint.HANDS_APART
+    15 -> QuickHint.KEYS_ONLY
+    13, 17 -> QuickHint.HOLD_STILL
+    else -> QuickHint.WRIST_CONTACT // 4, 10 and anything undocumented
 }
 
 /** Average skin conductance (µS) over [seconds] from EDA_CONTINUOUS (Watch8+), or null. */
