@@ -10,9 +10,16 @@
 | هشدار ریتم نامنظم (پس‌زمینه) + HR بالا/پایین | سرویس پایش، اعلان | تاریخچه‌ی هشدارها، تنظیمات |
 | HR / HRV | HR زنده، Tile، Complication | نمودار روز، استراحت، HRV هفتگی |
 | SpO2، دمای پوست، ترکیب بدن (BIA)، استرس (HRV + EDA) | اندازه‌گیری on-demand | جزئیات، روند، تاریخچه |
-| خروجی | — | PDF هر ECG، CSV همه‌ی داده‌ها |
+| خروجی | — | PDF و تصویر هر ECG، CSV همه‌ی داده‌ها، اشتراک با اپ‌های AI |
+| ویجت / Tile / Complication | ۵ Tile (قلب، فشار، اندازه‌گیری سریع، Wellness، استرس) و ۶ complication | ۷ ویجت One UI (داشبورد، ضربان، ECG، فشار، استرس، اندازه‌گیری روی ساعت، نمودار روز) |
 
-اسکرین‌شات‌ها: [`docs/screenshots/`](docs/screenshots/README.md) · پلن: [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) · پروتکل: [`docs/PROTOCOL.md`](docs/PROTOCOL.md) · دیزاین: [`docs/DESIGN.md`](docs/DESIGN.md) · فشار خون: [`docs/BP_ALGORITHM.md`](docs/BP_ALGORITHM.md) · تست روی دستگاه: [`docs/DEVICE_TESTING.md`](docs/DEVICE_TESTING.md)
+اسکرین‌شات‌ها: [`docs/screenshots/`](docs/screenshots/README.md) (ویجت‌ها: [`widgets/`](docs/screenshots/widgets), Tileها: [`wear/tiles/`](docs/screenshots/wear/tiles)) · پلن: [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) · پروتکل: [`docs/PROTOCOL.md`](docs/PROTOCOL.md) · دیزاین: [`docs/DESIGN.md`](docs/DESIGN.md) · فشار خون: [`docs/BP_ALGORITHM.md`](docs/BP_ALGORITHM.md) · تست روی دستگاه: [`docs/DEVICE_TESTING.md`](docs/DEVICE_TESTING.md)
+
+## ویجت‌ها
+
+| داشبورد (4×4) | ضربان · ECG · فشار · استرس (2×2) | Tileهای ساعت |
+|---|---|---|
+| <img src="docs/screenshots/widgets/dashboard_2_full_light.png" width="260"> | <img src="docs/screenshots/widgets/heart_rate_0_full_dark.png" width="120"> <img src="docs/screenshots/widgets/ecg_0_full_dark.png" width="120"> <img src="docs/screenshots/widgets/bp_0_full_light.png" width="120"> <img src="docs/screenshots/widgets/stress_0_full_light.png" width="120"> | <img src="docs/screenshots/wear/tiles/tile_heart_full.png" width="120"> <img src="docs/screenshots/wear/tiles/tile_quick_full.png" width="120"> <img src="docs/screenshots/wear/tiles/tile_wellness_full.png" width="120"> |
 
 ## ساختار
 ```

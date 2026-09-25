@@ -1,0 +1,70 @@
+package com.heartline.wear
+
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.wear.watchface.complications.data.ComplicationData
+import androidx.wear.watchface.complications.data.ComplicationText
+import androidx.wear.watchface.complications.data.ComplicationType
+import androidx.wear.watchface.complications.data.LongTextComplicationData
+import androidx.wear.watchface.complications.data.NoDataComplicationData
+import androidx.wear.watchface.complications.data.RangedValueComplicationData
+import androidx.wear.watchface.complications.data.ShortTextComplicationData
+import androidx.wear.watchface.complications.data.SmallImageComplicationData
+import com.heartline.wear.tile.Complications
+import com.heartline.wear.tile.TileData
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import java.time.Instant
+
+@RunWith(AndroidJUnit4::class)
+class ComplicationsTest {
+    private val context = ApplicationProvider.getApplicationContext<Context>()
+    private val c = Complications(context)
+    private val data = Complications.preview
+    private val empty = TileData(null, null, null, null)
+
+    private fun ComplicationText.text() = getTextAt(context.resources, Instant.now()).toString()
+
+    @Test
+    fun heartRateInAllThreeShapes() {
+        assertEquals("68", (c.heartRate(ComplicationType.SHORT_TEXT, data) as ShortTextComplicationData).text.text())
+        val ranged = c.heartRate(ComplicationType.RANGED_VALUE, data) as RangedValueComplicationData
+        assertEquals(68f, ranged.value, 0f)
+        assertEquals(40f to 180f, ranged.min to ranged.max)
+        assertEquals("68 bpm · 52–118", (c.heartRate(ComplicationType.LONG_TEXT, data) as LongTextComplicationData).text.text())
+        assertEquals("--", (c.heartRate(ComplicationType.SHORT_TEXT, empty) as ShortTextComplicationData).text.text())
+    }
+
+    @Test
+    fun metricsShowTheirLatestValue() {
+        assertEquals("Sinus", (c.ecg(ComplicationType.SHORT_TEXT, data) as ShortTextComplicationData).text.text())
+        assertEquals("118/76", (c.bloodPressure(ComplicationType.SHORT_TEXT, data) as ShortTextComplicationData).text.text())
+        val stress = c.stress(ComplicationType.RANGED_VALUE, data) as RangedValueComplicationData
+        assertEquals(38f, stress.value, 0f)
+        assertNotNull(stress.colorRamp)
+        assertEquals("97%", (c.spo2(ComplicationType.SHORT_TEXT, data) as ShortTextComplicationData).text.text())
+    }
+
+    @Test
+    fun everyComplicationOpensTheApp() {
+        val all: List<ComplicationData> = listOf(
+            c.heartRate(ComplicationType.SHORT_TEXT, data),
+            c.ecg(ComplicationType.LONG_TEXT, data),
+            c.bloodPressure(ComplicationType.LONG_TEXT, data),
+            c.stress(ComplicationType.SHORT_TEXT, data),
+            c.spo2(ComplicationType.RANGED_VALUE, data),
+            c.ecgShortcut(ComplicationType.SMALL_IMAGE),
+        )
+        all.forEach { assertNotNull("$it", it.tapAction) }
+        assertTrue(c.ecgShortcut(ComplicationType.SMALL_IMAGE) is SmallImageComplicationData)
+    }
+
+    @Test
+    fun unsupportedTypesGiveNoData() {
+        assertTrue(c.ecg(ComplicationType.RANGED_VALUE, data) is NoDataComplicationData)
+    }
+}

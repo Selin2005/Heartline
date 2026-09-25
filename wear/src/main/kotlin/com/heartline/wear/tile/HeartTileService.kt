@@ -189,32 +189,38 @@ internal val StressLevel.label: Int
         StressLevel.HIGH -> R.string.stress_high
     }
 
+/** Reads what tiles and complications show from the watch's own stores (works without the phone). */
+class TileDataLoader(
+    private val context: Context,
+    private val records: WatchRecordStore,
+    private val settings: WatchSettingsStore,
+    private val bp: WatchBpStore,
+    private val now: () -> Long = System::currentTimeMillis,
+) {
+    suspend fun load(): TileData {
+        val nowMs = now()
+        return TileData.from(
+            records.recent.first(),
+            settings.latestHeartRate,
+            bp.calibration.value?.takeIf { it.isValid(nowMs) }?.daysLeft(nowMs),
+            settings.heartToday(),
+        ) { ecg -> ecg.result?.let { context.getString(it.label) } }
+    }
+}
+
 /** Shared plumbing: loads [TileData] off the main thread and renders it with [layout]. */
 abstract class HeartlineTileService : TileService() {
-    private val records: WatchRecordStore by inject()
-    private val settings: WatchSettingsStore by inject()
-    private val bp: WatchBpStore by inject()
+    private val loader: TileDataLoader by inject()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** Internal so the render test can draw a tile from sample data. */
     internal abstract fun MaterialScope.layout(context: Context, data: TileData): LayoutElementBuilders.LayoutElement
 
-    /** Loads what the tiles and complications show. */
-    internal suspend fun load(): TileData {
-        val now = System.currentTimeMillis()
-        return TileData.from(
-            records.recent.first(),
-            settings.latestHeartRate,
-            bp.calibration.value?.takeIf { it.isValid(now) }?.daysLeft(now),
-            settings.heartToday(),
-        ) { ecg -> ecg.result?.let { getString(it.label) } }
-    }
-
     override fun onTileRequest(requestParams: RequestBuilders.TileRequest): ListenableFuture<TileBuilders.Tile> =
         CallbackToFutureAdapter.getFuture { completer ->
             scope.launch {
                 runCatching {
-                    val data = load()
+                    val data = loader.load()
                     val root = materialScope(this@HeartlineTileService, requestParams.deviceConfiguration, defaultColorScheme = TileColors.scheme) {
                         layout(this@HeartlineTileService, data)
                     }

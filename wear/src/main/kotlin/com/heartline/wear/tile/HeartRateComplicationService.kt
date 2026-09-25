@@ -1,43 +1,249 @@
 package com.heartline.wear.tile
 
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
+import androidx.annotation.DrawableRes
+import androidx.wear.watchface.complications.data.ColorRamp
 import androidx.wear.watchface.complications.data.ComplicationData
 import androidx.wear.watchface.complications.data.ComplicationType
+import androidx.wear.watchface.complications.data.LongTextComplicationData
 import androidx.wear.watchface.complications.data.MonochromaticImage
+import androidx.wear.watchface.complications.data.MonochromaticImageComplicationData
+import androidx.wear.watchface.complications.data.NoDataComplicationData
 import androidx.wear.watchface.complications.data.PlainComplicationText
+import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import androidx.wear.watchface.complications.data.ShortTextComplicationData
+import androidx.wear.watchface.complications.data.SmallImage
+import androidx.wear.watchface.complications.data.SmallImageComplicationData
+import androidx.wear.watchface.complications.data.SmallImageType
 import androidx.wear.watchface.complications.datasource.ComplicationRequest
 import androidx.wear.watchface.complications.datasource.SuspendingComplicationDataSourceService
+import com.heartline.shared.design.Palette
+import com.heartline.shared.model.EcgResult
+import com.heartline.shared.model.Metric
+import com.heartline.shared.profile.StressLevel
 import com.heartline.wear.MainActivity
 import com.heartline.wear.R
-import com.heartline.wear.monitor.WatchSettingsStore
 import org.koin.android.ext.android.inject
 
-/** Short-text complication with the latest background heart rate; tapping opens the heart screen. */
-class HeartRateComplicationService : SuspendingComplicationDataSourceService() {
-    private val settings: WatchSettingsStore by inject()
+/**
+ * Builds every Heartline complication from [TileData]; pure apart from Android resources, so
+ * previews, providers and tests share it.
+ */
+class Complications(private val context: Context) {
+    private fun text(value: String) = PlainComplicationText.Builder(value).build()
 
-    override fun getPreviewData(type: ComplicationType): ComplicationData? = if (type == ComplicationType.SHORT_TEXT) build(68) else null
+    private fun mono(@DrawableRes icon: Int) = MonochromaticImage.Builder(Icon.createWithResource(context, icon)).build()
 
-    override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? =
-        if (request.complicationType == ComplicationType.SHORT_TEXT) build(settings.latestHeartRate) else null
+    fun tap(route: String): PendingIntent = PendingIntent.getActivity(
+        context,
+        route.hashCode(),
+        Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_ROUTE, route).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
 
-    private fun build(bpm: Int?): ShortTextComplicationData {
-        val tap = PendingIntent.getActivity(
-            this,
-            3,
-            Intent(this, MainActivity::class.java).putExtra(MainActivity.EXTRA_ROUTE, MainActivity.ROUTE_HEART_RATE),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-        return ShortTextComplicationData.Builder(
-            PlainComplicationText.Builder(bpm?.toString() ?: "--").build(),
-            PlainComplicationText.Builder(getString(R.string.complication_hr_description)).build(),
-        )
-            .setTitle(PlainComplicationText.Builder(getString(R.string.unit_bpm)).build())
-            .setMonochromaticImage(MonochromaticImage.Builder(Icon.createWithResource(this, R.drawable.ic_heart)).build())
-            .setTapAction(tap)
-            .build()
+    private val noData: ComplicationData get() = NoDataComplicationData()
+
+    fun heartRate(type: ComplicationType, data: TileData): ComplicationData {
+        val bpm = data.heartRate
+        val description = text(context.getString(R.string.complication_hr_description))
+        val tap = tap(TileRoutes.HEART_RATE)
+        val icon = mono(R.drawable.ic_metric_heart)
+        return when (type) {
+            ComplicationType.SHORT_TEXT -> ShortTextComplicationData.Builder(text(bpm?.toString() ?: "--"), description)
+                .setTitle(text(context.getString(R.string.unit_bpm)))
+                .setMonochromaticImage(icon)
+                .setTapAction(tap)
+                .build()
+            ComplicationType.RANGED_VALUE -> RangedValueComplicationData.Builder((bpm ?: 40).toFloat().coerceIn(40f, 180f), 40f, 180f, description)
+                .setText(text(bpm?.toString() ?: "--"))
+                .setMonochromaticImage(icon)
+                .setColorRamp(ColorRamp(intArrayOf(Palette.Dark.HEART_RATE.toInt(), Palette.Dark.ECG.toInt()), true))
+                .setTapAction(tap)
+                .build()
+            ComplicationType.LONG_TEXT -> LongTextComplicationData.Builder(
+                text(
+                    bpm?.let {
+                        listOfNotNull(
+                            context.getString(R.string.tile_bpm, it),
+                            if (data.heartMin != null && data.heartMax != null) "${data.heartMin}–${data.heartMax}" else null,
+                        ).joinToString(" · ")
+                    } ?: context.getString(R.string.complication_no_data),
+                ),
+                description,
+            )
+                .setTitle(text(context.getString(R.string.metric_hr)))
+                .setMonochromaticImage(icon)
+                .setTapAction(tap)
+                .build()
+            else -> noData
+        }
     }
+
+    fun ecg(type: ComplicationType, data: TileData): ComplicationData {
+        val description = text(context.getString(R.string.complication_ecg_description))
+        val tap = tap(TileRoutes.ECG)
+        val icon = mono(R.drawable.ic_metric_ecg)
+        return when (type) {
+            ComplicationType.SHORT_TEXT -> ShortTextComplicationData.Builder(text(data.ecgResult?.let { context.getString(it.shortLabel) } ?: "--"), description)
+                .setTitle(text(context.getString(R.string.metric_ecg)))
+                .setMonochromaticImage(icon)
+                .setTapAction(tap)
+                .build()
+            ComplicationType.LONG_TEXT -> LongTextComplicationData.Builder(text(data.lastEcg ?: context.getString(R.string.tile_no_ecg)), description)
+                .setTitle(text(context.getString(R.string.metric_ecg)))
+                .setMonochromaticImage(icon)
+                .setTapAction(tap)
+                .build()
+            else -> noData
+        }
+    }
+
+    fun bloodPressure(type: ComplicationType, data: TileData): ComplicationData {
+        val description = text(context.getString(R.string.tile_bp_description))
+        val tap = tap(TileRoutes.BLOOD_PRESSURE)
+        val icon = mono(R.drawable.ic_metric_bp)
+        val days = data.bpDaysLeft?.let { context.getString(R.string.tile_bp_days, it) } ?: context.getString(R.string.tile_calibrate_on_phone)
+        return when (type) {
+            ComplicationType.SHORT_TEXT -> ShortTextComplicationData.Builder(text(data.lastBp ?: "--"), description)
+                .setTitle(text(context.getString(R.string.complication_mmhg)))
+                .setMonochromaticImage(icon)
+                .setTapAction(tap)
+                .build()
+            ComplicationType.LONG_TEXT -> LongTextComplicationData.Builder(text(listOfNotNull(data.lastBp, days).joinToString(" · ")), description)
+                .setTitle(text(context.getString(R.string.metric_bp)))
+                .setMonochromaticImage(icon)
+                .setTapAction(tap)
+                .build()
+            else -> noData
+        }
+    }
+
+    fun stress(type: ComplicationType, data: TileData): ComplicationData {
+        val description = text(context.getString(R.string.metric_stress))
+        val tap = tap(TileRoutes.measure(Metric.STRESS))
+        val icon = mono(R.drawable.ic_metric_stress)
+        val score = data.stressScore
+        return when (type) {
+            ComplicationType.RANGED_VALUE -> RangedValueComplicationData.Builder((score ?: 0).toFloat(), 0f, 100f, description)
+                .setText(text(score?.toString() ?: "--"))
+                .setMonochromaticImage(icon)
+                .setColorRamp(ColorRamp(intArrayOf(Palette.Dark.STATUS_NORMAL.toInt(), Palette.Dark.STATUS_WARN.toInt(), Palette.Dark.STATUS_ALERT.toInt()), true))
+                .setTapAction(tap)
+                .build()
+            ComplicationType.SHORT_TEXT -> ShortTextComplicationData.Builder(text(score?.toString() ?: "--"), description)
+                .setTitle(text(data.stressLevel?.let { context.getString(it.label) } ?: context.getString(R.string.metric_stress)))
+                .setMonochromaticImage(icon)
+                .setTapAction(tap)
+                .build()
+            else -> noData
+        }
+    }
+
+    fun spo2(type: ComplicationType, data: TileData): ComplicationData {
+        val description = text(context.getString(R.string.metric_spo2))
+        val tap = tap(TileRoutes.measure(Metric.SPO2))
+        val icon = mono(R.drawable.ic_metric_spo2)
+        val value = data.spo2
+        return when (type) {
+            ComplicationType.SHORT_TEXT -> ShortTextComplicationData.Builder(text(value?.let { "$it%" } ?: "--"), description)
+                .setTitle(text(context.getString(R.string.tile_spo2_short)))
+                .setMonochromaticImage(icon)
+                .setTapAction(tap)
+                .build()
+            ComplicationType.RANGED_VALUE -> RangedValueComplicationData.Builder((value ?: 80).toFloat().coerceIn(80f, 100f), 80f, 100f, description)
+                .setText(text(value?.let { "$it%" } ?: "--"))
+                .setMonochromaticImage(icon)
+                .setColorRamp(ColorRamp(intArrayOf(Palette.Dark.STATUS_WARN.toInt(), Palette.Dark.SPO2.toInt()), true))
+                .setTapAction(tap)
+                .build()
+            else -> noData
+        }
+    }
+
+    /** Starts an ECG straight from the watch face. */
+    fun ecgShortcut(type: ComplicationType): ComplicationData {
+        val description = text(context.getString(R.string.complication_ecg_shortcut))
+        val tap = tap(TileRoutes.ECG)
+        return when (type) {
+            ComplicationType.SMALL_IMAGE -> SmallImageComplicationData.Builder(
+                SmallImage.Builder(Icon.createWithResource(context, R.drawable.complication_ecg_badge), SmallImageType.ICON).build(),
+                description,
+            ).setTapAction(tap).build()
+            ComplicationType.MONOCHROMATIC_IMAGE -> MonochromaticImageComplicationData.Builder(mono(R.drawable.ic_metric_ecg), description).setTapAction(tap).build()
+            ComplicationType.SHORT_TEXT -> ShortTextComplicationData.Builder(text(context.getString(R.string.metric_ecg)), description)
+                .setMonochromaticImage(mono(R.drawable.ic_metric_ecg))
+                .setTapAction(tap)
+                .build()
+            else -> noData
+        }
+    }
+
+    companion object {
+        /** Realistic values for the complication picker. */
+        val preview = TileData(
+            heartRate = 68,
+            lastEcg = "Sinus rhythm",
+            lastBp = "118/76",
+            bpDaysLeft = 21,
+            heartMin = 52,
+            heartMax = 118,
+            ecgResult = EcgResult.SINUS_RHYTHM,
+            spo2 = 97,
+            stressScore = 38,
+            stressLevel = StressLevel.MEDIUM,
+        )
+    }
+}
+
+internal val EcgResult.shortLabel: Int
+    get() = when (this) {
+        EcgResult.SINUS_RHYTHM -> R.string.ecg_short_sinus
+        EcgResult.AFIB_SIGNS -> R.string.ecg_short_afib
+        EcgResult.HIGH_HEART_RATE -> R.string.ecg_short_high
+        EcgResult.LOW_HEART_RATE -> R.string.ecg_short_low
+        EcgResult.INCONCLUSIVE -> R.string.ecg_short_inconclusive
+        EcgResult.POOR_RECORDING -> R.string.ecg_short_poor
+    }
+
+/** Shared provider: loads the data and hands it to one [Complications] builder. */
+abstract class HeartlineComplicationService : SuspendingComplicationDataSourceService() {
+    private val loader: TileDataLoader by inject()
+    protected val complications by lazy { Complications(this) }
+
+    protected abstract fun build(type: ComplicationType, data: TileData): ComplicationData
+
+    override fun getPreviewData(type: ComplicationType): ComplicationData? = build(type, Complications.preview).takeUnless { it is NoDataComplicationData }
+
+    override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? = build(request.complicationType, loader.load())
+}
+
+/** Heart rate: number, gauge (40–180) or "68 bpm · 52–118". */
+class HeartRateComplicationService : HeartlineComplicationService() {
+    override fun build(type: ComplicationType, data: TileData) = complications.heartRate(type, data)
+}
+
+class EcgComplicationService : HeartlineComplicationService() {
+    override fun build(type: ComplicationType, data: TileData) = complications.ecg(type, data)
+}
+
+class BpComplicationService : HeartlineComplicationService() {
+    override fun build(type: ComplicationType, data: TileData) = complications.bloodPressure(type, data)
+}
+
+class StressComplicationService : HeartlineComplicationService() {
+    override fun build(type: ComplicationType, data: TileData) = complications.stress(type, data)
+}
+
+class Spo2ComplicationService : HeartlineComplicationService() {
+    override fun build(type: ComplicationType, data: TileData) = complications.spo2(type, data)
+}
+
+class EcgShortcutComplicationService : HeartlineComplicationService() {
+    override fun build(type: ComplicationType, data: TileData) = complications.ecgShortcut(type)
+
+    // The shortcut needs no data.
+    override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? = complications.ecgShortcut(request.complicationType)
 }

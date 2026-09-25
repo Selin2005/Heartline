@@ -71,7 +71,12 @@ class TileUpdates(
             StressTileService::class.java,
         )
 
-        /** Filled in with the complication providers (W4). */
-        val COMPLICATIONS: List<Class<*>> = listOf(HeartRateComplicationService::class.java)
+        val COMPLICATIONS: List<Class<*>> = listOf(
+            HeartRateComplicationService::class.java,
+            EcgComplicationService::class.java,
+            BpComplicationService::class.java,
+            StressComplicationService::class.java,
+            Spo2ComplicationService::class.java,
+        )
     }
 }
