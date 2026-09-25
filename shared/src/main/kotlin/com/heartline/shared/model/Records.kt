@@ -148,7 +148,10 @@ data class EcgMetrics(
     val pauses: Int = 0,
     val longestPauseMs: Int? = null,
     val segments: Int = 1,
-    val note: EcgNote = EcgNote.NONE
+    val note: EcgNote = EcgNote.NONE,
+    /** The phone's second opinion (app features + ECGFounder), when that model is installed. */
+    val secondOpinion: EcgResult? = null,
+    val secondOpinionAfProbability: Double? = null
 ) {
     val usablePercent: Int get() = if (durationSec <= 0f) 0 else (usableSec / durationSec * 100f).toInt()
 }

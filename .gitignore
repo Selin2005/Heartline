@@ -6,3 +6,4 @@ local.properties
 .kotlin/
 captures/
 .DS_Store
+__pycache__/

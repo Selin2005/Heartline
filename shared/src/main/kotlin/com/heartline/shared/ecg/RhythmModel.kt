@@ -1,5 +1,7 @@
 package com.heartline.shared.ecg
 
+import com.heartline.shared.dsp.Biquad
+import com.heartline.shared.dsp.filtFilt
 import com.heartline.shared.hr.RrFeatures
 import kotlin.math.abs
 import kotlin.math.exp
@@ -123,6 +125,8 @@ class RhythmModel(
     companion object {
         private val json = Json { ignoreUnknownKeys = true }
 
+        fun parse(text: String): RhythmModel = json.decodeFromString(text)
+
         /** The bundled model, or null if it isn't there (the rules alone then decide). */
         val bundled: RhythmModel? by lazy {
             runCatching {
@@ -130,6 +134,35 @@ class RhythmModel(
                     json.decodeFromString<RhythmModel>(it.readBytes().decodeToString())
                 }
             }.getOrNull()?.takeIf { it.features == RhythmFeatures.NAMES }
+        }
+    }
+}
+
+/**
+ * Input windows for ECGFounder (Li et al., NEJM AI 2025): 500 Hz, 50 Hz notch (Q 30), up to three
+ * 10 s windows, each z-scored — as in its reference preprocessing (tools/ecg-ml mirrors this).
+ */
+object EcgFounderInput {
+    const val FS = 500
+    const val WINDOW = 10 * FS
+
+    fun windows(raw: FloatArray, fs: Int, max: Int = 3): List<FloatArray> {
+        val x = if (fs == FS) {
+            raw
+        } else {
+            FloatArray((raw.size.toLong() * FS / fs).toInt()) { k ->
+                val pos = k.toDouble() * fs / FS
+                val i = pos.toInt().coerceAtMost(raw.size - 2)
+                (raw[i] + (raw[i + 1] - raw[i]) * (pos - i)).toFloat()
+            }
+        }
+        if (x.size < WINDOW) return emptyList()
+        val notched = x.filtFilt(Biquad.notch(50.0, FS.toDouble(), 30.0))
+        return (0..minOf(notched.size, max * WINDOW) - WINDOW step WINDOW).map { start ->
+            val w = notched.copyOfRange(start, start + WINDOW)
+            val mean = w.average()
+            val sd = sqrt(w.sumOf { (it - mean) * (it - mean) } / w.size)
+            FloatArray(WINDOW) { ((w[it] - mean) / (sd + 1e-8)).toFloat() }
         }
     }
 }

@@ -326,6 +326,7 @@
     <string name="ecg_detail_sdnn">HRV (SDNN)</string>
     <string name="ecg_detail_rmssd">HRV (RMSSD)</string>
     <string name="ecg_detail_note">Finding</string>
+    <string name="ecg_detail_second_opinion">Second opinion (phone AI)</string>
     <string name="ecg_detail_extra_beats">Extra beats</string>
     <string name="ecg_detail_pauses">Pauses over 2 s</string>
     <string name="ecg_detail_segments">Contact segments</string>

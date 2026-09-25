@@ -365,6 +365,12 @@ Do not edit by hand.
 ### ecg_analyzing_small
 <img src="wear/ecg_analyzing_small.png" width="240">
 
+### ecg_arming_large
+<img src="wear/ecg_arming_large.png" width="240">
+
+### ecg_arming_small
+<img src="wear/ecg_arming_small.png" width="240">
+
 ### ecg_instruction_large
 <img src="wear/ecg_instruction_large.png" width="240">
 
@@ -389,6 +395,12 @@ Do not edit by hand.
 ### ecg_result_afib_small
 <img src="wear/ecg_result_afib_small.png" width="240">
 
+### ecg_result_inconclusive_note_large
+<img src="wear/ecg_result_inconclusive_note_large.png" width="240">
+
+### ecg_result_inconclusive_note_small
+<img src="wear/ecg_result_inconclusive_note_small.png" width="240">
+
 ### ecg_result_poor_large
 <img src="wear/ecg_result_poor_large.png" width="240">
 
@@ -400,6 +412,12 @@ Do not edit by hand.
 
 ### ecg_result_sinus_small
 <img src="wear/ecg_result_sinus_small.png" width="240">
+
+### ecg_struggling_large
+<img src="wear/ecg_struggling_large.png" width="240">
+
+### ecg_struggling_small
+<img src="wear/ecg_struggling_small.png" width="240">
 
 ### ecg_waiting_large
 <img src="wear/ecg_waiting_large.png" width="240">

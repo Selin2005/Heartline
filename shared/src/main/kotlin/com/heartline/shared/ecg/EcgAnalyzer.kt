@@ -221,8 +221,9 @@ object EcgAnalyzer {
             sampleRateHz = session.measuredRateHz ?: fs.toFloat(),
             inverted = beats.inverted,
             algorithm = ALGORITHM,
-            ectopicBeats = premature.size,
-            ventricularLikeBeats = ventricularLike,
+            // In AFib every interval is irregular: "early beats" isn't a meaningful count there.
+            ectopicBeats = if (decision.result == EcgResult.AFIB_SIGNS) 0 else premature.size,
+            ventricularLikeBeats = if (decision.result == EcgResult.AFIB_SIGNS) 0 else ventricularLike,
             pauses = pauses,
             longestPauseMs = longestPause?.roundToInt(),
             segments = segments.count { it.count() >= fs },
@@ -243,7 +244,7 @@ object EcgAnalyzer {
      * The learned model's decision (mirrors decide() in tools/ecg-eval/train_rhythm.py, whose
      * cross-validated results are in docs/ECG_ALGORITHM.md). The rules' note explains the result.
      */
-    internal fun decide(model: RhythmModel, p: DoubleArray, bpm: Int, rules: RhythmClassifier.Decision): RhythmClassifier.Decision {
+    fun decide(model: RhythmModel, p: DoubleArray, bpm: Int, rules: RhythmClassifier.Decision): RhythmClassifier.Decision {
         val t = model.thresholds
         val cls = { name: String -> p[model.classes.indexOf(name)] }
         val note = rules.note

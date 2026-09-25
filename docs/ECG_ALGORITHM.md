@@ -93,9 +93,13 @@ on the same recordings (`results/baseline-algorithm2-*.txt`).
   That is deliberate: such a recording isn't normal sinus rhythm, and "not AFib, extra beats seen"
   is the useful answer.
 
-### ECGFounder
+### Second opinion on the phone (ECGFounder)
 
-See `tools/ecg-ml/` for whether the ECGFounder foundation model (NEJM AI 2025) adds to this model.
+Adding the ECGFounder foundation model's 150 label probabilities (NEJM AI 2025) to the features
+raises AFib recognition from 80 % to 86 % at the same 1 % false AFib (CinC subset, same CV). It
+only runs in fp16 (62 MB; 8-bit versions distorted its outputs), so the phone uses it when the
+model file is added to its assets, and shows the result as "Second opinion (phone AI)" next to
+the watch's result. Details: `tools/ecg-ml/README.md`.
 
 ## Re-running
 

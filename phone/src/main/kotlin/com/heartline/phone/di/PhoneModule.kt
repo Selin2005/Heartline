@@ -10,6 +10,7 @@ import com.heartline.phone.ui.model.WatchLinkViewModel
 import com.heartline.phone.R
 import com.heartline.phone.data.HeartlineDatabase
 import com.heartline.phone.bp.PapageiEmbedder
+import com.heartline.phone.ecg.EcgSecondOpinion
 import com.heartline.phone.data.BpRepository
 import com.heartline.phone.data.HeartRepository
 import com.heartline.phone.data.ProfileRepository
@@ -57,6 +58,7 @@ val phoneModule = module {
     single { RecordRepository(get(), get()) }
     single { DataLayerTransport(androidContext(), Protocol.CAPABILITY_WATCH) } bind SyncTransport::class
     single { PhoneNotifier(androidContext()) }
+    single { EcgSecondOpinion.fromAssets(androidContext()) }
     single { get<HeartlineDatabase>().heart() }
     single { HeartRepository(get()) { alert -> get<PhoneNotifier>().alert(alert) } }
     single { SettingsRepository(androidContext()) }
@@ -76,6 +78,7 @@ val phoneModule = module {
                 override suspend fun save(meta: RecordMeta, wave: FloatArray?) {
                     records.save(meta, wave)
                     runCatching { get<BpRepository>().onRecordSaved(meta, wave) }.onFailure { Log.w("Heartline/BP", "refine failed", it) }
+                    runCatching { get<EcgSecondOpinion>().onRecordSaved(records, meta, wave) }.onFailure { Log.w("Heartline/ECG", "second opinion failed", it) }
                 }
             },
             get<HeartRepository>(),

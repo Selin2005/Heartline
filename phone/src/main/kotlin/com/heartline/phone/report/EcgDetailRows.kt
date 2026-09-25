@@ -2,6 +2,7 @@ package com.heartline.phone.report
 
 import android.content.res.Resources
 import com.heartline.phone.R
+import com.heartline.phone.ui.components.label
 import com.heartline.shared.model.EcgMetrics
 import com.heartline.shared.model.EcgNote
 import com.heartline.shared.model.EcgPoorReason
@@ -37,6 +38,7 @@ object EcgDetailRows {
         add(res.getString(R.string.ecg_detail_quality) to "${m.qualityScore}/100")
         if (m.poorReason != EcgPoorReason.NONE) add(res.getString(R.string.ecg_detail_why) to res.getString(reason(m.poorReason)))
         note(m.note)?.let { add(res.getString(R.string.ecg_detail_note) to res.getString(it)) }
+        m.secondOpinion?.let { add(res.getString(R.string.ecg_detail_second_opinion) to res.getString(it.label)) }
         add(res.getString(R.string.ecg_detail_sampling) to res.getString(R.string.value_hz, m.sampleRateHz.roundToInt()))
     }
 
