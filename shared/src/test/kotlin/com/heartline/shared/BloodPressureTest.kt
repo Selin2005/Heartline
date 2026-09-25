@@ -5,6 +5,7 @@ import com.heartline.shared.bp.BpCategory
 import com.heartline.shared.bp.BpEstimator
 import com.heartline.shared.bp.BpOutcome
 import com.heartline.shared.bp.CalibrationPoint
+import com.heartline.shared.bp.OutOfRangeReason
 import com.heartline.shared.bp.PpgFeatureVector
 import com.heartline.shared.bp.PpgFeatures
 import com.heartline.shared.model.RecordMeta
@@ -32,6 +33,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BloodPressureTest {
+    private val DAY = BpCalibration.DAY_MS
     private val fs = SyntheticPpg.SAMPLE_RATE_HZ
 
     private fun features(hr: Double, stiffness: Double, seed: Int = 1) =
@@ -107,9 +109,110 @@ class BloodPressureTest {
     }
 
     @Test
-    fun pulseWaveFarFromCalibrationIsRefusedNotClamped() {
+    fun pulseWaveFarFromCalibrationIsShownAndFlaggedNotRefused() {
+        // A genuinely different state (fast, stiff pulse) must give a number, never "outside calibration".
         val out = BpEstimator.estimate(calibration(), features(135.0, 0.95, 9), 1_000)
-        assertTrue("$out", out is BpOutcome.OutOfRange)
+        val e = (out as? BpOutcome.Ok)?.estimate ?: error("refused: $out")
+        assertTrue("$e", e.beyondCalibration)
+        assertTrue("$e", e.systolic > 135)
+        assertTrue("$e", e.uncertaintySys > 8)
+        assertTrue(e.deltaSystolic > 0)
+    }
+
+    @Test
+    fun highPressureIsNeverHiddenBehindAnError() {
+        val e = (BpEstimator.estimate(calibration(), features(95.0, 0.9, 30), 1_000) as BpOutcome.Ok).estimate
+        assertTrue("$e", e.systolic > 130)
+    }
+
+    @Test
+    fun aNoisyShapeFeatureAloneNeitherBlocksNorSkewsTheReading() {
+        val f = features(68.0, 0.48, 7)
+        val skewed = f.copy(apgDa = f.apgDa + 8.0, areaRatio = f.areaRatio + 5.0)
+        val clean = (BpEstimator.estimate(calibration(), f, 1_000) as BpOutcome.Ok).estimate
+        val out = (BpEstimator.estimate(calibration(), skewed, 1_000) as BpOutcome.Ok).estimate
+        assertEquals(clean.systolic, out.systolic)
+        assertTrue(!out.beyondCalibration)
+    }
+
+    @Test
+    fun shapesNoRealPulseHasAreRefusedAsSignalProblems() {
+        val f = features(68.0, 0.48, 7)
+        val impossible = f.copy(upstrokeMs = f.beatMs * 0.8)
+        assertEquals(BpOutcome.OutOfRange(OutOfRangeReason.SIGNAL_INCONSISTENT), BpEstimator.estimate(calibration(), impossible, 1_000))
+        // A marginal recording whose core shape is also far off is more likely movement.
+        val shaky = features(68.0, 0.48, 7).copy(quality = 0.6, upstrokeMs = f.upstrokeMs + 120)
+        assertEquals(BpOutcome.OutOfRange(OutOfRangeReason.SIGNAL_INCONSISTENT), BpEstimator.estimate(calibration(), shaky, 1_000))
+        // The same change on a clean recording is physiology: shown.
+        assertTrue(BpEstimator.estimate(calibration(), shaky.copy(quality = 0.9), 1_000) is BpOutcome.Ok)
+    }
+
+    @Test
+    fun algorithm3FeaturesFollowStiffness() {
+        val soft = features(60.0, 0.1)
+        val stiff = features(60.0, 0.9)
+        assertTrue("soft=${soft.reflectionDelayMs} stiff=${stiff.reflectionDelayMs}", stiff.reflectionDelayMs < soft.reflectionDelayMs - 40)
+        assertTrue(soft.reflectionDelayMs in 150.0..400.0)
+        assertEquals(PpgFeatureVector.SHAPE_POINTS, soft.shape.size)
+        assertTrue(soft.skewness > 0.0)
+    }
+
+    @Test
+    fun algorithm2CalibrationStaysValidAndIsUpgradedFromItsRawPpg() {
+        val signals = (1..3).map { SyntheticPpg.generate(20.0, 68.0, 0.5, seed = it) }
+        val v2 = BpCalibration(
+            "c",
+            0,
+            signals.map { raw ->
+                val f = PpgFeatures.extract(raw, fs)!!
+                CalibrationPoint(f.copy(version = 2, reflectionDelayMs = 0.0, shape = emptyList()), 122, 80, 68, raw.toList())
+            }
+        )
+        assertTrue(v2.isValid(1_000))
+        assertTrue(BpEstimator.estimate(v2, features(68.0, 0.5, 9), 1_000) is BpOutcome.Ok)
+        val up = v2.upgraded()
+        assertTrue(up.points.all { it.features.version == PpgFeatureVector.VERSION && it.features.reflectionDelayMs > 0 })
+    }
+
+    @Test
+    fun cuffChecksExtendTheCalibrationRange() {
+        val base = calibration()
+        val stiffState = features(80.0, 0.8, 40)
+        val before = (BpEstimator.estimate(base, stiffState, 5 * DAY) as BpOutcome.Ok).estimate
+        // Two later cuff checks in that stiff state read 150.
+        val extended = base
+            .withExtraPoint(CalibrationPoint(features(80.0, 0.8, 41), 150, 94, 80, atMs = 2 * DAY))
+            .withExtraPoint(CalibrationPoint(features(80.0, 0.82, 42), 152, 95, 80, atMs = 4 * DAY))
+        val after = (BpEstimator.estimate(extended, stiffState, 5 * DAY) as BpOutcome.Ok).estimate
+        assertTrue("before=$before after=$after", after.systolic > before.systolic + 5)
+        assertTrue("after=$after", abs(after.systolic - 151) <= 10)
+        assertEquals(119..152, extended.systolicSpan)
+    }
+
+    @Test
+    fun aRecentCuffCheckMovesTheBaseline() {
+        val base = calibration()
+        val same = features(68.0, 0.48, 7)
+        val drifted = base.withExtraPoint(CalibrationPoint(features(68.0, 0.48, 43), 138, 88, 68, atMs = 10 * DAY))
+        val a = (BpEstimator.estimate(base, same, 10 * DAY) as BpOutcome.Ok).estimate
+        val b = (BpEstimator.estimate(drifted, same, 10 * DAY) as BpOutcome.Ok).estimate
+        assertTrue("a=$a b=$b", b.systolic >= a.systolic + 4)
+    }
+
+    @Test
+    fun extraPointsAreCapped() {
+        var cal = calibration()
+        repeat(20) { cal = cal.withExtraPoint(CalibrationPoint(features(68.0, 0.5, 50 + it), 120, 80, 68, atMs = it.toLong())) }
+        assertEquals(BpCalibration.MAX_EXTRA_POINTS, cal.extraPoints.size)
+        assertEquals(19L, cal.extraPoints.last().atMs)
+    }
+
+    @Test
+    fun personalSpreadOnlyWidensTheDefault() {
+        val steady = List(6) { features(68.0, 0.5, 60 + it) }
+        assertTrue(BpEstimator.personalScale(steady).indices.all { BpEstimator.personalScale(steady)[it] >= BpEstimator.featureScale[it] })
+        val varied = List(8) { features(55.0 + it * 8, 0.5, 70 + it) }
+        assertTrue(BpEstimator.personalScale(varied)[0] > BpEstimator.featureScale[0])
     }
 
     @Test

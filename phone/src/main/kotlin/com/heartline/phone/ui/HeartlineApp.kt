@@ -264,9 +264,16 @@ fun HeartlineApp(
                         onValidate = vm::validateLatest,
                         onShare = {
                             share(
-                                ShareRequest("BloodPressure", text = { prompt, person ->
-                                    ResultSummary.bp(context.resources, state, person, prompt)
-                                }),
+                                ShareRequest(
+                                    "BloodPressure",
+                                    // Raw pulse waves with their cuff readings, for offline analysis (tools/bp-ml).
+                                    formats = listOf(
+                                        ShareFormat("json", "application/json", R.string.share_format_bp_data) { name, _, _ ->
+                                            vm.exportDataset(java.io.File(context.cacheDir, "exports"), name)
+                                        },
+                                    ),
+                                    text = { prompt, person -> ResultSummary.bp(context.resources, state, person, prompt) },
+                                ),
                             )
                         },
                     )

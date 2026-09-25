@@ -9,6 +9,7 @@ import com.heartline.phone.notify.Reminders
 import com.heartline.phone.ui.model.WatchLinkViewModel
 import com.heartline.phone.R
 import com.heartline.phone.data.HeartlineDatabase
+import com.heartline.phone.bp.PapageiEmbedder
 import com.heartline.phone.data.BpRepository
 import com.heartline.phone.data.HeartRepository
 import com.heartline.phone.data.ProfileRepository
@@ -31,7 +32,10 @@ import com.heartline.phone.ui.model.EcgListViewModel
 import com.heartline.phone.ui.model.HomeViewModel
 import com.heartline.phone.ui.model.RecordFormatter
 import com.heartline.phone.ui.model.SettingsViewModel
+import com.heartline.shared.bp.MorphologyEmbedder
+import com.heartline.shared.model.RecordMeta
 import com.heartline.shared.sync.PhoneSyncEngine
+import com.heartline.shared.sync.RecordSink
 import com.heartline.shared.sync.Protocol
 import com.heartline.shared.sync.SyncTransport
 import kotlinx.coroutines.CoroutineScope
@@ -57,12 +61,23 @@ val phoneModule = module {
     single { HeartRepository(get()) { alert -> get<PhoneNotifier>().alert(alert) } }
     single { SettingsRepository(androidContext()) }
     single { get<HeartlineDatabase>().bp() }
-    single { BpRepository(get(), get()) { get() } }
+    single {
+        // PaPaGei is loaded on first use (only once there are enough cuff checks to train on).
+        val papagei by lazy { PapageiEmbedder.fromAssets(androidContext()) }
+        BpRepository(get(), get(), onSafety = { get<PhoneNotifier>().bpSafety(it) }, embedders = { listOfNotNull(MorphologyEmbedder, papagei) }) { get() }
+    }
     single { ProfileRepository(androidContext()) { get() } }
     single {
+        val records = get<RecordRepository>()
         PhoneSyncEngine(
             get(),
-            get<RecordRepository>(),
+            // Blood-pressure readings are also handed to the BP repository (refinement, safety notice).
+            object : RecordSink by records {
+                override suspend fun save(meta: RecordMeta, wave: FloatArray?) {
+                    records.save(meta, wave)
+                    runCatching { get<BpRepository>().onRecordSaved(meta, wave) }.onFailure { Log.w("Heartline/BP", "refine failed", it) }
+                }
+            },
             get<HeartRepository>(),
             onHello = { hello ->
                 // The watch says hello on start and on every link check: reply with everything it gates on.

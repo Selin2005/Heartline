@@ -9,6 +9,7 @@ import com.heartline.wear.data.WatchDatabase
 import com.heartline.wear.data.WatchRecordStore
 import com.heartline.wear.bp.BpMeasureViewModel
 import com.heartline.wear.bp.WatchBpStore
+import com.heartline.wear.sensor.AndroidMotionMeter
 import com.heartline.shared.model.Metric
 import com.heartline.wear.ecg.EcgMeasureViewModel
 import com.heartline.wear.quick.QuickMeasureViewModel
@@ -158,7 +159,7 @@ val wearModule = module {
             get<WatchSyncEngine>().sendSettings(changed)
         }
     }
-    viewModel { BpMeasureViewModel(get(), get(), get(), get()) }
+    viewModel { BpMeasureViewModel(get(), get(), get(), get(), motion = AndroidMotionMeter(androidContext())) }
     viewModel { params -> QuickMeasureViewModel(get<QuickSources>()[params.get<Metric>()]!!, get(), get(), get()) }
     viewModel { EcgMeasureViewModel(get(), get(), get()) }
 }

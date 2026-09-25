@@ -5,8 +5,9 @@ import kotlinx.coroutines.flow.Flow
 /**
  * A batch of ECG samples (mV at 500 Hz) and whether the electrodes lost contact.
  * [timestampMs]: sensor time of the last sample, used to measure the real sample rate.
+ * [ppg]: the green PPG value the SDK reports with each ECG sample (same length), if present.
  */
-class EcgChunk(val samples: FloatArray, val leadOff: Boolean, val timestampMs: Long? = null)
+class EcgChunk(val samples: FloatArray, val leadOff: Boolean, val timestampMs: Long? = null, val ppg: FloatArray? = null)
 
 class SensorException(val problem: SensorProblem) : Exception(problem.name)
 

@@ -55,3 +55,11 @@ tools/device/collect-logs.sh dump      # یا بعد از تست
     - روی watch face انگشت را نگه دارید و در Customize یک complication از Heartline انتخاب کنید (ضربان، ECG، فشار، استرس، SpO2، یا «Start ECG»).
     - بعد از یک اندازه‌گیری، Tile و complication باید به‌روز شوند.
     - میان‌بر «Start ECG» باید مستقیم ECG را باز کند.
+12. **فشار خون، الگوریتم ۳ (بدون «Outside your calibration»):**
+    - بعد از کالیبراسیون، در حالت استراحت اندازه بگیرید: عدد عادی، بدون برچسب.
+    - چند دقیقه فعالیت (بالا رفتن از پله) و بلافاصله نشسته اندازه بگیرید: باید **عدد** نشان داده شود، با «Beyond your calibration range» و دکمه‌ی «Measure again». اندازه‌گیری دوم در ۱۰ دقیقه باید «Confirmed» شود.
+    - هنگام اندازه‌گیری دست را تکان دهید: باید «Keep your arm still» بیاید (نه عدد، نه خطای کالیبراسیون).
+    - بلافاصله بعد از خوانش ساعت با کاف اندازه بگیرید و در گوشی «Compare latest reading with a cuff» را بزنید. در کارت کالیبراسیون باید «Calibration covers …–… mmHg · 1 cuff check added» دیده شود.
+    - لاگ `Heartline/BP` («BP outcome: …») را بفرستید.
+13. **PAT (زمان رسیدن پالس) در ECG:** یک ECG کامل بگیرید و خط لاگ `Heartline/ECG` که با `PAT:` شروع می‌شود را بفرستید. `ppg=true` و `medianMs` بین ۱۵۰ تا ۴۰۰ یعنی کانال PPG همراه ECG قابل استفاده است. `ppg=false` یعنی این مدل ساعت آن را نمی‌دهد.
+14. **خروجی داده‌ی فشار:** Blood pressure → Share → «BP data (JSON)». فایل را برای ارزیابی الگوریتم (`tools/bp-ml`) بفرستید. شامل موج خام PPG و عددهای کاف است.

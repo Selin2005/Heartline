@@ -34,15 +34,37 @@ data class PpgFeatureVector(
     val apgDa: Double = 0.0,
     /** The raw signal was upside down (Galaxy Watch green PPG usually is) and was flipped. */
     val inverted: Boolean = false,
-    val version: Int = 1
+    val version: Int = 1,
+    /**
+     * Algorithm 3: systolic peak → diastolic peak (or inflection) time, ms. The reflected wave
+     * returns sooner as arteries stiffen and pressure rises (stiffness index, Millasseau 2002).
+     */
+    val reflectionDelayMs: Double = 0.0,
+    /** Height of the diastolic peak/inflection relative to the systolic peak (reflection index). */
+    val reflectionIndex: Double = 0.0,
+    /** Beat-to-beat variability of the kept beats (RMSSD, ms). */
+    val rmssdMs: Double = 0.0,
+    /** Skewness of the filtered signal: clean PPG is clearly skewed (Elgendi 2016 SQI). */
+    val skewness: Double = 0.0,
+    /** The ensemble beat resampled to [SHAPE_POINTS] points (0..1), for the phone's learned model. */
+    val shape: List<Float> = emptyList()
 ) {
     fun asArray() = doubleArrayOf(heartRateBpm, riseFraction, widthFraction, areaRatio)
 
-    /** Features used by [BpEstimator] (algorithm 2). */
-    fun modelArray() = doubleArrayOf(heartRateBpm, upstrokeMs, width50Ms, areaRatio, apgBa, apgDa)
+    /** Features used by [BpEstimator]; see [BpEstimator.FEATURE_MIN_VERSION] for when each became available. */
+    fun modelArray() = doubleArrayOf(heartRateBpm, upstrokeMs, width50Ms, areaRatio, apgBa, apgDa, reflectionDelayMs)
+
+    /** Beat length, ms. */
+    val beatMs: Double get() = 60_000.0 / heartRateBpm.coerceAtLeast(1.0)
 
     companion object {
-        const val VERSION = 2
+        /** Current extractor. */
+        const val VERSION = 3
+
+        /** Oldest extractor whose features the estimator still accepts (the 6 algorithm-2 features are unchanged). */
+        const val MIN_MODEL_VERSION = 2
+
+        const val SHAPE_POINTS = 32
     }
 }
 
@@ -96,6 +118,9 @@ object PpgFeatures {
             (correlations.count { it > 0.9 }.toDouble() / correlations.size)
 
         val peakIdx = template.indices.maxBy { template[it] }
+        val (reflectionIdx, reflectionHeight) = reflection(template, peakIdx, fs * up)
+        val keptIntervals = kept.map { (a, b) -> (b - a) * 1000.0 / fs }
+        val rmssd = if (keptIntervals.size < 3) 0.0 else sqrt(keptIntervals.zipWithNext { a, b -> (b - a) * (b - a) }.average())
         val areaBefore = (0..peakIdx).sumOf { template[it] }
         val areaAfter = (peakIdx until n).sumOf { template[it] }
         val (ba, da) = apgRatios(template, fs * up)
@@ -113,8 +138,47 @@ object PpgFeatures {
             apgBa = ba,
             apgDa = da,
             inverted = inverted,
-            version = PpgFeatureVector.VERSION
+            version = PpgFeatureVector.VERSION,
+            reflectionDelayMs = reflectionIdx?.let { (it - peakIdx) * msPerSample } ?: 0.0,
+            reflectionIndex = reflectionHeight,
+            rmssdMs = rmssd,
+            skewness = skewness(x),
+            shape = List(PpgFeatureVector.SHAPE_POINTS) { k -> template[k * (n - 1) / (PpgFeatureVector.SHAPE_POINTS - 1)].toFloat() }
         )
+    }
+
+    /**
+     * The reflected (diastolic) wave: the first local maximum of the beat after the systolic peak,
+     * or, when the two merge (stiff arteries, older users), the inflection point where the downslope
+     * flattens most (maximum of the first derivative). Searched 80–500 ms after the peak and before
+     * 85 % of the beat. @return its index and its height relative to the systolic peak.
+     */
+    private fun reflection(template: DoubleArray, peak: Int, fs: Int): Pair<Int?, Double> {
+        val smooth = gaussian(template, sigma = 0.015 * fs)
+        val from = peak + (0.08 * fs).toInt()
+        val to = minOf(peak + (0.5 * fs).toInt(), (template.size * 0.85).toInt())
+        if (to - from < 3) return null to 0.0
+        val localMax = (from + 1 until to - 1).firstOrNull {
+            smooth[it] > smooth[it - 1] &&
+                smooth[it] >= smooth[it + 1] &&
+                smooth[it] > 0.05
+        }
+        val idx = localMax ?: (from + 1 until to - 1).maxByOrNull { smooth[it + 1] - smooth[it - 1] } ?: return null to 0.0
+        return idx to template[idx].coerceIn(0.0, 1.0)
+    }
+
+    private fun skewness(x: FloatArray): Double {
+        val m = x.average()
+        var m2 = 0.0
+        var m3 = 0.0
+        for (v in x) {
+            val d = v - m
+            m2 += d * d
+            m3 += d * d * d
+        }
+        m2 /= x.size
+        m3 /= x.size
+        return if (m2 <= 1e-12) 0.0 else m3 / (m2 * sqrt(m2))
     }
 
     /**

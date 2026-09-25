@@ -122,15 +122,20 @@ fun BpFlow(
             calibrationRound = capture?.round,
             showWave = prefs.liveWave,
         )
-        is BpState.Done -> BpResultScreen(s.systolic, s.diastolic, s.pulse, s.category, s.uncertainty, onDone = done)
-        BpState.OutOfRange -> BpOutOfRangeScreen(
-            onRetry = { vm.reset() },
-            onRecalibrate = {
-                scope.launch {
-                    if (phone.open(SetupTarget.BP_CALIBRATION)) onStartCalibration()
-                }
-            },
+        is BpState.Done -> BpResultScreen(
+            s.systolic,
+            s.diastolic,
+            s.pulse,
+            s.category,
+            s.uncertainty,
+            beyondCalibration = s.beyondCalibration,
+            confirmed = s.confirmed,
+            safety = s.safety,
+            onMeasureAgain = ::start,
+            onDone = done,
         )
+        BpState.OutOfRange -> BpOutOfRangeScreen(onRetry = { vm.reset() })
+        BpState.Moving -> BpOutOfRangeScreen(moving = true, onRetry = { vm.reset() })
         is BpState.CalibrationRecorded -> BpCalibrationRecordedScreen(s.round, onDone = done)
         BpState.PoorSignal -> SensorErrorScreen(SensorProblem.OFF_BODY, onAction = { vm.reset() })
         is BpState.Failed -> SensorErrorScreen(s.problem, onAction = {

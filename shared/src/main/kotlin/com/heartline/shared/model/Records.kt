@@ -1,5 +1,6 @@
 package com.heartline.shared.model
 
+import com.heartline.shared.bp.BpSafety
 import kotlinx.serialization.Serializable
 
 /** Kinds of measurement record the watch produces and the phone stores. */
@@ -32,8 +33,17 @@ sealed interface RecordSummary {
         val pulse: Int?,
         /** ± mmHg (about one standard deviation) for systolic; null for older readings. */
         val uncertainty: Int? = null,
-        val algorithm: Int = 1
-    ) : RecordSummary
+        val algorithm: Int = 1,
+        /** The pulse wave or pressure was outside what the calibration covered (algorithm 3+): an extrapolation. */
+        val beyondCalibration: Boolean = false,
+        /** A second reading within 10 minutes pointed the same way. */
+        val confirmed: Boolean = false,
+        /** When the phone's personal model refined the reading (algorithm 4): what the watch showed. */
+        val watchSystolic: Int? = null,
+        val watchDiastolic: Int? = null
+    ) : RecordSummary {
+        val safety get() = BpSafety.of(systolic, diastolic)
+    }
 
     @Serializable
     data class Spo2(val percent: Int, val heartRate: Int?, val lowConfidence: Boolean) : RecordSummary
@@ -92,7 +102,13 @@ data class EcgMetrics(
     val noisySeconds: List<Int> = emptyList(),
     val sampleRateHz: Float,
     val inverted: Boolean = false,
-    val algorithm: Int = 2
+    val algorithm: Int = 2,
+    /**
+     * Median pulse arrival time (ECG R peak → wrist PPG upstroke), ms, when the watch delivered a
+     * usable PPG channel alongside the ECG. Collected to validate PAT for blood pressure.
+     */
+    val pulseArrivalMs: Double? = null,
+    val pulseArrivalBeats: Int? = null
 ) {
     val usablePercent: Int get() = if (durationSec <= 0f) 0 else (usableSec / durationSec * 100f).toInt()
 }

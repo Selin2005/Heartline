@@ -14,8 +14,10 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.heartline.phone.MainActivity
 import com.heartline.phone.R
+import com.heartline.shared.bp.BpSafety
 import com.heartline.shared.hr.AlertKind
 import com.heartline.shared.hr.HealthAlert
+import com.heartline.shared.model.RecordSummary
 
 /** Mirrors watch heart alerts as phone notifications. */
 class PhoneNotifier(private val context: Context) {
@@ -53,6 +55,18 @@ class PhoneNotifier(private val context: Context) {
                 .setAutoCancel(true)
                 .setContentIntent(open)
                 .build(),
+        )
+    }
+
+    /** A confirmed very high or low blood-pressure reading: check with a cuff (wellness wording, not a diagnosis). */
+    fun bpSafety(reading: RecordSummary.BloodPressure) {
+        val high = reading.safety == BpSafety.VERY_HIGH
+        simple(
+            BP_SAFETY_ID,
+            context.getString(if (high) R.string.alert_bp_high_title else R.string.alert_bp_low_title, reading.systolic, reading.diastolic),
+            context.getString(if (high) R.string.bp_safety_high else R.string.bp_safety_low),
+            DeepLinks.phone("blood_pressure"),
+            CHANNEL_ALERTS,
         )
     }
 
@@ -98,7 +112,7 @@ class PhoneNotifier(private val context: Context) {
         DeepLinks.phone(SetupTarget.HOME.phoneRoute),
     )
 
-    private fun simple(id: Int, title: String, text: String, link: String) {
+    private fun simple(id: Int, title: String, text: String, link: String, channel: String = CHANNEL_REMINDERS) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val open = PendingIntent.getActivity(
             context,
@@ -108,10 +122,11 @@ class PhoneNotifier(private val context: Context) {
         )
         manager.notify(
             id,
-            NotificationCompat.Builder(context, CHANNEL_REMINDERS)
+            NotificationCompat.Builder(context, channel)
                 .setSmallIcon(R.drawable.ic_heart)
                 .setContentTitle(title)
                 .setContentText(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
                 .setAutoCancel(true)
                 .setContentIntent(open)
                 .build(),
@@ -121,6 +136,7 @@ class PhoneNotifier(private val context: Context) {
     companion object {
         const val CALIBRATION_ID = 7_002
         const val DAILY_ID = 7_003
+        const val BP_SAFETY_ID = 7_004
         const val CHANNEL_REMINDERS = "reminders"
         const val SETUP_ID = 7_001
         const val CHANNEL_ALERTS = "alerts"

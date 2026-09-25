@@ -15,6 +15,7 @@ import com.heartline.wear.bp.WatchBpStore
 import com.heartline.wear.data.WatchDatabase
 import com.heartline.wear.data.WatchRecordStore
 import com.heartline.wear.sensor.FakePpgSource
+import com.heartline.wear.sensor.MotionMeter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -55,7 +56,18 @@ class BpMeasureTest {
         Dispatchers.resetMain()
     }
 
-    private fun vm() = BpMeasureViewModel(FakePpgSource(chunkDelayMs = 0), bp, records, { scheduled++ }, uiIntervalMs = 0)
+    private fun vm(source: FakePpgSource = FakePpgSource(chunkDelayMs = 0), motion: MotionMeter = MotionMeter.NONE) =
+        BpMeasureViewModel(source, bp, records, { scheduled++ }, uiIntervalMs = 0, motion = motion)
+
+    private fun calibrate() {
+        val features = PpgFeatures.extract(SyntheticPpg.generate(20.0, 68.0, 0.5), 100)!!
+        bp.setCalibration(BpCalibration("c", System.currentTimeMillis(), List(3) { CalibrationPoint(features, 122, 80, 68) }))
+    }
+
+    private suspend fun BpMeasureViewModel.measure(): BpState {
+        start()
+        return withTimeout(10_000) { state.first { it !is BpState.Measuring && it !is BpState.Idle } }
+    }
 
     @Test
     fun withoutCalibrationAsksToCalibrate() {
@@ -87,8 +99,44 @@ class BpMeasureTest {
         val end = withTimeout(10_000) { vm.state.first { it !is BpState.Measuring && it !is BpState.Idle } }
         val done = end as? BpState.Done ?: error("ended with $end")
         assertTrue("$done", done.systolic in 110..135 && done.diastolic in 70..90)
-        val summary = records.pending().single().meta.summary as RecordSummary.BloodPressure
+        val pending = records.pending().single()
+        val summary = pending.meta.summary as RecordSummary.BloodPressure
         assertEquals(done.systolic, summary.systolic)
+        assertEquals(3, summary.algorithm)
+        // The raw pulse wave is kept for the phone.
+        assertEquals(100, pending.meta.sampleRateHz)
+        assertEquals(2000, pending.meta.sampleCount)
+        assertEquals(2000, pending.wave?.size)
         assertEquals(1, scheduled)
+        assertEquals(1, bp.history.size)
+    }
+
+    @Test
+    fun aVeryDifferentPulseIsShownFlaggedAndConfirmedBySecondReading() = runBlocking {
+        calibrate()
+        val vm = vm(FakePpgSource(heartRateBpm = 110.0, stiffness = 0.95, chunkDelayMs = 0))
+        val first = vm.measure() as? BpState.Done ?: error("refused: ${vm.state.value}")
+        assertTrue("$first", first.beyondCalibration && first.needsConfirming && !first.confirmed)
+        assertTrue("$first", first.systolic > 130)
+        vm.reset()
+        val second = vm.measure() as BpState.Done
+        assertTrue("$second", second.confirmed && !second.needsConfirming)
+        val summaries = records.pending().map { it.meta.summary as RecordSummary.BloodPressure }
+        assertTrue(summaries.all { it.beyondCalibration })
+        assertEquals(1, summaries.count { it.confirmed })
+        // Extrapolated readings don't teach the "normal spread".
+        assertTrue(bp.history.isEmpty())
+    }
+
+    @Test
+    fun movingArmMeansMeasureAgain() = runBlocking {
+        calibrate()
+        val moving = object : MotionMeter {
+            override fun start() = Unit
+
+            override fun stop() = 2.0
+        }
+        assertEquals(BpState.Moving, vm(motion = moving).measure())
+        assertTrue(records.pending().isEmpty())
     }
 }

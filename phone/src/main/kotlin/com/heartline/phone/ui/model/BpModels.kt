@@ -8,10 +8,15 @@ import com.heartline.phone.data.BpValidationEntity
 import com.heartline.shared.bp.BpPair
 import com.heartline.shared.bp.BpAccuracy
 import com.heartline.shared.bp.BpCategory
+import com.heartline.shared.bp.BpConformal
+import com.heartline.shared.bp.BpDrift
+import com.heartline.shared.bp.BpSafety
 import com.heartline.shared.bp.CalibrationPoint
 import com.heartline.shared.bp.PpgFeatureVector
 import com.heartline.shared.model.RecordSummary
 import com.heartline.shared.sync.CaptureRequest
+import com.heartline.shared.sync.Protocol
+import kotlinx.serialization.encodeToString
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -30,8 +35,16 @@ data class BpReadingUi(
     val diastolic: Int,
     val pulse: Int?,
     val uncertainty: Int? = null,
+    /** Outside what the calibration covered: an extrapolation. */
+    val beyondCalibration: Boolean = false,
+    val confirmed: Boolean = false,
+    /** Refined by the phone's personal model; [watchSystolic]/[watchDiastolic] is what the watch showed. */
+    val watchSystolic: Int? = null,
+    val watchDiastolic: Int? = null,
 ) {
     val category get() = BpCategory.of(systolic, diastolic)
+    val safety get() = BpSafety.of(systolic, diastolic)
+    val refined get() = watchSystolic != null
 }
 
 data class BpHomeUi(
@@ -45,6 +58,15 @@ data class BpHomeUi(
     val accuracy: BpAccuracy? = null,
     /** The latest reading can still be compared with a cuff (recent and not yet compared). */
     val canValidateLatest: Boolean = false,
+    /** Recent readings suggest pressure has moved away from the calibration: ask for a cuff check. */
+    val drift: BpDrift.Direction? = null,
+    /** Cuff checks keep disagreeing the same way: a fresh calibration is due. */
+    val recalibrate: Boolean = false,
+    /** Cuff systolic range the calibration has seen (base rounds plus cuff checks). */
+    val calibrationSpan: IntRange? = null,
+    val cuffChecksInCalibration: Int = 0,
+    /** ± that covered 80 % of this user's cuff checks (split-conformal), once there are enough. */
+    val personalRange80: Int? = null,
 )
 
 class BpHomeViewModel(
@@ -56,8 +78,19 @@ class BpHomeViewModel(
     val state: StateFlow<BpHomeUi> = combine(repository.calibration, repository.readings, repository.validations) { calibration, records, validations ->
         val readings = records.mapNotNull { r ->
             val s = r.summary as? RecordSummary.BloodPressure ?: return@mapNotNull null
-            BpReadingUi(r.id, formatter.date(r.entity.startedAtMs), formatter.time(r.entity.startedAtMs), s.systolic, s.diastolic, s.pulse, s.uncertainty) to
-                r.entity.startedAtMs
+            BpReadingUi(
+                r.id,
+                formatter.date(r.entity.startedAtMs),
+                formatter.time(r.entity.startedAtMs),
+                s.systolic,
+                s.diastolic,
+                s.pulse,
+                s.uncertainty,
+                s.beyondCalibration,
+                s.confirmed,
+                s.watchSystolic,
+                s.watchDiastolic,
+            ) to r.entity.startedAtMs
         }
         val latest = readings.firstOrNull()
         fun average(days: Int): Pair<Int, Int>? {
@@ -74,6 +107,19 @@ class BpHomeViewModel(
             average30 = average(30),
             accuracy = BpAccuracy.of(validations.map { BpPair(it.watchSystolic, it.watchDiastolic, it.cuffSystolic, it.cuffDiastolic) }),
             canValidateLatest = latest != null && now() - latest.second <= VALIDATION_WINDOW_MS && validations.none { it.readingId == latest.first.id },
+            drift = calibration?.takeIf { it.isValid(now()) }?.let { cal ->
+                // Readings since the last cuff point that keep landing beyond the calibration, the same way.
+                val since = cal.timedPoints().maxOf { it.second }
+                val reference = cal.timedPoints().map { it.first.cuffSystolic }.average()
+                BpDrift.fromReadings(readings.filter { it.second > since }.reversed().map { (ui, _) -> ui.beyondCalibration to ui.systolic - reference })
+            },
+            recalibrate = calibration?.takeIf { it.isValid(now()) }?.let { cal ->
+                // Cuff checks that keep disagreeing the same way although each one was added to the calibration.
+                BpDrift.fromResiduals(validations.filter { it.atMs >= cal.createdAtMs }.sortedBy { it.atMs }.map { (it.watchSystolic - it.cuffSystolic).toDouble() }) != null
+            } ?: false,
+            calibrationSpan = calibration?.takeIf { it.isValid(now()) }?.systolicSpan,
+            cuffChecksInCalibration = calibration?.extraPoints?.size ?: 0,
+            personalRange80 = BpConformal.halfWidth(validations.map { (it.watchSystolic - it.cuffSystolic).toDouble() })?.roundToInt(),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BpHomeUi())
 
@@ -85,6 +131,12 @@ class BpHomeViewModel(
             repository.addValidation(BpValidationEntity(newId(), latest.id, now(), latest.systolic, latest.diastolic, systolic, diastolic))
         }
         return true
+    }
+
+    /** The user's BP data (calibration and cuff-checked readings with raw PPG) as JSON, for offline analysis. */
+    suspend fun exportDataset(dir: java.io.File, fileName: String): java.io.File = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val data = repository.dataset()
+        java.io.File(dir.apply { mkdirs() }, fileName).apply { writeText(data?.let { Protocol.json.encodeToString(it) } ?: "{}") }
     }
 
     private companion object {

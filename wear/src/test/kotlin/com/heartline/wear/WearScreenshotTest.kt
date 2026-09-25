@@ -137,6 +137,16 @@ class WearScreenshotTest(private val size: String) {
 
     @Test fun bpOutOfRange() = shot("bp_out_of_range") { com.heartline.wear.ui.screens.BpOutOfRangeScreen() }
 
+    @Test fun bpMoving() = shot("bp_moving") { com.heartline.wear.ui.screens.BpOutOfRangeScreen(moving = true) }
+
+    @Test fun bpResultBeyondCalibration() = shot("bp_result_beyond") {
+        BpResultScreen(158, 96, 84, BpCategory.HIGH_STAGE_2, uncertainty = 13, beyondCalibration = true)
+    }
+
+    @Test fun bpResultVeryHigh() = shot("bp_result_very_high") {
+        BpResultScreen(186, 112, 90, BpCategory.CRISIS, uncertainty = 15, beyondCalibration = true, confirmed = true, safety = com.heartline.shared.bp.BpSafety.VERY_HIGH)
+    }
+
     @Test fun bpNeedsCalibration() = shot("bp_needs_calibration") { BpNeedsCalibrationScreen() }
 
     @Test fun bpNeedsCalibrationOpened() = shot("bp_needs_calibration_opened") { BpNeedsCalibrationScreen(opened = true) }

@@ -1,0 +1,10 @@
+numpy
+scipy
+onnxruntime
+# export_papagei_onnx.py only (PaPaGei's model code imports these):
+torch
+onnx
+onnxscript
+tqdm
+matplotlib
+scikit-learn

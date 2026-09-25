@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.heartline.shared.dsp.StreamingEcgFilter
 import com.heartline.shared.ecg.EcgAnalyzer
+import com.heartline.shared.bp.PulseArrival
 import com.heartline.shared.ecg.EcgRecorder
 import com.heartline.shared.ecg.EcgSession
 import com.heartline.shared.ecg.RPeakDetector
@@ -81,6 +82,7 @@ class EcgMeasureViewModel(
         var lastBpmAt = 0L
         var bpm: Int? = null
         var touched = false
+        val paired = PairedPpg(fs * recorder.targetSeconds)
         mutable.value = EcgMeasureState.Measuring(0f, recorder.secondsLeft, FloatArray(0), leadOff = true, waitingForTouch = true)
         job = viewModelScope.launch {
             var failure: SensorProblem? = null
@@ -89,6 +91,7 @@ class EcgMeasureViewModel(
                 .takeWhile { !recorder.isComplete && !recorder.isAbandoned }
                 .collect { chunk ->
                     recorder.accept(chunk.samples, chunk.leadOff)
+                    if (!chunk.leadOff) paired.add(chunk.samples, chunk.ppg)
                     live.add(chunk.samples, chunk.leadOff)
                     rate.add(chunk.samples.size, chunk.leadOff, chunk.timestampMs)
                     if (!chunk.leadOff) touched = true
@@ -117,7 +120,7 @@ class EcgMeasureViewModel(
                 return@launch
             }
             mutable.value = EcgMeasureState.Analyzing
-            mutable.value = finish(recorder, startedAt, rate.hz())
+            mutable.value = finish(recorder, startedAt, rate.hz(), paired)
         }
     }
 
@@ -130,7 +133,7 @@ class EcgMeasureViewModel(
         mutable.value = EcgMeasureState.Idle
     }
 
-    private suspend fun finish(recorder: EcgRecorder, startedAt: Long, measuredHz: Float?): EcgMeasureState {
+    private suspend fun finish(recorder: EcgRecorder, startedAt: Long, measuredHz: Float?, paired: PairedPpg? = null): EcgMeasureState {
         val recording = recorder.recording()
         val endedAt = now()
         val session = EcgSession(
@@ -141,7 +144,9 @@ class EcgMeasureViewModel(
             measuredRateHz = measuredHz,
         )
         val analysis = withContext(Dispatchers.Default) { EcgAnalyzer.analyze(recording, recorder.sampleRateHz, session) }
-        val m = analysis.metrics
+        val pat = paired?.takeIf { it.usable }?.let { p -> withContext(Dispatchers.Default) { PulseArrival.compute(p.ecg(), p.ppg(), recorder.sampleRateHz) } }
+        Log.i(TAG, "PAT: ppg=${paired?.usable} samples=${paired?.size} result=$pat")
+        val m = analysis.metrics.copy(pulseArrivalMs = pat?.medianMs, pulseArrivalBeats = pat?.beats)
         Log.i(
             TAG,
             "ECG done: result=${analysis.result} reason=${m.poorReason} quality=${m.qualityScore} " +
@@ -167,6 +172,32 @@ class EcgMeasureViewModel(
             sync.schedule()
         }
         return EcgMeasureState.Done(id, analysis.result, analysis.averageBpm, m)
+    }
+
+    /** ECG and the PPG channel reported with it, kept sample-aligned (contact stretches only). */
+    private class PairedPpg(private val capacity: Int) {
+        private val ecg = FloatArray(capacity)
+        private val ppg = FloatArray(capacity)
+        var size = 0
+            private set
+        private var missing = false
+
+        val usable get() = !missing && size > 0
+
+        fun add(samples: FloatArray, values: FloatArray?) {
+            if (values == null || values.size != samples.size) {
+                missing = true
+                return
+            }
+            val n = minOf(samples.size, capacity - size)
+            samples.copyInto(ecg, size, 0, n)
+            values.copyInto(ppg, size, 0, n)
+            size += n
+        }
+
+        fun ecg() = ecg.copyOf(size)
+
+        fun ppg() = ppg.copyOf(size)
     }
 
     private fun liveBpm(recent: FloatArray, fs: Int): Int? {

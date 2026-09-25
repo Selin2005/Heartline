@@ -66,6 +66,8 @@ import com.heartline.phone.ui.model.CalibrationUi
 import com.heartline.phone.ui.theme.HeartlineColors
 import com.heartline.phone.ui.theme.HeartlineTheme
 import com.heartline.shared.bp.BpCategory
+import com.heartline.shared.bp.BpDrift
+import com.heartline.shared.bp.BpSafety
 import com.heartline.shared.model.Metric
 
 fun HeartlineColors.bpCategory(category: BpCategory): Color = when (category) {
@@ -126,6 +128,14 @@ fun BpHomeScreen(
                         )
                     }
                 }
+                state.calibrationSpan?.let { span ->
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        pluralStringResource(R.plurals.bp_calibration_span, state.cuffChecksInCalibration, span.first, span.last, state.cuffChecksInCalibration),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant,
+                    )
+                }
                 Spacer(Modifier.height(14.dp))
                 if (state.calibrated) {
                     onMeasureOnWatch?.let { measure ->
@@ -136,6 +146,36 @@ fun BpHomeScreen(
                 } else {
                     // The watch never measures without a valid calibration: this is the only way forward.
                     PillButton(stringResource(R.string.bp_calibrate_first), onClick = onCalibrate, color = colors.bp)
+                }
+            }
+        }
+        if (state.drift != null || state.recalibrate) {
+            item {
+                RoundedCard(Modifier.gutter()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.ErrorOutline, contentDescription = null, tint = colors.statusWarn)
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            stringResource(
+                                when {
+                                    state.recalibrate -> R.string.bp_drift_recalibrate
+                                    state.drift == BpDrift.Direction.HIGHER -> R.string.bp_drift_higher
+                                    else -> R.string.bp_drift_lower
+                                },
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.onBackground,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    if (state.recalibrate) {
+                        TonalPillButton(stringResource(R.string.bp_recalibrate), onClick = onCalibrate)
+                    } else if (state.canValidateLatest) {
+                        TonalPillButton(stringResource(R.string.bp_accuracy_compare), onClick = { validating = true })
+                    } else {
+                        Text(stringResource(R.string.bp_drift_how), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                    }
                 }
             }
         }
@@ -152,6 +192,7 @@ fun BpHomeScreen(
                     latest.pulse?.let {
                         Text(stringResource(R.string.bp_pulse, it), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
                     }
+                    ReadingNotes(latest)
                     Spacer(Modifier.height(14.dp))
                     CategoryScale(latest.category)
                 }
@@ -189,6 +230,10 @@ fun BpHomeScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = colors.onSurfaceVariant,
                         )
+                        state.personalRange80?.let {
+                            Text(stringResource(R.string.bp_personal_range, it), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                        }
+                        Text(stringResource(R.string.bp_accuracy_learns), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                     }
                     if (state.canValidateLatest) {
                         Spacer(Modifier.height(12.dp))
@@ -203,7 +248,15 @@ fun BpHomeScreen(
                     rows.forEachIndexed { i, r ->
                         CardRow(
                             "${r.systolic}/${r.diastolic} ${stringResource(R.string.unit_mmhg)}",
-                            subtitle = listOfNotNull(r.date, r.time, r.uncertainty?.let { "±$it" }, r.pulse?.let { stringResource(R.string.bp_pulse, it) }).joinToString(" · "),
+                            subtitle = listOfNotNull(
+                                r.date,
+                                r.time,
+                                r.uncertainty?.let { "±$it" },
+                                r.pulse?.let { stringResource(R.string.bp_pulse, it) },
+                                stringResource(R.string.bp_tag_beyond).takeIf { r.beyondCalibration && !r.confirmed },
+                                stringResource(R.string.bp_tag_confirmed).takeIf { r.confirmed },
+                                stringResource(R.string.bp_tag_refined).takeIf { r.refined },
+                            ).joinToString(" · "),
                             leading = { Box(Modifier.size(10.dp).clip(CircleShape).background(colors.bpCategory(r.category))) },
                             trailing = {
                                 Text(stringResource(r.category.label), style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
@@ -223,6 +276,25 @@ fun BpHomeScreen(
                 modifier = Modifier.padding(horizontal = 28.dp),
             )
         }
+    }
+}
+
+/** What the latest reading needs the user to know: refined, beyond the calibration, confirmed, very high or low. */
+@Composable
+private fun ReadingNotes(r: BpReadingUi) {
+    val colors = HeartlineTheme.colors
+    @Composable
+    fun note(text: String, color: Color) = Text(text, style = MaterialTheme.typography.bodySmall, color = color, modifier = Modifier.padding(top = 4.dp))
+    if (r.refined) note(stringResource(R.string.bp_refined_note, r.watchSystolic ?: 0, r.watchDiastolic ?: 0), colors.onSurfaceVariant)
+    if (r.confirmed) {
+        note(stringResource(R.string.bp_confirmed), colors.onSurfaceVariant)
+    } else if (r.beyondCalibration) {
+        note(stringResource(R.string.bp_beyond_calibration), colors.statusWarn)
+    }
+    when (r.safety) {
+        BpSafety.VERY_HIGH -> note(stringResource(R.string.bp_safety_high), colors.statusAlert)
+        BpSafety.LOW -> note(stringResource(R.string.bp_safety_low), colors.statusWarn)
+        BpSafety.NONE -> Unit
     }
 }
 

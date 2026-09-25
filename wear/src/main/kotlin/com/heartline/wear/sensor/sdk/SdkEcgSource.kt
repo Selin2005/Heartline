@@ -35,7 +35,14 @@ class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
                     val values = points.mapNotNull { it.getValue(ValueKey.EcgSet.ECG_MV)?.takeIf { v -> v.isFinite() } }
                     if (values.size < points.size) missing += points.size - values.size
                     val leadOff = points.any { it.getValue(ValueKey.EcgSet.LEAD_OFF) == LEAD_OFF_NO_CONTACT }
-                    if (values.isNotEmpty()) trySendBlocking(EcgChunk(values.toFloatArray(), leadOff, points.last().timestamp))
+                    // The PPG channel reported with each ECG sample (pulse arrival time); only kept when
+                    // every point has both, so the two stay sample-aligned.
+                    val ppg = if (values.size == points.size) {
+                        points.mapNotNull { it.getValue(ValueKey.EcgSet.PPG_GREEN)?.toFloat() }.takeIf { it.size == points.size }?.toFloatArray()
+                    } else {
+                        null
+                    }
+                    if (values.isNotEmpty()) trySendBlocking(EcgChunk(values.toFloatArray(), leadOff, points.last().timestamp, ppg))
                 }
 
                 override fun onFlushCompleted() = Unit

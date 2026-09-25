@@ -25,6 +25,7 @@ import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import com.heartline.shared.bp.BpCategory
+import com.heartline.shared.bp.BpSafety
 import com.heartline.shared.design.Palette
 import com.heartline.shared.model.Metric
 import com.heartline.wear.R
@@ -90,8 +91,25 @@ fun BpInstructionScreen(calibrationRound: Int? = null, onStart: () -> Unit = {})
     }
 }
 
+/**
+ * The reading, always with its ±. A reading beyond the calibration or at a [BpSafety] level is
+ * shown too (never replaced by an error), with a prompt to confirm it with a second reading and,
+ * when it's very high or low, to check with a cuff.
+ */
 @Composable
-fun BpResultScreen(systolic: Int, diastolic: Int, pulse: Int, category: BpCategory, uncertainty: Int = 0, onDone: () -> Unit = {}) {
+fun BpResultScreen(
+    systolic: Int,
+    diastolic: Int,
+    pulse: Int,
+    category: BpCategory,
+    uncertainty: Int = 0,
+    beyondCalibration: Boolean = false,
+    confirmed: Boolean = false,
+    safety: BpSafety = BpSafety.NONE,
+    onMeasureAgain: () -> Unit = {},
+    onDone: () -> Unit = {},
+) {
+    val needsConfirming = (beyondCalibration || safety != BpSafety.NONE) && !confirmed
     ActionScreen(stringResource(R.string.action_done), onDone) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text("$systolic/$diastolic", style = MaterialTheme.typography.displayMedium)
@@ -102,6 +120,12 @@ fun BpResultScreen(systolic: Int, diastolic: Int, pulse: Int, category: BpCatego
             style = MaterialTheme.typography.bodySmall,
             color = WearColors.onSurfaceVariant,
         )
+        // Shown right under the number, before anything that needs scrolling.
+        if (confirmed) {
+            Note(stringResource(R.string.bp_confirmed), WearColors.onSurfaceVariant)
+        } else if (beyondCalibration) {
+            Note(stringResource(R.string.bp_beyond_calibration), WearColors.warn)
+        }
         Text(
             stringResource(category.label),
             style = MaterialTheme.typography.labelMedium,
@@ -109,8 +133,27 @@ fun BpResultScreen(systolic: Int, diastolic: Int, pulse: Int, category: BpCatego
             modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(50)).background(category.color).padding(horizontal = 10.dp, vertical = 3.dp),
         )
         Body(stringResource(R.string.bp_pulse, pulse))
+        when (safety) {
+            BpSafety.VERY_HIGH -> Note(stringResource(R.string.bp_safety_high), WearColors.warn)
+            BpSafety.LOW -> Note(stringResource(R.string.bp_safety_low), WearColors.warn)
+            BpSafety.NONE -> Unit
+        }
+        if (needsConfirming) {
+            androidx.wear.compose.material3.FilledTonalButton(onClick = onMeasureAgain, modifier = Modifier.padding(top = 6.dp)) {
+                Text(stringResource(R.string.bp_measure_again), maxLines = 1)
+            }
+        }
     }
 }
+
+@Composable
+private fun Note(text: String, color: Color) = Text(
+    text,
+    style = MaterialTheme.typography.bodySmall,
+    textAlign = TextAlign.Center,
+    color = color,
+    modifier = Modifier.padding(top = 4.dp),
+)
 
 /**
  * Blood pressure recording: the pulse wave sweeps across the screen (filtered, upright) with the
@@ -171,16 +214,21 @@ fun BpMeasuringScreen(
     }
 }
 
-/** Today's pulse wave is outside what the calibration covers: no number is invented. */
+/**
+ * The recording wasn't a trustworthy pulse wave ([moving]: the arm moved). Only signal problems
+ * end here; a real change in pressure is always shown as a reading.
+ */
 @Composable
-fun BpOutOfRangeScreen(onRetry: () -> Unit = {}, onRecalibrate: () -> Unit = {}) {
+fun BpOutOfRangeScreen(moving: Boolean = false, onRetry: () -> Unit = {}) {
     ActionScreen(stringResource(R.string.action_try_again), onRetry) {
-        Badge(Icons.Rounded.PhoneAndroid, WearColors.warn)
-        Text(stringResource(R.string.bp_out_of_range_title), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
-        Body(stringResource(R.string.bp_out_of_range_body))
-        androidx.wear.compose.material3.FilledTonalButton(onClick = onRecalibrate, modifier = Modifier.padding(top = 6.dp)) {
-            Text(stringResource(R.string.bp_recalibrate), maxLines = 1)
-        }
+        Badge(Icons.Rounded.Speed, WearColors.warn)
+        Text(
+            stringResource(if (moving) R.string.bp_moving_title else R.string.bp_out_of_range_title),
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+        Body(stringResource(if (moving) R.string.bp_moving_body else R.string.bp_out_of_range_body))
     }
 }
 

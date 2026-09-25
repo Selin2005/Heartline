@@ -62,6 +62,14 @@ class RecordRepository(
         dao.updateSummary(id, Protocol.json.encodeToString<RecordSummary>(summary.copy(symptoms = symptoms)), note)
     }
 
+    /** Replaces a record's summary (the phone refined a blood-pressure reading), keeping its note. */
+    suspend fun updateSummary(id: String, summary: RecordSummary) {
+        val entity = dao.get(id) ?: return
+        dao.updateSummary(id, Protocol.json.encodeToString<RecordSummary>(summary), entity.note)
+    }
+
+    suspend fun get(id: String): StoredRecord? = dao.get(id)?.decode()
+
     override suspend fun delete(id: String) {
         dao.get(id)?.wavePath?.let { withContext(Dispatchers.IO) { waves.delete(it) } }
         dao.delete(id)

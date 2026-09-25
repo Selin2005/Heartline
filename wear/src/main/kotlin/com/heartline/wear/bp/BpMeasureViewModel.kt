@@ -4,6 +4,8 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.heartline.shared.bp.BpCategory
+import com.heartline.shared.bp.BpConfirmation
+import com.heartline.shared.bp.BpSafety
 import com.heartline.shared.bp.BpEstimator
 import com.heartline.shared.bp.BpOutcome
 import com.heartline.shared.bp.PpgFeatures
@@ -16,6 +18,7 @@ import com.heartline.shared.sync.CaptureRequest
 import com.heartline.shared.sync.CaptureResult
 import com.heartline.shared.sync.Protocol
 import com.heartline.wear.data.WatchRecordStore
+import com.heartline.wear.sensor.MotionMeter
 import com.heartline.wear.sensor.PpgSource
 import com.heartline.wear.sensor.SensorException
 import com.heartline.wear.sensor.SensorProblem
@@ -47,10 +50,28 @@ sealed interface BpState {
         val endIndex: Long = trace.size.toLong(),
     ) : BpState
 
-    data class Done(val systolic: Int, val diastolic: Int, val pulse: Int, val category: BpCategory, val uncertainty: Int = 0) : BpState
+    /**
+     * [beyondCalibration]: an extrapolation (shown, with its wider ±). [confirmed]: a second
+     * reading within 10 minutes agreed. [safety]: very high or low, check with a cuff.
+     */
+    data class Done(
+        val systolic: Int,
+        val diastolic: Int,
+        val pulse: Int,
+        val category: BpCategory,
+        val uncertainty: Int = 0,
+        val beyondCalibration: Boolean = false,
+        val confirmed: Boolean = false,
+        val safety: BpSafety = BpSafety.NONE,
+    ) : BpState {
+        val needsConfirming get() = (beyondCalibration || safety != BpSafety.NONE) && !confirmed
+    }
 
-    /** Today's pulse wave is outside what the calibration covers. */
+    /** The recording isn't a trustworthy pulse wave (never used for a real change in pressure). */
     data object OutOfRange : BpState
+
+    /** The arm moved during the recording. */
+    data object Moving : BpState
 
     data class CalibrationRecorded(val round: Int) : BpState
 
@@ -72,6 +93,7 @@ class BpMeasureViewModel(
     private val now: () -> Long = System::currentTimeMillis,
     private val seconds: Int = 20,
     private val uiIntervalMs: Long = 40,
+    private val motion: MotionMeter = MotionMeter.NONE,
 ) : ViewModel() {
     private val mutable = MutableStateFlow<BpState>(BpState.Idle)
     val state: StateFlow<BpState> = mutable.asStateFlow()
@@ -99,6 +121,7 @@ class BpMeasureViewModel(
         val startedAt = now()
         val live = LivePpg(fs)
         mutable.value = BpState.Measuring(0f, seconds, FloatArray(0), contact = true)
+        motion.start()
         job = viewModelScope.launch {
             var failure: SensorProblem? = null
             source.stream()
@@ -124,14 +147,20 @@ class BpMeasureViewModel(
                         )
                     }
                 }
+            val movement = motion.stop()
             failure?.let {
                 mutable.value = BpState.Failed(it)
+                return@launch
+            }
+            if (movement != null && movement > MotionMeter.MAX_STILL) {
+                Log.i(TAG, "BP: moved during recording (${"%.2f".format(movement)} m/s²)")
+                mutable.value = BpState.Moving
                 return@launch
             }
             val recording = buffer.copyOf(collected)
             val features = withContext(Dispatchers.Default) { PpgFeatures.extract(recording, fs) }
             Log.i(TAG, "BP ${if (capture != null) "calibration round ${capture.round}" else "measurement"}: samples=$collected features=$features")
-            mutable.value = if (capture != null) finishCalibration(capture, features, recording) else finishMeasurement(features, startedAt)
+            mutable.value = if (capture != null) finishCalibration(capture, features, recording) else finishMeasurement(features, recording, startedAt)
         }
     }
 
@@ -144,29 +173,47 @@ class BpMeasureViewModel(
         return BpState.CalibrationRecorded(capture.round)
     }
 
-    private suspend fun finishMeasurement(features: com.heartline.shared.bp.PpgFeatureVector?, startedAt: Long): BpState =
-        when (val outcome = BpEstimator.estimate(bpStore.calibration.value, features, now()).also { Log.i(TAG, "BP outcome: $it") }) {
+    private suspend fun finishMeasurement(features: com.heartline.shared.bp.PpgFeatureVector?, recording: FloatArray, startedAt: Long): BpState {
+        val outcome = BpEstimator.estimate(bpStore.calibration.value, features, now(), bpStore.history).also { Log.i(TAG, "BP outcome: $it") }
+        return when (outcome) {
             BpOutcome.NeedsCalibration -> BpState.NeedsCalibration
             BpOutcome.PoorSignal -> BpState.PoorSignal
             is BpOutcome.OutOfRange -> BpState.OutOfRange
             is BpOutcome.Ok -> {
                 val e = outcome.estimate
+                val t = now()
+                val previous = bpStore.lastReading
+                val confirmed = previous != null && BpConfirmation.confirms(previous.toEstimate(), previous.atMs, e, t)
+                bpStore.lastReading = LastBpReading.of(e, t)
+                if (!e.beyondCalibration && features != null) bpStore.addHistory(features)
                 val meta = RecordMeta(
                     UUID.randomUUID().toString(),
                     RecordKind.BLOOD_PRESSURE,
                     startedAt,
                     seconds * 1000L,
-                    0,
-                    0,
-                    RecordSummary.BloodPressure(e.systolic, e.diastolic, e.pulse, e.uncertaintySys, algorithm = 2),
+                    source.sampleRateHz,
+                    recording.size,
+                    RecordSummary.BloodPressure(
+                        e.systolic,
+                        e.diastolic,
+                        e.pulse,
+                        e.uncertaintySys,
+                        algorithm = ALGORITHM,
+                        beyondCalibration = e.beyondCalibration,
+                        confirmed = confirmed,
+                    ),
                 )
-                records.add(meta, null)
+                // The raw pulse wave goes to the phone too: it lets the phone's personal model refine
+                // the reading and lets the algorithm be re-evaluated on real data later.
+                records.add(meta, recording)
                 sync.schedule()
-                BpState.Done(e.systolic, e.diastolic, e.pulse, BpCategory.of(e.systolic, e.diastolic), e.uncertaintySys)
+                BpState.Done(e.systolic, e.diastolic, e.pulse, BpCategory.of(e.systolic, e.diastolic), e.uncertaintySys, e.beyondCalibration, confirmed, e.safety)
             }
         }
+    }
 
     fun cancel() {
+        if (job?.isActive == true) motion.stop()
         job?.cancel()
         mutable.value = BpState.Idle
     }
@@ -212,5 +259,6 @@ class BpMeasureViewModel(
 
     private companion object {
         const val TAG = "Heartline/BP"
+        const val ALGORITHM = 3
     }
 }

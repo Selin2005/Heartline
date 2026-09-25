@@ -299,6 +299,12 @@ Do not edit by hand.
 ### bp_measuring_small
 <img src="wear/bp_measuring_small.png" width="240">
 
+### bp_moving_large
+<img src="wear/bp_moving_large.png" width="240">
+
+### bp_moving_small
+<img src="wear/bp_moving_small.png" width="240">
+
 ### bp_needs_calibration_opened_large
 <img src="wear/bp_needs_calibration_opened_large.png" width="240">
 
@@ -316,6 +322,18 @@ Do not edit by hand.
 
 ### bp_out_of_range_small
 <img src="wear/bp_out_of_range_small.png" width="240">
+
+### bp_result_beyond_large
+<img src="wear/bp_result_beyond_large.png" width="240">
+
+### bp_result_beyond_small
+<img src="wear/bp_result_beyond_small.png" width="240">
+
+### bp_result_very_high_large
+<img src="wear/bp_result_very_high_large.png" width="240">
+
+### bp_result_very_high_small
+<img src="wear/bp_result_very_high_small.png" width="240">
 
 ### bp_result_large
 <img src="wear/bp_result_large.png" width="240">
