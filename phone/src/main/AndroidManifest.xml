@@ -64,5 +64,94 @@
                     android:scheme="wear" />
             </intent-filter>
         </service>
+
+        <!-- Home-screen widgets (Jetpack Glance). -->
+        <activity
+            android:name=".widget.WidgetConfigActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="@string/widget_style_title"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+        <receiver
+            android:name=".widget.DashboardWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_name_dashboard">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_dashboard_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.HeartRateWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_name_heart_rate">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_heart_rate_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.EcgWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_name_ecg">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_ecg_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.BpWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_name_bp">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_bp_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.StressWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_name_stress">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_stress_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.QuickMeasureWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_name_quick">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_quick_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.HeartDayWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_name_heart_day">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_heart_day_info" />
+        </receiver>
     </application>
 </manifest>

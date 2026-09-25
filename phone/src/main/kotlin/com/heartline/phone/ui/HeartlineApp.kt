@@ -125,7 +125,9 @@ fun HeartlineApp(
             PhoneRoutes.PROFILE -> Routes.PROFILE
             PhoneRoutes.BP_CALIBRATION -> Routes.BP_CALIBRATION
             PhoneRoutes.DEV_MODE_HELP -> Routes.DEV_MODE_HELP
-            else -> Routes.HOME
+            // Home-screen widgets open their metric.
+            Routes.HEART_RATE, Routes.ECG, Routes.BLOOD_PRESSURE -> deepLink
+            else -> deepLink.takeIf { it.startsWith("metric/") && Metric.entries.any { m -> it == Routes.metric(m) } } ?: Routes.HOME
         }
         if (target == Routes.HOME) navController.navigateTab(Routes.HOME) else navController.navigate(target) { launchSingleTop = true }
         onDeepLinkHandled()

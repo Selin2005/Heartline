@@ -112,5 +112,7 @@ val phoneModule = module {
     viewModel { com.heartline.phone.ui.share.ShareViewModel(get(), get()) }
     viewModel { OnboardingViewModel(get()) }
     single { DataExporter(androidContext()) }
+    single { com.heartline.phone.widget.WidgetDataSource(get(), get(), get(), { get() }) }
+    single { com.heartline.phone.widget.WidgetUpdater(androidContext(), get(), get(), get()) }
     viewModel { AlertsViewModel(get(), get()) }
 }

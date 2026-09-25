@@ -78,6 +78,8 @@ dependencies {
     implementation(libs.koin.android)
     implementation(libs.datastore.preferences)
     implementation(libs.work.runtime.ktx)
+    implementation(libs.glance.appwidget)
+    implementation(libs.glance.material3)
     implementation(libs.koin.androidx.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.core.ktx)
@@ -98,6 +100,7 @@ dependencies {
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.androidx.test.ext.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.glance.appwidget.testing)
 }
 
 ksp {
