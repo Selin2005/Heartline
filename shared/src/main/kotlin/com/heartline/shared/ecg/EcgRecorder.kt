@@ -19,7 +19,11 @@ enum class ContactPhase { WAITING, ARMING, RECORDING, PAUSED }
  * Nothing is counted on the SDK's contact flag alone. Contact must hold for [contactDebounceMs];
  * then the first [settleSeconds] (electrode/skin settling) are dropped; then the last
  * [verifySeconds] of signal must look like an ECG ([verify]) before the countdown starts, and those
- * verified seconds are kept. A lift shorter than [liftDebounceMs] doesn't pause the countdown, but
+ * verified seconds are kept. If the SDK has reported contact without a break for
+ * [verifyFallbackSeconds] and the check still fails, a lenient check is used instead (an unusual
+ * wrist ECG, e.g. extra beats of another height, must not block the recording for good; flat
+ * signal, noise, drift and hum still don't pass). The analysis judges the quality afterwards.
+ * A lift shorter than [liftDebounceMs] doesn't pause the countdown, but
  * any skipped samples end the current segment: [segmentStarts] marks where the recording was
  * spliced, so no interval is ever measured across a gap.
  */
@@ -31,7 +35,9 @@ class EcgRecorder(
     val contactDebounceMs: Int = 500,
     val liftDebounceMs: Int = 300,
     val verifySeconds: Double = 3.0,
-    private val verify: (FloatArray) -> Boolean = { EcgContactCheck.looksLikeEcg(it, sampleRateHz) }
+    val verifyFallbackSeconds: Double = 6.0,
+    /** (window, lenient) → does it look like an ECG? */
+    private val verify: (FloatArray, Boolean) -> Boolean = { x, lenient -> EcgContactCheck.looksLikeEcg(x, sampleRateHz, lenient) }
 ) {
     private val target = sampleRateHz * targetSeconds
     private val buffer = FloatArray(target)
@@ -155,7 +161,7 @@ class EcgRecorder(
         armedSamples += samples.size
         if (arming.size < verifyWindow) return
         val window = arming.toFloatArray()
-        if (!verify(window)) return
+        if (!verify(window, armedSamples >= verifyFallbackSeconds * sampleRateHz)) return
         phase = ContactPhase.RECORDING
         needsNewSegment = true
         consecutiveLeadOff = 0
@@ -198,7 +204,11 @@ object EcgContactCheck {
     const val MIN_P2P_MV = 0.05
     const val MAX_P2P_MV = 5.0
 
-    fun looksLikeEcg(raw: FloatArray, fs: Int): Boolean {
+    /**
+     * @param lenient after a long unbroken contact: kurtosis only ≥ [LENIENT_KURTOSIS] and no
+     * R-height check (both can fail on a real wrist ECG with extra beats or a big T wave).
+     */
+    fun looksLikeEcg(raw: FloatArray, fs: Int, lenient: Boolean = false): Boolean {
         if (raw.size < 2 * fs || raw.any { !it.isFinite() }) return false
         val clean = EcgFilter.clean(raw, fs)
         // The filters' first and last 200 ms are unreliable on such a short window.
@@ -206,17 +216,21 @@ object EcgContactCheck {
         val core = clean.copyOfRange(edge, clean.size - edge)
         val p2p = core.max() - core.min()
         if (p2p < MIN_P2P_MV || p2p > MAX_P2P_MV) return false
-        if (kurtosis(core) < MIN_KURTOSIS) return false
+        if (kurtosis(core) < if (lenient) LENIENT_KURTOSIS else MIN_KURTOSIS) return false
         val peaks = RPeakDetector.detect(clean, fs).filter { it in edge until clean.size - edge }
         if (peaks.size < 2) return false
         val rr = peaks.zipWithNext { a, b -> (b - a) * 1000.0 / fs }
         if (rr.any { it !in 250.0..2200.0 }) return false
+        if (lenient) return true
         val heights = peaks.map { abs(clean[it]).toDouble() }
         return heights.max() <= 3 * heights.min()
     }
 
     /** ECG is spiky (kurtosis well above 3); noise and drift are not. */
     const val MIN_KURTOSIS = 4.0
+
+    /** Gaussian noise is 3, drift and hum below 2. */
+    const val LENIENT_KURTOSIS = 3.5
 
     internal fun kurtosis(x: FloatArray): Double {
         val m = x.average()

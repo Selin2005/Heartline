@@ -92,6 +92,8 @@
     <string name="hint_hold_still">Hold still</string>
     <string name="hint_low_signal">Signal too weak. Tighten your band.</string>
     <string name="hint_touch_keys">Keep both fingers on the keys</string>
+    <string name="hint_top_key">Upper key doesn\'t feel your finger. Press it flat</string>
+    <string name="hint_bottom_key">Lower key doesn\'t feel your finger. Press it flat</string>
     <string name="hint_wrist_contact">Wear your watch snugly</string>
     <string name="hint_dry_skin">Fingertips too dry. Moisten them slightly.</string>
     <string name="hint_hands_apart">Keep your arms apart, away from your body</string>

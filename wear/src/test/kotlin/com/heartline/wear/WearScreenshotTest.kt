@@ -183,6 +183,8 @@ class WearScreenshotTest(private val size: String) {
 
     @Test fun bodyMeasuring() = shot("body_measuring") { QuickMeasuringScreen(Metric.BODY_COMPOSITION, 0.3f, 11, null, animate = false) }
 
+    @Test fun bodyTopKey() = shot("body_top_key") { QuickMeasuringScreen(Metric.BODY_COMPOSITION, 0f, 15, QuickHint.TOP_KEY, animate = false) }
+
     @Test fun bpMeasuringLive() = shot("bp_measuring_live") {
         val ppg = WearSample.livePpg
         com.heartline.wear.ui.screens.BpMeasuringScreen(0.45f, 11, ppg.copyOfRange(0, 300), contact = true, bpm = 68, endIndex = 300L * 4 + 180, animate = false)

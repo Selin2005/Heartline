@@ -7,6 +7,7 @@ import com.heartline.wear.sensor.EcgSource
 import com.heartline.wear.sensor.GatewayState
 import com.heartline.wear.sensor.SensorException
 import com.heartline.wear.sensor.SensorProblem
+import com.heartline.wear.sensor.batchContact
 import com.samsung.android.service.health.tracking.HealthTracker
 import com.samsung.android.service.health.tracking.data.DataPoint
 import com.samsung.android.service.health.tracking.data.ValueKey
@@ -27,8 +28,10 @@ class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
         val tracker = gateway.tracker(TrackerKind.ECG_ON_DEMAND) ?: throw SensorException(SensorProblem.NOT_SUPPORTED)
 
         var missing = 0
-        // Every LEAD_OFF value seen (null included) and how often: the SDK documents 0 and 5 only.
-        val leadOffValues = mutableMapOf<Int?, Int>()
+        var contact = false
+        // LEAD_OFF values seen (null included) on the first point of each batch and on the others.
+        val firstValues = mutableMapOf<Int?, Int>()
+        val otherValues = mutableMapOf<Int?, Int>()
         tracker.setEventListener(
             object : HealthTracker.TrackerEventListener {
                 override fun onDataReceived(points: List<DataPoint>) {
@@ -36,10 +39,12 @@ class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
                     // A point without a value is skipped: a substituted 0 mV would be a spike after filtering.
                     val values = points.mapNotNull { it.getValue(ValueKey.EcgSet.ECG_MV)?.takeIf { v -> v.isFinite() } }
                     if (values.size < points.size) missing += points.size - values.size
-                    // Contact only when every point says 0 ("in contact"); 5, null or anything else is no contact.
+                    // LEAD_OFF comes on the first point of a batch only (batchContact).
                     val flags = points.map { it.getValue(ValueKey.EcgSet.LEAD_OFF) }
-                    flags.forEach { leadOffValues.merge(it, 1, Int::plus) }
-                    val leadOff = flags.any { it != LEAD_OFF_CONTACT }
+                    firstValues.merge(flags.first(), 1, Int::plus)
+                    flags.drop(1).forEach { otherValues.merge(it, 1, Int::plus) }
+                    contact = batchContact(flags, contact)
+                    val leadOff = !contact
                     val max = points.firstNotNullOfOrNull { it.getValue(ValueKey.EcgSet.MAX_THRESHOLD_MV) }
                     val min = points.firstNotNullOfOrNull { it.getValue(ValueKey.EcgSet.MIN_THRESHOLD_MV) }
                     val saturated = values.any { (max != null && it >= max) || (min != null && it <= min) }
@@ -64,13 +69,11 @@ class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
         awaitClose {
             tracker.unsetEventListener()
             if (missing > 0) Log.w(SdkSensorGateway.TAG, "ECG: $missing points had no ECG_MV value")
-            Log.i(SdkSensorGateway.TAG, "ECG LEAD_OFF values seen: $leadOffValues")
+            Log.i(SdkSensorGateway.TAG, "ECG LEAD_OFF values seen: first point $firstValues, other points $otherValues")
         }
     }
 
     private companion object {
-        /** LEAD_OFF value when both electrodes are in contact (Samsung ECG sample: 0 = contact, 5 = none). */
-        const val LEAD_OFF_CONTACT = 0
         const val CONNECT_TIMEOUT_MS = 10_000L
     }
 }

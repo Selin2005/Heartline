@@ -263,6 +263,12 @@ Do not edit by hand.
 ### body_measuring_small
 <img src="wear/body_measuring_small.png" width="240">
 
+### body_top_key_large
+<img src="wear/body_top_key_large.png" width="240">
+
+### body_top_key_small
+<img src="wear/body_top_key_small.png" width="240">
+
 ### body_result_large
 <img src="wear/body_result_large.png" width="240">
 

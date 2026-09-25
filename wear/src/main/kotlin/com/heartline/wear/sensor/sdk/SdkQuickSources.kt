@@ -50,12 +50,17 @@ abstract class SdkQuickSource(
 
     protected abstract fun create(profile: UserProfile?): HealthTracker?
 
+    protected open fun onStart() = Unit
+
+    protected open fun onStop() = Unit
+
     /** @return true when the measurement has finished (result or failure sent). */
     protected abstract fun ProducerScope<QuickEvent>.onData(points: List<DataPoint>): Boolean
 
     override fun measure(profile: UserProfile?): Flow<QuickEvent> = callbackFlow {
         problem = null
         sdkProgress = null
+        onStart()
         gateway.connect()
         val state = withTimeout(10_000) { gateway.state.first { it is GatewayState.Connected || it is GatewayState.Failed } }
         if (state is GatewayState.Failed) throw SensorException(state.problem)
@@ -94,6 +99,7 @@ abstract class SdkQuickSource(
         awaitClose {
             ticker.cancel()
             healthTracker.unsetEventListener()
+            onStop()
         }
     }
 }
@@ -171,11 +177,25 @@ class SdkBiaSource(private val gateway: SdkSensorGateway) :
         return gateway.trackerWithProfile(TrackerKind.BIA_ON_DEMAND, sdkProfile)
     }
 
+    /** Every STATUS the sensor reported in this measurement and how often (logged at the end). */
+    private val statuses = mutableMapOf<Int?, Int>()
+
+    override fun onStart() = statuses.clear()
+
+    override fun onStop() {
+        Log.i(SdkSensorGateway.TAG, "BIA statuses seen: $statuses")
+    }
+
     override fun ProducerScope<QuickEvent>.onData(points: List<DataPoint>): Boolean {
+        points.forEach { statuses.merge(it.getValue(ValueKey.BiaSet.STATUS), 1, Int::plus) }
         val p = points.last()
         val status = p.getValue(ValueKey.BiaSet.STATUS)
         val progress = p.getValue(ValueKey.BiaSet.PROGRESS)
-        Log.i(SdkSensorGateway.TAG, "BIA status=$status progress=$progress")
+        Log.i(
+            SdkSensorGateway.TAG,
+            "BIA points=${points.size} status=${points.map { it.getValue(ValueKey.BiaSet.STATUS) }} progress=$progress " +
+                "impedance=${p.getValue(ValueKey.BiaSet.BODY_IMPEDANCE_MAGNITUDE)}",
+        )
         return when (status) {
             0 -> if (progress != null && progress < 100f) {
                 problem = null
@@ -210,7 +230,9 @@ class SdkBiaSource(private val gateway: SdkSensorGateway) :
 }
 
 internal fun biaHint(status: Int?): QuickHint = when (status) {
-    7, 8, 9 -> QuickHint.TOUCH_KEYS
+    7 -> QuickHint.TOP_KEY
+    8 -> QuickHint.BOTTOM_KEY
+    9 -> QuickHint.TOUCH_KEYS
     11 -> QuickHint.DRY_SKIN
     14 -> QuickHint.HANDS_APART
     15 -> QuickHint.KEYS_ONLY

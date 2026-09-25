@@ -2,11 +2,14 @@ package com.heartline.shared
 
 import com.heartline.shared.ecg.ContactPhase
 import com.heartline.shared.ecg.EcgContactCheck
+import com.heartline.shared.ecg.EcgFilter
 import com.heartline.shared.ecg.EcgRecorder
+import com.heartline.shared.ecg.RPeakDetector
 import com.heartline.shared.sample.SyntheticEcg
 import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.random.Random
+import kotlin.random.asJavaRandom
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -50,6 +53,48 @@ class EcgContactTest {
             assertTrue(name, recorder.phase != ContactPhase.RECORDING)
             assertFalse(name, recorder.isAbandoned)
         }
+    }
+
+    /** Every other beat 4× taller (strict R-height check fails), as with tall extra beats. */
+    private fun unevenEcg(seconds: Double): FloatArray {
+        val x = ecg(seconds)
+        val peaks = RPeakDetector.detect(EcgFilter.clean(x, fs), fs)
+        val half = (0.08 * fs).toInt()
+        peaks.filterIndexed { i, _ -> i % 2 == 1 }.forEach { p ->
+            for (k in maxOf(0, p - half) until minOf(x.size, p + half)) x[k] *= 4f
+        }
+        return x
+    }
+
+    @Test
+    fun lenientCheckAcceptsUnevenBeats() {
+        val x = unevenEcg(3.0)
+        assertFalse("strict", EcgContactCheck.looksLikeEcg(x, fs))
+        assertTrue("lenient", EcgContactCheck.looksLikeEcg(x, fs, lenient = true))
+    }
+
+    @Test
+    fun longContactSwitchesToTheLenientCheck() {
+        val recorder = EcgRecorder(fs, verify = { _, lenient -> lenient })
+        val signal = ecg(12.0)
+        recorder.feed(signal.copyOfRange(0, 5 * fs))
+        assertTrue("strict check still applies before the fallback", recorder.phase != ContactPhase.RECORDING)
+        recorder.feed(signal.copyOfRange(5 * fs, signal.size))
+        assertEquals("phase", ContactPhase.RECORDING, recorder.phase)
+        assertTrue("progress", recorder.progress > 0f)
+    }
+
+    @Test
+    fun lenientCheckStillRejectsNonEcg() {
+        val gaussian = Random(5).asJavaRandom()
+        val n = 3 * fs
+        val lookalikes = mapOf(
+            "flat" to FloatArray(n),
+            "noise" to FloatArray(n) { (gaussian.nextGaussian() * 0.2).toFloat() },
+            "mains hum" to FloatArray(n) { (0.5 * sin(2 * PI * 50.0 * it / fs)).toFloat() },
+            "drift" to FloatArray(n) { (2 * sin(2 * PI * 0.3 * it / fs)).toFloat() }
+        )
+        for ((name, x) in lookalikes) assertFalse(name, EcgContactCheck.looksLikeEcg(x, fs, lenient = true))
     }
 
     @Test

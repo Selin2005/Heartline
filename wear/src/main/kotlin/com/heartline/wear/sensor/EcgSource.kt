@@ -16,6 +16,21 @@ class EcgChunk(
     val saturated: Boolean = false,
 )
 
+/**
+ * Electrode contact for one SDK batch from its LEAD_OFF values. The SDK sets LEAD_OFF on the
+ * first point of a batch only (the others read null; Samsung's ECG sample reads `list[0]`).
+ * Contact only when every value present is 0 (documented: 0 = contact, any other = none);
+ * a batch without any value keeps the previous state, and none before the first value is no contact.
+ */
+fun batchContact(flags: List<Int?>, previous: Boolean): Boolean {
+    val present = flags.filterNotNull()
+    if (present.isEmpty()) return previous
+    return present.all { it == LEAD_OFF_CONTACT }
+}
+
+/** LEAD_OFF value when the finger is on the electrode key. */
+const val LEAD_OFF_CONTACT = 0
+
 class SensorException(val problem: SensorProblem) : Exception(problem.name)
 
 /** On-demand ECG (ECG_ON_DEMAND). Collecting starts the sensor; cancelling stops it. */

@@ -59,6 +59,8 @@ val QuickHint.text: Int
         QuickHint.HOLD_STILL -> R.string.hint_hold_still
         QuickHint.LOW_SIGNAL -> R.string.hint_low_signal
         QuickHint.TOUCH_KEYS -> R.string.hint_touch_keys
+        QuickHint.TOP_KEY -> R.string.hint_top_key
+        QuickHint.BOTTOM_KEY -> R.string.hint_bottom_key
         QuickHint.WRIST_CONTACT -> R.string.hint_wrist_contact
         QuickHint.DRY_SKIN -> R.string.hint_dry_skin
         QuickHint.HANDS_APART -> R.string.hint_hands_apart

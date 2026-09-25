@@ -9,7 +9,8 @@ import org.junit.Test
 class BiaStatusTest {
     @Test
     fun documentedStatusesMapToSpecificHints() {
-        assertEquals(QuickHint.TOUCH_KEYS, biaHint(7))
+        assertEquals(QuickHint.TOP_KEY, biaHint(7))
+        assertEquals(QuickHint.BOTTOM_KEY, biaHint(8))
         assertEquals(QuickHint.TOUCH_KEYS, biaHint(9))
         assertEquals(QuickHint.DRY_SKIN, biaHint(11))
         assertEquals(QuickHint.HANDS_APART, biaHint(14))

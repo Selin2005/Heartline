@@ -23,13 +23,20 @@ out "poor", and 12–16 % of recordings with extra beats or other arrhythmias we
 
 ### Contact (`EcgRecorder`, `SdkEcgSource`)
 
-- Contact only when every point reports `LEAD_OFF == 0` (the SDK documents 0 = contact,
-  5 = none); samples beyond the SDK's `MIN/MAX_THRESHOLD_MV` are saturated and don't count. The
-  LEAD_OFF values seen are logged per session.
+- Contact per SDK batch from `LEAD_OFF` (`batchContact`): the SDK sets it on the **first point of
+  each batch only** (the rest read null, as in Samsung's ECG sample, which reads `list[0]`).
+  Contact only when the values present are 0 (documented: 0 = contact, anything else = none); a
+  batch without a value keeps the previous state. (A first version of algorithm 3 required 0 on
+  every point, so no batch ever counted as contact and the ECG never started.) Samples beyond the
+  SDK's `MIN/MAX_THRESHOLD_MV` are saturated and don't count. The LEAD_OFF values seen on first
+  and other points are logged per session.
 - States: **waiting → arming → recording ⇄ paused**. Contact must hold 500 ms; the next 1 s is
   electrode settling and is dropped; then the last 3 s must **look like an ECG**
   (`EcgContactCheck`: 0.05–5 mV, kurtosis ≥ 4, ≥ 2 QRS with plausible intervals and similar
-  heights) before the countdown starts (those 3 s are kept). A lift under 300 ms doesn't pause;
+  heights) before the countdown starts (those 3 s are kept). After 6 s of unbroken contact a
+  lenient check takes over (kurtosis ≥ 3.5, no height check), so an unusual wrist ECG — tall
+  extra beats, a big T wave — can't block the start for good; flat signal, noise, drift and hum
+  still don't pass. A lift under 300 ms doesn't pause;
   every gap starts a new **segment**. A short buzz marks the real start; the screen says
   "Hold still, starting…" while arming and asks for a lighter touch if it can't confirm an ECG.
 

@@ -21,6 +21,12 @@ enum class QuickHint {
     HOLD_STILL,
     LOW_SIGNAL,
     TOUCH_KEYS,
+
+    /** Body composition: the finger on the upper (2 o'clock) key isn't detected. */
+    TOP_KEY,
+
+    /** Body composition: the finger on the lower (4 o'clock) key isn't detected. */
+    BOTTOM_KEY,
     WRIST_CONTACT,
 
     /** Body composition: fingertips too dry for the electrodes. */
