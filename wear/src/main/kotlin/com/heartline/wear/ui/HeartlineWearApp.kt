@@ -42,6 +42,7 @@ import com.heartline.wear.bp.BpFlow
 import com.heartline.wear.ecg.EcgFlow
 import com.heartline.wear.quick.QuickFlow
 import com.heartline.shared.model.Metric
+import com.heartline.shared.nav.EntryLinks
 import com.heartline.shared.sample.SyntheticEcg
 import com.heartline.wear.ui.screens.LauncherEntry
 import com.heartline.wear.sensor.SensorProblem
@@ -96,16 +97,33 @@ private object Routes {
         (route.startsWith("quick/") && Metric.entries.any { route == quick(it) })
 }
 
-/** Opens [route] on top of the launcher (so back always lands on the launcher). */
-private fun NavHostController.openExternal(route: String) {
+/**
+ * Opens [link]. From a tile, complication or notification the screen stands alone, so swiping
+ * back (or finishing) returns to that tile or watch face; from the phone it opens on top of the
+ * launcher.
+ */
+private fun NavHostController.openExternal(link: String) {
+    val entry = EntryLinks.parse(link)
+    val route = entry.route
     if (route == Routes.LAUNCHER || !Routes.isExternal(route)) {
-        popBackStack(Routes.LAUNCHER, inclusive = false)
+        if (!popBackStack(Routes.LAUNCHER, inclusive = false)) {
+            navigate(Routes.LAUNCHER) { popUpTo(graph.id) { inclusive = true } }
+        }
         return
     }
+    val launcherBelow = runCatching { getBackStackEntry(Routes.LAUNCHER) }.isSuccess
     navigate(route) {
-        popUpTo(Routes.LAUNCHER)
+        when {
+            entry.external -> popUpTo(graph.id) { inclusive = true }
+            launcherBelow -> popUpTo(Routes.LAUNCHER)
+        }
         launchSingleTop = true
     }
+}
+
+/** Leaves the current screen: back to the one below, or out of the app when it stands alone. */
+private fun NavHostController.exit(activity: android.app.Activity?) {
+    if (previousBackStackEntry == null) activity?.finish() else popBackStack()
 }
 
 @Composable
@@ -204,6 +222,8 @@ fun HeartlineWearApp(startRoute: String? = null) {
 
 @Composable
 private fun AppNavHost(nav: NavHostController, gate: SetupGateViewModel) {
+    val activity = LocalActivity.current
+    val exit: () -> Unit = { nav.exit(activity) }
     val launcher: LauncherViewModel = koinViewModel()
     val launcherState by launcher.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { launcher.connect() }
@@ -230,14 +250,14 @@ private fun AppNavHost(nav: NavHostController, gate: SetupGateViewModel) {
                 LauncherState.Loading -> LauncherScreen(emptyList())
             }
         }
-        composable(Routes.ECG) { EcgFlow(onExit = { nav.popBackStack() }) }
+        composable(Routes.ECG) { EcgFlow(onExit = exit) }
         composable(Routes.BLOOD_PRESSURE) {
-            BpFlow(onExit = { nav.popBackStack() }, onStartCalibration = { nav.openExternal(Routes.BP_CALIBRATION) })
+            BpFlow(onExit = exit, onStartCalibration = { nav.openExternal(Routes.BP_CALIBRATION) })
         }
-        composable(Routes.BP_CALIBRATION) { BpFlow(onExit = { nav.popBackStack() }, calibrationSession = true) }
+        composable(Routes.BP_CALIBRATION) { BpFlow(onExit = exit, calibrationSession = true) }
         composable(Routes.QUICK) { entry ->
             val metric = Metric.valueOf(entry.arguments?.getString("metric") ?: Metric.SPO2.name)
-            QuickFlow(metric, onExit = { nav.popBackStack() })
+            QuickFlow(metric, onExit = exit)
         }
         composable(Routes.SETTINGS) {
             val vm: WatchSettingsViewModel = koinViewModel()

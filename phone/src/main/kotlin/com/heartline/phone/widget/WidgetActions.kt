@@ -16,15 +16,17 @@ import com.heartline.datalayer.DeepLinks
 import com.heartline.phone.R
 import com.heartline.phone.link.OpenResult
 import com.heartline.phone.link.WatchOpener
+import com.heartline.shared.nav.EntryLinks
+import com.heartline.shared.nav.EntrySource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.koin.mp.KoinPlatform
 
-/** Opens the phone app on [route] (heartline://phone/<route>). */
+/** Opens the phone app on [route] (heartline://phone/<route>); Back then returns to the home screen. */
 fun openApp(context: Context, route: String): Action = actionStartActivity(appIntent(context, route))
 
-internal fun appIntent(context: Context, route: String): Intent =
-    Intent(Intent.ACTION_VIEW, Uri.parse(DeepLinks.phone(route)))
+internal fun appIntent(context: Context, route: String, source: EntrySource = EntrySource.WIDGET): Intent =
+    Intent(Intent.ACTION_VIEW, Uri.parse(DeepLinks.phone(EntryLinks.tag(route, source))))
         .setPackage(context.packageName)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
 

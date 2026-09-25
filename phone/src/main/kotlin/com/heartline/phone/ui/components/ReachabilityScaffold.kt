@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -40,6 +42,12 @@ import androidx.compose.ui.unit.dp
 import com.heartline.phone.R
 import com.heartline.phone.ui.theme.Dimens
 import com.heartline.phone.ui.theme.HeartlineTheme
+
+/**
+ * Set while a screen was opened on its own from outside the app (a widget…): the app bar then
+ * also offers a way into the app's home, since Back leaves the app.
+ */
+val LocalOpenAppHome = compositionLocalOf<(() -> Unit)?> { null }
 
 /**
  * One UI "reachability" layout: a tall header holding a large title in the top third of the
@@ -130,6 +138,11 @@ fun ReachabilityScaffold(
                 modifier = Modifier.weight(1f).padding(start = 8.dp).alpha(collapse),
             )
             actions()
+            LocalOpenAppHome.current?.let { openHome ->
+                IconButton(onClick = openHome) {
+                    Icon(Icons.Rounded.Home, contentDescription = stringResource(R.string.action_open_home), tint = colors.onBackground)
+                }
+            }
         }
     }
 }

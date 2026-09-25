@@ -58,6 +58,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
+import androidx.compose.runtime.CompositionLocalProvider
+import com.heartline.phone.ui.components.LocalOpenAppHome
+import com.heartline.shared.nav.EntryLinks
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -122,16 +127,25 @@ fun HeartlineApp(
 ) {
     LaunchedEffect(openAlerts) { if (openAlerts) navController.navigate(Routes.ALERTS) }
     LaunchedEffect(deepLink) {
-        val target = when (deepLink) {
-            null -> return@LaunchedEffect
+        val link = EntryLinks.parse(deepLink ?: return@LaunchedEffect)
+        val target = when (link.route) {
             PhoneRoutes.PROFILE -> Routes.PROFILE
             PhoneRoutes.BP_CALIBRATION -> Routes.BP_CALIBRATION
             PhoneRoutes.DEV_MODE_HELP -> Routes.DEV_MODE_HELP
             // Home-screen widgets open their metric.
-            Routes.HEART_RATE, Routes.ECG, Routes.BLOOD_PRESSURE -> deepLink
-            else -> deepLink.takeIf { it.startsWith("metric/") && Metric.entries.any { m -> it == Routes.metric(m) } } ?: Routes.HOME
+            Routes.HEART_RATE, Routes.ECG, Routes.BLOOD_PRESSURE -> link.route
+            else -> link.route.takeIf { it.startsWith("metric/") && Metric.entries.any { m -> it == Routes.metric(m) } } ?: Routes.HOME
         }
-        if (target == Routes.HOME) navController.navigateTab(Routes.HOME) else navController.navigate(target) { launchSingleTop = true }
+        when {
+            target == Routes.HOME -> navController.navigateTab(Routes.HOME)
+            // From a widget, Quick Settings or a notification the screen stands alone: Back returns
+            // to wherever the user was (the home screen), not to the app's home.
+            link.external -> navController.navigate(target) {
+                popUpTo(navController.graph.id) { inclusive = true }
+                launchSingleTop = true
+            }
+            else -> navController.navigate(target) { launchSingleTop = true }
+        }
         onDeepLinkHandled()
     }
     // One opener for every "Measure on watch" button, with a snackbar saying what happened.
@@ -153,12 +167,24 @@ fun HeartlineApp(
     val reports: EcgReportBuilder = koinInject()
     val backStack by navController.currentBackStackEntryAsState()
     val route = backStack?.destination?.route ?: Routes.HOME
+    val activity = LocalActivity.current
+    // A screen opened on its own (from a widget…) has nothing under it: Back leaves the app.
+    val standalone = backStack != null && navController.previousBackStackEntry == null && tabs.none { it.route == route }
+    val goBack: () -> Unit = { if (navController.previousBackStackEntry == null) activity?.finish() else navController.popBackStack() }
+    BackHandler(enabled = standalone) { activity?.finish() }
+    val openHome: () -> Unit = {
+        navController.navigate(Routes.HOME) {
+            popUpTo(navController.graph.id) { inclusive = true }
+            launchSingleTop = true
+        }
+    }
     Scaffold(
         containerColor = HeartlineTheme.colors.background,
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = { if (tabs.any { it.route == route }) OneUiBottomBar(route) { navController.navigateTab(it) } },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
+            CompositionLocalProvider(LocalOpenAppHome provides if (standalone) openHome else null) {
             NavHost(navController, startDestination = Routes.HOME) {
                 composable(Routes.HOME) {
                     val vm: HomeViewModel = koinViewModel()
@@ -233,7 +259,7 @@ fun HeartlineApp(
                     EcgHomeScreen(
                         state,
                         onRecordOnWatch = { openOnWatch(WatchRoutes.ECG) },
-                        onBack = { navController.popBackStack() },
+                        onBack = goBack,
                         onOpenRecord = { navController.navigate(Routes.ecgDetail(it)) },
                         onViewAll = { navController.navigateTab(Routes.HISTORY) },
                     )
@@ -243,7 +269,7 @@ fun HeartlineApp(
                     val state by vm.state.collectAsStateWithLifecycle()
                     HeartRateScreen(
                         state,
-                        onBack = { navController.popBackStack() },
+                        onBack = goBack,
                         onOpenAlerts = { navController.navigate(Routes.ALERTS) },
                         onMeasureOnWatch = { openOnWatch(WatchRoutes.HEART_RATE) },
                         onShare = {
@@ -260,7 +286,7 @@ fun HeartlineApp(
                     val state by vm.state.collectAsStateWithLifecycle()
                     BpHomeScreen(
                         state,
-                        onBack = { navController.popBackStack() },
+                        onBack = goBack,
                         onCalibrate = { navController.navigate(Routes.BP_CALIBRATION) },
                         onMeasureOnWatch = { openOnWatch(WatchRoutes.BLOOD_PRESSURE) },
                         onValidate = vm::validateLatest,
@@ -285,10 +311,10 @@ fun HeartlineApp(
                     val state by vm.state.collectAsStateWithLifecycle()
                     BpCalibrationScreen(
                         state,
-                        onBack = { navController.popBackStack() },
+                        onBack = goBack,
                         onStart = { vm.startRound() },
                         onSubmit = { s, d, p -> vm.submitCuff(s, d, p) },
-                        onDone = { navController.popBackStack() },
+                        onDone = goBack,
                     )
                 }
                 composable(Routes.METRIC) { entry ->
@@ -296,29 +322,29 @@ fun HeartlineApp(
                     if (metric == Metric.BODY_COMPOSITION) {
                         val vm: BodyCompositionViewModel = koinViewModel()
                         val state by vm.state.collectAsStateWithLifecycle()
-                        BodyCompositionScreen(state, onBack = { navController.popBackStack() }, onMeasureOnWatch = { openOnWatch(WatchRoutes.quick(metric)) })
+                        BodyCompositionScreen(state, onBack = goBack, onMeasureOnWatch = { openOnWatch(WatchRoutes.quick(metric)) })
                     } else {
                         val vm: MetricDetailViewModel = koinViewModel(key = metric.name) { parametersOf(metric) }
                         val state by vm.state.collectAsStateWithLifecycle()
-                        MetricDetailScreen(state, onBack = { navController.popBackStack() }, onMeasureOnWatch = { openOnWatch(WatchRoutes.quick(metric)) })
+                        MetricDetailScreen(state, onBack = goBack, onMeasureOnWatch = { openOnWatch(WatchRoutes.quick(metric)) })
                     }
                 }
                 composable(Routes.PROFILE) {
                     val vm: ProfileViewModel = koinViewModel()
                     val profile by vm.profile.collectAsStateWithLifecycle()
-                    ProfileScreen(profile, onBack = { navController.popBackStack() }, onSave = { vm.save(it) { navController.popBackStack() } })
+                    ProfileScreen(profile, onBack = goBack, onSave = { vm.save(it) { goBack() } })
                 }
                 composable(Routes.DEV_MODE_HELP) {
-                    DevModeHelpScreen(onBack = { navController.popBackStack() }, onCheckOnWatch = { openOnWatch(WatchRoutes.SETUP) })
+                    DevModeHelpScreen(onBack = goBack, onCheckOnWatch = { openOnWatch(WatchRoutes.SETUP) })
                 }
                 composable(Routes.ABOUT) {
-                    AboutScreen(BuildConfig.VERSION_NAME, onBack = { navController.popBackStack() })
+                    AboutScreen(BuildConfig.VERSION_NAME, onBack = goBack)
                 }
                 composable(Routes.ALERTS) {
                     val vm: AlertsViewModel = koinViewModel()
                     val alerts by vm.alerts.collectAsStateWithLifecycle()
                     LaunchedEffect(alerts) { vm.markRead() }
-                    AlertsScreen(alerts, onBack = { navController.popBackStack() })
+                    AlertsScreen(alerts, onBack = goBack)
                 }
                 composable(Routes.ECG_DETAIL) { entry ->
                     val id = entry.arguments?.getString("id").orEmpty()
@@ -330,7 +356,7 @@ fun HeartlineApp(
                     record?.let { current ->
                         EcgDetailScreen(
                             current,
-                            onBack = { navController.popBackStack() },
+                            onBack = goBack,
                             onSharePdf = {
                                 share(
                                     ShareRequest(
@@ -358,13 +384,14 @@ fun HeartlineApp(
                             DeleteRecordingDialog(
                                 onConfirm = {
                                     confirmDelete = false
-                                    vm.delete { navController.popBackStack() }
+                                    vm.delete { goBack() }
                                 },
                                 onDismiss = { confirmDelete = false },
                             )
                         }
                     }
                 }
+            }
             }
         }
     }

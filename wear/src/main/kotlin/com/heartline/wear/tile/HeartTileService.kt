@@ -32,6 +32,8 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.heartline.shared.bp.BpCategory
 import com.heartline.shared.design.Palette
 import com.heartline.shared.model.Metric
+import com.heartline.shared.nav.EntryLinks
+import com.heartline.shared.nav.EntrySource
 import com.heartline.shared.model.Severity
 import com.heartline.shared.profile.StressLevel
 import com.heartline.wear.MainActivity
@@ -68,7 +70,7 @@ internal object TileRoutes {
     }
 }
 
-/** Opens the app on a given screen (MainActivity.EXTRA_ROUTE). */
+/** Opens the app on a given screen (MainActivity.EXTRA_ROUTE); swiping back returns to the tile. */
 internal fun Context.launch(route: String): ModifiersBuilders.Clickable = ModifiersBuilders.Clickable.Builder()
     .setId(route)
     .setOnClick(
@@ -77,7 +79,7 @@ internal fun Context.launch(route: String): ModifiersBuilders.Clickable = Modifi
                 ActionBuilders.AndroidActivity.Builder()
                     .setPackageName(packageName)
                     .setClassName(MainActivity::class.java.name)
-                    .addKeyToExtraMapping(MainActivity.EXTRA_ROUTE, ActionBuilders.AndroidStringExtra.Builder().setValue(route).build())
+                    .addKeyToExtraMapping(MainActivity.EXTRA_ROUTE, ActionBuilders.AndroidStringExtra.Builder().setValue(EntryLinks.tag(route, EntrySource.TILE)).build())
                     .build(),
             )
             .build(),

@@ -9,6 +9,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import com.heartline.datalayer.DeepLinks
+import com.heartline.shared.nav.EntryLinks
+import com.heartline.shared.nav.EntrySource
 import com.heartline.shared.sync.SetupTarget
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -65,7 +67,7 @@ class PhoneNotifier(private val context: Context) {
             BP_SAFETY_ID,
             context.getString(if (high) R.string.alert_bp_high_title else R.string.alert_bp_low_title, reading.systolic, reading.diastolic),
             context.getString(if (high) R.string.bp_safety_high else R.string.bp_safety_low),
-            DeepLinks.phone("blood_pressure"),
+            "blood_pressure",
             CHANNEL_ALERTS,
         )
     }
@@ -82,7 +84,7 @@ class PhoneNotifier(private val context: Context) {
         val open = PendingIntent.getActivity(
             context,
             target.ordinal + 100,
-            Intent(Intent.ACTION_VIEW, Uri.parse(DeepLinks.phone(target.phoneRoute)), context, MainActivity::class.java),
+            Intent(Intent.ACTION_VIEW, Uri.parse(DeepLinks.phone(EntryLinks.tag(target.phoneRoute, EntrySource.NOTIFICATION))), context, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         manager.notify(
@@ -102,22 +104,22 @@ class PhoneNotifier(private val context: Context) {
         CALIBRATION_ID,
         context.getString(R.string.reminder_calibration_title),
         context.resources.getQuantityString(R.plurals.reminder_calibration_text, daysLeft, daysLeft),
-        DeepLinks.phone(SetupTarget.BP_CALIBRATION.phoneRoute),
+        SetupTarget.BP_CALIBRATION.phoneRoute,
     )
 
     fun dailyReminder() = simple(
         DAILY_ID,
         context.getString(R.string.reminder_daily_title),
         context.getString(R.string.reminder_daily_text),
-        DeepLinks.phone(SetupTarget.HOME.phoneRoute),
+        SetupTarget.HOME.phoneRoute,
     )
 
-    private fun simple(id: Int, title: String, text: String, link: String, channel: String = CHANNEL_REMINDERS) {
+    private fun simple(id: Int, title: String, text: String, route: String, channel: String = CHANNEL_REMINDERS) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val open = PendingIntent.getActivity(
             context,
             id,
-            Intent(Intent.ACTION_VIEW, Uri.parse(link), context, MainActivity::class.java),
+            Intent(Intent.ACTION_VIEW, Uri.parse(DeepLinks.phone(EntryLinks.tag(route, EntrySource.NOTIFICATION))), context, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         manager.notify(

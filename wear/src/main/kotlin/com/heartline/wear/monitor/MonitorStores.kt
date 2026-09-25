@@ -7,6 +7,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import com.heartline.datalayer.DeepLinks
+import com.heartline.shared.nav.EntryLinks
+import com.heartline.shared.nav.EntrySource
 import androidx.core.app.NotificationCompat
 import com.heartline.shared.hr.AlertKind
 import com.heartline.shared.hr.HealthAlert
@@ -148,7 +150,7 @@ class WatchNotifier(private val context: Context) {
     private fun deepLink(requestCode: Int, route: String) = PendingIntent.getActivity(
         context,
         requestCode,
-        Intent(Intent.ACTION_VIEW, Uri.parse(DeepLinks.watch(route)), context, MainActivity::class.java),
+        Intent(Intent.ACTION_VIEW, Uri.parse(DeepLinks.watch(EntryLinks.tag(route, EntrySource.NOTIFICATION))), context, MainActivity::class.java),
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 

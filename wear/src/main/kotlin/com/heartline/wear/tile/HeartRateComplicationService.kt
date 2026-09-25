@@ -23,6 +23,8 @@ import androidx.wear.watchface.complications.datasource.SuspendingComplicationDa
 import com.heartline.shared.design.Palette
 import com.heartline.shared.model.EcgResult
 import com.heartline.shared.model.Metric
+import com.heartline.shared.nav.EntryLinks
+import com.heartline.shared.nav.EntrySource
 import com.heartline.shared.profile.StressLevel
 import com.heartline.wear.MainActivity
 import com.heartline.wear.R
@@ -40,7 +42,7 @@ class Complications(private val context: Context) {
     fun tap(route: String): PendingIntent = PendingIntent.getActivity(
         context,
         route.hashCode(),
-        Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_ROUTE, route).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_ROUTE, EntryLinks.tag(route, EntrySource.COMPLICATION)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 
