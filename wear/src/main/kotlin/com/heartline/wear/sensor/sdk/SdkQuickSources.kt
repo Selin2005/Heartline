@@ -30,6 +30,11 @@ import kotlinx.coroutines.withTimeout
 /**
  * Shared plumbing for on-demand SDK trackers: connect, check capability, attach a listener,
  * run a progress ticker, and translate each batch of DataPoints with [onData].
+ *
+ * While [problem] is set (fingers off the keys, wrist contact…) the ticker pauses and keeps
+ * showing that hint, so the screen neither counts down without a signal nor flickers between
+ * "Measuring" and the hint. When the tracker reports its own progress ([sdkProgress]), that
+ * drives the ring. Without a result after [timeoutSeconds], the measurement ends with the hint.
  */
 abstract class SdkQuickSource(
     private val gateway: SdkSensorGateway,
@@ -37,23 +42,37 @@ abstract class SdkQuickSource(
     override val metric: Metric,
     override val kind: RecordKind,
     override val seconds: Int,
+    private val timeoutSeconds: Int = seconds * 4,
 ) : QuickSource {
+    @Volatile protected var problem: QuickHint? = null
+
+    @Volatile protected var sdkProgress: Float? = null
+
     protected abstract fun create(profile: UserProfile?): HealthTracker?
 
     /** @return true when the measurement has finished (result or failure sent). */
     protected abstract fun ProducerScope<QuickEvent>.onData(points: List<DataPoint>): Boolean
 
     override fun measure(profile: UserProfile?): Flow<QuickEvent> = callbackFlow {
+        problem = null
+        sdkProgress = null
         gateway.connect()
         val state = withTimeout(10_000) { gateway.state.first { it is GatewayState.Connected || it is GatewayState.Failed } }
         if (state is GatewayState.Failed) throw SensorException(state.problem)
         if (tracker !in (state as GatewayState.Connected).trackers) throw SensorException(SensorProblem.NOT_SUPPORTED)
         val healthTracker = create(profile) ?: throw SensorException(SensorProblem.NOT_SUPPORTED)
         val ticker = launch {
-            for (i in 1..seconds * 4) {
+            var good = 0
+            for (tick in 1..timeoutSeconds * 4) {
                 delay(250)
-                trySend(QuickEvent.Progress((i / (seconds * 4f)).coerceAtMost(0.98f)))
+                val hint = problem
+                if (hint == null) good++
+                val fraction = sdkProgress ?: (good / (seconds * 4f))
+                trySend(QuickEvent.Progress(fraction.coerceIn(0f, 0.98f), hint))
             }
+            Log.w(SdkSensorGateway.TAG, "$tracker: no result after $timeoutSeconds s (hint=$problem)")
+            trySend(QuickEvent.Failed(null, problem ?: QuickHint.LOW_SIGNAL))
+            close()
         }
         healthTracker.setEventListener(
             object : HealthTracker.TrackerEventListener {
@@ -92,10 +111,11 @@ class SdkSpo2Source(private val gateway: SdkSensorGateway) :
                 true
             }
             -4 -> {
-                trySendBlocking(QuickEvent.Progress(0f, QuickHint.HOLD_STILL))
+                problem = QuickHint.HOLD_STILL
                 false
             }
             0 -> {
+                problem = null
                 // Still calculating: the heart rate is already known, show it live.
                 p.getValue(ValueKey.SpO2Set.HEART_RATE)?.takeIf { it > 0 }?.let { trySendBlocking(QuickEvent.Live(it)) }
                 false
@@ -150,10 +170,13 @@ class SdkBiaSource(private val gateway: SdkSensorGateway) :
 
     override fun ProducerScope<QuickEvent>.onData(points: List<DataPoint>): Boolean {
         val p = points.last()
+        val status = p.getValue(ValueKey.BiaSet.STATUS)
         val progress = p.getValue(ValueKey.BiaSet.PROGRESS)
-        return when (p.getValue(ValueKey.BiaSet.STATUS)) {
+        Log.i(SdkSensorGateway.TAG, "BIA status=$status progress=$progress")
+        return when (status) {
             0 -> if (progress != null && progress < 100f) {
-                trySendBlocking(QuickEvent.Progress(progress / 100f))
+                problem = null
+                sdkProgress = progress / 100f
                 false
             } else {
                 trySendBlocking(
@@ -169,11 +192,14 @@ class SdkBiaSource(private val gateway: SdkSensorGateway) :
                 true
             }
             7, 8, 9 -> {
-                trySendBlocking(QuickEvent.Progress(0f, QuickHint.TOUCH_KEYS))
+                // Fingers off the keys: the watch restarts the measurement once they're back.
+                problem = QuickHint.TOUCH_KEYS
+                sdkProgress = 0f
                 false
             }
             else -> {
-                trySendBlocking(QuickEvent.Progress(0f, QuickHint.WRIST_CONTACT))
+                problem = QuickHint.WRIST_CONTACT
+                sdkProgress = 0f
                 false
             }
         }

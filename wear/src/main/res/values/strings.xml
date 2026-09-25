@@ -88,6 +88,7 @@
     <string name="body_instruction">Touch both keys with your middle and ring fingers.</string>
     <string name="stress_instruction">Sit still and breathe normally for one minute.</string>
     <string name="hint_measuring">Measuring…</string>
+    <string name="hint_finishing">Almost done…</string>
     <string name="hint_hold_still">Hold still</string>
     <string name="hint_low_signal">Signal too weak. Tighten your band.</string>
     <string name="hint_touch_keys">Keep both fingers on the keys</string>

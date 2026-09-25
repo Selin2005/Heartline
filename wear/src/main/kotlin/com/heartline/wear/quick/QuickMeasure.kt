@@ -93,7 +93,8 @@ class QuickMeasureViewModel(
                     when (event) {
                         is QuickEvent.Progress -> {
                             val current = mutable.value as? QuickState.Measuring
-                            val fraction = maxOf(event.fraction, current?.progress ?: 0f)
+                            // A restart (fingers lifted) may move the ring back; otherwise it only moves forward.
+                            val fraction = if (event.hint != null) event.fraction else maxOf(event.fraction, current?.progress ?: 0f)
                             mutable.value = QuickState.Measuring(
                                 fraction,
                                 ((1 - fraction) * source.seconds).toInt().coerceAtLeast(1),

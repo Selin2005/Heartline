@@ -131,6 +131,7 @@ fun QuickMeasuringScreen(
             Text(
                 when {
                     hint != null -> stringResource(hint.text)
+                    progress >= 0.98f -> stringResource(R.string.hint_finishing)
                     live.isNotEmpty() -> live
                     metric == Metric.STRESS -> stringResource(R.string.hint_breathe)
                     else -> stringResource(R.string.hint_measuring)

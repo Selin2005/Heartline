@@ -277,7 +277,7 @@ private fun AppNavHost(nav: NavHostController, gate: SetupGateViewModel) {
         composable(Routes.HEART_RATE) {
             val vm: HeartRateViewModel = koinViewModel()
             val hr by vm.state.collectAsStateWithLifecycle()
-            HeartRateScreen(hr.bpm, hr.recent, hr.onBody)
+            HeartRateScreen(hr.bpm, hr.onBody)
         }
         composable(Routes.HISTORY) {
             val vm: HistoryViewModel = koinViewModel()

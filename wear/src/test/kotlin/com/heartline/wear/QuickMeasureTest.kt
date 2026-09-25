@@ -117,4 +117,28 @@ class QuickMeasureTest {
         val done = withTimeout(5_000) { vm.state.first { it is QuickState.Done } } as QuickState.Done
         assertTrue((done.summary as RecordSummary.Stress).rmssdMs!! > 0)
     }
+
+    @Test
+    fun skinReadingIsTakenDuringTheMinuteSoTheResultIsImmediate() = runBlocking {
+        val hr = FakeHrSource(bpm = 70.0, irregularity = 0.06, periodMs = 1)
+        // The skin reading takes as long as the last 12 "seconds" and is ready when the minute ends.
+        val stress = StressSource(hr, skinConductance = { kotlinx.coroutines.delay(10 * 20L); 4.2f }, seconds = 60, tickMs = 20)
+        val vm = QuickMeasureViewModel(stress, profiles, store, { scheduled++ })
+        val started = System.currentTimeMillis()
+        vm.start()
+        val done = withTimeout(10_000) { vm.state.first { it is QuickState.Done } } as QuickState.Done
+        assertEquals(4.2f, (done.summary as RecordSummary.Stress).skinConductanceMicroSiemens!!, 0f)
+        // 60 ticks of 20 ms plus a little: no extra wait after the minute.
+        assertTrue(System.currentTimeMillis() - started < 60 * 20 + 1_000)
+    }
+
+    @Test
+    fun aSlowSkinReadingNeverHoldsTheResult() = runBlocking {
+        val hr = FakeHrSource(bpm = 70.0, irregularity = 0.06, periodMs = 1)
+        val stress = StressSource(hr, skinConductance = { kotlinx.coroutines.awaitCancellation() }, seconds = 60, tickMs = 10)
+        val vm = QuickMeasureViewModel(stress, profiles, store, { scheduled++ })
+        vm.start()
+        val done = withTimeout(5_000) { vm.state.first { it is QuickState.Done } } as QuickState.Done
+        assertEquals(null, (done.summary as RecordSummary.Stress).skinConductanceMicroSiemens)
+    }
 }

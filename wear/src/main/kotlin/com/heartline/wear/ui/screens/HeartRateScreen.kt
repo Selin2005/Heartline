@@ -1,37 +1,30 @@
 package com.heartline.wear.ui.screens
 
 import com.heartline.wear.ui.components.CenteredValue
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import com.heartline.wear.R
 import com.heartline.wear.ui.components.BeatingHeart
+import com.heartline.wear.ui.components.HeartMonitor
 import com.heartline.wear.ui.theme.WearColors
 
-/** Live heart rate with a heart beating at that rate and the last minute as a bar trend (Samsung Health style). */
+/** Live heart rate with a heart beating at that rate over a bedside-monitor style sweep. */
 @Composable
-fun HeartRateScreen(bpm: Int?, recent: List<Int>, onBody: Boolean, animate: Boolean = true) {
+fun HeartRateScreen(bpm: Int?, onBody: Boolean, animate: Boolean = true) {
     val color = WearColors.metric(com.heartline.shared.model.Metric.HEART_RATE)
     Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
         Column(
@@ -55,17 +48,8 @@ fun HeartRateScreen(bpm: Int?, recent: List<Int>, onBody: Boolean, animate: Bool
                     Text(stringResource(R.string.hr_now), style = MaterialTheme.typography.bodySmall, color = WearColors.onSurfaceVariant)
                 }
             }
-            if (recent.size >= 2) {
-                val min = (recent.min() - 5).toFloat()
-                val max = (recent.max() + 5).toFloat()
-                Canvas(Modifier.fillMaxWidth().padding(top = 10.dp, start = 8.dp, end = 8.dp).height(30.dp)) {
-                    val step = size.width / recent.size
-                    recent.forEachIndexed { i, v ->
-                        val h = (v - min) / (max - min) * size.height
-                        val x = i * step + step / 2
-                        drawLine(color, Offset(x, size.height), Offset(x, size.height - h), strokeWidth = step * 0.55f, cap = StrokeCap.Round)
-                    }
-                }
+            if (onBody) {
+                HeartMonitor(bpm, color, Modifier.fillMaxWidth().padding(top = 10.dp).height(40.dp), animate)
             }
         }
     }

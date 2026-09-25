@@ -10,6 +10,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import android.util.Log
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.flow
@@ -56,6 +57,12 @@ class StressSource(
     override val kind = RecordKind.STRESS
 
     override fun measure(profile: UserProfile?): Flow<QuickEvent> = channelFlow {
+        // Skin conductance takes ~10 s: read it during the last seconds of the minute, not after,
+        // so the result shows the moment the minute ends.
+        val eda = async {
+            delay(tickMs * (seconds - EDA_LEAD_SECONDS).coerceAtLeast(0))
+            runCatching { skinConductance() }.getOrNull()
+        }
         val ibis = mutableListOf<Int>()
         var samples = 0
         var offBody = false
@@ -73,6 +80,7 @@ class StressSource(
             if (second == noDataSeconds && samples == 0) {
                 log("no heart-rate data after $noDataSeconds s")
                 reader.cancel()
+                eda.cancel()
                 send(QuickEvent.Failed(null, QuickHint.LOW_SIGNAL))
                 return@channelFlow
             }
@@ -80,12 +88,12 @@ class StressSource(
         }
         reader.cancel()
         val hrv = Hrv.compute(ibis)
+        val skin = withTimeoutOrNull(EDA_GRACE_MS) { eda.await() }.also { eda.cancel() }
         log("done: samples=$samples ibis=${ibis.size} clean=${Hrv.clean(ibis).size} rmssd=${hrv?.rmssdMs}")
         if (hrv == null) {
             send(QuickEvent.Failed(null, QuickHint.LOW_SIGNAL))
         } else {
-            val eda = withTimeoutOrNull(EDA_TIMEOUT_MS) { skinConductance() }
-            send(QuickEvent.Result(RecordSummary.Stress(StressIndex.score(hrv.rmssdMs, eda), hrv.rmssdMs, eda)))
+            send(QuickEvent.Result(RecordSummary.Stress(StressIndex.score(hrv.rmssdMs, skin), hrv.rmssdMs, skin)))
         }
     }
 
@@ -95,7 +103,10 @@ class StressSource(
 
     private companion object {
         const val TAG = "Heartline/Stress"
-        const val EDA_TIMEOUT_MS = 15_000L
+        const val EDA_LEAD_SECONDS = 12
+
+        /** At most this much extra wait for the skin reading once the minute is over. */
+        const val EDA_GRACE_MS = 1_500L
     }
 }
 
