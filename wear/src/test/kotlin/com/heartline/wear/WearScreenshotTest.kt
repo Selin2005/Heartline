@@ -82,7 +82,7 @@ class WearScreenshotTest(private val size: String) {
 
     @Test fun launcher() = shot("launcher") { LauncherScreen(WearSample.launcher) }
 
-    @Test fun ecgInstruction() = shot("ecg_instruction") { EcgInstructionScreen() }
+    @Test fun ecgInstruction() = shot("ecg_instruction") { EcgInstructionScreen(animate = false) }
 
     @Test fun ecgMeasuring() = shot("ecg_measuring") {
         EcgMeasuringScreen(0.4f, 18, WearSample.liveEcg, leadOff = false, bpm = 72, endIndex = 1500L * 3 + 900)

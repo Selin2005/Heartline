@@ -46,6 +46,7 @@ import com.heartline.shared.model.EcgResult
 import com.heartline.shared.model.Severity
 import com.heartline.wear.R
 import com.heartline.wear.ui.components.ActionScreen
+import com.heartline.wear.ui.components.EcgKeyIllustration
 import com.heartline.wear.ui.components.LiveWave
 import com.heartline.wear.ui.components.SweepTrace
 import com.heartline.wear.ui.components.isSmallRound
@@ -54,47 +55,21 @@ import com.heartline.wear.ui.theme.WearColors
 
 /** Step 1: how to hold the watch, with an original illustration of a finger on the top key. */
 @Composable
-fun EcgInstructionScreen(onStart: () -> Unit = {}) {
+fun EcgInstructionScreen(onStart: () -> Unit = {}, animate: Boolean = true) {
     ActionScreen(stringResource(R.string.action_start), onStart) {
         val small = isSmallRound()
-        WatchKeyIllustration(if (small) Modifier.size(width = 80.dp, height = 56.dp) else Modifier.size(width = 96.dp, height = 70.dp))
+        EcgKeyIllustration(
+            WearColors.ecg,
+            if (small) Modifier.size(width = 84.dp, height = 60.dp) else Modifier.size(width = 100.dp, height = 72.dp),
+            background = WearColors.background,
+            animate = animate,
+        )
         Text(
             stringResource(R.string.ecg_instruction),
             style = if (small) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 6.dp),
         )
-    }
-}
-
-@Composable
-private fun WatchKeyIllustration(modifier: Modifier) {
-    val ecg = WearColors.ecg
-    val outline = WearColors.onSurfaceVariant
-    Canvas(modifier) {
-        val body = size.height * 0.62f
-        val cx = size.width * 0.38f
-        val cy = size.height * 0.58f
-        // Watch case and bezel.
-        drawCircle(outline, radius = body / 2, center = Offset(cx, cy), style = Stroke(width = 3.dp.toPx()))
-        drawCircle(outline.copy(alpha = 0.35f), radius = body / 2 - 7.dp.toPx(), center = Offset(cx, cy))
-        // Top and bottom keys on the right side.
-        val keyW = 6.dp.toPx()
-        val keyH = 12.dp.toPx()
-        val keyX = cx + body / 2 - 1.dp.toPx()
-        drawRoundRect(ecg, Offset(keyX, cy - body * 0.32f - keyH / 2), Size(keyW, keyH), CornerRadius(3.dp.toPx()))
-        drawRoundRect(outline, Offset(keyX, cy + body * 0.32f - keyH / 2), Size(keyW, keyH), CornerRadius(3.dp.toPx()))
-        // Fingertip pressing the top key from the right.
-        val keyY = cy - body * 0.32f
-        val fingerH = 14.dp.toPx()
-        drawRoundRect(
-            ecg.copy(alpha = 0.9f),
-            Offset(keyX + keyW - 1.dp.toPx(), keyY - fingerH / 2),
-            Size(size.width - keyX - keyW + 1.dp.toPx(), fingerH),
-            CornerRadius(fingerH / 2),
-        )
-        // Contact pulse.
-        drawCircle(ecg.copy(alpha = 0.25f), radius = 13.dp.toPx(), center = Offset(keyX + keyW / 2, keyY))
     }
 }
 
