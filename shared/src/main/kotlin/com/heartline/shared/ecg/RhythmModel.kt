@@ -157,7 +157,7 @@ object EcgFounderInput {
             }
         }
         if (x.size < WINDOW) return emptyList()
-        val notched = x.filtFilt(Biquad.notch(50.0, FS.toDouble(), 30.0))
+        val notched = x.filtFilt(Biquad.iirNotch(50.0, FS.toDouble(), 30.0))
         return (0..minOf(notched.size, max * WINDOW) - WINDOW step WINDOW).map { start ->
             val w = notched.copyOfRange(start, start + WINDOW)
             val mean = w.average()

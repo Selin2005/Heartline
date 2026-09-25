@@ -1,0 +1,17 @@
+-- cross-validated (app + ECGFounder) thresholds {'af': 0.3, 'noisy': 0.3, 'normal': 0.5}
+  cinc2017     A   n=674   SINUS=1% AF=84% HIGH=2% LOW=0% INC=6% POOR=6%
+  cinc2017     N   n=4768  SINUS=86% AF=1% HIGH=0% LOW=0% INC=8% POOR=5%
+  cinc2017     O   n=2302  SINUS=15% AF=7% HIGH=3% LOW=4% INC=62% POOR=9%
+  cinc2017     ~   n=168   SINUS=2% AF=3% HIGH=0% LOW=0% INC=11% POOR=84%
+  mitdb        A   n=205   SINUS=0% AF=89% HIGH=0% LOW=0% INC=11% POOR=0%
+  mitdb        E   n=662   SINUS=3% AF=0% HIGH=0% LOW=1% INC=95% POOR=1%
+  mitdb        N   n=1197  SINUS=87% AF=0% HIGH=0% LOW=3% INC=7% POOR=2%
+  mitdb        O   n=816   SINUS=6% AF=8% HIGH=1% LOW=4% INC=76% POOR=5%
+-- NSTDB (never trained on) thresholds {'af': 0.3, 'noisy': 0.3, 'normal': 0.5}
+  nstdb        -6  n=52    SINUS=0% AF=0% HIGH=0% LOW=0% INC=0% POOR=100%
+  nstdb        00  n=52    SINUS=0% AF=0% HIGH=0% LOW=0% INC=0% POOR=100%
+  nstdb        06  n=52    SINUS=0% AF=0% HIGH=0% LOW=0% INC=29% POOR=71%
+  nstdb        12  n=52    SINUS=2% AF=0% HIGH=0% LOW=0% INC=92% POOR=6%
+  nstdb        18  n=52    SINUS=0% AF=0% HIGH=0% LOW=0% INC=100% POOR=0%
+  nstdb        24  n=52    SINUS=6% AF=0% HIGH=0% LOW=0% INC=94% POOR=0%
+wrote /home/user/Heartline/phone/src/main/assets/ecg/second_opinion_model.json

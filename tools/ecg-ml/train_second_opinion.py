@@ -2,7 +2,10 @@
 probabilities, same tree model and decision logic as train_rhythm.py. Needs ecgfounder_features.py
 output. The phone uses it only when ecgfounder_1lead_fp16.onnx is bundled (see README).
 
-    python train_second_opinion.py feat-cinc.csv founder.csv --out ../../phone/src/main/assets/ecg/second_opinion_model.json
+    python train_second_opinion.py --features feat-cinc.csv feat-mit.csv --founder founder*.csv \
+        --out ../../phone/src/main/assets/ecg/second_opinion_model.json
+
+NSTDB segments (noise stress) are never trained on; they only check false AFib on noise.
 """
 import argparse
 import csv
@@ -19,14 +22,19 @@ from train_rhythm import CLASSES, LABEL, export, group, load, report  # noqa: E4
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("features")
-    ap.add_argument("founder")
+    ap.add_argument("--features", nargs="+", required=True)
+    ap.add_argument("--founder", nargs="+", required=True)
     ap.add_argument("--out")
     a = ap.parse_args()
-    names, rows = load([a.features])
-    fr = list(csv.reader(open(a.founder)))
-    fnames, fmap = fr[0][1:], {r[0]: [float(v) for v in r[1:]] for r in fr[1:]}
-    rows = [r for r in rows if r["id"] in fmap and r["label"] in LABEL]
+    names, all_rows = load(a.features)
+    fmap = {}
+    for path in a.founder:
+        fr = list(csv.reader(open(path)))
+        fnames = fr[0][1:]
+        fmap.update({r[0]: [float(v) for v in r[1:]] for r in fr[1:]})
+    all_rows = [r for r in all_rows if r["id"] in fmap]
+    rows = [r for r in all_rows if r["label"] in LABEL and r["group"] != "nstdb"]
+    nstdb = [r for r in all_rows if r["group"] == "nstdb"]
     X = np.array([[float(r[n]) for n in names] + fmap[r["id"]] for r in rows])
     y = np.array([CLASSES.index(LABEL[r["label"]]) for r in rows])
     g = np.array([group(r) for r in rows])
@@ -46,9 +54,12 @@ def main():
         "normal": 0.5,
     }
     report("cross-validated (app + ECGFounder)", rows, oof, t)
+    final = make().fit(X, y, sample_weight=w)
+    if nstdb:
+        Xn = np.array([[float(r[n]) for n in names] + fmap[r["id"]] for r in nstdb])
+        report("NSTDB (never trained on)", nstdb, final.predict_proba(Xn), t)
     if a.out:
-        final = make().fit(X, y, sample_weight=w)
-        info = f"GBT on app features + ECGFounder (1-lead) probabilities, {len(y)} CinC 2017 recordings, CV grouped"
+        info = f"GBT on app features + ECGFounder (1-lead) probabilities, {len(y)} CinC 2017 + MIT-BIH recordings, CV grouped by patient"
         with open(a.out, "w") as f:
             json.dump(export(final, names + fnames, t, info), f, separators=(",", ":"))
         print("wrote", a.out)

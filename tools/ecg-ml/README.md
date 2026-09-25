@@ -11,19 +11,32 @@ licence), trained on 10.8 M ECGs with 150 labels; the single-lead checkpoint
 [Hugging Face](https://huggingface.co/PKUDigitalHealth/ECGFounder). In the FOUND-AF benchmark
 (arXiv 2608.03597) it was the best of nine ECG foundation models for AFib.
 
-## Result (CinC 2017 subset of 2842 recordings, 5-fold patient-grouped CV)
+## Result
 
-`ecgfounder_features.py` → `evaluate_founder.py` / `train_second_opinion.py`. Thresholds hold
-false AFib on normal recordings at 1 %.
+First on a CinC subset (2842 recordings, `evaluate_founder.py`), then on everything: all CinC 2017
+recordings ≥ 20 s and all MIT-BIH segments, NSTDB kept out for the noise check
+(`train_second_opinion.py`, `tools/ecg-eval/results/second-opinion-cv.txt`). Both 5-fold, grouped
+by patient, thresholds holding false AFib on normal recordings at 1 %.
 
-| | App features | App + ECGFounder |
-|---|---|---|
-| AFib recognised | 80 % | **86 %** |
-| Normal → sinus rhythm | 83 % | **86 %** |
-| Noisy → poor | 82 % | **87 %** |
-| Other rhythms → called AFib | 7 % | 8 % |
+| | Subset: app | Subset: + ECGFounder | All: app | All: + ECGFounder |
+|---|---|---|---|---|
+| CinC AFib recognised | 80 % | 86 % | 83 % | 84 % |
+| MIT-BIH AFib recognised | – | – | **100 %** | 89 % |
+| CinC normal → sinus | 83 % | 86 % | 84 % | 86 % |
+| MIT-BIH normal → sinus | – | – | 78 % | **87 %** |
+| CinC other rhythms → AFib | 7 % | 8 % | 9 % | 7 % |
+| MIT-BIH other rhythms → AFib | – | – | 17 % | **8 %** |
+| MIT-BIH extra beats → AFib | – | – | 3 % | 0 % |
+| Noisy → poor | 82 % | 87 % | 81 % | 84 % |
+| NSTDB noise → AFib | – | – | 0–2 % | 0 % |
 
-ECGFounder's own "atrial fibrillation" output alone, with no training on this data: AUC 0.98.
+With the app's model trained on all the data, ECGFounder no longer finds more AFib (CinC +1,
+MIT-BIH −11 points); it mainly cuts false AFib on other arrhythmias and recognises more normal
+recordings. ECGFounder's own "atrial fibrillation" output alone, untrained on this data: AUC 0.98.
+
+**Decision:** not bundled. The gain doesn't justify 62 MB, and it would lose AFib on MIT-BIH.
+Worth revisiting with real watch recordings (their noise and amplitude differ from these
+databases) or as a distilled small model.
 
 ## On the phone
 
@@ -48,5 +61,5 @@ python export_ecgfounder_onnx.py --repo ecgfounder --out ../../phone/src/main/as
 A smaller route is distilling ECGFounder into a compact network, best done once real watch
 recordings are available to check it on.
 
-Preprocessing: 500 Hz, 50 Hz notch (Q 30), up to three 10 s windows, z-scored, mean of sigmoid
+Preprocessing: 500 Hz, 50 Hz notch (scipy `iirnotch`, Q 30; `Biquad.iirNotch` matches its coefficients exactly), up to three 10 s windows, z-scored, mean of sigmoid
 outputs (`EcgFounderInput` in `shared` mirrors this).

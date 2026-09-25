@@ -95,11 +95,12 @@ on the same recordings (`results/baseline-algorithm2-*.txt`).
 
 ### Second opinion on the phone (ECGFounder)
 
-Adding the ECGFounder foundation model's 150 label probabilities (NEJM AI 2025) to the features
-raises AFib recognition from 80 % to 86 % at the same 1 % false AFib (CinC subset, same CV). It
-only runs in fp16 (62 MB; 8-bit versions distorted its outputs), so the phone uses it when the
-model file is added to its assets, and shows the result as "Second opinion (phone AI)" next to
-the watch's result. Details: `tools/ecg-ml/README.md`.
+The ECGFounder foundation model (NEJM AI 2025) was tested as extra input to the rhythm model on
+all the data above (same CV). It cut false AFib on other arrhythmias (MIT-BIH 17 % → 8 %) and
+recognised more normal recordings (MIT-BIH 78 % → 87 %), but found no more AFib (CinC 83 → 84 %,
+MIT-BIH 100 → 89 %). It needs 62 MB (fp16; 8-bit versions distorted its outputs), so it isn't
+bundled. The phone code runs it as a "Second opinion (phone AI)" as soon as the model file is
+added. Details: `tools/ecg-ml/README.md`.
 
 ## Re-running
 

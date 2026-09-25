@@ -87,6 +87,18 @@ class Biquad private constructor(
             return make((1 + c) / 2, -(1 + c), (1 + c) / 2, 1 + alpha, -2 * c, 1 - alpha)
         }
 
+        /**
+         * The notch of scipy.signal.iirnotch (bandwidth w0/Q at −3 dB), for models whose reference
+         * preprocessing uses it (ECGFounder). Slightly different from the cookbook [notch].
+         */
+        fun iirNotch(centerHz: Double, fs: Double, q: Double = 30.0): Biquad {
+            val w0 = 2 * PI * centerHz / fs
+            val beta = kotlin.math.tan(w0 / q / 2)
+            val gain = 1 / (1 + beta)
+            val c = cos(w0)
+            return Biquad(gain, -2 * gain * c, gain, -2 * gain * c, 2 * gain - 1)
+        }
+
         fun notch(centerHz: Double, fs: Double, q: Double = 30.0): Biquad {
             val w = 2 * PI * centerHz / fs
             val alpha = sin(w) / (2 * q)
