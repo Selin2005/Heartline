@@ -47,6 +47,10 @@ import com.heartline.wear.ui.theme.HeartlineWearTheme
 import androidx.wear.compose.material3.AppScaffold
 import org.junit.Rule
 import org.junit.Test
+import com.heartline.wear.ui.screens.WeightConfirmScreen
+import com.heartline.wear.ui.screens.BodyResultScreen
+import com.heartline.shared.profile.Sex
+import com.heartline.shared.body.BodyComposition
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 
@@ -194,7 +198,26 @@ class WearScreenshotTest(private val size: String) {
 
     @Test fun tempResult() = shot("temp_result") { QuickResultScreen(Metric.SKIN_TEMPERATURE, RecordSummary.SkinTemperature(33.6f, 24.5f)) }
 
-    @Test fun bodyResult() = shot("body_result") { QuickResultScreen(Metric.BODY_COMPOSITION, RecordSummary.BodyComposition(21.4f, 29.8f, 38.6f, 1540)) }
+    private val body = RecordSummary.BodyComposition(
+        bodyFatPercent = 21.4f,
+        skeletalMuscleKg = 33.8f,
+        bodyWaterKg = 43.1f,
+        bmrKcal = 1654,
+        weightKg = 76.4f,
+        heightCm = 178f,
+        bodyFatMassKg = 16.3f,
+        fatFreeMassKg = 60.1f,
+        impedanceOhm = 486f,
+        phaseAngleDeg = -6.6f,
+    )
+    private val bodyReport = BodyComposition.report(body, Sex.MALE, 34)
+    private val bodyPrevious = BodyComposition.report(body.copy(bodyFatPercent = 22.3f, weightKg = 77.6f, bodyFatMassKg = 17.3f, skeletalMuscleKg = 33.5f), Sex.MALE, 34)
+
+    @Test fun bodyResult() = shot("body_result") { BodyResultScreen(bodyReport, bodyPrevious, animate = false) }
+
+    @Test fun bodyResultCards() = shot("body_result_cards") { BodyResultScreen(bodyReport, bodyPrevious, animate = false, firstItem = 3) }
+
+    @Test fun bodyWeight() = shot("body_weight") { WeightConfirmScreen(76.4f, onConfirm = {}) }
 
     @Test fun stressResult() = shot("stress_result") { QuickResultScreen(Metric.STRESS, RecordSummary.Stress(38, 34.0)) }
 

@@ -27,6 +27,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.Icon
+import kotlin.math.sin
+import kotlin.math.cos
+import kotlin.math.PI
 
 /**
  * Measuring animations. Where a live heart rate is known, the motion beats at that rate, so the
@@ -157,6 +160,18 @@ fun KeysContact(color: Color, modifier: Modifier = Modifier, animate: Boolean = 
             drawCircle(color.copy(alpha = 0.35f * (1 - phase)), radius = inner + (r - inner) * phase, style = Stroke(2.dp.toPx()))
             drawCircle(color.copy(alpha = 0.16f), radius = inner)
             drawCircle(color.copy(alpha = 0.9f), radius = inner, style = Stroke(2.dp.toPx()))
+            // The tiny current: sparks flowing around the body, a fading tail behind each.
+            val orbit = inner + (r - inner) * 0.45f
+            for (i in 0 until 3) {
+                for (k in 0 until 6) {
+                    val a = 2 * PI * (phase + i / 3.0 - k * 0.018)
+                    drawCircle(
+                        color.copy(alpha = 0.9f * (1 - k / 6f)),
+                        radius = (2.6f - k * 0.3f).dp.toPx(),
+                        center = Offset(center.x + orbit * cos(a).toFloat(), center.y + orbit * sin(a).toFloat()),
+                    )
+                }
+            }
         }
         content()
     }

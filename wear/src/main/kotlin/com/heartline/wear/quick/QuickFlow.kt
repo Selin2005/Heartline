@@ -16,14 +16,18 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.heartline.shared.body.BodyComposition
 import com.heartline.shared.model.Metric
+import com.heartline.shared.model.RecordSummary
 import com.heartline.shared.sensor.PermissionPolicy
 import com.heartline.wear.sensor.SensorProblem
+import com.heartline.wear.ui.screens.BodyResultScreen
 import com.heartline.wear.ui.screens.ProfileNeededScreen
 import com.heartline.wear.ui.screens.QuickInstructionScreen
 import com.heartline.wear.ui.screens.QuickMeasuringScreen
 import com.heartline.wear.ui.screens.QuickResultScreen
 import com.heartline.wear.ui.screens.SensorErrorScreen
+import com.heartline.wear.ui.screens.WeightConfirmScreen
 import org.koin.androidx.compose.koinViewModel
 import com.heartline.wear.monitor.WatchSettingsStore
 import org.koin.compose.koinInject
@@ -58,7 +62,19 @@ fun QuickFlow(metric: Metric, onExit: () -> Unit, vm: QuickMeasureViewModel = ko
         QuickState.Idle -> QuickInstructionScreen(metric, onStart = ::start)
         QuickState.NeedsProfile -> ProfileNeededScreen(onDone = done)
         is QuickState.Measuring -> QuickMeasuringScreen(metric, s.progress, s.secondsLeft, s.hint, s.bpm, s.hrvMs)
-        is QuickState.Done -> QuickResultScreen(metric, s.summary, onDone = done)
+        is QuickState.ConfirmWeight -> WeightConfirmScreen(s.weightKg, onConfirm = vm::confirmWeight)
+        is QuickState.Done -> {
+            val body = s.summary as? RecordSummary.BodyComposition
+            if (body != null) {
+                val sex = s.profile?.calcSex
+                val age = s.profile?.age()
+                val report = BodyComposition.report(body, sex, age, s.profile?.weightKg, s.profile?.heightCm)
+                val previous = (s.previous as? RecordSummary.BodyComposition)?.let { BodyComposition.report(it, sex, age, s.profile?.weightKg, s.profile?.heightCm) }
+                BodyResultScreen(report, previous, onDone = done)
+            } else {
+                QuickResultScreen(metric, s.summary, onDone = done)
+            }
+        }
         is QuickState.Failed -> SensorErrorScreen(s.problem ?: SensorProblem.OFF_BODY, onAction = { vm.reset() })
     }
 }

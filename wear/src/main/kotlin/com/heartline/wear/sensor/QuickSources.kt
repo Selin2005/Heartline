@@ -160,8 +160,21 @@ class FakeQuickSource(
             FakeQuickSource(Metric.SPO2, 30, tickMs) { RecordSummary.Spo2(96 + random.nextInt(0, 3), 64, lowConfidence = false) },
             FakeQuickSource(Metric.SKIN_TEMPERATURE, 10, tickMs) { RecordSummary.SkinTemperature(33.2f + random.nextFloat(), 24.5f) },
             FakeQuickSource(Metric.BODY_COMPOSITION, 15, tickMs) { profile ->
-                val weight = profile?.weightKg ?: 70f
-                RecordSummary.BodyComposition(21.4f, weight * 0.42f, weight * 0.55f, 1520)
+                val weight = profile?.weightKg?.takeIf { it > 0 } ?: 70f
+                RecordSummary.BodyComposition(
+                    bodyFatPercent = 21.4f,
+                    skeletalMuscleKg = weight * 0.42f,
+                    bodyWaterKg = weight * 0.55f,
+                    bmrKcal = 1520,
+                    weightKg = weight,
+                    heightCm = profile?.heightCm?.takeIf { it > 0 },
+                    bodyFatMassKg = weight * 0.214f,
+                    skeletalMusclePercent = 42f,
+                    fatFreeMassKg = weight * 0.786f,
+                    fatFreePercent = 78.6f,
+                    impedanceOhm = 486f,
+                    phaseAngleDeg = -6.4f,
+                )
             },
         )
     }

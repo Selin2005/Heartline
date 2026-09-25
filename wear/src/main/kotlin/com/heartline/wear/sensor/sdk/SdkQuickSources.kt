@@ -188,6 +188,7 @@ class SdkBiaSource(private val gateway: SdkSensorGateway) :
         val sex = p.calcSex ?: throw SensorException(SensorProblem.NOT_SUPPORTED)
         val age = p.age() ?: throw SensorException(SensorProblem.NOT_SUPPORTED)
         Log.i(RAW_TAG, "profile age=$age sex=$sex heightCm=${p.heightCm} weightKg=${p.weightKg}")
+        measuredWith = p
         val sdkProfile = TrackerUserProfile.Builder()
             .setAge(age)
             .setGender(if (sex == Sex.MALE) 1 else 0)
@@ -196,6 +197,9 @@ class SdkBiaSource(private val gateway: SdkSensorGateway) :
             .build()
         return gateway.trackerWithProfile(TrackerKind.BIA_ON_DEMAND, sdkProfile)
     }
+
+    /** The profile the tracker was created with: its weight and height go into the record. */
+    @Volatile private var measuredWith: UserProfile? = null
 
     /** Every STATUS the sensor reported in this measurement and how often (logged at the end). */
     private val statuses = mutableMapOf<Int?, Int>()
@@ -226,10 +230,18 @@ class SdkBiaSource(private val gateway: SdkSensorGateway) :
                     trySendBlocking(
                         QuickEvent.Result(
                             RecordSummary.BodyComposition(
-                                fat,
-                                p.getValue(ValueKey.BiaSet.SKELETAL_MUSCLE_MASS),
-                                p.getValue(ValueKey.BiaSet.TOTAL_BODY_WATER),
-                                p.getValue(ValueKey.BiaSet.BASAL_METABOLIC_RATE)?.toInt(),
+                                bodyFatPercent = fat,
+                                skeletalMuscleKg = p.getValue(ValueKey.BiaSet.SKELETAL_MUSCLE_MASS),
+                                bodyWaterKg = p.getValue(ValueKey.BiaSet.TOTAL_BODY_WATER),
+                                bmrKcal = p.getValue(ValueKey.BiaSet.BASAL_METABOLIC_RATE)?.toInt(),
+                                weightKg = measuredWith?.weightKg?.takeIf { it > 0 },
+                                heightCm = measuredWith?.heightCm?.takeIf { it > 0 },
+                                bodyFatMassKg = p.getValue(ValueKey.BiaSet.BODY_FAT_MASS),
+                                skeletalMusclePercent = p.getValue(ValueKey.BiaSet.SKELETAL_MUSCLE_RATIO),
+                                fatFreeMassKg = p.getValue(ValueKey.BiaSet.FAT_FREE_MASS),
+                                fatFreePercent = p.getValue(ValueKey.BiaSet.FAT_FREE_RATIO),
+                                impedanceOhm = p.getValue(ValueKey.BiaSet.BODY_IMPEDANCE_MAGNITUDE),
+                                phaseAngleDeg = p.getValue(ValueKey.BiaSet.BODY_IMPEDANCE_DEGREE),
                             ),
                         ),
                     )

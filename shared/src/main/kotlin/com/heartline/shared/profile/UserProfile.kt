@@ -58,7 +58,9 @@ data class UserProfile(
     val sex: Sex? = null,
     val heightCm: Float = 0f,
     val weightKg: Float = 0f,
-    val birthYear: Int? = null
+    val birthYear: Int? = null,
+    /** When [weightKg] was last entered (phone profile or the watch before body composition); null if unknown. */
+    val weightUpdatedAtMs: Long? = null
 ) {
     val birthLocalDate: LocalDate? get() = birthDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
 
@@ -89,10 +91,14 @@ data class UserProfile(
 
     val isComplete: Boolean get() = ProfileValidator.errors(this).isEmpty()
 
+    /** Body composition asks for today's weight when the last one is unknown or older than [WEIGHT_MAX_AGE_DAYS]. */
+    fun weightIsStale(nowMs: Long): Boolean = weightUpdatedAtMs == null || nowMs - weightUpdatedAtMs > WEIGHT_MAX_AGE_DAYS * 86_400_000L
+
     companion object {
         const val MIN_AGE = 13
         const val MAX_AGE = 120
         val HEIGHT_CM = 100f..250f
         val WEIGHT_KG = 25f..300f
+        const val WEIGHT_MAX_AGE_DAYS = 30
     }
 }

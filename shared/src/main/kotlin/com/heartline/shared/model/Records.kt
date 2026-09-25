@@ -54,9 +54,26 @@ sealed interface RecordSummary {
     @Serializable
     data class Stress(val score: Int, val rmssdMs: Double?, val skinConductanceMicroSiemens: Float? = null) : RecordSummary
 
+    /**
+     * Everything the watch's BIA reports (Samsung Health shows weight, skeletal muscle, fat mass,
+     * body fat, BMI, body water and BMR). [weightKg]/[heightCm] are the values the measurement was
+     * computed with; the newer fields default to null so records from older versions still load.
+     */
     @Serializable
-    data class BodyComposition(val bodyFatPercent: Float, val skeletalMuscleKg: Float?, val bodyWaterKg: Float?, val bmrKcal: Int?) :
-        RecordSummary
+    data class BodyComposition(
+        val bodyFatPercent: Float,
+        val skeletalMuscleKg: Float?,
+        val bodyWaterKg: Float?,
+        val bmrKcal: Int?,
+        val weightKg: Float? = null,
+        val heightCm: Float? = null,
+        val bodyFatMassKg: Float? = null,
+        val skeletalMusclePercent: Float? = null,
+        val fatFreeMassKg: Float? = null,
+        val fatFreePercent: Float? = null,
+        val impedanceOhm: Float? = null,
+        val phaseAngleDeg: Float? = null
+    ) : RecordSummary
 }
 
 /** Metadata for one measurement. [id] is a UUID and the idempotency key across sync. */

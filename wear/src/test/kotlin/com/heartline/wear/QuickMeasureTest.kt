@@ -78,8 +78,20 @@ class QuickMeasureTest {
         profiles.update(UserProfile("Sam", "Lee", birthDate = "1988-05-04", gender = Gender.MAN, heightCm = 180f, weightKg = 80f))
         vm.reset()
         vm.start()
+        // No weight date yet: today's weight is asked first, then used for the measurement and kept.
+        assertEquals(QuickState.ConfirmWeight(80f), vm.state.value)
+        vm.confirmWeight(78.5f)
         val done = withTimeout(10_000) { vm.state.first { it is QuickState.Done } } as QuickState.Done
-        assertEquals(80f * 0.42f, (done.summary as RecordSummary.BodyComposition).skeletalMuscleKg!!, 0.01f)
+        val body = done.summary as RecordSummary.BodyComposition
+        assertEquals(78.5f * 0.42f, body.skeletalMuscleKg!!, 0.01f)
+        assertEquals(78.5f, body.weightKg!!, 1e-6f)
+        assertEquals(78.5f, profiles.profile.value!!.weightKg, 1e-6f)
+
+        // Weighed a moment ago: no question the second time.
+        vm.cancel()
+        vm.start()
+        assertTrue(vm.state.value is QuickState.Measuring)
+        assertTrue(withTimeout(10_000) { vm.state.first { it is QuickState.Done } } is QuickState.Done)
     }
 
     @Test

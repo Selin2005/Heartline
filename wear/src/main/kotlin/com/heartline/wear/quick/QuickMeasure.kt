@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import java.util.UUID
@@ -58,7 +59,11 @@ sealed interface QuickState {
 
     data class Measuring(val progress: Float, val secondsLeft: Int, val hint: QuickHint?, val bpm: Int? = null, val hrvMs: Double? = null) : QuickState
 
-    data class Done(val summary: RecordSummary) : QuickState
+    /** Body composition: today's weight is asked when the last one is over a month old. */
+    data class ConfirmWeight(val weightKg: Float) : QuickState
+
+    /** [previous]: the last result of the same kind (for changes); [profile]: for reference ranges. */
+    data class Done(val summary: RecordSummary, val previous: RecordSummary? = null, val profile: UserProfile? = null) : QuickState
 
     data class Failed(val problem: SensorProblem?, val hint: QuickHint?) : QuickState
 }
@@ -84,6 +89,25 @@ class QuickMeasureViewModel(
             mutable.value = QuickState.NeedsProfile
             return
         }
+        if (source.metric == Metric.BODY_COMPOSITION && profile != null && profile.weightIsStale(now())) {
+            mutable.value = QuickState.ConfirmWeight(profile.weightKg)
+            return
+        }
+        measure(profile)
+    }
+
+    /** Saves today's weight (it reaches the phone with the result) and starts the measurement. */
+    fun confirmWeight(weightKg: Float) {
+        val profile = profiles.profile.value ?: return
+        val updated = profile.copy(
+            weightKg = weightKg.coerceIn(UserProfile.WEIGHT_KG.start, UserProfile.WEIGHT_KG.endInclusive),
+            weightUpdatedAtMs = now(),
+        )
+        profiles.update(updated)
+        measure(updated)
+    }
+
+    private fun measure(profile: UserProfile?) {
         val startedAt = now()
         mutable.value = QuickState.Measuring(0f, source.seconds, null)
         job = viewModelScope.launch {
@@ -108,10 +132,11 @@ class QuickMeasureViewModel(
                         }
                         is QuickEvent.Failed -> mutable.value = QuickState.Failed(event.problem, event.hint)
                         is QuickEvent.Result -> {
+                            val previous = store.recent.first().firstOrNull { it.kind == source.kind }?.summary
                             val meta = RecordMeta(UUID.randomUUID().toString(), source.kind, startedAt, now() - startedAt, 0, 0, event.summary)
                             store.add(meta, null)
                             sync.schedule()
-                            mutable.value = QuickState.Done(event.summary)
+                            mutable.value = QuickState.Done(event.summary, previous, profile)
                         }
                     }
                 }
