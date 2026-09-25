@@ -15,7 +15,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -25,8 +24,8 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * How to take an ECG, seen from above: the watch on the left wrist and the index finger of the
- * other hand resting on the top key (2 o'clock), which lights up with a contact pulse. Animated:
+ * How to take an ECG, seen from above, in a flat friendly style: the watch (a heart on its screen)
+ * on the wrist and the other hand pointing, index finger on the top key (2 o'clock), which glows. Animated:
  * the finger rests on the key, lifts off briefly and comes back. Drawn on a 140 × 100 grid.
  */
 @Composable
@@ -54,95 +53,82 @@ fun EcgKeyIllustration(accent: Color, modifier: Modifier = Modifier, background:
     }
 }
 
-private val SKIN = Color(0xFFD7A07E)
-private val SKIN_SHADE = Color(0xFFB9805F)
-private val SKIN_LIGHT = Color(0xFFE8BC9E)
-private val NAIL = Color(0xFFF1D3C2)
-private val STRAP = Color(0xFF30343B)
-private val STRAP_EDGE = Color(0xFF474C55)
-private val STEEL = Color(0xFFA7ADB6)
-private val STEEL_DARK = Color(0xFF6E747D)
-private val BEZEL = Color(0xFF1B1D21)
+// Flat, friendly palette (no realistic shading): two warm tones tell the two hands apart.
+private val ARM = Color(0xFFD9A583)
+private val ARM_EDGE = Color(0xFFE6B996)
+private val HAND = Color(0xFFF4CBA9)
+private val HAND_EDGE = Color(0xFFDFAF8B)
+private val NAIL = Color(0xFFFBE3D3)
+private val STRAP = Color(0xFF2B3038)
+private val CASE_LIGHT = Color(0xFFE1E5EA)
+private val CASE_DARK = Color(0xFF8D949E)
+private val BEZEL = Color(0xFF1C1F24)
 
 private fun DrawScope.scene(u: Float, accent: Color, background: Color, lift: Float, onKey: Boolean, pulse: Float) {
     fun p(x: Float, y: Float) = Offset(x * u, y * u)
-
-    // Forearm across the scene, lit from above; it fades out at both sides (it goes on).
-    drawRect(Brush.verticalGradient(listOf(SKIN_LIGHT, SKIN, SKIN_SHADE), startY = 32 * u, endY = 74 * u), p(0f, 32f), Size(140 * u, 42 * u))
-    drawRect(Brush.horizontalGradient(listOf(background, Color.Transparent), startX = 0f, endX = 28 * u), p(0f, 31f), Size(28 * u, 44 * u))
-    drawRect(Brush.horizontalGradient(listOf(Color.Transparent, background), startX = 112 * u, endX = 140 * u), p(112f, 31f), Size(28 * u, 44 * u))
-
-    // Strap over the wrist.
-    val cx = 54f
-    val cy = 53f
-    drawRect(STRAP, p(cx - 16f, 0f), Size(32 * u, 100 * u))
-    drawLine(STRAP_EDGE, p(cx - 15f, 0f), p(cx - 15f, 100f), strokeWidth = 1.2f * u)
-    drawLine(STRAP_EDGE, p(cx + 15f, 0f), p(cx + 15f, 100f), strokeWidth = 1.2f * u)
-    for (y in listOf(10f, 18f)) drawCircle(BEZEL, 1.6f * u, p(cx, y))
-    // The strap fades out too.
-    drawRect(Brush.verticalGradient(listOf(background, Color.Transparent), startY = 0f, endY = 12 * u), p(cx - 17f, 0f), Size(34 * u, 12 * u))
-    drawRect(Brush.verticalGradient(listOf(Color.Transparent, background), startY = 88 * u, endY = 100 * u), p(cx - 17f, 88f), Size(34 * u, 12 * u))
-
-    // Keys on the right side at 2 and 4 o'clock (top one lit while touched).
+    val cx = 60f
+    val cy = 58f
     val r = 27f
-    for ((deg, lit) in listOf(-32f to true, 32f to false)) {
-        val a = deg * PI.toFloat() / 180f
-        rotate(deg, pivot = p(cx, cy)) {
-            drawRoundRect(
-                if (lit) accent else STEEL_DARK,
-                topLeft = p(cx + r - 2f, cy - 4.5f),
-                size = Size(7 * u, 9 * u),
-                cornerRadius = CornerRadius(2.5f * u),
-            )
-        }
-        if (lit && onKey) {
-            val key = p(cx + (r + 3f) * cos(a), cy + (r + 3f) * sin(a))
-            drawCircle(accent.copy(alpha = 0.6f * (1 - pulse)), radius = (7f + 13f * pulse) * u, center = key, style = Stroke(2f * u))
-        }
-    }
 
-    // Case, bezel with minute ticks, screen with a small ECG trace.
-    drawCircle(Brush.linearGradient(listOf(Color(0xFFCDD2D9), STEEL_DARK), p(cx - r, cy - r), p(cx + r, cy + r)), r * u, p(cx, cy))
-    drawCircle(BEZEL, (r - 3f) * u, p(cx, cy))
-    for (i in 0 until 12) {
-        val a = i * PI.toFloat() / 6
-        drawLine(
-            STEEL,
-            p(cx + (r - 4.5f) * cos(a), cy + (r - 4.5f) * sin(a)),
-            p(cx + (r - 6.5f) * cos(a), cy + (r - 6.5f) * sin(a)),
-            strokeWidth = 1f * u,
+    // Wrist: a soft band that fades out on both sides, with the strap across it.
+    drawRoundRect(
+        Brush.verticalGradient(listOf(ARM_EDGE, ARM), startY = 41 * u, endY = 76 * u),
+        p(0f, 41f),
+        Size(140 * u, 35 * u),
+        CornerRadius(17 * u),
+    )
+    drawRoundRect(STRAP, p(cx - 15f, 12f), Size(30 * u, 88 * u), CornerRadius(8 * u))
+    drawRect(Brush.horizontalGradient(listOf(background, Color.Transparent), startX = 0f, endX = 30 * u), p(0f, 39f), Size(30 * u, 40 * u))
+    drawRect(Brush.horizontalGradient(listOf(Color.Transparent, background), startX = 110 * u, endX = 140 * u), p(110f, 39f), Size(30 * u, 40 * u))
+    drawRect(Brush.verticalGradient(listOf(background, Color.Transparent), startY = 10 * u, endY = 24 * u), p(cx - 16f, 10f), Size(32 * u, 14 * u))
+    drawRect(Brush.verticalGradient(listOf(Color.Transparent, background), startY = 88 * u, endY = 100 * u), p(cx - 16f, 88f), Size(32 * u, 12 * u))
+
+    // Side keys at 2 and 4 o'clock; the top one glows while touched.
+    val keyAngle = -32f * PI.toFloat() / 180f
+    val key = p(cx + (r + 2.5f) * cos(keyAngle), cy + (r + 2.5f) * sin(keyAngle))
+    if (onKey) {
+        drawCircle(
+            Brush.radialGradient(listOf(accent.copy(alpha = 0.55f), Color.Transparent), center = key, radius = 16f * u),
+            radius = 16f * u,
+            center = key,
         )
+        drawCircle(accent.copy(alpha = 0.7f * (1 - pulse)), radius = (8f + 12f * pulse) * u, center = key, style = Stroke(1.6f * u))
     }
-    drawCircle(Color.Black, (r - 8f) * u, p(cx, cy))
-    val trace = Path().apply {
-        val pts = listOf(-12f to 0f, -6f to 0f, -4f to -2f, -2f to 0f, 0f to 0f, 1.5f to -9f, 3f to 5f, 4.5f to 0f, 8f to 0f, 10f to -3f, 12f to 0f)
-        pts.forEachIndexed { i, (x, y) -> if (i == 0) moveTo((cx + x) * u, (cy + y) * u) else lineTo((cx + x) * u, (cy + y) * u) }
+    for ((deg, lit) in listOf(-32f to true, 32f to false)) {
+        rotate(deg, pivot = p(cx, cy)) {
+            drawRoundRect(if (lit) accent else CASE_DARK, p(cx + r - 2f, cy - 4.5f), Size(6.5f * u, 9 * u), CornerRadius(3f * u))
+        }
     }
-    drawPath(trace, accent, style = Stroke(1.6f * u, cap = StrokeCap.Round))
 
-    // Index finger of the other hand, from the upper right, tip on the top key.
-    val tipAngle = -32f * PI.toFloat() / 180f
-    val tip = Offset(cx + (r + 9f) * cos(tipAngle), cy + (r + 9f) * sin(tipAngle))
-    val axis = -28f // finger direction from the tip towards the hand, degrees
-    val away = 10f * lift
+    // Watch: light case, dark bezel, a heart on the screen.
+    drawCircle(Brush.linearGradient(listOf(CASE_LIGHT, CASE_DARK), p(cx - r, cy - r), p(cx + r, cy + r)), r * u, p(cx, cy))
+    drawCircle(BEZEL, (r - 3f) * u, p(cx, cy))
+    drawCircle(Color.Black, (r - 6.5f) * u, p(cx, cy))
+    val heart = Path().apply {
+        val s = 0.62f
+        moveTo(cx * u, (cy + 8f * s) * u)
+        cubicTo((cx - 14f * s) * u, (cy - 1f * s) * u, (cx - 9f * s) * u, (cy - 13f * s) * u, cx * u, (cy - 6f * s) * u)
+        cubicTo((cx + 9f * s) * u, (cy - 13f * s) * u, (cx + 14f * s) * u, (cy - 1f * s) * u, cx * u, (cy + 8f * s) * u)
+        close()
+    }
+    drawPath(heart, accent)
+
+    // The other hand: a rounded palm at the top right and the index finger resting on the key.
+    val axis = -22f // from the fingertip towards the hand, degrees
     val ax = cos(axis * PI.toFloat() / 180f)
     val ay = sin(axis * PI.toFloat() / 180f)
-    val base = Offset(tip.x + ax * away, tip.y + ay * away)
-    rotate(axis, pivot = p(base.x, base.y)) {
-        val w = 13f
-        // Shadow under the finger.
-        drawRoundRect(Color.Black.copy(alpha = 0.18f), p(base.x - 1f, base.y - w / 2 + 3f), Size(90 * u, w * u), CornerRadius(w / 2 * u))
-        drawRoundRect(
-            Brush.verticalGradient(listOf(SKIN_LIGHT, SKIN, SKIN_SHADE), startY = (base.y - w / 2) * u, endY = (base.y + w / 2) * u),
-            p(base.x - 1f, base.y - w / 2),
-            Size(90 * u, w * u),
-            CornerRadius(w / 2 * u),
-        )
-        // Nail near the tip, and the two knuckle creases.
-        drawRoundRect(NAIL, p(base.x + 1.5f, base.y - w / 2 + 2f), Size(8 * u, (w - 4f) * u), CornerRadius(3.5f * u))
-        for (d in listOf(22f, 40f)) {
-            drawLine(SKIN_SHADE, p(base.x + d, base.y - w / 2 + 3f), p(base.x + d, base.y + w / 2 - 3f), strokeWidth = 1.1f * u, cap = StrokeCap.Round)
-        }
-        drawRoundRect(SKIN_SHADE.copy(alpha = 0.6f), p(base.x - 1f, base.y - w / 2), Size(90 * u, w * u), CornerRadius(w / 2 * u), style = Stroke(0.8f * u))
+    val tipGap = 5.5f + 10f * lift
+    val tip = Offset(key.x / u + ax * tipGap, key.y / u + ay * tipGap)
+    rotate(axis, pivot = p(tip.x, tip.y)) {
+        val w = 12f
+        // Palm and folded fingers, beyond the index finger.
+        drawRoundRect(HAND, p(tip.x + 34f, tip.y - 11f), Size(40 * u, 32 * u), CornerRadius(14 * u))
+        drawRoundRect(HAND_EDGE, p(tip.x + 34f, tip.y - 11f), Size(40 * u, 32 * u), CornerRadius(14 * u), style = Stroke(1f * u))
+        drawRoundRect(HAND, p(tip.x + 26f, tip.y + 4f), Size(16 * u, 13 * u), CornerRadius(6.5f * u))
+        drawRoundRect(HAND_EDGE, p(tip.x + 26f, tip.y + 4f), Size(16 * u, 13 * u), CornerRadius(6.5f * u), style = Stroke(1f * u))
+        // Index finger.
+        drawRoundRect(HAND, p(tip.x, tip.y - w / 2), Size(44 * u, w * u), CornerRadius(w / 2 * u))
+        drawRoundRect(HAND_EDGE, p(tip.x, tip.y - w / 2), Size(44 * u, w * u), CornerRadius(w / 2 * u), style = Stroke(1f * u))
+        drawRoundRect(NAIL, p(tip.x + 2f, tip.y - w / 2 + 2.5f), Size(7 * u, (w - 5f) * u), CornerRadius(3f * u))
     }
 }
