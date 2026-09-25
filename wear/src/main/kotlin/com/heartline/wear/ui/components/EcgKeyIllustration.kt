@@ -66,7 +66,7 @@ private val STRAP_LIGHT = Color(0xFF3D434D)
 private val STEEL_LIGHT = Color(0xFFE4E8ED)
 private val STEEL = Color(0xFFAEB4BD)
 private val STEEL_DARK = Color(0xFF6C727B)
-private val BEZEL = Color(0xFF17191D)
+private val BEZEL = Color(0xFF17191D) // strap holes
 private val TICK = Color(0xFF9AA0A9)
 
 private fun DrawScope.scene(u: Float, accent: Color, background: Color, lift: Float, onKey: Boolean, pulse: Float) {
@@ -123,21 +123,21 @@ private fun DrawScope.scene(u: Float, accent: Color, background: Color, lift: Fl
     // Case: brushed steel with a bright rim, dark bezel with minute ticks (longer at 12/3/6/9).
     drawCircle(Brush.linearGradient(listOf(STEEL_LIGHT, STEEL, STEEL_DARK), p(cx - r, cy - r), p(cx + r, cy + r)), r * u, p(cx, cy))
     drawCircle(Color.White.copy(alpha = 0.5f), (r - 0.6f) * u, p(cx, cy), style = Stroke(0.8f * u))
-    drawCircle(BEZEL, (r - 3.2f) * u, p(cx, cy))
+    // One black face (no separate bezel ring), minute ticks around its edge.
+    val face = r - 3.2f
+    drawCircle(Brush.radialGradient(listOf(Color(0xFF1A1D22), Color.Black), p(cx - 5f, cy - 7f), face * 1.2f * u), face * u, p(cx, cy))
     for (i in 0 until 12) {
         val a = i * PI.toFloat() / 6
         val long = i % 3 == 0
         drawLine(
-            if (long) STEEL_LIGHT else TICK,
-            p(cx + (r - 4.8f) * cos(a), cy + (r - 4.8f) * sin(a)),
-            p(cx + (r - if (long) 8f else 6.8f) * cos(a), cy + (r - if (long) 8f else 6.8f) * sin(a)),
-            strokeWidth = (if (long) 1.4f else 0.9f) * u,
+            if (long) STEEL_LIGHT else TICK.copy(alpha = 0.7f),
+            p(cx + (face - 2f) * cos(a), cy + (face - 2f) * sin(a)),
+            p(cx + (face - if (long) 5f else 3.8f) * cos(a), cy + (face - if (long) 5f else 3.8f) * sin(a)),
+            strokeWidth = (if (long) 1.3f else 0.8f) * u,
             cap = StrokeCap.Round,
         )
     }
-    // Screen with an ECG trace (and its glow) and a glass reflection.
-    val screen = r - 9.5f
-    drawCircle(Brush.radialGradient(listOf(Color(0xFF15181D), Color.Black), p(cx - 4f, cy - 6f), screen * 1.3f * u), screen * u, p(cx, cy))
+    val screen = face - 2f
     val trace = Path().apply {
         val pts = listOf(-14f to 0f, -7f to 0f, -5f to -2.5f, -3f to 0f, -1f to 0f, 1f to -11f, 3f to 6f, 5f to 0f, 9f to 0f, 11.5f to -3.5f, 14f to 0f)
         pts.forEachIndexed { i, (x, y) -> if (i == 0) moveTo((cx + x) * u, (cy + 2f + y) * u) else lineTo((cx + x) * u, (cy + 2f + y) * u) }
