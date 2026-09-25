@@ -5,7 +5,6 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,8 +27,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -37,7 +34,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.rotary.onRotaryScrollEvent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -60,53 +56,42 @@ import com.heartline.shared.model.Severity
 import com.heartline.wear.R
 import com.heartline.wear.ui.components.ActionScreen
 import com.heartline.wear.ui.components.CenteredValue
+import com.heartline.wear.ui.components.RollingNumber
+import com.heartline.wear.ui.components.RotaryNumberInput
 import com.heartline.wear.ui.components.isSmallRound
 import com.heartline.wear.ui.theme.WearColors
 import kotlin.math.roundToInt
 
 /**
- * Today's weight before body composition (asked when the last one is over a month old): a big
- * value adjusted by the bezel (0.1 kg a step) or the − / + buttons.
+ * Today's weight before body composition (asked when the last one is over a month old). Set with
+ * the rotating bezel: one click = 0.1 kg with a haptic tick, fast turning 0.5 kg; the tick ring
+ * along the edge turns with it. The small − / + buttons are a fallback.
  */
 @Composable
 fun WeightConfirmScreen(initialKg: Float, onConfirm: (Float) -> Unit) {
     var kg by remember { mutableFloatStateOf(if (initialKg > 0) initialKg else 70f) }
-    var rotary by remember { mutableFloatStateOf(0f) }
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    val color = WearColors.metric(Metric.BODY_COMPOSITION)
     fun step(d: Float) {
-        kg = ((kg + d) * 10).roundToInt() / 10f
-        kg = kg.coerceIn(25f, 300f)
+        kg = (((kg + d) * 10).roundToInt() / 10f).coerceIn(25f, 300f)
     }
-    ActionScreen(stringResource(R.string.action_continue), onAction = { onConfirm(kg) }) {
-        Column(
-            Modifier
-                .onRotaryScrollEvent {
-                    rotary += it.verticalScrollPixels
-                    while (rotary > ROTARY_STEP_PX) {
-                        step(0.1f)
-                        rotary -= ROTARY_STEP_PX
-                    }
-                    while (rotary < -ROTARY_STEP_PX) {
-                        step(-0.1f)
-                        rotary += ROTARY_STEP_PX
-                    }
-                    true
+    RotaryNumberInput(kg, { kg = it }, step = 0.1f, range = 25f..300f, accent = color) {
+        ActionScreen(stringResource(R.string.action_continue), onAction = { onConfirm(kg) }) {
+            Text(stringResource(R.string.body_weight_title), style = MaterialTheme.typography.titleSmall, color = color)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(vertical = 2.dp)) {
+                FilledTonalIconButton(onClick = { step(-0.1f) }, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Rounded.Remove, contentDescription = "−0.1", modifier = Modifier.size(16.dp))
                 }
-                .focusRequester(focus)
-                .focusable(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(stringResource(R.string.body_weight_title), style = MaterialTheme.typography.titleSmall, color = WearColors.metric(Metric.BODY_COMPOSITION))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 4.dp)) {
-                FilledTonalIconButton(onClick = { step(-0.1f) }, modifier = Modifier.size(34.dp)) { Icon(Icons.Rounded.Remove, contentDescription = "−0.1") }
-                CenteredValue(
-                    "%.1f".format(kg),
-                    "kg",
-                    if (isSmallRound()) MaterialTheme.typography.displaySmall else MaterialTheme.typography.displayMedium,
-                    MaterialTheme.typography.bodyMedium,
-                )
-                FilledTonalIconButton(onClick = { step(0.1f) }, modifier = Modifier.size(34.dp)) { Icon(Icons.Rounded.Add, contentDescription = "+0.1") }
+                Row(verticalAlignment = Alignment.Bottom) {
+                    RollingNumber(
+                        kg,
+                        { "%.1f".format(it) },
+                        if (isSmallRound()) MaterialTheme.typography.displaySmall else MaterialTheme.typography.displayMedium,
+                    )
+                    Text(" kg", style = MaterialTheme.typography.bodyMedium, color = WearColors.onSurfaceVariant, modifier = Modifier.padding(bottom = 6.dp))
+                }
+                FilledTonalIconButton(onClick = { step(0.1f) }, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Rounded.Add, contentDescription = "+0.1", modifier = Modifier.size(16.dp))
+                }
             }
             Text(
                 stringResource(R.string.body_weight_hint),
@@ -117,8 +102,6 @@ fun WeightConfirmScreen(initialKg: Float, onConfirm: (Float) -> Unit) {
         }
     }
 }
-
-private const val ROTARY_STEP_PX = 24f
 
 /**
  * Body composition result as one scrolling page (bezel or swipe): a hero ring with body fat and

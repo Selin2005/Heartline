@@ -103,7 +103,7 @@
     <string name="body_fat">Body fat</string>
     <string name="action_continue">Continue</string>
     <string name="body_weight_title">Today\'s weight</string>
-    <string name="body_weight_hint">Rotate the bezel to adjust. Body composition is worked out from your weight.</string>
+    <string name="body_weight_hint">Turn the bezel to set it. Body composition is worked out from your weight.</string>
     <string name="body_weight">Weight</string>
     <string name="body_muscle_label">Skeletal muscle</string>
     <string name="body_fat_mass">Fat mass</string>
