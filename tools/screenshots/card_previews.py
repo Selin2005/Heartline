@@ -5,7 +5,7 @@
 Turns the watch card screenshots (CardScreenshotTest, recorded with ./gradlew :wear:recordPaparazziDebug)
 into the picker preview images: card_preview_<name>_{small,large}.png and tile_preview_<name>.png (full
 screen, for watches without the tile stack). Crops each card out of its black test frame and copies the
-images to docs/screenshots/wear/cards/.
+images to docs/screenshots/wear/tiles/.
 """
 import glob, os, re, sys
 from PIL import Image
@@ -13,7 +13,7 @@ from PIL import Image
 root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 shots = os.path.join(root, "wear/src/test/snapshots/images")
 res = os.path.join(root, "wear/src/main/res/drawable-nodpi")
-docs = os.path.join(root, "docs/screenshots/wear/cards")
+docs = os.path.join(root, "docs/screenshots/wear/tiles")
 os.makedirs(docs, exist_ok=True)
 for path in sorted(glob.glob(os.path.join(shots, "com.heartline.wear_CardScreenshotTest_*.png"))):
     # com.heartline.wear_CardScreenshotTest_<test>_<card>_<size>.png (test names have no underscores).
