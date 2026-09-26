@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.foundation.layout.fillMaxSize
@@ -80,8 +81,8 @@ fun LauncherScreen(
     Box(Modifier.fillMaxSize()) {
         LauncherList(entries, header, onOpen, onOptions, onHistory, onSettings, nowMs)
         if (celebrate) {
-            val haptics = LocalHapticFeedback.current
-            LaunchedEffect(Unit) { haptics.performHapticFeedback(HapticFeedbackType.Confirm) }
+            val vibrate = com.heartline.wear.ui.components.rememberBuzz(true)
+            LaunchedEffect(Unit) { vibrate(com.heartline.wear.ui.components.Buzz.CELEBRATE) }
             EdgeConfetti("launcher", frameMs = confettiFrameMs)
         }
     }
@@ -156,6 +157,12 @@ private fun TodayCard(header: LauncherHeader, onNext: () -> Unit) {
             }
             Column(Modifier.weight(1f)) {
                 Text(stringResource(R.string.tile_today_done, header.done, header.total), style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                if (header.streak >= 2) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.LocalFireDepartment, contentDescription = null, tint = WearColors.warn, modifier = Modifier.size(12.dp))
+                        Text(stringResource(R.string.streak_days, header.streak), style = MaterialTheme.typography.labelSmall, color = WearColors.warn, maxLines = 1)
+                    }
+                }
                 Text(
                     header.next?.let { stringResource(R.string.tile_today_next, stringResource(it.label)) } ?: stringResource(R.string.tile_today_all_done),
                     style = MaterialTheme.typography.bodySmall,

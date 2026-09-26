@@ -1,6 +1,11 @@
 package com.heartline.wear.ui.theme
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.heartline.shared.design.Accent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -30,7 +35,8 @@ object WearColors {
     val surfaceHigh = Color(Palette.Watch.SURFACE_HIGH)
     val onSurface = Color(Palette.Dark.ON_BACKGROUND)
     val onSurfaceVariant = Color(Palette.Dark.ON_SURFACE_VARIANT)
-    val primary = Color(Palette.Dark.PRIMARY)
+    /** The user's accent colour (Settings on the phone); blue by default. */
+    val primary: Color get() = AccentState.color
     val ecg = Color(Palette.Dark.ECG)
     val warn = Color(Palette.Dark.STATUS_WARN)
 
@@ -54,10 +60,15 @@ object WearColors {
     }
 }
 
-private val scheme = ColorScheme(
-    primary = WearColors.primary,
+/** Holds the accent; changing it recolours the app. */
+object AccentState {
+    var color by mutableStateOf(Color(Palette.Dark.PRIMARY))
+}
+
+private fun scheme(accent: Color) = ColorScheme(
+    primary = accent,
     onPrimary = Color.White,
-    primaryContainer = WearColors.primary,
+    primaryContainer = accent,
     onPrimaryContainer = Color.White,
     background = WearColors.background,
     onBackground = WearColors.onSurface,
@@ -91,6 +102,9 @@ private val typography = Typography(
 }
 
 @Composable
-fun HeartlineWearTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = scheme, typography = typography, content = content)
+fun HeartlineWearTheme(accent: Accent? = null, content: @Composable () -> Unit) {
+    if (accent != null && AccentState.color != Color(accent.argb)) AccentState.color = Color(accent.argb)
+    val color = AccentState.color
+    val colors = remember(color) { scheme(color) }
+    MaterialTheme(colorScheme = colors, typography = typography, content = content)
 }

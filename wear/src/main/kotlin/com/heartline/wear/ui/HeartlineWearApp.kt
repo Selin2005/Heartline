@@ -83,7 +83,7 @@ object WearSample {
         LauncherEntry(Metric.BODY_COMPOSITION, "21.4%", NOW_MS - 5 * 24 * 60 * MIN),
         LauncherEntry(Metric.STRESS, "38/100", NOW_MS - 4 * 60 * MIN, com.heartline.shared.model.Severity.WARN),
     )
-    val launcherHeader = com.heartline.wear.ui.LauncherHeader(com.heartline.shared.profile.DayPart.MORNING, "Sara", done = 1, total = 3, next = Metric.BLOOD_PRESSURE)
+    val launcherHeader = com.heartline.wear.ui.LauncherHeader(com.heartline.shared.profile.DayPart.MORNING, "Sara", done = 1, total = 3, next = Metric.BLOOD_PRESSURE, streak = 6)
     val liveEcg: FloatArray by lazy { SyntheticEcg.generate(durationSec = 3.0, heartRateBpm = 72.0) }
     val livePpg: FloatArray by lazy { com.heartline.shared.sample.SyntheticPpg.generate(3.0, 68.0, 0.5) }
 }
@@ -194,9 +194,17 @@ fun HeartlineWearApp(startRoute: String? = null) {
     val profile by profiles.profile.collectAsStateWithLifecycle()
     val monitor by settingsStore.settings.collectAsStateWithLifecycle()
     val userName = profile?.displayName?.takeIf { monitor.showNameOnWatch && it.isNotBlank() }
+    val records: com.heartline.wear.data.WatchRecordStore = koinInject()
+    val history by records.history.collectAsStateWithLifecycle(emptyList())
+    // The newest record is usually the one on screen: judge it against the ones before.
+    val baselines = remember(history) { com.heartline.shared.profile.PersonalBaseline.all(history, System.currentTimeMillis(), exclude = history.firstOrNull()?.id) }
 
-    HeartlineWearTheme {
-        CompositionLocalProvider(LocalUserName provides userName, LocalCelebrations provides monitor.celebrations) {
+    HeartlineWearTheme(monitor.accent) {
+        CompositionLocalProvider(
+            LocalUserName provides userName,
+            LocalCelebrations provides monitor.celebrations,
+            com.heartline.wear.ui.components.LocalBaselines provides baselines,
+        ) {
         AppScaffold(timeText = { TimeText() }) {
             when (val g = gateState) {
                 GateState.CheckingPhone -> CheckingScreen(

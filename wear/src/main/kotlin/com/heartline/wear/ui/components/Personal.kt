@@ -17,6 +17,36 @@ import com.heartline.wear.ui.theme.WearColors
 import java.time.Instant
 import java.time.ZoneId
 
+/** The user's own usual range per metric (last 30 days), for "your usual" notes under results. */
+val LocalBaselines = compositionLocalOf<Map<com.heartline.shared.model.Metric, com.heartline.shared.profile.Baseline>> { emptyMap() }
+
+/**
+ * "Your usual 112–121" under a result, plus how far this one is from it when outside ("5 below
+ * your usual"). Nothing until there are enough readings to know what usual is.
+ */
+@Composable
+fun BaselineNote(metric: com.heartline.shared.model.Metric, value: Float?, decimals: Int = 0, modifier: Modifier = Modifier) {
+    val baseline = LocalBaselines.current[metric] ?: return
+    if (value == null) return
+    fun f(v: Float) = if (decimals == 0) Math.round(v).toString() else "%.${decimals}f".format(v)
+    val place = baseline.place(value)
+    val text = listOfNotNull(
+        stringResource(R.string.baseline_usual, f(baseline.low), f(baseline.high)),
+        when (place) {
+            com.heartline.shared.profile.Baseline.Place.ABOVE -> stringResource(R.string.baseline_above, kotlin.math.abs(baseline.delta(value)))
+            com.heartline.shared.profile.Baseline.Place.BELOW -> stringResource(R.string.baseline_below, kotlin.math.abs(baseline.delta(value)))
+            com.heartline.shared.profile.Baseline.Place.USUAL -> null
+        },
+    ).joinToString(" · ")
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = WearColors.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = modifier.padding(top = 2.dp, start = 14.dp, end = 14.dp),
+    )
+}
+
 /** The name the watch greets the user with (null when unknown or hidden in settings). */
 val LocalUserName = compositionLocalOf<String?> { null }
 

@@ -153,6 +153,10 @@
     <string name="greeting_birthday">Happy birthday!</string>
     <string name="greeting_birthday_named">Happy birthday, %1$s!</string>
     <string name="setup_incomplete_title_named">Almost there, %1$s</string>
+    <string name="streak_days">%1$d-day streak</string>
+    <string name="baseline_usual">Your usual %1$s–%2$s</string>
+    <string name="baseline_above">%1$d above your usual</string>
+    <string name="baseline_below">%1$d below your usual</string>
     <string name="ago_now">Just now</string>
     <string name="ago_minutes">%1$d min ago</string>
     <string name="ago_hours">%1$d h ago</string>

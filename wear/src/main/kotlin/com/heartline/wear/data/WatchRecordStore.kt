@@ -22,6 +22,9 @@ class WatchRecordStore(
 ) : Outbox {
     val recent: Flow<List<RecordMeta>> = dao.recent().map { list -> list.map { Protocol.json.decodeFromString<RecordMeta>(it.metaJson) } }
 
+    /** A longer history (newest first) for streaks and the user's usual ranges. */
+    val history: Flow<List<RecordMeta>> = dao.recent(HISTORY).map { list -> list.map { Protocol.json.decodeFromString<RecordMeta>(it.metaJson) } }
+
     suspend fun add(meta: RecordMeta, wave: FloatArray?) {
         val path = wave?.let {
             withContext(Dispatchers.IO) {
@@ -58,5 +61,9 @@ class WatchRecordStore(
     suspend fun delete(id: String) {
         dao.get(id)?.wavePath?.let { withContext(Dispatchers.IO) { File(root, it).delete() } }
         dao.delete(id)
+    }
+
+    companion object {
+        const val HISTORY = 400
     }
 }

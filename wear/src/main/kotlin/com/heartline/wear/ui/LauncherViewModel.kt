@@ -39,6 +39,8 @@ data class LauncherHeader(
     val done: Int = 0,
     val total: Int = TodayChecks.DEFAULT.size,
     val next: Metric? = TodayChecks.DEFAULT.first(),
+    /** Days in a row with every check-in done. */
+    val streak: Int = 0,
 )
 
 sealed interface LauncherState {
@@ -95,14 +97,14 @@ class LauncherViewModel(
         prefs?.pinned ?: MutableStateFlow(emptyList()),
     ) { profile, monitor, pinned -> Triple(profile.takeIf { monitor.showNameOnWatch }, pinned, monitor) }
 
-    val state: StateFlow<LauncherState> = combine(gateway.state, store.recent, personal) { gatewayState, recent, (profile, pinned, _) ->
+    val state: StateFlow<LauncherState> = combine(gateway.state, store.history, personal) { gatewayState, recent, (profile, pinned, monitor) ->
         when (gatewayState) {
             is GatewayState.Connected -> LauncherState.Ready(
                 order(MetricRequirements.supportedMetrics(gatewayState.trackers), recent, pinned, now()).map { metric ->
                     val last = recent.firstOrNull { it.kind.metric == metric }
                     LauncherEntry(metric, last?.let(::lastValue), last?.startedAtMs, last?.let(::severity), metric in pinned)
                 },
-                header(recent, profile, now(), zone()),
+                header(recent, profile, now(), zone(), monitor.dailyGoal),
             )
             is GatewayState.Failed -> LauncherState.Problem(gatewayState.problem, gatewayState.resolvable)
             else -> LauncherState.Loading
@@ -141,11 +143,12 @@ class LauncherViewModel(
             return pinned.filter { it in supported } + rest
         }
 
-        fun header(recent: List<RecordMeta>, profile: UserProfile?, nowMs: Long, zone: ZoneId): LauncherHeader {
+        fun header(recent: List<RecordMeta>, profile: UserProfile?, nowMs: Long, zone: ZoneId, goal: List<Metric> = TodayChecks.DEFAULT): LauncherHeader {
             val now = Instant.ofEpochMilli(nowMs).atZone(zone)
             val today: LocalDate = now.toLocalDate()
-            val doneToday = recent.filter { Instant.ofEpochMilli(it.startedAtMs).atZone(zone).toLocalDate() == today }.map { it.kind.metric }.toSet()
-            val checks = TodayChecks.DEFAULT.map { it to (it in doneToday) }
+            val byDay = com.heartline.shared.profile.DailyGoal.byDay(recent, zone)
+            val doneToday = byDay[today].orEmpty()
+            val checks = goal.ifEmpty { TodayChecks.DEFAULT }.map { it to (it in doneToday) }
             return LauncherHeader(
                 part = DayPart.of(now.hour),
                 name = profile?.displayName?.takeIf { it.isNotBlank() },
@@ -153,6 +156,7 @@ class LauncherViewModel(
                 done = checks.count { it.second },
                 total = checks.size,
                 next = checks.firstOrNull { !it.second }?.first,
+                streak = com.heartline.shared.profile.Streak.of(byDay, checks.map { it.first }, today),
             )
         }
 

@@ -58,3 +58,13 @@ object Palette {
         const val SURFACE_HIGH = 0xFF2A2A2E
     }
 }
+
+/** Accent colours the user can pick for the watch (dark theme values, ARGB). */
+enum class Accent(val argb: Long) {
+    BLUE(0xFF5C91FF),
+    VIOLET(0xFFA47CFF),
+    TEAL(0xFF2BD0DC),
+    ROSE(0xFFFF7A94),
+    AMBER(0xFFFFB84D),
+    GREEN(0xFF45D487)
+}

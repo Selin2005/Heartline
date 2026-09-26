@@ -31,6 +31,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.heartline.shared.model.Metric
 import com.heartline.shared.sensor.PermissionPolicy
 import com.heartline.wear.R
+import com.heartline.wear.ui.components.Buzz
+import com.heartline.wear.ui.components.rememberBuzz
 import com.heartline.wear.sensor.SensorGateway
 import com.heartline.wear.sensor.SensorProblem
 import com.heartline.wear.ui.screens.BpCalibrationRecordedScreen
@@ -89,8 +91,14 @@ fun BpFlow(
         view.keepScreenOn = measuring != null
         onDispose { view.keepScreenOn = false }
     }
+    val vibrate = rememberBuzz(buzz)
+    LaunchedEffect(measuring != null) { if (measuring != null) vibrate(Buzz.STARTED) }
     LaunchedEffect(state is BpState.Done || state is BpState.CalibrationRecorded) {
-        if (state is BpState.Done || state is BpState.CalibrationRecorded) if (buzz) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+        when (val s = state) {
+            is BpState.Done -> vibrate(if (s.category == com.heartline.shared.bp.BpCategory.NORMAL || s.category == com.heartline.shared.bp.BpCategory.ELEVATED) Buzz.DONE else Buzz.ATTENTION)
+            is BpState.CalibrationRecorded -> vibrate(Buzz.DONE)
+            else -> Unit
+        }
     }
     val done = {
         vm.reset()

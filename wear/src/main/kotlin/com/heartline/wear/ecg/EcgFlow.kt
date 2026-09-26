@@ -1,5 +1,8 @@
 package com.heartline.wear.ecg
 
+import com.heartline.wear.ui.components.Buzz
+import com.heartline.wear.ui.components.rememberBuzz
+import com.heartline.shared.model.Severity
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.LocalActivity
@@ -67,6 +70,7 @@ fun EcgFlow(
     DisposableEffect(Unit) { onDispose { vm.cancel() } }
 
     val measuring = state as? EcgMeasureState.Measuring
+    val vibrate = rememberBuzz(buzz)
     val view = LocalView.current
     DisposableEffect(measuring != null) {
         view.keepScreenOn = measuring != null
@@ -78,9 +82,11 @@ fun EcgFlow(
     }
     // One short buzz when the countdown really starts: the touch was confirmed as an ECG.
     LaunchedEffect(measuring?.started) {
-        if (measuring?.started == true) if (buzz) haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+        if (measuring?.started == true) vibrate(Buzz.STARTED)
     }
-    LaunchedEffect(state is EcgMeasureState.Done) { if (state is EcgMeasureState.Done) if (buzz) haptics.performHapticFeedback(HapticFeedbackType.Confirm) }
+    LaunchedEffect(state is EcgMeasureState.Done) {
+        (state as? EcgMeasureState.Done)?.let { vibrate(if (it.result.severity == Severity.WARN || it.result.severity == Severity.ALERT) Buzz.ATTENTION else Buzz.DONE) }
+    }
 
     when (val s = state) {
         EcgMeasureState.Idle ->

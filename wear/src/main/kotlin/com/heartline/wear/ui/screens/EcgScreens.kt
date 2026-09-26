@@ -235,6 +235,7 @@ fun EcgResultScreen(result: EcgResult, averageBpm: Int?, metrics: EcgMetrics? = 
         if (averageBpm != null) {
             Text(stringResource(R.string.ecg_bpm_value, averageBpm), style = MaterialTheme.typography.bodyLarge, color = WearColors.onSurfaceVariant)
         }
+        com.heartline.wear.ui.components.BaselineNote(com.heartline.shared.model.Metric.ECG, averageBpm?.toFloat())
         if (result.severity == Severity.NORMAL) PersonalNote(GoodResult.ECG)
         metrics?.poorReason?.takeIf { it != EcgPoorReason.NONE }?.let { reason ->
             Text(

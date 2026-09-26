@@ -136,6 +136,7 @@ fun BpResultScreen(
             modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(50)).background(category.color).padding(horizontal = 10.dp, vertical = 3.dp),
         )
         Body(stringResource(R.string.bp_pulse, pulse))
+        com.heartline.wear.ui.components.BaselineNote(Metric.BLOOD_PRESSURE, systolic.toFloat())
         if (category == BpCategory.NORMAL && !needsConfirming) PersonalNote(GoodResult.BLOOD_PRESSURE)
         when (safety) {
             BpSafety.VERY_HIGH -> Note(stringResource(R.string.bp_safety_high), WearColors.warn)

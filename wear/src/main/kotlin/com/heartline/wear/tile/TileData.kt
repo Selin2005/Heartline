@@ -43,6 +43,10 @@ data class TileData(
     val name: String? = null,
     val bpSystolic: Int? = null,
     val bpDiastolic: Int? = null,
+    /** The user's daily check-ins, and how many days in a row they were all done. */
+    val goal: List<Metric> = com.heartline.shared.profile.DailyGoal.DEFAULT,
+    val streak: Int = 0,
+    val accent: com.heartline.shared.design.Accent = com.heartline.shared.design.Accent.BLUE,
 ) {
     /** Latest body composition, with the body-fat change since the one before. */
     data class Body(val fatPercent: Float, val muscleKg: Float?, val weightKg: Float?, val fatChange: Float?)

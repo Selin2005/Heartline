@@ -1,5 +1,7 @@
 package com.heartline.wear.quick
 
+import com.heartline.wear.ui.components.Buzz
+import com.heartline.wear.ui.components.rememberBuzz
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -53,7 +55,9 @@ fun QuickFlow(metric: Metric, onExit: () -> Unit, vm: QuickMeasureViewModel = ko
         onDispose { view.keepScreenOn = false }
     }
     val prefs by koinInject<WatchSettingsStore>().settings.collectAsStateWithLifecycle()
-    LaunchedEffect(state is QuickState.Done) { if (state is QuickState.Done && prefs.haptics) haptics.performHapticFeedback(HapticFeedbackType.Confirm) }
+    val vibrate = rememberBuzz(prefs.haptics)
+    LaunchedEffect(state is QuickState.Measuring) { if (state is QuickState.Measuring) vibrate(Buzz.STARTED) }
+    LaunchedEffect(state is QuickState.Done) { if (state is QuickState.Done) vibrate(Buzz.DONE) }
     val done = {
         vm.reset()
         onExit()

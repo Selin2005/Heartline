@@ -44,9 +44,12 @@ interface WatchRecordDao {
     @Query("DELETE FROM records WHERE id = :id")
     suspend fun delete(id: String)
 
-    /** Keeps the newest [keep] delivered records. */
+    /**
+     * Keeps the newest [keep] delivered records (only their summaries: waves are deleted once
+     * delivered), enough for streaks and the user's usual ranges.
+     */
     @Query("DELETE FROM records WHERE delivered = 1 AND id NOT IN (SELECT id FROM records ORDER BY startedAtMs DESC LIMIT :keep)")
-    suspend fun prune(keep: Int = 50)
+    suspend fun prune(keep: Int = 300)
 }
 
 /** A small message (HR batch, alert) waiting for the phone's ack. */

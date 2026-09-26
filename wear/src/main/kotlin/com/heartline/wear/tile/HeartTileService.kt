@@ -203,7 +203,14 @@ class TileDataLoader(
 ) {
     suspend fun load(): TileData {
         val nowMs = now()
-        val showName = settings.settings.value.showNameOnWatch
+        val monitor = settings.settings.value
+        val showName = monitor.showNameOnWatch
+        val zone = java.time.ZoneId.systemDefault()
+        val streak = com.heartline.shared.profile.Streak.of(
+            com.heartline.shared.profile.DailyGoal.byDay(records.history.first(), zone),
+            monitor.dailyGoal,
+            java.time.Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate(),
+        )
         return TileData.from(
             records.recent.first(),
             settings.latestHeartRate,
@@ -211,7 +218,7 @@ class TileDataLoader(
             settings.heartToday(),
             nowMs = nowMs,
             name = profiles?.profile?.value?.displayName?.takeIf { showName },
-        ) { ecg -> ecg.result?.let { context.getString(it.label) } }
+        ) { ecg -> ecg.result?.let { context.getString(it.label) } }.copy(goal = monitor.dailyGoal, streak = streak, accent = monitor.accent)
     }
 }
 

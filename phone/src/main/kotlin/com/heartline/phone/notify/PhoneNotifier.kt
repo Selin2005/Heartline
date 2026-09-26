@@ -107,6 +107,9 @@ class PhoneNotifier(private val context: Context) {
         SetupTarget.BP_CALIBRATION.phoneRoute,
     )
 
+    /** The Friday summary: [title] and one line of the week in numbers; opens Home. */
+    fun weeklySummary(title: String, text: String) = simple(WEEKLY_ID, title, text, SetupTarget.HOME.phoneRoute)
+
     fun dailyReminder() = simple(
         DAILY_ID,
         context.getString(R.string.reminder_daily_title),
@@ -139,6 +142,7 @@ class PhoneNotifier(private val context: Context) {
         const val CALIBRATION_ID = 7_002
         const val DAILY_ID = 7_003
         const val BP_SAFETY_ID = 7_004
+        const val WEEKLY_ID = 7_005
         const val CHANNEL_REMINDERS = "reminders"
         const val SETUP_ID = 7_001
         const val CHANNEL_ALERTS = "alerts"

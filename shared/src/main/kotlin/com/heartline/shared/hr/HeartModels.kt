@@ -60,6 +60,12 @@ data class MonitorSettings(
     val showNameOnWidgets: Boolean = false,
     /** Confetti and light effects for birthdays, goals and good results on the watch. */
     val celebrations: Boolean = true,
+    /** The daily check-ins (Today tile, launcher card, streak). */
+    val dailyGoal: List<com.heartline.shared.model.Metric> = com.heartline.shared.profile.DailyGoal.DEFAULT,
+    /** Accent colour of the watch app and tiles. */
+    val accent: com.heartline.shared.design.Accent = com.heartline.shared.design.Accent.BLUE,
+    /** A summary of the week on Friday evening (phone notification). */
+    val weeklySummary: Boolean = true,
     /** When these settings were last changed (either device); the newer copy wins. */
     val updatedAtMs: Long = 0
 ) {

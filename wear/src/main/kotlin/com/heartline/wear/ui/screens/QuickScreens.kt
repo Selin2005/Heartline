@@ -165,6 +165,7 @@ fun QuickResultScreen(metric: Metric, summary: RecordSummary, onDone: () -> Unit
             is RecordSummary.Spo2 -> {
                 BigValue("${summary.percent}", "%")
                 summary.heartRate?.let { Detail(stringResource(R.string.bp_pulse, it)) }
+                com.heartline.wear.ui.components.BaselineNote(Metric.SPO2, summary.percent.toFloat())
                 if (summary.percent >= 95 && !summary.lowConfidence) PersonalNote(GoodResult.SPO2)
             }
             is RecordSummary.SkinTemperature -> {
@@ -184,6 +185,7 @@ fun QuickResultScreen(metric: Metric, summary: RecordSummary, onDone: () -> Unit
                 )
                 StressBar(summary.score, Modifier.fillMaxWidth(0.8f).padding(top = 6.dp).height(10.dp))
                 summary.rmssdMs?.let { Detail(stringResource(R.string.stress_hrv, it.toInt())) }
+                com.heartline.wear.ui.components.BaselineNote(Metric.STRESS, summary.score.toFloat())
                 if (level == StressLevel.LOW) PersonalNote(GoodResult.CALM)
             }
             else -> Unit

@@ -14,6 +14,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.rounded.Alarm
 import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.TaskAlt
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material3.Checkbox
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import com.heartline.shared.design.Accent
 import androidx.compose.material.icons.rounded.Celebration
 import androidx.compose.material.icons.rounded.Face
 import com.heartline.phone.qs.QuickTilePrefs
@@ -85,6 +93,9 @@ sealed interface SettingChange {
     data class NameOnWatch(val on: Boolean) : SettingChange
     data class NameOnWidgets(val on: Boolean) : SettingChange
     data class Celebrations(val on: Boolean) : SettingChange
+    data class Goal(val metrics: List<Metric>) : SettingChange
+    data class AccentColour(val accent: Accent) : SettingChange
+    data class WeeklySummary(val on: Boolean) : SettingChange
 
     fun applyTo(s: MonitorSettings): MonitorSettings = when (this) {
         is IrregularRhythm -> s.copy(irregularRhythmEnabled = on)
@@ -102,6 +113,9 @@ sealed interface SettingChange {
         is NameOnWatch -> s.copy(showNameOnWatch = on)
         is NameOnWidgets -> s.copy(showNameOnWidgets = on)
         is Celebrations -> s.copy(celebrations = on)
+        is Goal -> s.copy(dailyGoal = metrics)
+        is AccentColour -> s.copy(accent = accent)
+        is WeeklySummary -> s.copy(weeklySummary = on)
     }
 }
 
@@ -113,6 +127,8 @@ private sealed interface Picker {
     data object Temperature : Picker
     data object Name : Picker
     data object QuickTile : Picker
+    data object Goal : Picker
+    data object AccentPick : Picker
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -266,6 +282,31 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.settings_celebrations_summary),
                     leading = { IconBadge(Icons.Rounded.Celebration, colors.body) },
                     trailing = { OneUiSwitch(monitor.celebrations) { onChange(SettingChange.Celebrations(it)) } },
+                    showDivider = true,
+                )
+                CardRow(
+                    stringResource(R.string.settings_daily_goal),
+                    subtitle = monitor.dailyGoal.map { stringResource(it.title) }.joinToString(", ").ifEmpty { stringResource(R.string.state_off) },
+                    leading = { IconBadge(Icons.Rounded.TaskAlt, colors.primary) },
+                    showDivider = true,
+                    onClick = { picker = Picker.Goal },
+                )
+                CardRow(
+                    stringResource(R.string.settings_accent),
+                    subtitle = stringResource(monitor.accent.label),
+                    leading = {
+                        Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(22.dp).clip(CircleShape).background(Color(monitor.accent.argb)))
+                        }
+                    },
+                    showDivider = true,
+                    onClick = { picker = Picker.AccentPick },
+                )
+                CardRow(
+                    stringResource(R.string.settings_weekly_summary),
+                    subtitle = stringResource(R.string.settings_weekly_summary_text),
+                    leading = { IconBadge(Icons.Rounded.CalendarMonth, colors.spo2) },
+                    trailing = { OneUiSwitch(monitor.weeklySummary) { onChange(SettingChange.WeeklySummary(it)) } },
                 )
             }
         }
@@ -410,6 +451,13 @@ fun SettingsScreen(
             monitor.temperatureFahrenheit,
             onDismiss = { picker = null },
         ) { onChange(SettingChange.Fahrenheit(it)) }
+        Picker.Goal -> GoalDialog(monitor.dailyGoal, onDismiss = { picker = null }) { onChange(SettingChange.Goal(it)) }
+        Picker.AccentPick -> ChoiceDialog(
+            stringResource(R.string.settings_accent),
+            Accent.entries.map { stringResource(it.label) to it },
+            monitor.accent,
+            onDismiss = { picker = null },
+        ) { onChange(SettingChange.AccentColour(it)) }
         Picker.QuickTile -> ChoiceDialog(
             stringResource(R.string.settings_quick_tile_measure),
             QuickTilePrefs.choices.map { stringResource(it.title) to it },
@@ -449,6 +497,47 @@ private val ReportName.label: Int get() = when (this) {
 
 private fun formatMinute(minute: Int): String =
     LocalTime.of(minute / 60, minute % 60).format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
+
+private val Accent.label: Int get() = when (this) {
+    Accent.BLUE -> R.string.accent_blue
+    Accent.VIOLET -> R.string.accent_violet
+    Accent.TEAL -> R.string.accent_teal
+    Accent.ROSE -> R.string.accent_rose
+    Accent.AMBER -> R.string.accent_amber
+    Accent.GREEN -> R.string.accent_green
+}
+
+/** Which measurements count as today's check-ins (several can be chosen). */
+@Composable
+private fun GoalDialog(selected: List<Metric>, onDismiss: () -> Unit, onSave: (List<Metric>) -> Unit) {
+    var chosen by remember { mutableStateOf(selected) }
+    val order = listOf(Metric.ECG, Metric.BLOOD_PRESSURE, Metric.SPO2, Metric.STRESS, Metric.SKIN_TEMPERATURE, Metric.BODY_COMPOSITION)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_daily_goal)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(stringResource(R.string.settings_daily_goal_text), style = MaterialTheme.typography.bodyMedium)
+                order.forEach { m ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { chosen = if (m in chosen) chosen - m else order.filter { it in chosen || it == m } }.padding(vertical = 2.dp),
+                    ) {
+                        Checkbox(checked = m in chosen, onCheckedChange = { chosen = if (m in chosen) chosen - m else order.filter { it in chosen || it == m } })
+                        Text(stringResource(m.title), style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onSave(chosen)
+                onDismiss()
+            }) { Text(stringResource(R.string.action_save)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
+}
 
 /** Single-choice list in a dialog (One UI style radio list). */
 @Composable

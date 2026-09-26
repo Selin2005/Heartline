@@ -385,7 +385,7 @@ class TodayTileService : HeartlineTileService() {
         return edgeTile(
             title,
             done.toFloat() / checks.size,
-            TileColors.of(Palette.Dark.PRIMARY),
+            TileColors.of(data.accent.argb),
             main = {
                 val row = LayoutElementBuilders.Row.Builder().setVerticalAlignment(LayoutElementBuilders.VERTICAL_ALIGN_CENTER)
                 checks.forEachIndexed { i, (metric, ok) ->
@@ -411,6 +411,7 @@ class TodayTileService : HeartlineTileService() {
                 }
                 column(
                     line(context.getString(R.string.tile_today_done, done, checks.size), WHITE, Typography.LABEL_MEDIUM),
+                    data.streak.takeIf { it >= 2 }?.let { line(context.getString(R.string.streak_days, it), TileColors.of(Palette.Dark.STATUS_WARN)) },
                     gap(height = 8f),
                     row.build(),
                     gap(height = 6f),
@@ -428,7 +429,7 @@ class TodayTileService : HeartlineTileService() {
 object TodayChecks {
     val DEFAULT = listOf(Metric.ECG, Metric.BLOOD_PRESSURE, Metric.SPO2)
 
-    fun of(data: TileData, checks: List<Metric> = DEFAULT): List<Pair<Metric, Boolean>> = checks.map { it to (it in data.doneToday) }
+    fun of(data: TileData, checks: List<Metric> = data.goal.ifEmpty { DEFAULT }): List<Pair<Metric, Boolean>> = checks.map { it to (it in data.doneToday) }
 }
 
 /** "Good morning, Sara" (or without a name) by the time of day. */
