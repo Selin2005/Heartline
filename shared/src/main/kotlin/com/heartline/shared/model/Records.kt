@@ -43,7 +43,9 @@ sealed interface RecordSummary {
         val confirmed: Boolean = false,
         /** When the phone's personal model refined the reading (algorithm 4): what the watch showed. */
         val watchSystolic: Int? = null,
-        val watchDiastolic: Int? = null
+        val watchDiastolic: Int? = null,
+        /** Algorithm 5: too uncertain for one number (mostly a pulse-rate change): shown as the range ± [uncertainty]. */
+        val rangeOnly: Boolean = false
     ) : RecordSummary {
         val safety get() = BpSafety.of(systolic, diastolic)
     }

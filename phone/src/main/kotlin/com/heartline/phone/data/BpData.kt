@@ -14,6 +14,7 @@ import com.heartline.shared.bp.BpCalibration
 import com.heartline.shared.bp.BpDataset
 import com.heartline.shared.bp.BpDatasetEntry
 import com.heartline.shared.bp.BpEstimate
+import com.heartline.shared.bp.BpProfile
 import com.heartline.shared.bp.BpSafety
 import com.heartline.shared.bp.CalibrationPoint
 import com.heartline.shared.bp.HybridBpModel
@@ -123,6 +124,12 @@ class BpRepository(
         if (current != null || orNull) sync().sendCalibration(current)
     }
 
+    /** Stores the health profile with the current calibration and sends it to the watch. */
+    suspend fun saveProfile(profile: BpProfile) {
+        val cal = calibration.first() ?: return
+        if (cal.profile != profile) saveCalibration(cal.copy(profile = profile))
+    }
+
     private suspend fun upgradeIfNeeded(cal: BpCalibration): BpCalibration {
         val up = withContext(Dispatchers.Default) { cal.upgraded() }
         if (up != cal) dao.insert(BpCalibrationEntity(up.id, up.createdAtMs, Protocol.json.encodeToString(up)))
@@ -151,12 +158,16 @@ class BpRepository(
         val refined = if (wave != null) refine(meta, wave, summary) else null
         if (refined != null) records.updateSummary(meta.id, refined)
         val final = refined ?: summary
-        if (final.confirmed && final.safety != BpSafety.NONE) onSafety(final)
+        // A range-only reading is too uncertain to raise a "very high" alert.
+        val alert = final.safety == BpSafety.LOW || (final.safety == BpSafety.VERY_HIGH && !final.rangeOnly)
+        if (final.confirmed && alert) onSafety(final)
     }
 
     /** The personal model's refinement of a reading, or null when the model isn't (yet) better than the watch's estimate. */
     internal suspend fun refine(meta: RecordMeta, wave: FloatArray, summary: RecordSummary.BloodPressure): RecordSummary.BloodPressure? =
         withContext(Dispatchers.Default) {
+            // The personal model learned steady readings; an uncertain, range-only one is left as the watch gave it.
+            if (summary.rangeOnly) return@withContext null
             val fs = meta.sampleRateHz.takeIf { it > 0 } ?: BpCalibration.PPG_FS
             val features = PpgFeatures.extract(wave, fs) ?: return@withContext null
             val samples = trainingSamples(excluding = meta.id)

@@ -97,7 +97,9 @@ class BloodPressureTest {
         val cal = calibration()
         val base = (BpEstimator.estimate(cal, features(68.0, 0.48, 7), 1_000) as BpOutcome.Ok).estimate
         val stiff = (BpEstimator.estimate(cal, features(82.0, 0.8, 8), 1_000) as BpOutcome.Ok).estimate
-        assertTrue("base=$base stiff=$stiff", stiff.systolic > base.systolic + 3)
+        // Algorithm 5: the rate no longer drives the estimate (bounded, see BpAlgorithm5Test), so
+        // without cuff checks the shape alone moves it only a little, but in the right direction.
+        assertTrue("base=$base stiff=$stiff", stiff.systolic > base.systolic)
         assertTrue("base=$base stiff=$stiff", stiff.diastolic > base.diastolic)
         assertTrue("base=$base stiff=$stiff", stiff.uncertaintySys >= base.uncertaintySys)
     }
@@ -117,7 +119,9 @@ class BloodPressureTest {
         val out = BpEstimator.estimate(calibration(), features(135.0, 0.95, 9), 1_000)
         val e = (out as? BpOutcome.Ok)?.estimate ?: error("refused: $out")
         assertTrue("$e", e.beyondCalibration)
-        assertTrue("$e", e.systolic > 135)
+        // Mostly a faster pulse: shown as a range, never as a confident high number (algorithm 5).
+        assertTrue("$e", e.systolic > 121)
+        assertTrue("$e", e.rangeOnly)
         assertTrue("$e", e.uncertaintySys > 8)
         assertTrue(e.deltaSystolic > 0)
     }
@@ -125,7 +129,7 @@ class BloodPressureTest {
     @Test
     fun highPressureIsNeverHiddenBehindAnError() {
         val e = (BpEstimator.estimate(calibration(), features(95.0, 0.9, 30), 1_000) as BpOutcome.Ok).estimate
-        assertTrue("$e", e.systolic > 130)
+        assertTrue("$e", e.systolic > 121 && e.beyondCalibration)
     }
 
     @Test

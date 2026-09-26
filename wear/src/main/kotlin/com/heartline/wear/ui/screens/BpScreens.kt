@@ -13,6 +13,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Chair
+import androidx.compose.material.icons.rounded.MonitorHeart
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.runtime.Composable
@@ -27,8 +29,10 @@ import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
+import com.heartline.shared.bp.BpCalibration
 import com.heartline.shared.bp.BpCategory
 import com.heartline.shared.bp.BpSafety
+import com.heartline.shared.bp.UnsteadyReason
 import com.heartline.shared.design.Palette
 import com.heartline.shared.model.Metric
 import com.heartline.wear.R
@@ -72,6 +76,11 @@ private fun Badge(icon: ImageVector, tint: Color) {
     }
 }
 
+/** "Calibration 2 of 3", or the optional standing round after the 3 seated ones. */
+@Composable
+private fun calibrationTitle(round: Int) =
+    if (round == BpCalibration.STANDING_ROUND) stringResource(R.string.bp_calibration_standing) else stringResource(R.string.bp_calibration_round, round)
+
 @Composable
 private fun Body(text: String) = Text(
     text,
@@ -87,12 +96,12 @@ fun BpInstructionScreen(calibrationRound: Int? = null, onStart: () -> Unit = {})
     ActionScreen(stringResource(R.string.action_start), onStart) {
         Badge(Icons.Rounded.Speed, WearColors.metric(Metric.BLOOD_PRESSURE))
         Text(
-            if (calibrationRound != null) stringResource(R.string.bp_calibration_round, calibrationRound) else stringResource(R.string.metric_bp),
+            calibrationRound?.let { calibrationTitle(it) } ?: stringResource(R.string.metric_bp),
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 6.dp),
         )
-        Body(stringResource(R.string.bp_instruction))
+        Body(stringResource(if (calibrationRound == BpCalibration.STANDING_ROUND) R.string.bp_instruction_standing else R.string.bp_instruction))
     }
 }
 
@@ -111,36 +120,56 @@ fun BpResultScreen(
     beyondCalibration: Boolean = false,
     confirmed: Boolean = false,
     safety: BpSafety = BpSafety.NONE,
+    rangeOnly: Boolean = false,
+    uncertaintyDia: Int = 0,
+    notValidated: Boolean = false,
+    ectopicBeats: Int = 0,
     onMeasureAgain: () -> Unit = {},
     onDone: () -> Unit = {},
 ) {
     val needsConfirming = (beyondCalibration || safety != BpSafety.NONE) && !confirmed
     Box(Modifier.fillMaxSize()) {
     ActionScreen(stringResource(R.string.action_done), onDone) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text("$systolic/$diastolic", style = MaterialTheme.typography.displayMedium)
+        if (rangeOnly) {
+            // Too uncertain for one number (mostly a change in pulse rate): the range, no category.
+            Text(
+                "${systolic - uncertainty}–${systolic + uncertainty}",
+                style = MaterialTheme.typography.displaySmall,
+            )
+            Text(
+                stringResource(R.string.bp_range_diastolic, diastolic - uncertaintyDia, diastolic + uncertaintyDia),
+                style = MaterialTheme.typography.bodySmall,
+                color = WearColors.onSurfaceVariant,
+            )
+            Note(stringResource(R.string.bp_range_note), WearColors.warn)
+        } else {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text("$systolic/$diastolic", style = MaterialTheme.typography.displayMedium)
+            }
+            // The estimate's uncertainty is shown, never hidden: this is an estimate, not a cuff reading.
+            Text(
+                if (uncertainty > 0) stringResource(R.string.bp_unit_uncertainty, uncertainty) else stringResource(R.string.unit_mmhg),
+                style = MaterialTheme.typography.bodySmall,
+                color = WearColors.onSurfaceVariant,
+            )
+            // Shown right under the number, before anything that needs scrolling.
+            if (confirmed) {
+                Note(stringResource(R.string.bp_confirmed), WearColors.onSurfaceVariant)
+            } else if (beyondCalibration) {
+                Note(stringResource(R.string.bp_beyond_calibration), WearColors.warn)
+            }
+            Text(
+                stringResource(category.label),
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.Black,
+                modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(50)).background(category.color).padding(horizontal = 10.dp, vertical = 3.dp),
+            )
         }
-        // The estimate's uncertainty is shown, never hidden: this is an estimate, not a cuff reading.
-        Text(
-            if (uncertainty > 0) stringResource(R.string.bp_unit_uncertainty, uncertainty) else stringResource(R.string.unit_mmhg),
-            style = MaterialTheme.typography.bodySmall,
-            color = WearColors.onSurfaceVariant,
-        )
-        // Shown right under the number, before anything that needs scrolling.
-        if (confirmed) {
-            Note(stringResource(R.string.bp_confirmed), WearColors.onSurfaceVariant)
-        } else if (beyondCalibration) {
-            Note(stringResource(R.string.bp_beyond_calibration), WearColors.warn)
-        }
-        Text(
-            stringResource(category.label),
-            style = MaterialTheme.typography.labelMedium,
-            color = Color.Black,
-            modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(50)).background(category.color).padding(horizontal = 10.dp, vertical = 3.dp),
-        )
+        if (notValidated) Note(stringResource(R.string.bp_not_validated), WearColors.warn)
         Body(stringResource(R.string.bp_pulse, pulse))
-        com.heartline.wear.ui.components.BaselineNote(Metric.BLOOD_PRESSURE, systolic.toFloat())
-        if (category == BpCategory.NORMAL && !needsConfirming) PersonalNote(GoodResult.BLOOD_PRESSURE)
+        if (ectopicBeats > 0) Note(stringResource(R.string.bp_ectopic_removed), WearColors.onSurfaceVariant)
+        if (!rangeOnly) com.heartline.wear.ui.components.BaselineNote(Metric.BLOOD_PRESSURE, systolic.toFloat())
+        if (category == BpCategory.NORMAL && !needsConfirming && !rangeOnly) PersonalNote(GoodResult.BLOOD_PRESSURE)
         when (safety) {
             BpSafety.VERY_HIGH -> Note(stringResource(R.string.bp_safety_high), WearColors.warn)
             BpSafety.LOW -> Note(stringResource(R.string.bp_safety_low), WearColors.warn)
@@ -152,7 +181,7 @@ fun BpResultScreen(
             }
         }
     }
-        if (category == BpCategory.NORMAL && !needsConfirming) com.heartline.wear.ui.components.EdgeGlowSweep(systolic, category.color)
+        if (category == BpCategory.NORMAL && !needsConfirming && !rangeOnly) com.heartline.wear.ui.components.EdgeGlowSweep(systolic, category.color)
     }
 }
 
@@ -195,7 +224,7 @@ fun BpMeasuringScreen(
             modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 18.dp),
         ) {
             Text(
-                calibrationRound?.let { stringResource(R.string.bp_calibration_round, it) } ?: stringResource(R.string.metric_bp),
+                calibrationRound?.let { calibrationTitle(it) } ?: stringResource(R.string.metric_bp),
                 style = MaterialTheme.typography.labelMedium,
                 color = color,
             )
@@ -239,6 +268,32 @@ fun BpOutOfRangeScreen(moving: Boolean = false, onRetry: () -> Unit = {}) {
             modifier = Modifier.padding(top = 6.dp),
         )
         Body(stringResource(if (moving) R.string.bp_moving_body else R.string.bp_out_of_range_body))
+    }
+}
+
+/**
+ * Algorithm 5: the body wasn't in a steady state (pulse racing or changing, a compensating
+ * response, irregular rhythm, arm elsewhere). No number: pulse-wave analysis reads these states
+ * as falsely high. With [lowPressureSuspected] the advice is for a possible drop in pressure.
+ */
+@Composable
+fun BpUnsteadyScreen(reason: UnsteadyReason, lowPressureSuspected: Boolean = false, onRetry: () -> Unit = {}) {
+    val (title, body) = when (reason) {
+        UnsteadyReason.IRREGULAR_RHYTHM -> R.string.bp_irregular_title to R.string.bp_irregular_body
+        UnsteadyReason.ARM_POSITION -> R.string.bp_arm_position_title to R.string.bp_arm_position_body
+        UnsteadyReason.COMPENSATORY_RESPONSE -> R.string.bp_unsteady_title to R.string.bp_unsteady_compensatory_body
+        UnsteadyReason.HEART_RATE_CHANGING, UnsteadyReason.PULSE_AMPLITUDE_CHANGING -> R.string.bp_unsteady_title to R.string.bp_unsteady_body
+    }
+    ActionScreen(stringResource(R.string.action_try_again), onRetry) {
+        Badge(if (reason == UnsteadyReason.IRREGULAR_RHYTHM) Icons.Rounded.MonitorHeart else Icons.Rounded.Chair, WearColors.warn)
+        Text(
+            stringResource(title),
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+        Body(stringResource(body))
+        if (lowPressureSuspected) Note(stringResource(R.string.bp_low_suspected), WearColors.warn)
     }
 }
 

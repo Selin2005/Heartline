@@ -323,6 +323,7 @@ fun HeartlineApp(
                         onCalibrate = { navController.navigate(Routes.BP_CALIBRATION) },
                         onMeasureOnWatch = { openOnWatch(WatchRoutes.BLOOD_PRESSURE) },
                         onValidate = vm::validateLatest,
+                        onProfileChange = vm::saveProfile,
                         onShare = {
                             share(
                                 ShareRequest(
@@ -348,6 +349,9 @@ fun HeartlineApp(
                         onStart = { vm.startRound() },
                         onSubmit = { s, d, p -> vm.submitCuff(s, d, p) },
                         onDone = goBack,
+                        onProfileChange = vm::setProfile,
+                        onAddStanding = { vm.addStandingRound() },
+                        onFinish = { vm.finish() },
                     )
                 }
                 composable(Routes.METRIC) { entry ->

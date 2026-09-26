@@ -44,6 +44,7 @@ import com.heartline.wear.ui.screens.BpNeedsCalibrationScreen
 import com.heartline.wear.ui.screens.BpMeasuringScreen
 import com.heartline.wear.ui.screens.BpOutOfRangeScreen
 import com.heartline.wear.ui.screens.BpResultScreen
+import com.heartline.wear.ui.screens.BpUnsteadyScreen
 import com.heartline.wear.ui.screens.MeasuringScreen
 import com.heartline.wear.ui.screens.SensorErrorScreen
 import com.heartline.wear.ui.theme.WearColors
@@ -98,7 +99,9 @@ fun BpFlow(
     LaunchedEffect(measuring != null) { if (measuring != null) vibrate(Buzz.STARTED) }
     LaunchedEffect(state is BpState.Done || state is BpState.CalibrationRecorded) {
         when (val s = state) {
-            is BpState.Done -> vibrate(if (s.category == com.heartline.shared.bp.BpCategory.NORMAL || s.category == com.heartline.shared.bp.BpCategory.ELEVATED) Buzz.DONE else Buzz.ATTENTION)
+            is BpState.Done -> vibrate(
+                if (!s.rangeOnly && (s.category == com.heartline.shared.bp.BpCategory.NORMAL || s.category == com.heartline.shared.bp.BpCategory.ELEVATED)) Buzz.DONE else Buzz.ATTENTION,
+            )
             is BpState.CalibrationRecorded -> vibrate(Buzz.DONE)
             else -> Unit
         }
@@ -142,11 +145,16 @@ fun BpFlow(
             beyondCalibration = s.beyondCalibration,
             confirmed = s.confirmed,
             safety = s.safety,
+            rangeOnly = s.rangeOnly,
+            uncertaintyDia = s.uncertaintyDia,
+            notValidated = s.notValidated,
+            ectopicBeats = s.ectopicBeats,
             onMeasureAgain = ::start,
             onDone = done,
         )
         BpState.OutOfRange -> BpOutOfRangeScreen(onRetry = { vm.reset() })
         BpState.Moving -> BpOutOfRangeScreen(moving = true, onRetry = { vm.reset() })
+        is BpState.Unsteady -> BpUnsteadyScreen(s.reason, s.lowPressureSuspected, onRetry = { vm.reset() })
         is BpState.CalibrationRecorded -> BpCalibrationRecordedScreen(s.round, onDone = done)
         BpState.PoorSignal -> SensorErrorScreen(SensorProblem.OFF_BODY, onAction = { vm.reset() })
         is BpState.Failed -> SensorErrorScreen(s.problem, onAction = {

@@ -66,10 +66,12 @@ import com.heartline.phone.ui.components.icon
 import com.heartline.phone.ui.model.BpHomeUi
 import com.heartline.phone.ui.model.BpReadingUi
 import com.heartline.phone.ui.model.CalibrationUi
+import com.heartline.phone.ui.settings.OneUiSwitch
 import com.heartline.phone.ui.theme.HeartlineColors
 import com.heartline.phone.ui.theme.HeartlineTheme
 import com.heartline.shared.bp.BpCategory
 import com.heartline.shared.bp.BpDrift
+import com.heartline.shared.bp.BpProfile
 import com.heartline.shared.bp.BpSafety
 import com.heartline.shared.model.Metric
 
@@ -98,9 +100,17 @@ fun BpHomeScreen(
     onValidate: (Int?, Int?) -> Boolean = { _, _ -> true },
     listState: LazyListState = rememberLazyListState(),
     onShare: (() -> Unit)? = null,
+    onProfileChange: (BpProfile) -> Unit = {},
 ) {
     var validating by remember { mutableStateOf(false) }
     if (validating) ValidationDialog(onDismiss = { validating = false }, onSave = { s, d -> onValidate(s, d).also { ok -> if (ok) validating = false } })
+    var editingProfile by remember { mutableStateOf(false) }
+    if (editingProfile) {
+        BpProfileDialog(state.profile, onDismiss = { editingProfile = false }, onSave = {
+            onProfileChange(it)
+            editingProfile = false
+        })
+    }
     val colors = HeartlineTheme.colors
     ReachabilityScaffold(
         title = stringResource(R.string.metric_bp),
@@ -146,6 +156,8 @@ fun BpHomeScreen(
                         Spacer(Modifier.height(8.dp))
                     }
                     TonalPillButton(stringResource(R.string.bp_recalibrate), onClick = onCalibrate)
+                    Spacer(Modifier.height(8.dp))
+                    TonalPillButton(stringResource(R.string.bp_profile_title), onClick = { editingProfile = true })
                 } else {
                     // The watch never measures without a valid calibration: this is the only way forward.
                     PillButton(stringResource(R.string.bp_calibrate_first), onClick = onCalibrate, color = colors.bp)
@@ -187,17 +199,29 @@ fun BpHomeScreen(
                 RoundedCard(Modifier.gutter()) {
                     CardTitle(stringResource(R.string.bp_latest))
                     Spacer(Modifier.height(8.dp))
-                    MetricValue(
-                        "${latest.systolic}/${latest.diastolic}",
-                        latest.uncertainty?.let { stringResource(R.string.bp_unit_uncertainty, it) } ?: stringResource(R.string.unit_mmhg),
-                        large = true,
-                    )
+                    if (latest.rangeOnly && latest.uncertainty != null) {
+                        // Too uncertain for one number (mostly a pulse change): the range, no category.
+                        val u = latest.uncertainty
+                        MetricValue(
+                            "${latest.systolic - u}–${latest.systolic + u}",
+                            stringResource(R.string.bp_range_diastolic, latest.diastolic - u * 7 / 10, latest.diastolic + u * 7 / 10),
+                            large = true,
+                        )
+                    } else {
+                        MetricValue(
+                            "${latest.systolic}/${latest.diastolic}",
+                            latest.uncertainty?.let { stringResource(R.string.bp_unit_uncertainty, it) } ?: stringResource(R.string.unit_mmhg),
+                            large = true,
+                        )
+                    }
                     latest.pulse?.let {
                         Text(stringResource(R.string.bp_pulse, it), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
                     }
                     ReadingNotes(latest)
-                    Spacer(Modifier.height(14.dp))
-                    CategoryScale(latest.category)
+                    if (!latest.rangeOnly) {
+                        Spacer(Modifier.height(14.dp))
+                        CategoryScale(latest.category)
+                    }
                 }
             }
             item {
@@ -259,6 +283,7 @@ fun BpHomeScreen(
                                 stringResource(R.string.bp_tag_beyond).takeIf { r.beyondCalibration && !r.confirmed },
                                 stringResource(R.string.bp_tag_confirmed).takeIf { r.confirmed },
                                 stringResource(R.string.bp_tag_refined).takeIf { r.refined },
+                                stringResource(R.string.bp_tag_range).takeIf { r.rangeOnly },
                             ).joinToString(" · "),
                             leading = { Box(Modifier.size(10.dp).clip(CircleShape).background(colors.bpCategory(r.category))) },
                             trailing = {
@@ -289,13 +314,14 @@ private fun ReadingNotes(r: BpReadingUi) {
     @Composable
     fun note(text: String, color: Color) = Text(text, style = MaterialTheme.typography.bodySmall, color = color, modifier = Modifier.padding(top = 4.dp))
     if (r.refined) note(stringResource(R.string.bp_refined_note, r.watchSystolic ?: 0, r.watchDiastolic ?: 0), colors.onSurfaceVariant)
+    if (r.rangeOnly) note(stringResource(R.string.bp_range_note), colors.statusWarn)
     if (r.confirmed) {
         note(stringResource(R.string.bp_confirmed), colors.onSurfaceVariant)
     } else if (r.beyondCalibration) {
         note(stringResource(R.string.bp_beyond_calibration), colors.statusWarn)
     }
     when (r.safety) {
-        BpSafety.VERY_HIGH -> note(stringResource(R.string.bp_safety_high), colors.statusAlert)
+        BpSafety.VERY_HIGH -> if (!r.rangeOnly) note(stringResource(R.string.bp_safety_high), colors.statusAlert)
         BpSafety.LOW -> note(stringResource(R.string.bp_safety_low), colors.statusWarn)
         BpSafety.NONE -> Unit
     }
@@ -380,6 +406,9 @@ fun BpCalibrationScreen(
     onStart: () -> Unit = {},
     onSubmit: (Int?, Int?, Int?) -> Unit = { _, _, _ -> },
     onDone: () -> Unit = {},
+    onProfileChange: (BpProfile) -> Unit = {},
+    onAddStanding: () -> Unit = {},
+    onFinish: () -> Unit = {},
 ) {
     val colors = HeartlineTheme.colors
     ReachabilityScaffold(
@@ -417,9 +446,17 @@ fun BpCalibrationScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             IconBadge(Metric.BLOOD_PRESSURE.icon, colors.bp)
                             Spacer(Modifier.width(14.dp))
-                            Text(stringResource(R.string.bp_round, state.round), style = MaterialTheme.typography.titleMedium, color = colors.onBackground)
+                            Text(
+                                if (state.standingRound) stringResource(R.string.bp_round_standing) else stringResource(R.string.bp_round, state.round),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = colors.onBackground,
+                            )
                         }
                         Spacer(Modifier.height(12.dp))
+                        if (state.standingRound) {
+                            Text(stringResource(R.string.bp_standing_instruction), style = MaterialTheme.typography.bodyMedium, color = colors.onBackground)
+                            Spacer(Modifier.height(8.dp))
+                        }
                         Text(stringResource(R.string.bp_waiting_watch), style = MaterialTheme.typography.bodyMedium, color = colors.onBackground)
                         Spacer(Modifier.height(16.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -429,6 +466,15 @@ fun BpCalibrationScreen(
                         }
                     }
                     CalibrationUi.Phase.ENTER_CUFF -> CuffEntry(state, onSubmit)
+                    CalibrationUi.Phase.OFFER_STANDING -> {
+                        CardTitle(stringResource(R.string.bp_standing_offer_title))
+                        Spacer(Modifier.height(8.dp))
+                        Text(stringResource(R.string.bp_standing_offer_body), style = MaterialTheme.typography.bodyMedium, color = colors.onBackground)
+                        Spacer(Modifier.height(16.dp))
+                        PillButton(stringResource(R.string.bp_standing_add), onClick = onAddStanding, color = colors.bp)
+                        Spacer(Modifier.height(8.dp))
+                        TonalPillButton(stringResource(R.string.bp_finish), onClick = onFinish)
+                    }
                     CalibrationUi.Phase.DONE -> {
                         Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = colors.statusNormal, modifier = Modifier.size(40.dp))
                         Spacer(Modifier.height(8.dp))
@@ -440,7 +486,63 @@ fun BpCalibrationScreen(
                 }
             }
         }
+        if (state.phase == CalibrationUi.Phase.INTRO) {
+            item {
+                RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
+                    Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp)) {
+                        CardTitle(stringResource(R.string.bp_profile_title))
+                        Text(stringResource(R.string.bp_profile_why), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                    }
+                    BpProfileEditor(state.profile, onProfileChange)
+                }
+            }
+        }
     }
+}
+
+/**
+ * Conditions and medicines that change how the pulse wave relates to pressure (algorithm 5): a
+ * rate-setting drug or pacemaker takes the pulse rate out of the model, atrial fibrillation
+ * lengthens the recording, POTS makes the "unsteady" check more sensitive, pregnancy is flagged
+ * as not validated, and diabetes or kidney disease shortens the calibration's validity.
+ */
+@Composable
+fun BpProfileEditor(profile: BpProfile, onChange: (BpProfile) -> Unit) {
+    val rows = listOf(
+        Triple(R.string.bp_profile_beta_blocker, profile.betaBlocker) { v: Boolean -> profile.copy(betaBlocker = v) },
+        Triple(R.string.bp_profile_pacemaker, profile.pacemaker) { v: Boolean -> profile.copy(pacemaker = v) },
+        Triple(R.string.bp_profile_af, profile.atrialFibrillation) { v: Boolean -> profile.copy(atrialFibrillation = v) },
+        Triple(R.string.bp_profile_orthostatic, profile.orthostaticIntolerance) { v: Boolean -> profile.copy(orthostaticIntolerance = v) },
+        Triple(R.string.bp_profile_diabetes, profile.diabetesOrKidney) { v: Boolean -> profile.copy(diabetesOrKidney = v) },
+        Triple(R.string.bp_profile_pregnancy, profile.pregnancy) { v: Boolean -> profile.copy(pregnancy = v) },
+    )
+    Column {
+        rows.forEachIndexed { i, (label, checked, update) ->
+            CardRow(
+                stringResource(label),
+                trailing = { OneUiSwitch(checked) { onChange(update(it)) } },
+                showDivider = i < rows.lastIndex,
+                onClick = { onChange(update(!checked)) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun BpProfileDialog(profile: BpProfile, onDismiss: () -> Unit, onSave: (BpProfile) -> Unit) {
+    var edited by remember(profile) { mutableStateOf(profile) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.bp_profile_title)) },
+        text = {
+            Column {
+                Text(stringResource(R.string.bp_profile_why), style = MaterialTheme.typography.bodySmall)
+                BpProfileEditor(edited) { edited = it }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(edited) }) { Text(stringResource(R.string.action_save)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
 }
 
 @Composable

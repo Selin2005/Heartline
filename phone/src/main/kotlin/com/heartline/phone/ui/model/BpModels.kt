@@ -13,6 +13,7 @@ import com.heartline.shared.bp.BpAccuracy
 import com.heartline.shared.bp.BpCategory
 import com.heartline.shared.bp.BpConformal
 import com.heartline.shared.bp.BpDrift
+import com.heartline.shared.bp.BpProfile
 import com.heartline.shared.bp.BpSafety
 import com.heartline.shared.bp.CalibrationPoint
 import com.heartline.shared.bp.PpgFeatureVector
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -44,6 +46,8 @@ data class BpReadingUi(
     /** Refined by the phone's personal model; [watchSystolic]/[watchDiastolic] is what the watch showed. */
     val watchSystolic: Int? = null,
     val watchDiastolic: Int? = null,
+    /** Algorithm 5: too uncertain for one number (mostly a pulse change): shown as a range, no category. */
+    val rangeOnly: Boolean = false,
 ) {
     val category get() = BpCategory.of(systolic, diastolic)
     val safety get() = BpSafety.of(systolic, diastolic)
@@ -70,6 +74,8 @@ data class BpHomeUi(
     val cuffChecksInCalibration: Int = 0,
     /** ± that covered 80 % of this user's cuff checks (split-conformal), once there are enough. */
     val personalRange80: Int? = null,
+    /** Conditions and medicines that change the model (algorithm 5), stored with the calibration. */
+    val profile: BpProfile = BpProfile.NONE,
 )
 
 class BpHomeViewModel(
@@ -93,6 +99,7 @@ class BpHomeViewModel(
                 s.confirmed,
                 s.watchSystolic,
                 s.watchDiastolic,
+                s.rangeOnly,
             ) to r.entity.startedAtMs
         }
         val latest = readings.firstOrNull()
@@ -123,8 +130,14 @@ class BpHomeViewModel(
             calibrationSpan = calibration?.takeIf { it.isValid(now()) }?.systolicSpan,
             cuffChecksInCalibration = calibration?.extraPoints?.size ?: 0,
             personalRange80 = BpConformal.halfWidth(validations.map { (it.watchSystolic - it.cuffSystolic).toDouble() })?.roundToInt(),
+            profile = calibration?.profile ?: BpProfile.NONE,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BpHomeUi())
+
+    /** Updates the health profile on the current calibration and sends it to the watch. */
+    fun saveProfile(profile: BpProfile) {
+        viewModelScope.launch { repository.saveProfile(profile) }
+    }
 
     /** Stores a cuff reading taken right after the latest watch reading. @return false for implausible values. */
     fun validateLatest(systolic: Int?, diastolic: Int?): Boolean {
@@ -148,14 +161,21 @@ class BpHomeViewModel(
     }
 }
 
-/** State of the 3-round cuff calibration wizard. */
+/**
+ * State of the cuff calibration wizard: 3 seated rounds, then an optional standing round
+ * ([Phase.OFFER_STANDING]) so the model also sees how this user's pulse and pressure respond to
+ * standing (algorithm 5). [profile]: the user's conditions and medicines, saved with it.
+ */
 data class CalibrationUi(
     val round: Int = 1,
     val phase: Phase = Phase.INTRO,
     val completedRounds: Int = 0,
     val inputError: Boolean = false,
+    val profile: BpProfile = BpProfile.NONE,
 ) {
-    enum class Phase { INTRO, WAITING_FOR_WATCH, ENTER_CUFF, DONE }
+    enum class Phase { INTRO, WAITING_FOR_WATCH, ENTER_CUFF, OFFER_STANDING, DONE }
+
+    val standingRound: Boolean get() = round == BpCalibration.STANDING_ROUND
 }
 
 class CalibrationViewModel(
@@ -171,18 +191,28 @@ class CalibrationViewModel(
     private val points = mutableListOf<CalibrationPoint>()
     private var captured: PpgFeatureVector? = null
     private var capturedPpg: List<Float>? = null
+    private var capturedGravity: List<Double>? = null
 
     init {
+        // A recalibration keeps the profile the user already entered.
+        viewModelScope.launch {
+            repository.calibration.first()?.profile?.let { p -> if (mutable.value.phase == CalibrationUi.Phase.INTRO) mutable.value = mutable.value.copy(profile = p) }
+        }
         viewModelScope.launch {
             repository.captureResults.collect { result ->
                 val ui = mutable.value
                 if (result.captureId == captureId && result.round == ui.round && ui.phase == CalibrationUi.Phase.WAITING_FOR_WATCH) {
                     captured = result.features
                     capturedPpg = result.ppg
+                    capturedGravity = result.gravity
                     mutable.value = ui.copy(phase = CalibrationUi.Phase.ENTER_CUFF)
                 }
             }
         }
+    }
+
+    fun setProfile(profile: BpProfile) {
+        mutable.value = mutable.value.copy(profile = profile)
     }
 
     /** Asks the watch to record this round; the open calibration screen there starts measuring at once. */
@@ -199,18 +229,35 @@ class CalibrationViewModel(
             mutable.value = mutable.value.copy(inputError = true)
             return@launch
         }
-        points += CalibrationPoint(features, systolic!!, diastolic!!, pulse, capturedPpg)
+        val ui = mutable.value
+        points += CalibrationPoint(features, systolic!!, diastolic!!, pulse, capturedPpg, gravity = capturedGravity, standing = ui.standingRound)
         captured = null
         capturedPpg = null
-        val ui = mutable.value
-        if (points.size < BpCalibration.REQUIRED_POINTS) {
-            mutable.value = CalibrationUi(round = ui.round + 1, phase = CalibrationUi.Phase.WAITING_FOR_WATCH, completedRounds = points.size)
-            repository.requestCapture(CaptureRequest(captureId, ui.round + 1))
-            openOnWatch(CALIBRATION_ROUTE)
-        } else {
-            repository.saveCalibration(BpCalibration(newId(), now(), points.toList()))
-            mutable.value = ui.copy(phase = CalibrationUi.Phase.DONE, completedRounds = points.size, inputError = false)
+        capturedGravity = null
+        when {
+            points.size < BpCalibration.REQUIRED_POINTS -> {
+                mutable.value = ui.copy(round = ui.round + 1, phase = CalibrationUi.Phase.WAITING_FOR_WATCH, completedRounds = points.size, inputError = false)
+                repository.requestCapture(CaptureRequest(captureId, ui.round + 1))
+                openOnWatch(CALIBRATION_ROUTE)
+            }
+            ui.standingRound -> save()
+            else -> mutable.value = ui.copy(phase = CalibrationUi.Phase.OFFER_STANDING, completedRounds = points.size, inputError = false)
         }
+    }
+
+    /** The optional 4th round: standing, watch arm across the chest at heart level. */
+    fun addStandingRound() = viewModelScope.launch {
+        mutable.value = mutable.value.copy(round = BpCalibration.STANDING_ROUND, phase = CalibrationUi.Phase.WAITING_FOR_WATCH, inputError = false)
+        repository.requestCapture(CaptureRequest(captureId, BpCalibration.STANDING_ROUND))
+        openOnWatch(CALIBRATION_ROUTE)
+    }
+
+    /** Saves the calibration without the standing round. */
+    fun finish() = viewModelScope.launch { save() }
+
+    private suspend fun save() {
+        repository.saveCalibration(BpCalibration(newId(), now(), points.toList(), profile = mutable.value.profile))
+        mutable.value = mutable.value.copy(phase = CalibrationUi.Phase.DONE, completedRounds = points.size, inputError = false)
     }
 
     private companion object {

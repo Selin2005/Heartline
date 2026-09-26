@@ -80,5 +80,7 @@ data class CaptureResult(
     val round: Int,
     val features: com.heartline.shared.bp.PpgFeatureVector,
     /** Raw PPG of the round (100 Hz), kept with the calibration so it can be re-analysed later. */
-    val ppg: List<Float>? = null
+    val ppg: List<Float>? = null,
+    /** Mean gravity vector in the watch's frame during the round (arm position), if known. */
+    val gravity: List<Double>? = null
 )

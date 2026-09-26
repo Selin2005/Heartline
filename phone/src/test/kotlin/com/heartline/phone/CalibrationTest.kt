@@ -12,6 +12,7 @@ import com.heartline.phone.data.WaveStore
 import com.heartline.phone.ui.model.CalibrationUi
 import com.heartline.phone.ui.model.CalibrationViewModel
 import com.heartline.shared.bp.BpCalibration
+import com.heartline.shared.bp.BpProfile
 import com.heartline.shared.bp.PpgFeatures
 import com.heartline.shared.sample.SyntheticPpg
 import com.heartline.shared.sync.CaptureRequest
@@ -95,12 +96,63 @@ class CalibrationTest {
             }
             vm.submitCuff(120 + round, 80, 65)
         }
+        // After the 3 seated rounds the standing round is offered; this user skips it.
+        withTimeout(5_000) { vm.state.first { it.phase == CalibrationUi.Phase.OFFER_STANDING } }
+        vm.finish()
         withTimeout(5_000) { vm.state.first { it.phase == CalibrationUi.Phase.DONE } }
         val saved = withTimeout(5_000) { bp.calibration.first { it != null } }!!
         assertEquals(3, saved.points.size)
         assertEquals(122.0, saved.points.map { it.cuffSystolic }.average(), 1e-9)
         assertTrue(saved.isValid(1_000L + BpCalibration.VALIDITY_MS - 1))
         withTimeout(5_000) { while (sentCalibrations.isEmpty()) delay(5) }
+        watchJob.cancel()
+    }
+
+    @Test
+    fun standingRoundAndHealthProfileAreSavedWithTheCalibration() = runBlocking {
+        val (phoneSide, watchSide) = InMemoryTransport.pair()
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val records = RecordRepository(db.records(), WaveStore(File(context.cacheDir, "cal-standing")))
+        lateinit var engine: PhoneSyncEngine
+        val bp = BpRepository(db.bp(), records) { engine }
+        engine = PhoneSyncEngine(phoneSide, records, onCaptureResult = { bp.onCaptureResult(it) })
+        val requests = mutableListOf<CaptureRequest>()
+        val watchJob = watchSide.incoming.onEach { env ->
+            if (env.path == Protocol.BP_CALIBRATION_CAPTURE) requests += Protocol.json.decodeFromString<CaptureRequest>(env.data.decodeToString())
+        }.launchIn(this)
+        yield()
+
+        val vm = CalibrationViewModel(bp, now = { 1_000L })
+        vm.setProfile(BpProfile(betaBlocker = true))
+        val features = PpgFeatures.extract(SyntheticPpg.generate(20.0), 100)!!
+        val seated = listOf(0.0, 0.0, 9.8)
+        suspend fun answer(round: Int, gravity: List<Double>) {
+            withTimeout(5_000) { while (requests.none { it.round == round }) delay(5) }
+            val request = requests.last { it.round == round }
+            val result = CaptureResult("r$round", request.captureId, round, features, gravity = gravity)
+            engine.handle(com.heartline.shared.sync.Envelope(Protocol.BP_CALIBRATION_CAPTURE, Protocol.json.encodeToString(CaptureResult.serializer(), result).encodeToByteArray()))
+            withTimeout(5_000) { vm.state.first { it.phase == CalibrationUi.Phase.ENTER_CUFF && it.round == round } }
+        }
+        vm.startRound()
+        for (round in 1..3) {
+            answer(round, seated)
+            vm.submitCuff(104, 70, 70)
+        }
+        withTimeout(5_000) { vm.state.first { it.phase == CalibrationUi.Phase.OFFER_STANDING } }
+        vm.addStandingRound()
+        answer(BpCalibration.STANDING_ROUND, listOf(9.8, 0.0, 0.0))
+        assertTrue(vm.state.value.standingRound)
+        vm.submitCuff(100, 72, 88)
+        withTimeout(5_000) { vm.state.first { it.phase == CalibrationUi.Phase.DONE } }
+        val saved = withTimeout(5_000) { bp.calibration.first { it != null } }!!
+        assertEquals(4, saved.points.size)
+        assertEquals(listOf(false, false, false, true), saved.points.map { it.standing })
+        assertEquals(seated, saved.points.first().gravity)
+        assertEquals(BpProfile(betaBlocker = true), saved.profile)
+        assertTrue(saved.isValid(2_000))
+        // The profile can be changed later without recalibrating.
+        bp.saveProfile(BpProfile(atrialFibrillation = true))
+        assertEquals(BpProfile(atrialFibrillation = true), withTimeout(5_000) { bp.calibration.first { it?.profile?.atrialFibrillation == true } }!!.profile)
         watchJob.cancel()
     }
 }

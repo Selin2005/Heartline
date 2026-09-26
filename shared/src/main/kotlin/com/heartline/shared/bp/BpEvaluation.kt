@@ -43,7 +43,10 @@ data class BpDataset(
  * - the proportional-bias slope of (watch − cuff) against cuff: 0 is ideal; a negative slope
  *   means readings are pulled towards the calibration (Falter et al. 2022 found this for
  *   Galaxy Watch). Relating the difference to the cuff, not the mean, keeps it interpretable.
- * - [refused]: readings the algorithm gave no number for.
+ * - [refused]: readings the algorithm gave no number for; [unsteady] of them because the body was
+ *   not in a steady state (algorithm 5).
+ * - [maeSysFastPulse]: MAE of readings whose pulse was more than [FAST_PULSE_RISE] bpm above the
+ *   calibration's (where the old model read high); null without such readings.
  */
 data class BpEvaluationReport(
     val count: Int,
@@ -56,8 +59,14 @@ data class BpEvaluationReport(
     val maeDia: Double,
     val within10Percent: Int,
     val biasSlopeSys: Double,
-    val beyondCalibration: Int
-)
+    val beyondCalibration: Int,
+    val unsteady: Int = 0,
+    val maeSysFastPulse: Double? = null
+) {
+    companion object {
+        const val FAST_PULSE_RISE = 15.0
+    }
+}
 
 object BpEvaluation {
     /** A replayable algorithm: calibration known before the reading, the reading's features, its time. */
@@ -78,18 +87,28 @@ object BpEvaluation {
         val sorted = dataset.entries.sortedBy { it.atMs }
         val pairs = mutableListOf<Pair<BpEstimate, BpDatasetEntry>>()
         var refused = 0
+        var unsteady = 0
+        val fastPulse = mutableSetOf<BpDatasetEntry>()
         var cal = base
         for (entry in sorted) {
             val features = PpgFeatures.extract(entry.ppg.toFloatArray(), fs)
             when (val out = algorithm.estimate(cal, features, entry.atMs)) {
-                is BpOutcome.Ok -> pairs += out.estimate to entry
+                is BpOutcome.Ok -> {
+                    pairs += out.estimate to entry
+                    if (out.estimate.pulse - cal.referenceHeartRate() > BpEvaluationReport.FAST_PULSE_RISE) fastPulse += entry
+                }
+                is BpOutcome.Unsteady -> {
+                    refused++
+                    unsteady++
+                }
                 else -> refused++
             }
             if (incremental && features != null) {
                 cal = cal.withExtraPoint(CalibrationPoint(features, entry.cuffSystolic, entry.cuffDiastolic, null, null, entry.atMs))
             }
         }
-        return report(pairs, refused)
+        val fast = pairs.filter { it.second in fastPulse }.map { (e, c) -> abs(e.systolic - c.cuffSystolic).toDouble() }
+        return report(pairs, refused).copy(unsteady = unsteady, maeSysFastPulse = fast.takeIf { it.isNotEmpty() }?.average())
     }
 
     internal fun report(pairs: List<Pair<BpEstimate, BpDatasetEntry>>, refused: Int): BpEvaluationReport {
