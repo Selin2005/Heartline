@@ -11,22 +11,22 @@
 | HR / HRV | HR زنده، Tile، Complication | نمودار روز، استراحت، HRV هفتگی |
 | SpO2، دمای پوست، ترکیب بدن (BIA)، استرس (HRV + EDA) | اندازه‌گیری on-demand | جزئیات، روند، تاریخچه |
 | خروجی | — | PDF و تصویر هر ECG، CSV همه‌ی داده‌ها، اشتراک با اپ‌های AI |
-| ویجت / Tile / Complication | ۵ Tile (قلب، فشار، اندازه‌گیری سریع، Wellness، استرس) و ۶ complication | ۷ ویجت One UI (داشبورد، ضربان، ECG، فشار، استرس، اندازه‌گیری روی ساعت، نمودار روز) |
+| ویجت / Tile / Complication | ۹ کارت برای صفحه‌ی tileها (کوچک و بزرگ؛ قلب، فشار، ECG، اکسیژن، استرس، ترکیب بدن، Today، Wellness، Measure) و ۱۳ complication | ویجت‌های One UI (داشبورد، Health tile ۱×۱ تا ۴×۲، دکمه‌ی Measure، ضربان، ECG، فشار، استرس، اندازه‌گیری روی ساعت، نمودار روز) و کاشی‌های Quick Settings |
 
-اسکرین‌شات‌ها: [`docs/screenshots/`](docs/screenshots/README.md) (ویجت‌ها: [`widgets/`](docs/screenshots/widgets), Tileها: [`wear/tiles/`](docs/screenshots/wear/tiles)) · پلن: [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) · پروتکل: [`docs/PROTOCOL.md`](docs/PROTOCOL.md) · دیزاین: [`docs/DESIGN.md`](docs/DESIGN.md) · فشار خون: [`docs/BP_ALGORITHM.md`](docs/BP_ALGORITHM.md) · تست روی دستگاه: [`docs/DEVICE_TESTING.md`](docs/DEVICE_TESTING.md)
+اسکرین‌شات‌ها: [`docs/screenshots/`](docs/screenshots/README.md) (ویجت‌ها: [`widgets/`](docs/screenshots/widgets), کارت‌های ساعت: [`wear/cards/`](docs/screenshots/wear/cards)) · پلن: [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) · پروتکل: [`docs/PROTOCOL.md`](docs/PROTOCOL.md) · دیزاین: [`docs/DESIGN.md`](docs/DESIGN.md) · فشار خون: [`docs/BP_ALGORITHM.md`](docs/BP_ALGORITHM.md) · تست روی دستگاه: [`docs/DEVICE_TESTING.md`](docs/DEVICE_TESTING.md)
 
 ## ویجت‌ها
 
-| داشبورد (4×4) | ضربان · ECG · فشار · استرس (2×2) | Tileهای ساعت |
+| داشبورد (4×4) | ضربان · ECG · فشار · استرس (2×2) | کارت‌های ساعت (کوچک و بزرگ) |
 |---|---|---|
-| <img src="docs/screenshots/widgets/dashboard_2_full_light.png" width="260"> | <img src="docs/screenshots/widgets/heart_rate_0_full_dark.png" width="120"> <img src="docs/screenshots/widgets/ecg_0_full_dark.png" width="120"> <img src="docs/screenshots/widgets/bp_0_full_light.png" width="120"> <img src="docs/screenshots/widgets/stress_0_full_light.png" width="120"> | <img src="docs/screenshots/wear/tiles/tile_heart_full.png" width="120"> <img src="docs/screenshots/wear/tiles/tile_quick_full.png" width="120"> <img src="docs/screenshots/wear/tiles/tile_wellness_full.png" width="120"> |
+| <img src="docs/screenshots/widgets/dashboard_2_full_light.png" width="260"> | <img src="docs/screenshots/widgets/heart_rate_0_full_dark.png" width="120"> <img src="docs/screenshots/widgets/ecg_0_full_dark.png" width="120"> <img src="docs/screenshots/widgets/bp_0_full_light.png" width="120"> <img src="docs/screenshots/widgets/stress_0_full_light.png" width="120"> | <img src="docs/screenshots/wear/cards/heart_small.png" width="150"> <img src="docs/screenshots/wear/cards/bp_small.png" width="150"> <img src="docs/screenshots/wear/cards/heart_large.png" width="150"> <img src="docs/screenshots/wear/cards/today_large.png" width="150"> |
 
 ## ساختار
 ```
 shared/     Kotlin JVM: مدل‌ها، پروتکل سینک، الگوریتم‌ها (ECG, HRV, IRN, BP, stress) — تست JVM
 datalayer/  Android lib: SyncTransport روی Wearable Data Layer
 phone/      اپ گوشی (Compose M3, Room, Koin)
-wear/       اپ ساعت (Wear Compose M3, Samsung Health Sensor SDK 1.4.1, Tiles)
+wear/       اپ ساعت (Wear Compose M3, Samsung Health Sensor SDK 1.4.1, Wear widgets / Remote Compose)
 ```
 
 ## بیلد و تست

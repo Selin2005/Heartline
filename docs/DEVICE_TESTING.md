@@ -50,10 +50,13 @@ tools/device/collect-logs.sh dump      # یا بعد از تست
     - با نگه‌داشتن ویجت، «Widget style» را باز کنید و شفافیت و رنگ را عوض کنید.
     - دکمه‌های «Measure»، «Record ECG» و نوار «Measure on watch» باید همان صفحه را روی ساعت باز کنند.
     - بعد از هر اندازه‌گیری، ویجت‌ها باید در چند ثانیه به‌روز شوند.
-11. **Tileها و Complicationها:**
-    - روی ساعت، Tileهای Heart، Blood pressure، Measure، Wellness و Stress را اضافه کنید.
+11. **کارت‌های صفحه‌ی tile و Complicationها:**
+    - **One UI 9 Watch / Wear OS 7:** در ویرایش صفحه‌ی tileها، کارت‌های Heartline (Heart rate، Blood pressure، ECG، Blood oxygen، Stress، Body composition، Today، Wellness، Measure) را کوچک یا بزرگ اضافه کنید. باید کنار کارت‌های برنامه‌های دیگر در همان صفحه‌ی اسکرولی بنشینند و دو کارت کوچک در یک صفحه جا شوند.
+    - **One UI 8 Watch و قدیمی‌تر:** همان کارت‌ها به‌صورت tile تمام‌صفحه اضافه می‌شوند (سامسونگ در این نسخه کارت کوچک را فقط به برنامه‌های خودش می‌دهد).
+    - کارت‌ها دکمه ندارند: لمس کارت صفحه‌ی خودش را باز می‌کند و Back به همان صفحه‌ی tileها برمی‌گردد. در Measure، Wellness و Today هر آیکن اندازه‌گیری خودش را باز می‌کند.
+    - بدون ساعت Wear OS 7 (امولاتور): `adb shell am broadcast -a com.google.android.wearable.app.DEBUG_SURFACE --es operation add-tile --ecn component com.heartline.wear/.tile.HeartTileService --ei type 2` (نوع ۲ = کوچک، ۱ = بزرگ، ۰ = تمام‌صفحه).
     - روی watch face انگشت را نگه دارید و در Customize یک complication از Heartline انتخاب کنید (ضربان، ECG، فشار، استرس، SpO2، یا «Start ECG»).
-    - بعد از یک اندازه‌گیری، Tile و complication باید به‌روز شوند.
+    - بعد از یک اندازه‌گیری، کارت‌ها و complicationها باید به‌روز شوند.
     - میان‌بر «Start ECG» باید مستقیم ECG را باز کند.
 12. **فشار خون، الگوریتم ۳ (بدون «Outside your calibration»):**
     - بعد از کالیبراسیون، در حالت استراحت اندازه بگیرید: عدد عادی، بدون برچسب.
