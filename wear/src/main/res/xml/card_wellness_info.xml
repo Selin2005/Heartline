@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wearwidget-provider
+    description="@string/card_wellness_description"
+    group="heartline_wellness"
+    icon="@drawable/ic_metric_temp"
+    label="@string/card_wellness_label"
+    preferredType="SMALL">
+    <container
+        type="SMALL"
+        previewImage="@drawable/card_preview_wellness_small" />
+    <container
+        type="LARGE"
+        previewImage="@drawable/card_preview_wellness_large" />
+</wearwidget-provider>

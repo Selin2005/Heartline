@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wearwidget-provider
+    description="@string/card_stress_description"
+    group="heartline_stress"
+    icon="@drawable/ic_metric_stress"
+    label="@string/card_stress_label"
+    preferredType="SMALL">
+    <container
+        type="SMALL"
+        previewImage="@drawable/card_preview_stress_small" />
+    <container
+        type="LARGE"
+        previewImage="@drawable/card_preview_stress_large" />
+</wearwidget-provider>

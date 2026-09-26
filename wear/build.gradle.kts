@@ -93,10 +93,14 @@ dependencies {
     implementation(libs.wear.compose.foundation)
     implementation(libs.compose.material.icons.extended)
     implementation(libs.wear.compose.navigation)
-    implementation(libs.wear.tiles)
-    implementation(libs.concurrent.futures)
-    implementation(libs.wear.protolayout)
-    implementation(libs.wear.protolayout.material3)
+    // Wear widgets (Wear OS 7 tile stack; shown as full-screen tiles on older watches).
+    implementation(libs.glance.wear)
+    implementation(libs.glance.wear.core)
+    implementation(libs.remote.creation.compose)
+    implementation(libs.remote.core)
+    implementation(libs.wear.remote.material3)
+    testImplementation(libs.remote.tooling.preview)
+    testImplementation("androidx.glance.wear:wear-tooling-preview:1.0.0-alpha19")
     implementation(libs.wear.complications.data.source.ktx)
     // Navigation stays on 2.9.x; compileSdk 37 now allows newer versions (MASTER_PLAN R6).
     implementation(libs.androidx.navigation.compose)
@@ -106,8 +110,6 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
-    // Tile render test only; its resources must be merged, so it is a debug (not test) dependency.
-    debugImplementation(libs.wear.tiles.renderer)
     testImplementation(libs.room.testing)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.androidx.test.ext.junit)

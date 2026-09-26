@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wearwidget-provider
+    description="@string/card_quick_description"
+    group="heartline_quick"
+    icon="@drawable/ic_metric_ecg"
+    label="@string/card_quick_label"
+    preferredType="SMALL">
+    <container
+        type="SMALL"
+        previewImage="@drawable/card_preview_quick_small" />
+    <container
+        type="LARGE"
+        previewImage="@drawable/card_preview_quick_large" />
+</wearwidget-provider>

@@ -79,15 +79,23 @@
             android:foregroundServiceType="health"
             tools:node="merge" />
 
+        <!-- Watch-face complications; data is pushed on change (TileUpdates), heart rate also every 10 min. -->
+        <!-- Cards for the watch's tile stack (Wear widgets); full-screen tiles on older watches. -->
         <service
             android:name=".tile.HeartTileService"
             android:exported="true"
-            android:icon="@drawable/ic_heart"
-            android:label="@string/tile_heart_description"
+            android:icon="@drawable/ic_metric_heart"
+            android:label="@string/card_heart_label"
             android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.glance.wear.action.BIND_WIDGET_PROVIDER" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
             </intent-filter>
+            <meta-data
+                android:name="androidx.glance.wear.widget.provider"
+                android:resource="@xml/card_heart_info" />
             <meta-data
                 android:name="androidx.wear.tiles.PREVIEW"
                 android:resource="@drawable/tile_preview_heart" />
@@ -96,88 +104,163 @@
         <service
             android:name=".tile.BpTileService"
             android:exported="true"
-            android:icon="@drawable/ic_heart"
-            android:label="@string/tile_bp_description"
+            android:icon="@drawable/ic_metric_bp"
+            android:label="@string/card_bp_label"
             android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.glance.wear.action.BIND_WIDGET_PROVIDER" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
             </intent-filter>
+            <meta-data
+                android:name="androidx.glance.wear.widget.provider"
+                android:resource="@xml/card_bp_info" />
             <meta-data
                 android:name="androidx.wear.tiles.PREVIEW"
                 android:resource="@drawable/tile_preview_bp" />
         </service>
 
         <service
-            android:name=".tile.QuickMeasureTileService"
+            android:name=".tile.EcgTileService"
             android:exported="true"
             android:icon="@drawable/ic_metric_ecg"
-            android:label="@string/tile_quick_description"
+            android:label="@string/card_ecg_label"
             android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.glance.wear.action.BIND_WIDGET_PROVIDER" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
             </intent-filter>
             <meta-data
+                android:name="androidx.glance.wear.widget.provider"
+                android:resource="@xml/card_ecg_info" />
+            <meta-data
                 android:name="androidx.wear.tiles.PREVIEW"
-                android:resource="@drawable/tile_preview_quick" />
+                android:resource="@drawable/tile_preview_ecg" />
         </service>
 
         <service
-            android:name=".tile.WellnessTileService"
+            android:name=".tile.Spo2TileService"
             android:exported="true"
             android:icon="@drawable/ic_metric_spo2"
-            android:label="@string/tile_wellness_description"
+            android:label="@string/card_spo2_label"
             android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.glance.wear.action.BIND_WIDGET_PROVIDER" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
             </intent-filter>
             <meta-data
+                android:name="androidx.glance.wear.widget.provider"
+                android:resource="@xml/card_spo2_info" />
+            <meta-data
                 android:name="androidx.wear.tiles.PREVIEW"
-                android:resource="@drawable/tile_preview_wellness" />
+                android:resource="@drawable/tile_preview_spo2" />
         </service>
 
         <service
             android:name=".tile.StressTileService"
             android:exported="true"
             android:icon="@drawable/ic_metric_stress"
-            android:label="@string/tile_stress_description"
+            android:label="@string/card_stress_label"
             android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.glance.wear.action.BIND_WIDGET_PROVIDER" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
             </intent-filter>
+            <meta-data
+                android:name="androidx.glance.wear.widget.provider"
+                android:resource="@xml/card_stress_info" />
             <meta-data
                 android:name="androidx.wear.tiles.PREVIEW"
                 android:resource="@drawable/tile_preview_stress" />
         </service>
 
         <service
-            android:name=".tile.TodayTileService"
+            android:name=".tile.BodyTileService"
             android:exported="true"
-            android:icon="@drawable/ic_heart"
-            android:label="@string/tile_today_description"
+            android:icon="@drawable/ic_metric_body"
+            android:label="@string/card_body_label"
             android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.glance.wear.action.BIND_WIDGET_PROVIDER" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
             </intent-filter>
+            <meta-data
+                android:name="androidx.glance.wear.widget.provider"
+                android:resource="@xml/card_body_info" />
+            <meta-data
+                android:name="androidx.wear.tiles.PREVIEW"
+                android:resource="@drawable/tile_preview_body" />
+        </service>
+
+        <service
+            android:name=".tile.TodayTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_heart"
+            android:label="@string/card_today_label"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.glance.wear.action.BIND_WIDGET_PROVIDER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.glance.wear.widget.provider"
+                android:resource="@xml/card_today_info" />
             <meta-data
                 android:name="androidx.wear.tiles.PREVIEW"
                 android:resource="@drawable/tile_preview_today" />
         </service>
 
         <service
-            android:name=".tile.BodyTileService"
+            android:name=".tile.WellnessTileService"
             android:exported="true"
-            android:icon="@drawable/ic_metric_body"
-            android:label="@string/tile_body_description"
+            android:icon="@drawable/ic_metric_temp"
+            android:label="@string/card_wellness_label"
             android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.glance.wear.action.BIND_WIDGET_PROVIDER" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
             </intent-filter>
             <meta-data
+                android:name="androidx.glance.wear.widget.provider"
+                android:resource="@xml/card_wellness_info" />
+            <meta-data
                 android:name="androidx.wear.tiles.PREVIEW"
-                android:resource="@drawable/tile_preview_body" />
+                android:resource="@drawable/tile_preview_wellness" />
         </service>
 
-        <!-- Watch-face complications; data is pushed on change (TileUpdates), heart rate also every 10 min. -->
+        <service
+            android:name=".tile.QuickMeasureTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_metric_ecg"
+            android:label="@string/card_quick_label"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.glance.wear.action.BIND_WIDGET_PROVIDER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.glance.wear.widget.provider"
+                android:resource="@xml/card_quick_info" />
+            <meta-data
+                android:name="androidx.wear.tiles.PREVIEW"
+                android:resource="@drawable/tile_preview_quick" />
+        </service>
+
         <service
             android:name=".tile.HeartRateComplicationService"
             android:exported="true"

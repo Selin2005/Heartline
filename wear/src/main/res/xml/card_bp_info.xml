@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wearwidget-provider
+    description="@string/card_bp_description"
+    group="heartline_bp"
+    icon="@drawable/ic_metric_bp"
+    label="@string/card_bp_label"
+    preferredType="SMALL">
+    <container
+        type="SMALL"
+        previewImage="@drawable/card_preview_bp_small" />
+    <container
+        type="LARGE"
+        previewImage="@drawable/card_preview_bp_large" />
+</wearwidget-provider>

@@ -3,7 +3,6 @@ package com.heartline.wear.tile
 import android.content.ComponentName
 import android.content.Context
 import android.util.Log
-import androidx.wear.tiles.TileService
 import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester
 import com.heartline.wear.bp.WatchBpStore
 import com.heartline.wear.data.WatchRecordStore
@@ -17,6 +16,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 
 /**
  * Pushes fresh data to the tiles and watch-face complications: a new record or calibration
@@ -31,8 +31,11 @@ class TileUpdates(
 ) {
     private var lastHeartPush = 0L
 
+    private var scope: CoroutineScope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
+
     @OptIn(FlowPreview::class)
     fun start(scope: CoroutineScope) {
+        this.scope = scope
         combine(records.recent.map { list -> list.firstOrNull()?.id }, bp.calibration.map { it?.id }) { a, b -> a to b }
             .distinctUntilChanged()
             .drop(1)
@@ -50,10 +53,11 @@ class TileUpdates(
             .launchIn(scope)
     }
 
-    fun requestAll(reason: String) {
-        Log.i(TAG, "update tiles and complications ($reason)")
-        val updater = TileService.getUpdater(context)
-        TILES.forEach { runCatching { updater.requestUpdate(it) } }
+    fun requestAll(reason: String, scope: CoroutineScope = this.scope) {
+        Log.i(TAG, "update cards and complications ($reason)")
+        scope.launch {
+            ALL_CARDS.forEach { card -> runCatching { card().triggerUpdateAll(context) }.onFailure { Log.w(TAG, "card update failed", it) } }
+        }
         COMPLICATIONS.forEach { cls ->
             runCatching { ComplicationDataSourceUpdateRequester.create(context, ComponentName(context, cls)).requestUpdateAll() }
         }
@@ -62,16 +66,6 @@ class TileUpdates(
     companion object {
         private const val TAG = "Heartline/Tiles"
         private const val HEART_EVERY_MS = 5 * 60_000L
-
-        val TILES = listOf(
-            HeartTileService::class.java,
-            BpTileService::class.java,
-            QuickMeasureTileService::class.java,
-            WellnessTileService::class.java,
-            StressTileService::class.java,
-            TodayTileService::class.java,
-            BodyTileService::class.java,
-        )
 
         val COMPLICATIONS: List<Class<*>> = listOf(
             HeartRateComplicationService::class.java,
