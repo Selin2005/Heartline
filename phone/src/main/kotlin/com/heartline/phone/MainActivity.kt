@@ -20,6 +20,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.heartline.phone.notify.PhoneNotifier
 import com.heartline.phone.ui.model.OnboardingViewModel
 import com.heartline.phone.ui.onboarding.OnboardingFlow
+import com.heartline.phone.ui.legal.TermsGate
+import com.heartline.shared.AppInfo
 import org.koin.androidx.compose.koinViewModel
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -55,10 +57,14 @@ class MainActivity : ComponentActivity() {
                 }
                 val onboarding: OnboardingViewModel = koinViewModel()
                 val onboarded by onboarding.onboarded.collectAsStateWithLifecycle()
-                when (onboarded) {
-                    null -> Unit
-                    false -> OnboardingFlow(onFinished = onboarding::finish)
-                    true -> HeartlineApp(openAlerts = openAlerts, deepLink = deepLink, onDeepLinkHandled = { deepLink = null })
+                val acceptedTerms by onboarding.acceptedTerms.collectAsStateWithLifecycle()
+                val terms = acceptedTerms
+                when {
+                    onboarded == null || terms == null -> Unit
+                    // Before anything else, and again whenever the terms change.
+                    terms < AppInfo.TERMS_VERSION -> TermsGate(updated = terms > 0, onAccept = onboarding::acceptTerms, onDecline = ::finish)
+                    onboarded == false -> OnboardingFlow(onFinished = onboarding::finish)
+                    else -> HeartlineApp(openAlerts = openAlerts, deepLink = deepLink, onDeepLinkHandled = { deepLink = null })
                 }
             }
         }

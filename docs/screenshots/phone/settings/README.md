@@ -13,4 +13,5 @@ Settings, updates, what's new, sharing, help and about.
 | **Share a result, no AI apps installed** | <img src="share_sheet_no_ai_light.png" width="240" alt=""> | <img src="share_sheet_no_ai_dark.png" width="240" alt=""> |
 | **Help: turning on developer mode on the watch** | <img src="dev_mode_help_light.png" width="240" alt=""> | <img src="dev_mode_help_dark.png" width="240" alt=""> |
 | **About** | <img src="about_light.png" width="240" alt=""> | <img src="about_dark.png" width="240" alt=""> |
+| **Terms of Use** | <img src="legal_light.png" width="240" alt=""> | <img src="legal_dark.png" width="240" alt=""> |
 | **App icon** | <img src="launcher_icon.png" width="240" alt=""> | — |

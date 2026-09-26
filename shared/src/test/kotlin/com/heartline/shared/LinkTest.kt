@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -81,7 +82,8 @@ class LinkTest {
         }
     }
 
-    private val complete = PhoneStatus(appVersion = "1.0", onboarded = true, profileComplete = true, displayName = "Sam")
+    private val complete =
+        PhoneStatus(appVersion = "1.0", onboarded = true, termsAccepted = true, profileComplete = true, displayName = "Sam")
 
     @Test
     fun connectsAndCarriesSetupState() = runTest {
@@ -99,6 +101,18 @@ class LinkTest {
         val state = rig.checker.check()
         assertEquals(LinkStage.CONNECTED, state.stage)
         assertFalse(state.status!!.setupComplete)
+    }
+
+    @Test
+    fun termsNotAcceptedIsIncomplete() = runTest {
+        val status = Rig(this, complete.copy(termsAccepted = false)).checker.check().status!!
+        assertFalse(status.setupComplete)
+    }
+
+    @Test
+    fun olderPhoneWithoutTermsFieldCountsAsNotAccepted() {
+        val json = """{"protocol":1,"appVersion":"0.9","onboarded":true,"profileComplete":true}"""
+        assertFalse(Protocol.json.decodeFromString<PhoneStatus>(json).setupComplete)
     }
 
     @Test

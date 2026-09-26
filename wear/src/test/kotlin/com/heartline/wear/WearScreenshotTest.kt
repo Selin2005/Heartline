@@ -271,6 +271,8 @@ class WearScreenshotTest(private val size: String) {
 
     @Test fun setupIncomplete() = shot("setup_incomplete") { SetupIncompleteScreen("Sara") }
 
+    @Test fun setupTerms() = shot("setup_terms") { SetupIncompleteScreen("Sara", termsPending = true) }
+
     @Test fun setupPermissions() = shot("setup_permissions") { PermissionsScreen() }
 
     @Test fun setupCheckingSensors() = shot("setup_checking_sensors") { CheckingSensorsScreen(animate = false) }

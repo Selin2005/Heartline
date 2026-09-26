@@ -12,7 +12,7 @@ ID and the same signing key**, so the phone and watch apps are always built and 
 |---|---|---|---|---|
 | `/hl/v1/hello` | W→P | Message | `Hello{protocol, appVersion, capabilities, sensorServiceVersion, role, deviceName, settings}` | Phone replies with `status`, then sends `settings`, `bp/calibration` and `profile` |
 | `/hl/v1/status` | P→W | Message | `PhoneStatus{protocol, appVersion, onboarded, termsAccepted, profileComplete, displayName, calibration, …}` | Watch gates its features on it |
-| `/hl/v1/setup-request` | W→P | Message | `SetupRequest{target}` (`HOME`, `PROFILE`, `BP_CALIBRATION`, `DEV_MODE_HELP`, `TERMS`) | Phone opens that screen |
+| `/hl/v1/setup-request` | W→P | Message | `SetupRequest{target}` (`HOME`, `PROFILE`, `BP_CALIBRATION`, `DEV_MODE_HELP`) | Phone opens that screen |
 | `/hl/v1/record/meta` | W→P | Message | `RecordMeta{id, kind, startedAtMs, durationMs, sampleRateHz, sampleCount, summary}` | `record/ack` once stored |
 | `/hl/v1/record/wave/<id>` | W→P | Channel | Binary `HLW1`: 16-byte header (magic, kind, rate, count) + Float32LE samples | Merged with the meta |
 | `/hl/v1/record/ack` | P→W | Message | `Ack{id, ok}` | Watch removes it from its outbox |

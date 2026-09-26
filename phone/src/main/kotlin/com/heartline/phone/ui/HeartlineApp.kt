@@ -28,6 +28,8 @@ import com.heartline.phone.ui.bp.BpHomeScreen
 import com.heartline.phone.BuildConfig
 import com.heartline.phone.export.DataExporter
 import com.heartline.phone.ui.about.AboutScreen
+import com.heartline.phone.legal.BundledDoc
+import com.heartline.phone.ui.legal.LegalDocumentScreen
 import com.heartline.phone.ui.heart.AlertsScreen
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -112,6 +114,9 @@ object Routes {
     const val PROFILE = "profile"
     const val ABOUT = "about"
     const val DEV_MODE_HELP = "help/dev_mode"
+    const val DOC = "doc/{doc}"
+
+    fun doc(doc: BundledDoc) = "doc/${doc.route}"
 
     fun metric(metric: Metric) = "metric/${metric.name}"
 
@@ -358,7 +363,11 @@ fun HeartlineApp(
                     DevModeHelpScreen(onBack = goBack, onCheckOnWatch = { openOnWatch(WatchRoutes.SETUP) })
                 }
                 composable(Routes.ABOUT) {
-                    AboutScreen(BuildConfig.VERSION_NAME, onBack = goBack)
+                    AboutScreen(BuildConfig.VERSION_NAME, onBack = goBack, onOpenDoc = { navController.navigate(Routes.doc(it)) })
+                }
+                composable(Routes.DOC) { entry ->
+                    val doc = BundledDoc.fromRoute(entry.arguments?.getString("doc")) ?: BundledDoc.TERMS
+                    LegalDocumentScreen(doc, onBack = goBack, onOpenDoc = { navController.navigate(Routes.doc(it)) })
                 }
                 composable(Routes.ALERTS) {
                     val vm: AlertsViewModel = koinViewModel()

@@ -292,8 +292,8 @@
     <string name="about_use_body">Heartline records a single-lead ECG, estimates blood pressure after cuff calibration, and checks your heart rhythm in the background with a Galaxy Watch. It\'s for general wellness and to help you talk with your doctor.</string>
     <string name="about_disclaimer_body">Heartline isn\'t a medical device. It can\'t diagnose, treat or rule out any condition, and it can\'t detect heart attacks, blood clots or stroke. Don\'t change your medication or treatment based on it. If you think you\'re having a medical emergency, call emergency services.</string>
     <string name="about_privacy_title">Your data</string>
-    <string name="about_privacy_body">Measurements stay on your watch and phone. Nothing is uploaded; you choose when to share a PDF or export a CSV.</string>
-    <string name="about_licenses_body">Samsung Health Sensor SDK 1.4.1 (Samsung Health Partner Service &amp; SDK License). Inter typeface (SIL Open Font License 1.1). AndroidX, Kotlin, kotlinx, Koin (Apache License 2.0).</string>
+    <string name="about_privacy_body">Measurements stay on your watch and phone. There\'s no account, no server, no analytics and no ads. Data only leaves your devices when you share or export it.</string>
+    <string name="about_licenses_body">Heartline is free software under the GNU AGPL-3.0-or-later. It includes: Samsung Health Sensor SDK 1.4.1 (Samsung Health Partner Service &amp; SDK License); ECGFounder model and ONNX Runtime (MIT); PaPaGei model (BSD-3-Clause-Clear); Inter typeface (SIL Open Font License 1.1); AndroidX, Kotlin, kotlinx and Koin (Apache License 2.0); Google Play services (Android SDK License). Details: THIRD_PARTY_NOTICES.md in the source code.</string>
 
     <string name="a11y_ecg_strip">ECG waveform, %1$d seconds. Scroll sideways to see all of it.</string>
     <string name="a11y_hr_chart">Heart rate today, from %1$d to %2$d beats per minute</string>
@@ -624,4 +624,21 @@
     <string name="widget_style_metric">Show</string>
     <string name="widget_style_measure_metric">Measure</string>
     <string name="widget_style_preview">Preview</string>
+
+    <!-- Terms, privacy and about -->
+    <string name="terms_title">Before you start</string>
+    <string name="terms_updated_title">We\'ve updated our terms</string>
+    <string name="terms_body">Heartline is a wellness app, not a medical device. Please read how it works, what it can\'t do, and how your data stays on your devices.</string>
+    <string name="terms_read">Tap to read</string>
+    <string name="terms_check_terms">I\'m 18 or older and accept the Terms of Use</string>
+    <string name="terms_check_privacy">I\'ve read the Privacy Policy</string>
+    <string name="terms_check_medical">I understand Heartline can\'t diagnose any condition or detect an emergency, and I won\'t make medical decisions based on it</string>
+    <string name="terms_accept">Accept and continue</string>
+    <string name="terms_decline">Decline and close</string>
+    <string name="legal_terms">Terms of Use</string>
+    <string name="legal_privacy">Privacy Policy</string>
+    <string name="about_source_code">Source code</string>
+    <string name="about_license">Licensed under the %1$s</string>
+    <string name="about_report_issue">Report a problem</string>
+    <string name="whats_new_title">What\'s new</string>
 </resources>

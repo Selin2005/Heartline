@@ -79,6 +79,16 @@ android {
     }
 }
 
+// legal/*.md and CHANGELOG.md go into the APK as assets/docs/, so the app shows the same text as the repository.
+val bundledDocs = layout.buildDirectory.dir("generated/bundled-docs")
+val bundleDocs = tasks.register<Sync>("bundleDocs") {
+    from(rootProject.fileTree("legal") { include("*.md") })
+    from(rootProject.file("CHANGELOG.md"))
+    into(bundledDocs.map { it.dir("docs") })
+}
+android.sourceSets.getByName("main").assets.directories.add(bundledDocs.get().asFile.path)
+tasks.named("preBuild") { dependsOn(bundleDocs) }
+
 dependencies {
     implementation(project(":shared"))
     // On-device PPG encoder (PaPaGei) for the personal blood-pressure model.

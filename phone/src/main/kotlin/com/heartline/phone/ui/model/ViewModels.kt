@@ -212,5 +212,10 @@ class WatchLinkViewModel(private val opener: WatchOpener, status: PhoneStatusPub
 class OnboardingViewModel(private val settings: SettingsRepository) : ViewModel() {
     val onboarded: StateFlow<Boolean?> = settings.onboarded.map<Boolean, Boolean?> { it }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    /** Null while loading; the accepted terms version otherwise (0 = never accepted). */
+    val acceptedTerms: StateFlow<Int?> = settings.acceptedTermsVersion.map<Int, Int?> { it }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     fun finish() = viewModelScope.launch { settings.setOnboarded() }
+
+    fun acceptTerms() = viewModelScope.launch { settings.acceptTerms() }
 }

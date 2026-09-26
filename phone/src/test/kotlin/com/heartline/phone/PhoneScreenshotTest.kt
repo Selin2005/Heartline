@@ -38,6 +38,9 @@ import com.heartline.phone.ui.model.EcgListState
 import com.heartline.phone.ui.model.HeartRateUi
 import com.heartline.phone.ui.model.HomeState
 import com.heartline.phone.ui.settings.SettingsScreen
+import com.heartline.phone.legal.BundledDoc
+import com.heartline.phone.ui.legal.LegalDocumentScreen
+import com.heartline.phone.ui.legal.TermsScreen
 import com.heartline.phone.ui.theme.HeartlineTheme
 import androidx.compose.foundation.background
 import androidx.compose.ui.unit.dp
@@ -185,6 +188,13 @@ class PhoneScreenshotTest(private val theme: String) {
     }
 
     @Test fun onboarding() = shot("onboarding") { OnboardingScreen() }
+
+    @Test fun terms() = shot("terms") { TermsScreen(updated = false, initiallyChecked = true) }
+
+    @Test fun legalDocument() = shot("legal") {
+        val root = generateSequence(java.io.File("").absoluteFile) { it.parentFile }.first { java.io.File(it, "settings.gradle.kts").exists() }
+        LegalDocumentScreen(BundledDoc.TERMS, onBack = {}, text = java.io.File(root, "legal/TERMS_OF_USE.md").readText())
+    }
 
     @Test fun shareSheet() = shot("share_sheet") {
         Box(Modifier.background(HeartlineTheme.colors.surface).padding(top = 24.dp)) {

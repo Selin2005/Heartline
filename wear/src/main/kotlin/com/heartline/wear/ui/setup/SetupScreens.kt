@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DeveloperMode
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Gavel
 import androidx.compose.material.icons.rounded.PersonOutline
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.PhonelinkErase
@@ -144,13 +145,17 @@ fun PhoneProblemScreen(stage: LinkStage, onRetry: () -> Unit = {}, onOpenOnPhone
 }
 
 @Composable
-fun SetupIncompleteScreen(name: String?, onOpenOnPhone: () -> Unit = {}, opened: Boolean? = null) {
+fun SetupIncompleteScreen(name: String?, onOpenOnPhone: () -> Unit = {}, opened: Boolean? = null, termsPending: Boolean = false) {
     InfoScreen(
-        icon = Icons.Rounded.PersonOutline,
+        icon = if (termsPending) Icons.Rounded.Gavel else Icons.Rounded.PersonOutline,
         tint = WearColors.primary,
         // Greets by name once the phone has sent one (the profile is started but not finished).
-        title = name?.let { stringResource(R.string.setup_incomplete_title_named, it) } ?: stringResource(R.string.setup_incomplete_title),
-        body = stringResource(R.string.setup_incomplete_body),
+        title = when {
+            termsPending -> stringResource(R.string.setup_terms_title)
+            name != null -> stringResource(R.string.setup_incomplete_title_named, name)
+            else -> stringResource(R.string.setup_incomplete_title)
+        },
+        body = stringResource(if (termsPending) R.string.setup_terms_body else R.string.setup_incomplete_body),
         action = stringResource(R.string.action_open_on_phone),
         onAction = onOpenOnPhone,
         note = openedNote(opened) ?: stringResource(R.string.setup_continues_automatically),

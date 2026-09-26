@@ -285,6 +285,8 @@
     <string name="link_incompatible_title">Update Heartline</string>
     <string name="link_incompatible_body">The watch and phone apps are different versions. Install the same version on both.</string>
     <string name="setup_incomplete_title">Finish setup on phone</string>
+    <string name="setup_terms_title">Accept terms on phone</string>
+    <string name="setup_terms_body">Open Heartline on your phone to accept the terms.</string>
     <string name="setup_incomplete_body">Complete your profile in Heartline on your phone first.</string>
     <string name="setup_continues_automatically">The watch continues by itself when you\'re done.</string>
     <string name="setup_permissions_title">Allow sensor access</string>

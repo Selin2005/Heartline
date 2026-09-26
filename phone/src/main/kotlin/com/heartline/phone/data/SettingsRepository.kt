@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.heartline.shared.AppInfo
 import com.heartline.shared.hr.MonitorSettings
 import com.heartline.shared.sync.Protocol
 import kotlinx.serialization.encodeToString
@@ -34,6 +35,7 @@ class SettingsRepository(private val context: Context, private val now: () -> Lo
         val AI_PROMPT = stringPreferencesKey("ai_prompt")
         val AI_ATTACH_PDF = booleanPreferencesKey("ai_attach_pdf")
         val REPORT_NAME = stringPreferencesKey("report_name")
+        val TERMS_VERSION = intPreferencesKey("accepted_terms_version")
     }
 
     /**
@@ -96,6 +98,16 @@ class SettingsRepository(private val context: Context, private val now: () -> Lo
 
     suspend fun setOnboarded() {
         context.settingsStore.edit { it[Keys.ONBOARDED] = true }
+    }
+
+    /** Version of the Terms of Use / Privacy Policy the user accepted; 0 = never. */
+    val acceptedTermsVersion: Flow<Int> = context.settingsStore.data.map { it[Keys.TERMS_VERSION] ?: 0 }
+
+    /** The current terms ([AppInfo.TERMS_VERSION]) are accepted. */
+    val termsAccepted: Flow<Boolean> = acceptedTermsVersion.map { it >= AppInfo.TERMS_VERSION }
+
+    suspend fun acceptTerms(version: Int = AppInfo.TERMS_VERSION) {
+        context.settingsStore.edit { it[Keys.TERMS_VERSION] = version }
     }
 
     /**

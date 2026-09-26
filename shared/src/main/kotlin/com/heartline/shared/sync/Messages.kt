@@ -36,6 +36,8 @@ data class PhoneStatus(
     val protocol: Int = Protocol.VERSION,
     val appVersion: String = "",
     val onboarded: Boolean = false,
+    /** The current Terms of Use and Privacy Policy (AppInfo.TERMS_VERSION) were accepted on the phone. */
+    val termsAccepted: Boolean = false,
     val profileComplete: Boolean = false,
     val displayName: String = "",
     val calcSexKnown: Boolean = false,
@@ -44,7 +46,7 @@ data class PhoneStatus(
 ) {
     fun isCompatible() = protocol == Protocol.VERSION
 
-    val setupComplete: Boolean get() = onboarded && profileComplete
+    val setupComplete: Boolean get() = termsAccepted && onboarded && profileComplete
 }
 
 /** Where the watch sends the user on the phone. */

@@ -223,8 +223,10 @@ fun HeartlineWearApp(startRoute: String? = null) {
                 )
                 is GateState.SetupIncomplete -> SetupIncompleteScreen(
                     g.status.displayName.ifBlank { null },
-                    onOpenOnPhone = { gate.openOnPhone(SetupTarget.PROFILE) },
+                    // The phone app shows the terms before any other screen, so HOME is enough.
+                    onOpenOnPhone = { gate.openOnPhone(if (g.status.termsAccepted) SetupTarget.PROFILE else SetupTarget.HOME) },
                     opened = openedOnPhone,
+                    termsPending = !g.status.termsAccepted,
                 )
                 GateState.NeedsPermissions -> PermissionsScreen(onAllow = {
                     if (permissionDenials >= 2) {

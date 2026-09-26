@@ -35,8 +35,8 @@ class PhoneStatusPublisher(
     private val sync: () -> PhoneSyncEngine,
     private val now: () -> Long = System::currentTimeMillis
 ) {
-    val status: Flow<PhoneStatus> = combine(settings.onboarded, profiles.profile, bp.calibration) { onboarded, profile, calibration ->
-        build(onboarded, profile, calibration, now())
+    val status: Flow<PhoneStatus> = combine(settings.onboarded, settings.termsAccepted, profiles.profile, bp.calibration) { onboarded, terms, profile, calibration ->
+        build(onboarded, profile, calibration, now(), terms)
     }.distinctUntilChanged()
 
     suspend fun current(): PhoneStatus = status.first()
@@ -54,9 +54,10 @@ class PhoneStatusPublisher(
     companion object {
         private const val TAG = "Heartline/Link"
 
-        fun build(onboarded: Boolean, profile: UserProfile?, calibration: BpCalibration?, nowMs: Long) = PhoneStatus(
+        fun build(onboarded: Boolean, profile: UserProfile?, calibration: BpCalibration?, nowMs: Long, termsAccepted: Boolean) = PhoneStatus(
             appVersion = BuildConfig.VERSION_NAME,
             onboarded = onboarded,
+            termsAccepted = termsAccepted,
             profileComplete = profile?.isComplete == true,
             displayName = profile?.displayName.orEmpty(),
             calcSexKnown = profile?.calcSex != null,

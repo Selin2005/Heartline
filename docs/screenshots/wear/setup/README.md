@@ -11,6 +11,7 @@ Connecting to the phone, permissions and the sensor check.
 | **Phone not responding** | <img src="setup_no_response_small.png" width="200" alt=""> | <img src="setup_no_response_large.png" width="200" alt=""> |
 | **Heartline missing on the phone** | <img src="setup_app_missing_small.png" width="200" alt=""> | <img src="setup_app_missing_large.png" width="200" alt=""> |
 | **Finish setup on the phone** | <img src="setup_incomplete_small.png" width="200" alt=""> | <img src="setup_incomplete_large.png" width="200" alt=""> |
+| **Accept the terms on the phone** | <img src="setup_terms_small.png" width="200" alt=""> | <img src="setup_terms_large.png" width="200" alt=""> |
 | **Profile needed** | <img src="profile_needed_small.png" width="200" alt=""> | <img src="profile_needed_large.png" width="200" alt=""> |
 | **Permissions** | <img src="setup_permissions_small.png" width="200" alt=""> | <img src="setup_permissions_large.png" width="200" alt=""> |
 | **Checking the sensors** | <img src="setup_checking_sensors_small.png" width="200" alt=""> | <img src="setup_checking_sensors_large.png" width="200" alt=""> |

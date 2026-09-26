@@ -77,12 +77,15 @@ class SetupGateTest {
         withTimeout(5_000) { state.first { it !is GateState.CheckingPhone && it !is GateState.CheckingSensors } }
     }
 
-    private val complete = PhoneStatus(onboarded = true, profileComplete = true)
+    private val complete = PhoneStatus(onboarded = true, termsAccepted = true, profileComplete = true)
 
     @Test fun readyWhenPhoneSetUpAndSensorsOk() = assertEquals(GateState.Ready(offline = false), gate(PeerProbe.REACHABLE, complete).settle())
 
     @Test fun incompleteProfileBlocks() =
         assertEquals(GateState.SetupIncomplete(complete.copy(profileComplete = false)), gate(PeerProbe.REACHABLE, complete.copy(profileComplete = false)).settle())
+
+    @Test fun termsNotAcceptedBlocks() =
+        assertEquals(GateState.SetupIncomplete(complete.copy(termsAccepted = false)), gate(PeerProbe.REACHABLE, complete.copy(termsAccepted = false)).settle())
 
     @Test fun devModeOffShowsGuide() = assertEquals(GateState.SensorIssue(SensorProblem.SDK_POLICY), gate(PeerProbe.REACHABLE, complete, SensorProblem.SDK_POLICY).settle())
 
