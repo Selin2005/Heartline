@@ -1,7 +1,7 @@
 # tools/ecg-ml: ECGFounder as the phone's ECG second opinion
 
 Question: does a large pretrained ECG model add anything to the app's own rhythm model
-(`docs/ECG_ALGORITHM.md`), and can it run on the phone?
+(`docs/algorithms/ECG_ALGORITHM.md`), and can it run on the phone?
 
 ## Model
 

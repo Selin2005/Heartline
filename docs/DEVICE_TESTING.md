@@ -1,99 +1,108 @@
-# تست روی دستگاه (دور دوم)
+# Installing and testing on a device
 
-راهنمای کوتاه برای تست APKهای CI روی Galaxy Watch و گوشی، و جمع‌کردن لاگ‌هایی که برای عیب‌یابی لازم است.
+This guide covers installing Heartline from GitHub Releases or CI builds, getting the Samsung
+sensors to work, and collecting the logs we need for bug reports.
 
-## ۱) نصب
+## 1. Requirements
+- A **Galaxy Watch4 or newer** running Wear OS Powered by Samsung (One UI Watch), paired with an
+  **Android phone** (Android 8.0 or newer) through the Galaxy Wearable app.
+- `adb` on a computer ([Android platform tools](https://developer.android.com/tools/releases/platform-tools)).
 
-- از آخرین اجرای CI روی `main`، آرتیفکت‌های `heartline-phone-debug` و `heartline-wear-debug` را بگیرید.
-- هر دو باید از **یک build** باشند: امضا و نسخه‌ی یکسان لازم است، وگرنه Data Layer دو اپ را به هم وصل نمی‌کند.
-- اگر نسخه‌ی قبلی نصب است، اول هر دو را حذف کنید. داده‌ی نمایشی قدیمی و کالیبراسیون ساختگی در نسخه‌ی جدید خودکار پاک می‌شوند.
-- برای داده‌ی نمایشی (بدون ساعت) build با `-Pheartline.demoData=true` لازم است. پیش‌فرض خاموش است.
+## 2. Install
+1. Download **both** APKs of the same version from
+   [Releases](https://github.com/selin2005/heartline/releases): `Heartline-phone-<version>.apk` and
+   `Heartline-watch-<version>.apk`. The two apps only talk to each other when they come from the
+   same release, because they must share the signing key.
+2. **Phone:** open the APK on the phone (allow "Install unknown apps" for your browser or file
+   manager), or run `adb install -r Heartline-phone-<version>.apk`.
+3. **Watch:** turn on Settings → Developer options → **ADB debugging** and **Wireless debugging**
+   on the watch, then:
+   ```bash
+   adb pair <ip>:<pairing-port>     # use the code shown on the watch
+   adb connect <ip>:<port>
+   adb -s <ip>:<port> install -r Heartline-watch-<version>.apk
+   ```
+4. **Samsung sensor access:** until Heartline is registered as a Samsung Health partner, the
+   sensors only work in *developer mode*. On the watch, open Settings → Apps → **Health Sensor
+   Service** (called *Health Platform* on older watches), tap the title about 10 times, then turn
+   on **Developer mode**. The phone app has a step-by-step guide under Help.
 
-## ۲) لاگ را قبل از تست روشن کنید
+After that, the **phone app** keeps both apps up to date: it tells you when a new release is out
+and installs the phone update itself. For the watch it shows the download link and these steps.
 
+> If you installed an earlier build that used the application ID `com.heartline.app`, uninstall it
+> from both devices first. Newer builds use `io.github.selin2005.heartline`.
+
+### CI builds
+Every run of the **Build** workflow (GitHub → Actions → Build) keeps its APKs as downloadable
+artifacts, even when no release is published. A debug phone build made with
+`-Pheartline.demoData=true` fills the app with sample data on first launch, so the UI can be
+explored without a watch. Remove it with Settings → Delete all data.
+
+## 3. Collect logs
 ```bash
-tools/device/collect-logs.sh live      # قبل از تست؛ Ctrl+C در پایان
-tools/device/collect-logs.sh dump      # یا بعد از تست
+tools/device/collect-logs.sh live      # start before testing, Ctrl+C when done
+tools/device/collect-logs.sh dump      # or dump afterwards
 ```
+The logs are saved in `logs/<timestamp>/` (ignored by git): `phone-heartline.log`,
+`watch-heartline.log` and the full logcat of each device. **Review them before sharing: they can
+contain personal and health data.** All app logs use `Heartline/*` tags:
 
-خروجی در `logs/<زمان>/` ذخیره می‌شود: `phone-heartline.log`، `watch-heartline.log` و لاگ کامل هر دستگاه. همه‌ی لاگ‌های اپ با تگ `Heartline/*` هستند:
-
-| تگ | چه چیزی |
+| Tag | Contents |
 |---|---|
-| `Heartline/Sync`، `Heartline/Link` | Data Layer: یافتن گوشی/ساعت، hello، status، ارسال/دریافت |
-| `Heartline/Setup` | مراحل gate ساعت |
-| `Heartline/Sensor` | اتصال Health Platform و probe (Developer mode) |
-| `Heartline/ECG` | خلاصه‌ی کامل هر ECG: usable/noise، min/max، کیفیت، دلیل Poor، آمار خام |
-| `Heartline/BP` | ویژگی‌های PPG، polarity و نتیجه‌ی تخمین |
-| `Heartline/Monitor` | پایش پس‌زمینه (passive HR، پنجره‌های IRN) |
+| `Heartline/Sync`, `Heartline/Link` | Data Layer: finding the other device, hello, status, sending and receiving |
+| `Heartline/Setup` | Watch setup gate steps |
+| `Heartline/Sensor` | Health Sensor Service connection, capability probe, developer mode |
+| `Heartline/ECG` | Summary of each ECG: usable time, noise, amplitude, quality, reason for "poor", pulse arrival time |
+| `Heartline/BP` | PPG features, polarity and the estimate |
+| `Heartline/Monitor` | Background monitoring (passive heart rate, irregular rhythm windows) |
+| `Heartline/Update` | Update checks and downloads (phone) |
 
-## ۳) سناریوها
+Debug builds also log raw sensor values:
 
-1. **Onboarding گوشی:** یک فیلد را عمداً اشتباه پر کنید (مثلاً قد ۴۰). خطا باید **زیر همان فیلد** بیاید. تاریخ تولد از تقویم انتخاب می‌شود. یک جنسیت غیر از زن/مرد را هم امتحان کنید.
-2. **اتصال:** در مرحله‌ی «Connect your watch» وضعیت ساعت دیده می‌شود. اپ ساعت را باز کنید:
-   1. «Connecting to phone»؛
-   2. اگر پروفایل ناقص است، «Finish setup on phone» (با تکمیل پروفایل روی گوشی، ساعت خودش ادامه می‌دهد)؛
-   3. مجوزها؛
-   4. بررسی Health Platform؛
-   5. لانچر.
-3. **Developer mode خاموش:** راهنمای مرحله‌به‌مرحله و دکمه‌ی «Check again» در انتهای صفحه باید ظاهر شود.
-4. **اندازه‌گیری از گوشی:** دکمه‌ی «Measure on watch» در ECG، فشار خون، ضربان، SpO2، دما، ترکیب بدن و استرس. همان بخش باید **مستقیم** روی ساعت باز شود، نه با نوتیفیکیشن.
-5. **کالیبراسیون فشار خون:** از گوشی شروع کنید. ساعت یک بار صفحه‌ی کالیبراسیون را باز می‌کند و هر دور را خودش شروع می‌کند، بی‌نوتیفیکیشن. بدون کالیبراسیون، ساعت فشار خون نمی‌گیرد و به گوشی هدایت می‌کند.
-6. **ECG:** سه بار ضبط کنید. اگر Poor شد، دلیلش روی ساعت و در «Recording details» گوشی نوشته می‌شود و ثانیه‌های نویزی روی نوار سایه دارند. لاگ `Heartline/ECG` را بفرستید.
-7. **تنظیمات:** یک گزینه را روی ساعت عوض کنید و روی گوشی ببینید، و برعکس.
-8. **نوتیفیکیشن دائمی:** نباید وجود داشته باشد. اگر مجوز حسگر در پس‌زمینه داده نشده باشد، فقط هنگام بررسی ریتم (حدود یک دقیقه در هر ۱۵ دقیقه) کوتاه دیده می‌شود.
-9. **اشتراک:** در جزئیات ECG «Share PDF» را بزنید. نام فایل قابل ویرایش است. دکمه‌های AI فقط برای اپ‌های نصب‌شده‌ای که share را می‌پذیرند ظاهر می‌شوند.
-10. **ویجت‌های گوشی:**
-    - روی Home انگشت را نگه دارید، سپس Widgets و Heartline را بزنید و ویجت‌ها را اضافه کنید.
-    - اندازه را تغییر دهید؛ چیدمان باید با اندازه عوض شود.
-    - دو ویجت 2×2 را روی هم بکشید تا Stack شوند.
-    - با نگه‌داشتن ویجت، «Widget style» را باز کنید و شفافیت و رنگ را عوض کنید.
-    - دکمه‌های «Measure»، «Record ECG» و نوار «Measure on watch» باید همان صفحه را روی ساعت باز کنند.
-    - بعد از هر اندازه‌گیری، ویجت‌ها باید در چند ثانیه به‌روز شوند.
-11. **کارت‌های صفحه‌ی tile و Complicationها:**
-    - **One UI 9 Watch / Wear OS 7:** در ویرایش صفحه‌ی tileها، کارت‌های Heartline (Heart rate، Blood pressure، ECG، Blood oxygen، Stress، Body composition، Today، Wellness، Measure) را کوچک یا بزرگ اضافه کنید. باید کنار کارت‌های برنامه‌های دیگر در همان صفحه‌ی اسکرولی بنشینند و دو کارت کوچک در یک صفحه جا شوند.
-    - **One UI 8 Watch و قدیمی‌تر:** همان کارت‌ها به‌صورت tile تمام‌صفحه اضافه می‌شوند (سامسونگ در این نسخه کارت کوچک را فقط به برنامه‌های خودش می‌دهد).
-    - کارت‌ها دکمه ندارند: لمس کارت صفحه‌ی خودش را باز می‌کند و Back به همان صفحه‌ی tileها برمی‌گردد. در Measure، Wellness و Today هر آیکن اندازه‌گیری خودش را باز می‌کند.
-    - بدون ساعت Wear OS 7 (امولاتور): `adb shell am broadcast -a com.google.android.wearable.app.DEBUG_SURFACE --es operation add-tile --ecn component com.heartline.wear/.tile.HeartTileService --ei type 2` (نوع ۲ = کوچک، ۱ = بزرگ، ۰ = تمام‌صفحه).
-    - روی watch face انگشت را نگه دارید و در Customize یک complication از Heartline انتخاب کنید (ضربان، ECG، فشار، استرس، SpO2، یا «Start ECG»).
-    - بعد از یک اندازه‌گیری، کارت‌ها و complicationها باید به‌روز شوند.
-    - میان‌بر «Start ECG» باید مستقیم ECG را باز کند.
-12. **فشار خون، الگوریتم ۳ (بدون «Outside your calibration»):**
-    - بعد از کالیبراسیون، در حالت استراحت اندازه بگیرید: عدد عادی، بدون برچسب.
-    - چند دقیقه فعالیت (بالا رفتن از پله) و بلافاصله نشسته اندازه بگیرید: باید **عدد** نشان داده شود، با «Beyond your calibration range» و دکمه‌ی «Measure again». اندازه‌گیری دوم در ۱۰ دقیقه باید «Confirmed» شود.
-    - هنگام اندازه‌گیری دست را تکان دهید: باید «Keep your arm still» بیاید (نه عدد، نه خطای کالیبراسیون).
-    - بلافاصله بعد از خوانش ساعت با کاف اندازه بگیرید و در گوشی «Compare latest reading with a cuff» را بزنید. در کارت کالیبراسیون باید «Calibration covers …–… mmHg · 1 cuff check added» دیده شود.
-    - لاگ `Heartline/BP` («BP outcome: …») را بفرستید.
-13. **PAT (زمان رسیدن پالس) در ECG:** یک ECG کامل بگیرید و خط لاگ `Heartline/ECG` که با `PAT:` شروع می‌شود را بفرستید. `ppg=true` و `medianMs` بین ۱۵۰ تا ۴۰۰ یعنی کانال PPG همراه ECG قابل استفاده است. `ppg=false` یعنی این مدل ساعت آن را نمی‌دهد.
-14. **خروجی داده‌ی فشار:** Blood pressure → Share → «BP data (JSON)». فایل را برای ارزیابی الگوریتم (`tools/bp-ml`) بفرستید. شامل موج خام PPG و عددهای کاف است.
-15. **ECG، الگوریتم ۳ (شروع فقط با انگشت واقعی):**
-    - صفحه‌ی ECG را باز کنید و ۶۰ ثانیه به دکمه دست نزنید: شمارش **نباید** شروع شود.
-    - انگشت را نزدیک دکمه ببرید یا فقط لبه‌ی قاب را لمس کنید: نباید شروع شود.
-    - انگشت را روی دکمه بگذارید: اول «Hold still, starting…»، بعد یک لرزش کوتاه و شروع شمارش (حدود ۴ ثانیه).
-    - وسط ضبط انگشت را ۱ ثانیه بردارید: شمارش مکث می‌کند و بعد از برگشت انگشت ادامه می‌دهد.
-    - خط لاگ `ECG LEAD_OFF values seen: first point {...}, other points {...}` را بفرستید. انتظار این است که مقدار ۰ یا ۵ فقط در «first point» باشد و «other points» همه null باشند.
-    - ثبتی با سرفه‌ی عمدی یا ضربان زودرس: نتیجه نباید «Poor recording» باشد. اگر «Inconclusive» شد، باید دلیلش را بگوید (مثلاً «extra beats»).
-16. **Body composition، تشخیص انگشت‌ها:**
-    - اول با اپ خود Samsung Health (Body composition) امتحان کنید. اگر آن هم انگشت‌ها را تشخیص نمی‌دهد، مشکل از اپ نیست: کلیدها و پشت ساعت را تمیز و خشک کنید، ساعت را محکم ببندید و انگشت‌های وسط و حلقه را صاف روی دو کلید بگذارید.
-    - در Heartline پیام می‌گوید کدام کلید انگشت را حس نمی‌کند: «Upper key…» (کلید ساعت ۲، وضعیت ۷ SDK)، «Lower key…» (کلید ساعت ۴، وضعیت ۸) یا «Keep both fingers on the keys» (هر دو، وضعیت ۹).
-    - لاگ را بفرستید: `adb logcat -s Heartline/Sensor`. خط‌های `BIA points=… status=[…] impedance=…` و خلاصه‌ی پایانی `BIA statuses seen: {…}`. این‌ها دقیقاً نشان می‌دهند سنسور سامسونگ چه گزارش داده است.
-
-## ۴) لاگ دقیق سنسورها (ECG و Body composition)
-
-در build های dev همه‌ی مقادیر خام سنسورها با تگ‌های جدا لاگ می‌شوند:
-
-| تگ | محتوا |
+| Tag | Contents |
 |---|---|
-| `Heartline/EcgRaw` | شروع ترکر ECG؛ ۲۰ دسته‌ی اول و هر دسته‌ای که وضعیت تماس در آن عوض شد به‌طور کامل (LEAD_OFF تک‌تک نقاط، بازه‌ی mV، آستانه‌های SDK، SEQUENCE، PPG)؛ خلاصه‌ی هر ثانیه؛ جمع کل در پایان |
-| `Heartline/EcgRec` | فازهای ضبط (WAITING/ARMING/RECORDING/PAUSED)؛ هر ثانیه در ARMING نتیجه‌ی بررسی سیگنال: دلیل رد، دامنه، kurtosis، تعداد ضربان، RR، نسبت ارتفاع |
-| `Heartline/BiaRaw` | پروفایل ارسالی (سن، جنس، قد، وزن) و همه‌ی مقادیر هر نقطه‌ی BIA (STATUS، PROGRESS، چربی، عضله، آب، BMR، امپدانس و فاز) |
-| `Heartline/QuickRaw` | مقادیر خام SpO2 و دمای پوست |
-| `Heartline/Sensor` | اتصال، خطاها و خلاصه‌ها |
+| `Heartline/EcgRaw` | ECG tracker start; the first 20 batches in full, and every batch where contact changes (lead-off per sample, mV range, SDK thresholds, sequence, PPG); per-second summaries |
+| `Heartline/EcgRec` | Recording phases (waiting, arming, recording, paused) and the signal check result every second while arming |
+| `Heartline/BiaRaw` | The profile sent to the sensor and every value of each body composition data point |
+| `Heartline/QuickRaw` | Raw SpO₂ and skin temperature values |
 
-روش گرفتن لاگ:
-1. بافر را بزرگ کنید، وگرنه لاگ‌های قدیمی‌تر پاک می‌شوند: `adb logcat -G 16M`، سپس `adb logcat -c`.
-2. `adb logcat -v time -s Heartline/EcgRaw Heartline/EcgRec Heartline/BiaRaw Heartline/QuickRaw Heartline/Sensor > heartline.log`
-3. ECG: صفحه را باز کنید و Start بزنید، ۱۰ ثانیه دست به دکمه نزنید، ۱۵ ثانیه انگشت روی دکمه بگذارید، انگشت را بردارید، از صفحه خارج شوید.
-4. Body composition: یک اندازه‌گیری کامل.
-5. فایل `heartline.log` را بفرستید.
+To capture them, enlarge the buffer first: `adb logcat -G 16M && adb logcat -c`, then
+`adb logcat -v time -s Heartline/EcgRaw Heartline/EcgRec Heartline/BiaRaw Heartline/QuickRaw Heartline/Sensor > heartline.log`.
 
+## 4. Test checklist
+1. **Terms and onboarding:** the app asks you to accept the Terms of Use and Privacy Policy
+   before anything else. Enter an invalid value on purpose (for example a height of 40 cm); the
+   error must appear under that field.
+2. **Connect the watch:** the "Connect your watch" step shows the watch state. Open Heartline on
+   the watch: *Connecting to phone* → *Finish setup on phone* (if the profile or terms are
+   missing) → permissions → sensor check → launcher.
+3. **Developer mode off:** the watch shows the step-by-step guide and a *Check again* button.
+4. **Measure from the phone:** *Measure on watch* for ECG, blood pressure, heart rate, SpO₂,
+   temperature, body composition and stress opens that screen directly on the watch.
+5. **Blood pressure calibration:** start it on the phone. The watch opens the calibration screen
+   once and runs each round itself. Without a calibration, the watch sends you to the phone.
+6. **ECG:** record three times. A poor recording explains why, on the watch and in *Recording
+   details* on the phone, with the noisy seconds shaded. Keep your hand away from the key for a
+   minute: the countdown must not start. Lift the finger for a second mid-recording: it pauses and
+   resumes.
+7. **Settings sync:** change an option on the watch and check the phone, and the other way round.
+8. **No permanent notification:** without background sensor permission, a short notification
+   only appears during rhythm checks (about one minute every 15 minutes).
+9. **Sharing:** *Share PDF* on an ECG lets you edit the file name; AI app buttons only appear for
+   installed apps that accept shares.
+10. **Phone widgets:** add Heartline widgets, resize them, stack two 2×2 widgets, change the widget
+    style, and check that *Measure* buttons open the watch screen and that widgets refresh within
+    seconds after a measurement.
+11. **Watch tiles and complications:** add Heartline cards (small or large on One UI 9 Watch /
+    Wear OS 7, full-screen tiles on older versions) and complications. Tapping a card opens its
+    screen; Back returns to the tiles. Without a Wear OS 7 watch, an emulator can add a card with
+    `adb shell am broadcast -a com.google.android.wearable.app.DEBUG_SURFACE --es operation add-tile --ecn component io.github.selin2005.heartline/com.heartline.wear.tile.HeartTileService --ei type 2`
+    (type 2 = small, 1 = large, 0 = full screen).
+12. **Blood pressure beyond calibration:** after calibrating, measure at rest, then right after
+    climbing stairs: the second reading shows a number with *Beyond your calibration range* and
+    *Measure again*. Moving your arm shows *Keep your arm still*.
+13. **Body composition:** if the watch can't detect your fingers, try Samsung Health's own body
+    composition first. Heartline tells you which key doesn't sense a finger (upper, lower or both).
+14. **Updates:** Settings → Updates → *Check now* finds the newest stable release; with *Receive
+    beta versions* on, it also offers betas. After updating, *What's new* shows the changelog.

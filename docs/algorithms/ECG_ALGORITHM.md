@@ -3,7 +3,7 @@
 Heartline records a 30 s single-lead ECG (watch key + wrist electrode, 500 Hz, Samsung Health
 Sensor SDK `ECG_ON_DEMAND`) and gives a wellness rhythm label with Samsung Health Monitor's
 categories: sinus rhythm, signs of AFib, high / low heart rate, inconclusive, poor recording.
-The plan and the research behind this version are in `docs/ECG_ACCURACY_PLAN.md`.
+Heartline is a wellness app, not a medical device: none of this is a diagnosis.
 
 ## What was wrong with algorithm 2
 
@@ -135,7 +135,7 @@ quality), otherwise the app computes different features than the model was train
 
 - Wellness only: no diagnosis. Public databases are clinical recordings, not wrist lead I from a
   Galaxy Watch; real watch recordings (Share → export) are needed to confirm these numbers.
-- Pulse arrival time is measured during ECG (see `docs/BP_ALGORITHM.md`).
+- Pulse arrival time is measured during ECG (see `docs/algorithms/BP_ALGORITHM.md`).
 
 ## References
 

@@ -1,6 +1,6 @@
 # tools/bp-ml: offline tools for the blood-pressure model
 
-Everything the app ships is built or checked here. See `docs/BP_ALGORITHM.md` for the algorithm.
+Everything the app ships is built or checked here. See `docs/algorithms/BP_ALGORITHM.md` for the algorithm.
 
 | Script | What it does |
 |---|---|

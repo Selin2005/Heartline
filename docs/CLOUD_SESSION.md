@@ -1,54 +1,42 @@
-# کار در سشن ابری Claude Code (Heartline)
+# Working in a Claude Code cloud session
 
-> محیط: Ubuntu 24.04، JDK 21، Android SDK در `/opt/android-sdk` (`platforms;android-36`، `build-tools;36.0.0`)، بدون امولاتور/KVM/دستگاه.
-> اعتبارسنجی = `assembleDebug` هر دو ماژول + تست JVM + Robolectric + Paparazzi (record/verify) + ktlint. نصب روی دستگاه = دانلود APK از GitHub Actions.
+Environment: Ubuntu 24.04, JDK 21, Android SDK in `/opt/android-sdk`, no emulator, KVM or
+device. Changes are validated with `assemble` for both modules, JVM + Robolectric + Paparazzi
+tests and ktlint. Testing on a device uses APKs from GitHub Actions.
 
-## 1) پروکسی Gradle (چرا و چطور)
-سندباکس تمام ترافیک خروجی را از یک پروکسی HTTP که در `https_proxy`/`HTTPS_PROXY` تعریف شده عبور می‌دهد.
-**JVM (و در نتیجه Gradle و sdkmanager) این متغیرهای محیطی را نادیده می‌گیرد** → بدون تنظیم، خطای
-`java.net.UnknownHostException: dl.google.com` یا `Could not resolve …` می‌گیرید.
+## Gradle proxy
+The sandbox routes all outbound traffic through an HTTP proxy defined in `https_proxy` /
+`HTTPS_PROXY`. **The JVM, and therefore Gradle and `sdkmanager`, ignore those variables.** Without
+extra setup the build fails with `UnknownHostException: dl.google.com` or `Could not resolve …`.
 
-راه‌حل: `tools/cloud/gradle-proxy-setup.sh`
-- متغیر پروکسی را پارس می‌کند (`scheme://[user[:pass]@]host:port`، با URL-decode).
-- یک بلوک مدیریت‌شده بین `# >>> heartline-proxy >>>` و `# <<< heartline-proxy <<<` در `~/.gradle/gradle.properties` می‌نویسد:
-  `systemProp.http(s).proxyHost/Port`، در صورت وجود `proxyUser/proxyPassword`، `systemProp.http.nonProxyHosts` (از `NO_PROXY`؛ CIDRها حذف و `.domain` → `*.domain`)
-  و `jdk.http.auth.tunneling.disabledSchemes=` (برای Basic auth روی CONNECT).
-- idempotent است؛ بلوک قبلی را جایگزین و در نبود پروکسی حذف می‌کند.
-- فقط وقتی `CLAUDE_CODE_REMOTE=true` اجرا می‌شود (اجرای دستی خارج از سشن: `HEARTLINE_FORCE_PROXY_SETUP=1`).
+`tools/cloud/gradle-proxy-setup.sh` fixes this:
+- it parses the proxy variable (`scheme://[user[:pass]@]host:port`, URL-decoded);
+- it writes a managed block between `# >>> heartline-proxy >>>` and `# <<< heartline-proxy <<<`
+  in `~/.gradle/gradle.properties`: `systemProp.http(s).proxyHost/Port`, `proxyUser/proxyPassword`
+  when present, `systemProp.http.nonProxyHosts` (from `NO_PROXY`), and
+  `jdk.http.auth.tunneling.disabledSchemes=` (Basic auth on CONNECT);
+- it is idempotent: it replaces the previous block, or removes it when there is no proxy;
+- it only runs when `CLAUDE_CODE_REMOTE=true` (outside a session: `HEARTLINE_FORCE_PROXY_SETUP=1`).
 
-به‌صورت **SessionStart hook** در `.claude/settings.json` وصل است، پس در شروع هر سشن ابری خودکار اجرا می‌شود.
-اجرای دستی: `bash tools/cloud/gradle-proxy-setup.sh && grep -A12 heartline-proxy ~/.gradle/gradle.properties`
+It runs automatically at the start of every cloud session as a SessionStart hook in
+`.claude/settings.json`. To run it by hand:
+`bash tools/cloud/gradle-proxy-setup.sh && grep -A12 heartline-proxy ~/.gradle/gradle.properties`.
+If the proxy port changes during a session (container restart), run it again and `./gradlew --stop`.
 
-> نکته: اگر پورت پروکسی در طول سشن عوض شد (ری‌استارت کانتینر)، اسکریپت را دوباره اجرا کنید و `./gradlew --stop` بزنید.
-
-### sdkmanager
-sdkmanager تنظیمات Gradle را نمی‌خواند؛ پروکسی را صریح بدهید:
+`sdkmanager` doesn't read the Gradle settings. Pass the proxy explicitly:
 ```bash
 p="${HTTPS_PROXY#*://}"; p="${p%/}"
-sdkmanager --proxy=http --proxy_host="${p%:*}" --proxy_port="${p##*:}" "platforms;android-36"
+sdkmanager --proxy=http --proxy_host="${p%:*}" --proxy_port="${p##*:}" "platforms;android-37"
 ```
 
-## 2) حلقه‌ی روزمره
-```bash
-./gradlew :phone:assembleDebug :wear:assembleDebug   # بیلد APKها
-./gradlew test                                        # JVM + Robolectric
-./gradlew recordPaparazziDebug                        # تولید اسکرین‌شات‌ها
-./gradlew verifyPaparazziDebug                        # رگرسیون بصری
-./gradlew ktlintCheck                                 # (ktlintFormat برای اصلاح)
-bash tools/screenshots/sync.sh                        # کپی PNGها به docs/screenshots/
-```
+## Daily loop
+See [CONTRIBUTING.md](../CONTRIBUTING.md#development-setup).
 
-## 3) CI و دانلود APK
-`.github/workflows/build.yml` فقط با فرم دستی اجرا می‌شود (GitHub → Actions → Build → Run workflow)، نه با هر push.
-فرم: نام نسخه، Release (ساخت GitHub Release)، Dev (APK دیباگ و pre-release با برچسب `-dev`؛ خاموش = APK ریلیز R8)
-و اجرای تست‌ها. دو APK (`Heartline-phone-<نسخه>` و `Heartline-watch-<نسخه>`) همیشه در بخش Artifacts همان اجرا
-قابل دانلودند، چه Release تیک خورده باشد چه نه. هر دو APK با `keystore/debug.keystore` مشترک امضا می‌شوند
-(لازمه‌ی Wearable Data Layer و نصب روی نسخه‌ی قبلی).
+## Troubleshooting
 
-## 4) عیب‌یابی
-| علامت | علت | راه‌حل |
+| Symptom | Cause | Fix |
 |---|---|---|
-| `UnknownHostException` / `Could not GET` | پروکسی برای JVM تنظیم نشده | اسکریپت بالا + `./gradlew --stop` |
-| `407 Proxy Authentication Required` | Basic auth غیرفعال در JDK | بلوک اسکریپت شامل `disabledSchemes=` است؛ daemon را ری‌استارت کنید |
-| `PKIX path building failed` | CA پروکسی در truststore نیست | `JAVA_TOOL_OPTIONS` سشن truststore را تنظیم می‌کند؛ آن را unset نکنید |
-| Paparazzi: `verify` شکست | تغییر بصری | PNGهای `*/build/paparazzi/failures` را ببینید؛ اگر عمدی است `record` |
+| `UnknownHostException` / `Could not GET` | Proxy not configured for the JVM | Run the script above, then `./gradlew --stop` |
+| `407 Proxy Authentication Required` | Basic auth disabled in the JDK | The script's block contains `disabledSchemes=`; restart the daemon |
+| `PKIX path building failed` | The proxy CA is missing from the truststore | The session's `JAVA_TOOL_OPTIONS` sets the truststore; don't unset it |
+| Paparazzi `verify` fails | A visual change | Check the PNGs in `*/build/paparazzi/failures`; if intended, re-record |
