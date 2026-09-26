@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Selin and Heartline contributors
+
 package com.heartline.shared.bp
 
 import com.heartline.shared.dsp.Biquad
@@ -8,7 +11,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * Pulse-wave morphology of one recording, measured on the ensemble-averaged beat (see
- * docs/BP_ALGORITHM.md). Fields added in algorithm 2 default to 0 so older data still decodes.
+ * docs/algorithms/BP_ALGORITHM.md). Fields added in algorithm 2 default to 0 so older data still decodes.
  */
 @Serializable
 data class PpgFeatureVector(

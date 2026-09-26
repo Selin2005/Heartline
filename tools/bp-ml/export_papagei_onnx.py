@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Selin and Heartline contributors
 """Exports the PaPaGei-S PPG encoder (Nokia Bell Labs, BSD-3-Clause) to ONNX for the phone.
 
     git clone https://github.com/Nokia-Bell-Labs/papagei-foundation-model papagei

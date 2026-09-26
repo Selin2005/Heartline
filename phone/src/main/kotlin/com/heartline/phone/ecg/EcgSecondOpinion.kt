@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Selin and Heartline contributors
+
 package com.heartline.phone.ecg
 
 import ai.onnxruntime.OnnxTensor
@@ -70,7 +73,7 @@ class OnnxEcgFounder private constructor(private val session: OrtSession) : EcgF
  * The phone's second opinion on a watch ECG: the app's own analysis of the stored recording plus
  * ECGFounder's label probabilities, through a model trained on both (tools/ecg-ml,
  * train_second_opinion.py; cross-validated on CinC 2017, MIT-BIH, AFDB and CPSC 2021 it finds
- * more AFib with fewer false alarms than the watch model on each of them, docs/ECG_ALGORITHM.md).
+ * more AFib with fewer false alarms than the watch model on each of them, docs/algorithms/ECG_ALGORITHM.md).
  * Shown next to the watch's result, never instead.
  */
 class EcgSecondOpinion(

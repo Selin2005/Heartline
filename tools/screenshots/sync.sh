@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Selin and Heartline contributors
 # Copies Paparazzi golden images into docs/screenshots/{phone,wear}/ and
 # regenerates docs/screenshots/README.md so they can be browsed on GitHub.
 # Run after `./gradlew recordPaparazziDebug`.

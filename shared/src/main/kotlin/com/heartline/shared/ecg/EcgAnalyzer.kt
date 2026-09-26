@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Selin and Heartline contributors
+
 package com.heartline.shared.ecg
 
 import com.heartline.shared.hr.RrFeatures
@@ -38,7 +41,7 @@ data class EcgSession(
 )
 
 /**
- * Turns a finished recording into a result plus [EcgMetrics] (algorithm 3, docs/ECG_ALGORITHM.md):
+ * Turns a finished recording into a result plus [EcgMetrics] (algorithm 3, docs/algorithms/ECG_ALGORITHM.md):
  * each contact segment is cleaned (0.5–40 Hz, mains notch) and searched for beats on its own (two
  * QRS detectors) → beats are grouped by shape → per-second quality from rhythm-independent
  * indices → intervals only between consecutive trustworthy beats of one segment → heart rate, HRV,
@@ -242,7 +245,7 @@ object EcgAnalyzer {
 
     /**
      * The learned model's decision (mirrors decide() in tools/ecg-eval/train_rhythm.py, whose
-     * cross-validated results are in docs/ECG_ALGORITHM.md). The rules' note explains the result.
+     * cross-validated results are in docs/algorithms/ECG_ALGORITHM.md). The rules' note explains the result.
      */
     fun decide(model: RhythmModel, p: DoubleArray, bpm: Int, rules: RhythmClassifier.Decision): RhythmClassifier.Decision {
         val t = model.thresholds

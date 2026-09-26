@@ -1,0 +1,49 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! **Don't attach real health data or personal logs.**
+        Security problems go through [private reporting](https://github.com/selin2005/heartline/security/advisories/new), not here.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Open …\n2. Tap …\n3. See …"
+  - type: input
+    id: phone_version
+    attributes:
+      label: Heartline version on the phone
+      description: Settings → About
+    validations:
+      required: true
+  - type: input
+    id: watch_version
+    attributes:
+      label: Heartline version on the watch
+  - type: input
+    id: devices
+    attributes:
+      label: Devices
+      placeholder: "Galaxy Watch8 (One UI 8 Watch), Galaxy S25 (Android 16)"
+    validations:
+      required: true
+  - type: dropdown
+    id: channel
+    attributes:
+      label: Update channel
+      options: [Stable, Beta, Google Play, Built from source]
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Remove any personal information first.

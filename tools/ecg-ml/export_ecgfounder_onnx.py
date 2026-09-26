@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Selin and Heartline contributors
 """Exports single-lead ECGFounder (MIT licence) to ONNX for the phone, as fp16 (62 MB).
 
     python export_ecgfounder_onnx.py --repo ecgfounder --out ../../phone/src/main/assets/ecg/ecgfounder_1lead_fp16.onnx

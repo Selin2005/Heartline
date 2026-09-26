@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Selin and Heartline contributors
 """Trains the learned rhythm model (RhythmModel.kt) on features exported by EcgDatasetReport.
 
     ECG_DATASET=<cinc dir> ECG_FEATURES_OUT=feat-cinc.csv ./gradlew :shared:test --tests '*EcgDatasetReport*' --rerun

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Selin and Heartline contributors
 """Converts public ECG databases into the evaluation format read by EcgDatasetReport.
 
 Output directory:

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Selin and Heartline contributors
 """Patient-grouped CV: the app's rhythm features alone vs plus ECGFounder's label probabilities."""
 import csv
 import sys

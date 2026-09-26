@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Selin and Heartline contributors
 """Does ECGFounder (Li et al., NEJM AI 2025; MIT licence) add to the app's rhythm model?
 
 Runs the single-lead ECGFounder on recordings converted by tools/ecg-eval/convert.py (500 Hz,

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Selin and Heartline contributors
 """Does a pretrained PPG encoder beat the app's own pulse-shape embedding on *your* data?
 
 Input: the JSON the phone exports (Blood pressure → Share → BP data). For every cuff-checked

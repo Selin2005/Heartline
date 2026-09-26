@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Selin and Heartline contributors
 # Full ECG evaluation and model training, reproducible end to end.
 #   tools/ecg-eval/run_all.sh <work dir> <python with numpy scipy wfdb scikit-learn>
 # 1. downloads CinC 2017, MIT-BIH Arrhythmia, NSTDB and the AF Database from PhysioNet, plus the

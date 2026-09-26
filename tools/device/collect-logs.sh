@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Selin and Heartline contributors
 # Collects Heartline logs from the phone and the watch into logs/<timestamp>/.
 #
 #   tools/device/collect-logs.sh live   [-p PHONE_SERIAL] [-w WATCH_SERIAL]

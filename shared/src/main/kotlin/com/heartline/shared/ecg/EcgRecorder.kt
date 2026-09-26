@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Selin and Heartline contributors
+
 package com.heartline.shared.ecg
 
 import kotlin.math.abs
@@ -14,7 +17,7 @@ import kotlin.math.abs
 enum class ContactPhase { WAITING, ARMING, RECORDING, PAUSED }
 
 /**
- * Collects a fixed-length recording from streamed chunks (algorithm 3, docs/ECG_ALGORITHM.md).
+ * Collects a fixed-length recording from streamed chunks (algorithm 3, docs/algorithms/ECG_ALGORITHM.md).
  *
  * Nothing is counted on the SDK's contact flag alone. Contact must hold for [contactDebounceMs];
  * then the first [settleSeconds] (electrode/skin settling) are dropped; then the last

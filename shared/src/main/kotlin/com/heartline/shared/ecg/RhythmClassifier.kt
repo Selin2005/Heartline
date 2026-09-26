@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Selin and Heartline contributors
+
 package com.heartline.shared.ecg
 
 import com.heartline.shared.hr.RrFeatures
@@ -14,7 +17,7 @@ import kotlin.math.sqrt
 data class RrInterval(val beat: Int, val ms: Double)
 
 /**
- * Wellness rhythm classification with SHM's categories (algorithm 3, docs/ECG_ALGORITHM.md):
+ * Wellness rhythm classification with SHM's categories (algorithm 3, docs/algorithms/ECG_ALGORITHM.md):
  * 1. early beats are found (interval < 85 % of the local median) and labelled by shape (a
  *    different cluster with a wider QRS is "ventricular-like");
  * 2. irregularity is judged after removing early beats and their compensatory intervals

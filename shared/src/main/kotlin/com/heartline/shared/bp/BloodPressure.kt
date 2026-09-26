@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Selin and Heartline contributors
+
 package com.heartline.shared.bp
 
 import kotlin.math.abs
@@ -25,7 +28,7 @@ data class CalibrationPoint(
 /**
  * SHM-style calibration: 3 cuff readings, valid for 28 days. Algorithm 3 adds
  * [extraPoints]: later cuff checks paired with a watch reading. They widen the pressure range the
- * fit has seen and keep its baseline current (see docs/BP_ALGORITHM.md).
+ * fit has seen and keep its baseline current (see docs/algorithms/BP_ALGORITHM.md).
  */
 @Serializable
 data class BpCalibration(
@@ -113,7 +116,7 @@ sealed interface BpOutcome {
 }
 
 /**
- * Calibrated pulse-wave-analysis estimate (algorithm 3, see docs/BP_ALGORITHM.md).
+ * Calibrated pulse-wave-analysis estimate (algorithm 3, see docs/algorithms/BP_ALGORITHM.md).
  *
  * BP = reference cuff reading + w · (features − reference features), where w is a Bayesian
  * (ridge-to-prior) fit: population sensitivities from the literature act as the prior and the

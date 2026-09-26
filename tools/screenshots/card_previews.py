@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Selin and Heartline contributors
 """
 Turns the watch card screenshots (CardScreenshotTest, recorded with ./gradlew :wear:recordPaparazziDebug)
 into the picker preview images: card_preview_<name>_{small,large}.png and tile_preview_<name>.png (full

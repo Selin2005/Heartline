@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Selin and Heartline contributors
 """Trains the phone's "second opinion" model: the app's rhythm features plus ECGFounder's 150 label
 probabilities, same tree model and decision logic as train_rhythm.py. Needs ecgfounder_features.py
 output. The phone uses it only when ecgfounder_1lead_fp16.onnx is bundled (see README).

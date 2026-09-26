@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Selin and Heartline contributors
 # Translates the sandbox proxy env var (https_proxy / HTTPS_PROXY) into Java
 # system properties in ~/.gradle/gradle.properties. The JVM ignores proxy env
 # vars, so without this Gradle fails with UnknownHostException in cloud sessions.
