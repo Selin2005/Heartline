@@ -11,8 +11,8 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /**
- * Runs [EcgAnalyzer] over public databases converted by tools/ecg-eval/convert.py and prints what
- * the plan (docs/ECG_ACCURACY_PLAN.md §3) measures: QRS detection F1, the result for every
+ * Runs [EcgAnalyzer] over public databases converted by tools/ecg-eval/convert.py and prints
+ * the metrics described in docs/algorithms/ECG_ALGORITHM.md: QRS detection F1, the result for every
  * reference label, how often abnormal rhythms end up "poor", AF sensitivity/specificity.
  * Skipped unless ECG_DATASET points to the converted directory:
  *

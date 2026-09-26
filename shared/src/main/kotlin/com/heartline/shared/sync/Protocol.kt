@@ -2,7 +2,7 @@ package com.heartline.shared.sync
 
 import kotlinx.serialization.json.Json
 
-/** Wearable Data Layer contract v1 (MASTER_PLAN §4.6). */
+/** Wearable Data Layer contract v1. */
 object Protocol {
     const val VERSION = 1
     private const val ROOT = "/hl/v1"

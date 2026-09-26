@@ -276,8 +276,8 @@ class SdkBiaSource(private val gateway: SdkSensorGateway) :
 }
 
 /**
- * BIA progress as a 0–1 fraction. The Galaxy Watch8 reports 0–1 (1.0 = done, see
- * logs/wear_full_logcat_20260925-215013.log); a 0–100 value is accepted too.
+ * BIA progress as a 0–1 fraction. The Galaxy Watch8 reports 0–1 (1.0 = done, seen in a
+ * device logcat); a 0–100 value is accepted too.
  */
 internal fun biaFraction(progress: Float?): Float = when {
     progress == null || !progress.isFinite() -> 0f

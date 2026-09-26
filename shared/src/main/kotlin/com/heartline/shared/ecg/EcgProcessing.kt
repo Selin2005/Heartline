@@ -5,7 +5,7 @@ import com.heartline.shared.dsp.filtFilt
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/** Cleans a raw single-lead ECG for display and analysis (MASTER_PLAN §5). */
+/** Cleans a raw single-lead ECG for display and analysis. */
 object EcgFilter {
     fun clean(samples: FloatArray, fs: Int, mainsHz: List<Double> = listOf(50.0, 60.0)): FloatArray {
         if (samples.size < fs) return samples.copyOf()

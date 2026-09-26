@@ -23,7 +23,7 @@ data class CalibrationPoint(
 )
 
 /**
- * SHM-style calibration: 3 cuff readings, valid for 28 days (MASTER_PLAN F7). Algorithm 3 adds
+ * SHM-style calibration: 3 cuff readings, valid for 28 days. Algorithm 3 adds
  * [extraPoints]: later cuff checks paired with a watch reading. They widen the pressure range the
  * fit has seen and keep its baseline current (see docs/BP_ALGORITHM.md).
  */

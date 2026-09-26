@@ -18,7 +18,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Algorithm 3: unusual rhythms and shapes are findings, not noise (docs/ECG_ACCURACY_PLAN.md, phases 2–3). */
+/** Algorithm 3: unusual rhythms and shapes are findings, not noise. */
 class EcgAlgorithm3Test {
     private val fs = 500
 

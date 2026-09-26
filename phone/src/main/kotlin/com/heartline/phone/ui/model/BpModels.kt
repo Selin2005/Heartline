@@ -145,7 +145,7 @@ class BpHomeViewModel(
     }
 }
 
-/** State of the 3-round cuff calibration wizard (MASTER_PLAN F7). */
+/** State of the 3-round cuff calibration wizard. */
 data class CalibrationUi(
     val round: Int = 1,
     val phase: Phase = Phase.INTRO,

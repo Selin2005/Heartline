@@ -1,6 +1,6 @@
 package com.heartline.shared.model
 
-/** Wellness-level rhythm categories shown after an ECG recording (MASTER_PLAN §5). */
+/** Wellness-level rhythm categories shown after an ECG recording. */
 enum class EcgResult {
     SINUS_RHYTHM,
     AFIB_SIGNS,

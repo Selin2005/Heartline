@@ -43,7 +43,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 
-/** Every phone screen in light and dark (MASTER_PLAN §7). */
+/** Every phone screen in light and dark. */
 @RunWith(Parameterized::class)
 class PhoneScreenshotTest(private val theme: String) {
     private val dark = theme == "dark"

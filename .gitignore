@@ -7,3 +7,17 @@ local.properties
 captures/
 .DS_Store
 __pycache__/
+
+# Device logs, local SDK downloads and reverse-engineering material never belong in the repo
+logs/
+sdk/
+decompiled/
+apks/
+
+# Build outputs and signing keys
+*.apk
+*.aab
+*.jks
+release.keystore
+keystore/release*
+dist/

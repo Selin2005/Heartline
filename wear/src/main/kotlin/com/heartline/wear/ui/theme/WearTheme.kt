@@ -28,7 +28,7 @@ val Inter = FontFamily(
     Font(R.font.inter_bold, FontWeight.Bold),
 )
 
-/** Watch UI always uses the dark palette on an OLED-black background (MASTER_PLAN §3.1). */
+/** Watch UI always uses the dark palette on an OLED-black background. */
 object WearColors {
     val background = Color(Palette.Watch.BACKGROUND)
     val surface = Color(Palette.Watch.SURFACE)

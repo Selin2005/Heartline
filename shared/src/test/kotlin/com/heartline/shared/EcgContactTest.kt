@@ -15,7 +15,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The countdown starts only on a confirmed touch with a real ECG (docs/ECG_ACCURACY_PLAN.md, phase 1). */
+/** The countdown starts only on a confirmed touch with a real ECG. */
 class EcgContactTest {
     private val fs = 500
     private val chunk = 10

@@ -4,7 +4,7 @@ import android.app.Activity
 import com.heartline.shared.sensor.TrackerKind
 import kotlinx.coroutines.flow.StateFlow
 
-/** Problems the user can act on (EXECUTION_PLAN §5.8). */
+/** Problems the user can act on. */
 enum class SensorProblem {
     NOT_SUPPORTED,
     PERMISSION,

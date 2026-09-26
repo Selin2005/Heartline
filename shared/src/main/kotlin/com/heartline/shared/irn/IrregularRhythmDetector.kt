@@ -16,7 +16,7 @@ data class WindowResult(val startMs: Long, val irregular: Boolean, val meanBpm: 
 data class IrnState(val windows: List<WindowResult> = emptyList(), val lastAlertMs: Long? = null)
 
 /**
- * Irregular rhythm notification logic (MASTER_PLAN F9): the watch checks one-minute
+ * Irregular rhythm notification logic: the watch checks one-minute
  * tachograms while the wearer is still. A window is irregular when its IBIs are
  * irregularly irregular (RrFeatures). An alert needs [required] irregular out of the last
  * [consider] analysed windows within [lookbackMs], and is followed by a [cooldownMs] quiet period.

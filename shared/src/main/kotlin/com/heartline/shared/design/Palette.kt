@@ -2,7 +2,7 @@ package com.heartline.shared.design
 
 /**
  * One UI-inspired colour tokens shared by the phone and watch themes (ARGB).
- * See docs/MASTER_PLAN.md §3.1.
+ * See docs/DESIGN.md.
  */
 object Palette {
     object Light {

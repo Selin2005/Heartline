@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 
-/** ECG_ON_DEMAND via the SDK (sample: sdk/official/1.4.1/sample-codes/ecg-monitor.html). */
+/** ECG_ON_DEMAND via the SDK. */
 class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
     override fun stream(): Flow<EcgChunk> = callbackFlow {
         gateway.connect()

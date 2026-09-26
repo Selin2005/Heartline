@@ -24,7 +24,7 @@ private fun style(size: Int, line: Int, weight: FontWeight, tracking: Double = 0
     letterSpacing = tracking.sp,
 )
 
-/** MASTER_PLAN §3.2 mapped onto Material slots. */
+/** The type scale from docs/DESIGN.md mapped onto Material slots. */
 val HeartlineTypography = Typography(
     displayLarge = style(56, 60, FontWeight.Light, -1.0),
     displayMedium = style(40, 48, FontWeight.SemiBold, -0.5),

@@ -2,7 +2,7 @@ package com.heartline.shared.report
 
 /**
  * Geometry of the printed ECG report: A4 landscape, three 10-second strips at 25 mm/s and
- * 10 mm/mV on 1 mm / 5 mm grid paper (MASTER_PLAN F5). Units are PDF points (1/72 in).
+ * 10 mm/mV on 1 mm / 5 mm grid paper. Units are PDF points (1/72 in).
  */
 object EcgStripLayout {
     const val PT_PER_MM = 72.0 / 25.4

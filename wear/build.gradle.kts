@@ -82,7 +82,7 @@ dependencies {
     implementation(libs.koin.androidx.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
-    // Samsung Health Sensor SDK v1.4.1 (copied from sdk/, see sdk/README.md).
+    // Samsung Health Sensor SDK v1.4.1 (see docs/SAMSUNG_HEALTH_SENSOR_SDK.md).
     implementation(files("libs/samsung-health-sensor-api.aar"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -102,7 +102,7 @@ dependencies {
     testImplementation(libs.remote.tooling.preview)
     testImplementation("androidx.glance.wear:wear-tooling-preview:1.0.0-alpha19")
     implementation(libs.wear.complications.data.source.ktx)
-    // Navigation stays on 2.9.x; compileSdk 37 now allows newer versions (MASTER_PLAN R6).
+    // Navigation stays on 2.9.x; compileSdk 37 now allows newer versions.
     implementation(libs.androidx.navigation.compose)
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)

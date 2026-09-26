@@ -9,7 +9,7 @@ import com.heartline.shared.sync.Protocol
 import java.io.File
 import java.time.Instant
 
-/** Exports every record as one CSV (MASTER_PLAN F19); waveforms stay in the PDF reports. */
+/** Exports every record as one CSV; waveforms stay in the PDF reports. */
 object CsvFormat {
     const val HEADER = "timestamp_utc,type,value,unit,details"
 
