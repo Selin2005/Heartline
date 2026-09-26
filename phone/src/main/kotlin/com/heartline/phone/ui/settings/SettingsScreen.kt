@@ -14,6 +14,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.rounded.Alarm
 import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.Celebration
+import androidx.compose.material.icons.rounded.Face
 import com.heartline.phone.qs.QuickTilePrefs
 import com.heartline.phone.widget.title
 import com.heartline.shared.model.Metric
@@ -80,6 +82,9 @@ sealed interface SettingChange {
     data class Haptics(val on: Boolean) : SettingChange
     data class LiveWave(val on: Boolean) : SettingChange
     data class Fahrenheit(val on: Boolean) : SettingChange
+    data class NameOnWatch(val on: Boolean) : SettingChange
+    data class NameOnWidgets(val on: Boolean) : SettingChange
+    data class Celebrations(val on: Boolean) : SettingChange
 
     fun applyTo(s: MonitorSettings): MonitorSettings = when (this) {
         is IrregularRhythm -> s.copy(irregularRhythmEnabled = on)
@@ -94,6 +99,9 @@ sealed interface SettingChange {
         is Haptics -> s.copy(haptics = on)
         is LiveWave -> s.copy(liveWave = on)
         is Fahrenheit -> s.copy(temperatureFahrenheit = on)
+        is NameOnWatch -> s.copy(showNameOnWatch = on)
+        is NameOnWidgets -> s.copy(showNameOnWidgets = on)
+        is Celebrations -> s.copy(celebrations = on)
     }
 }
 
@@ -232,6 +240,32 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.settings_live_wave_summary),
                     leading = { IconBadge(Icons.Rounded.ShowChart, colors.ecg) },
                     trailing = { OneUiSwitch(monitor.liveWave) { onChange(SettingChange.LiveWave(it)) } },
+                )
+            }
+        }
+
+        item { SectionHeader(stringResource(R.string.settings_personal)) }
+        item {
+            RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
+                CardRow(
+                    stringResource(R.string.settings_name_on_watch),
+                    subtitle = stringResource(R.string.settings_name_on_watch_summary),
+                    leading = { IconBadge(Icons.Rounded.Face, colors.primary) },
+                    trailing = { OneUiSwitch(monitor.showNameOnWatch) { onChange(SettingChange.NameOnWatch(it)) } },
+                    showDivider = true,
+                )
+                CardRow(
+                    stringResource(R.string.settings_name_on_widgets),
+                    subtitle = stringResource(R.string.settings_name_on_widgets_summary),
+                    leading = { Spacer(Modifier.size(40.dp)) },
+                    trailing = { OneUiSwitch(monitor.showNameOnWidgets) { onChange(SettingChange.NameOnWidgets(it)) } },
+                    showDivider = true,
+                )
+                CardRow(
+                    stringResource(R.string.settings_celebrations),
+                    subtitle = stringResource(R.string.settings_celebrations_summary),
+                    leading = { IconBadge(Icons.Rounded.Celebration, colors.body) },
+                    trailing = { OneUiSwitch(monitor.celebrations) { onChange(SettingChange.Celebrations(it)) } },
                 )
             }
         }

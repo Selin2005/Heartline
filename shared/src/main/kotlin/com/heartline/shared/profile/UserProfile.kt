@@ -77,6 +77,13 @@ data class UserProfile(
     /** The name the app greets the user with. */
     val displayName: String get() = preferredName.trim().ifEmpty { firstName.trim() }
 
+    /** True on the user's birthday (29 February birthdays fall on 28 February in other years). */
+    fun isBirthday(today: LocalDate = LocalDate.now()): Boolean {
+        val born = birthLocalDate ?: return false
+        val day = if (born.monthValue == 2 && born.dayOfMonth == 29 && !today.isLeapYear) 28 else born.dayOfMonth
+        return today.monthValue == born.monthValue && today.dayOfMonth == day
+    }
+
     val fullName: String get() = listOf(firstName.trim(), lastName.trim()).filter { it.isNotEmpty() }.joinToString(" ")
 
     /** The name printed on reports and exports for the user's choice; null for "no name". */

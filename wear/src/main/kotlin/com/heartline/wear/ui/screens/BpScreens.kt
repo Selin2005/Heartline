@@ -29,6 +29,8 @@ import com.heartline.shared.bp.BpSafety
 import com.heartline.shared.design.Palette
 import com.heartline.shared.model.Metric
 import com.heartline.wear.R
+import com.heartline.wear.ui.components.GoodResult
+import com.heartline.wear.ui.components.PersonalNote
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
@@ -133,6 +135,7 @@ fun BpResultScreen(
             modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(50)).background(category.color).padding(horizontal = 10.dp, vertical = 3.dp),
         )
         Body(stringResource(R.string.bp_pulse, pulse))
+        if (category == BpCategory.NORMAL && !needsConfirming) PersonalNote(GoodResult.BLOOD_PRESSURE)
         when (safety) {
             BpSafety.VERY_HIGH -> Note(stringResource(R.string.bp_safety_high), WearColors.warn)
             BpSafety.LOW -> Note(stringResource(R.string.bp_safety_low), WearColors.warn)

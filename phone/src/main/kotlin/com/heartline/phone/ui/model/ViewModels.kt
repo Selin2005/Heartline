@@ -85,8 +85,11 @@ class HomeViewModel(
     settings: SettingsRepository,
     bp: BpRepository,
     formatter: RecordFormatter,
+    profiles: com.heartline.phone.data.ProfileRepository? = null,
     private val now: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
+    private val profile = profiles?.profile ?: kotlinx.coroutines.flow.flowOf(null)
+
     private val others = combine(
         repository.observe(RecordKind.SPO2),
         repository.observe(RecordKind.SKIN_TEMPERATURE),
@@ -132,6 +135,13 @@ class HomeViewModel(
             latestEcg = latest?.let { formatter.ecg(it, repository.displayWave(it)) },
             tiles = tiles,
             irregularRhythmNotifications = monitor.irregularRhythmEnabled,
+        )
+    }.combine(profile) { home, p ->
+        val local = java.time.Instant.ofEpochMilli(now()).atZone(java.time.ZoneId.systemDefault())
+        home.copy(
+            name = p?.displayName?.takeIf { it.isNotBlank() },
+            dayPart = com.heartline.shared.profile.DayPart.of(local.hour),
+            birthday = p?.isBirthday(local.toLocalDate()) == true,
         )
     }.stateIn(viewModelScope, WHILE_SUBSCRIBED, HomeState())
 }

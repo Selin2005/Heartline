@@ -15,6 +15,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -30,6 +31,8 @@ class WidgetUpdater(
     private val records: RecordRepository,
     private val heart: HeartRepository,
     private val bp: BpRepository,
+    private val profiles: com.heartline.phone.data.ProfileRepository? = null,
+    private val settings: com.heartline.phone.data.SettingsRepository? = null,
 ) {
     @OptIn(FlowPreview::class)
     fun start(scope: CoroutineScope) {
@@ -44,7 +47,9 @@ class WidgetUpdater(
             ) { a, b, c, d, e -> listOf(a.size, b.size, c.size, d.size, e.size) },
             heart.latestMinute,
             bp.calibration,
-        ) { ecg, others, minute, calibration -> listOf(ecg.firstOrNull()?.entity?.id, others, minute?.minuteStartMs, calibration?.id) }
+            // The name on widgets follows the profile and the "show my name" setting.
+            combine(profiles?.profile ?: flowOf(null), settings?.monitor ?: flowOf(null)) { p, s -> p?.displayName to s?.showNameOnWidgets },
+        ) { ecg, others, minute, calibration, name -> listOf(ecg.firstOrNull()?.entity?.id, others, minute?.minuteStartMs, calibration?.id, name) }
             .drop(1)
             .debounce(1_500)
             .onEach { updateAll() }

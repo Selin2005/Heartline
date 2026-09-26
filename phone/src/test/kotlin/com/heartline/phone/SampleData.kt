@@ -147,6 +147,7 @@ object SampleData {
     )
 
     val home get() = HomeState(
+        name = "Sara",
         watchName = "Galaxy Watch8 Classic",
         latestEcg = ecgRecords.first(),
         tiles = mapOf(

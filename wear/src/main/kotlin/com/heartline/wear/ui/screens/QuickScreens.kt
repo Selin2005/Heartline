@@ -33,6 +33,8 @@ import com.heartline.shared.model.RecordSummary
 import com.heartline.shared.profile.StressIndex
 import com.heartline.shared.profile.StressLevel
 import com.heartline.wear.R
+import com.heartline.wear.ui.components.GoodResult
+import com.heartline.wear.ui.components.PersonalNote
 import kotlin.math.roundToInt
 import com.heartline.wear.ui.components.BeatingHeart
 import com.heartline.wear.ui.components.BreathingCircle
@@ -160,6 +162,7 @@ fun QuickResultScreen(metric: Metric, summary: RecordSummary, onDone: () -> Unit
             is RecordSummary.Spo2 -> {
                 BigValue("${summary.percent}", "%")
                 summary.heartRate?.let { Detail(stringResource(R.string.bp_pulse, it)) }
+                if (summary.percent >= 95 && !summary.lowConfidence) PersonalNote(GoodResult.SPO2)
             }
             is RecordSummary.SkinTemperature -> {
                 BigValue("%.1f".format(summary.skinCelsius), "°C")
@@ -178,6 +181,7 @@ fun QuickResultScreen(metric: Metric, summary: RecordSummary, onDone: () -> Unit
                 )
                 StressBar(summary.score, Modifier.fillMaxWidth(0.8f).padding(top = 6.dp).height(10.dp))
                 summary.rmssdMs?.let { Detail(stringResource(R.string.stress_hrv, it.toInt())) }
+                if (level == StressLevel.LOW) PersonalNote(GoodResult.CALM)
             }
             else -> Unit
         }

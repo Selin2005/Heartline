@@ -45,6 +45,8 @@ import com.heartline.shared.model.EcgPoorReason
 import com.heartline.shared.model.EcgResult
 import com.heartline.shared.model.Severity
 import com.heartline.wear.R
+import com.heartline.wear.ui.components.GoodResult
+import com.heartline.wear.ui.components.PersonalNote
 import com.heartline.wear.ui.components.ActionScreen
 import com.heartline.wear.ui.components.EcgKeyIllustration
 import com.heartline.wear.ui.components.LiveWave
@@ -224,6 +226,7 @@ fun EcgResultScreen(result: EcgResult, averageBpm: Int?, metrics: EcgMetrics? = 
         if (averageBpm != null) {
             Text(stringResource(R.string.ecg_bpm_value, averageBpm), style = MaterialTheme.typography.bodyLarge, color = WearColors.onSurfaceVariant)
         }
+        if (result.severity == Severity.NORMAL) PersonalNote(GoodResult.ECG)
         metrics?.poorReason?.takeIf { it != EcgPoorReason.NONE }?.let { reason ->
             Text(
                 stringResource(reason.hint),

@@ -1,6 +1,8 @@
 package com.heartline.wear.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import com.heartline.wear.ui.components.LocalUserName
 import androidx.compose.runtime.LaunchedEffect
 import android.content.Intent
 import android.net.Uri
@@ -59,21 +61,27 @@ import com.heartline.wear.monitor.BackgroundMonitoring
 import com.heartline.wear.monitor.WatchSettingsStore
 import kotlinx.coroutines.launch
 import com.heartline.wear.ui.screens.LauncherScreen
+import com.heartline.wear.ui.screens.MetricOptionsScreen
 import com.heartline.wear.ui.screens.SensorErrorScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.androidx.compose.koinViewModel
 import com.heartline.wear.ui.theme.HeartlineWearTheme
 
 object WearSample {
+    /** Fixed "now" for screenshots, so "2 h ago" labels never change. */
+    const val NOW_MS = 1_790_000_000_000L
+    private const val MIN = 60_000L
+
     val launcher = listOf(
-        LauncherEntry(Metric.ECG, "Sinus rhythm"),
-        LauncherEntry(Metric.BLOOD_PRESSURE, "118/76"),
-        LauncherEntry(Metric.HEART_RATE, "64 bpm"),
-        LauncherEntry(Metric.SPO2, "97%"),
-        LauncherEntry(Metric.SKIN_TEMPERATURE, "+0.3 °C"),
-        LauncherEntry(Metric.BODY_COMPOSITION, "21.4%"),
-        LauncherEntry(Metric.STRESS, "Low"),
+        LauncherEntry(Metric.ECG, "68 bpm", NOW_MS - 2 * 60 * MIN, com.heartline.shared.model.Severity.NORMAL, pinned = true),
+        LauncherEntry(Metric.BLOOD_PRESSURE, "118/76", NOW_MS - 25 * MIN, com.heartline.shared.model.Severity.NORMAL),
+        LauncherEntry(Metric.HEART_RATE, "64 bpm", NOW_MS - 3 * MIN),
+        LauncherEntry(Metric.SPO2, "97%", NOW_MS - 26 * 60 * MIN, com.heartline.shared.model.Severity.NORMAL),
+        LauncherEntry(Metric.SKIN_TEMPERATURE, "33.9 °C", NOW_MS - 3 * 24 * 60 * MIN),
+        LauncherEntry(Metric.BODY_COMPOSITION, "21.4%", NOW_MS - 5 * 24 * 60 * MIN),
+        LauncherEntry(Metric.STRESS, "38/100", NOW_MS - 4 * 60 * MIN, com.heartline.shared.model.Severity.WARN),
     )
+    val launcherHeader = com.heartline.wear.ui.LauncherHeader(com.heartline.shared.profile.DayPart.MORNING, "Sara", done = 1, total = 3, next = Metric.BLOOD_PRESSURE)
     val liveEcg: FloatArray by lazy { SyntheticEcg.generate(durationSec = 3.0, heartRateBpm = 72.0) }
     val livePpg: FloatArray by lazy { com.heartline.shared.sample.SyntheticPpg.generate(3.0, 68.0, 0.5) }
 }
@@ -89,8 +97,18 @@ private object Routes {
     const val SETTINGS = "settings"
     const val DEV_MODE = "dev_mode"
     const val DIAGNOSTICS = "diagnostics"
+    const val OPTIONS = "options/{metric}"
+
+    fun options(metric: Metric) = "options/${metric.name}"
 
     fun quick(metric: Metric) = "quick/${metric.name}"
+
+    fun measure(metric: Metric) = when (metric) {
+        Metric.ECG -> ECG
+        Metric.HEART_RATE -> HEART_RATE
+        Metric.BLOOD_PRESSURE -> BLOOD_PRESSURE
+        else -> quick(metric)
+    }
 
     /** Screens the phone, notifications, tiles and complications may open. */
     fun isExternal(route: String) = route in setOf(ECG, HEART_RATE, BLOOD_PRESSURE, BP_CALIBRATION, HISTORY) ||
@@ -170,7 +188,13 @@ fun HeartlineWearApp(startRoute: String? = null) {
         if (granted && !BackgroundMonitoring.hasBackgroundPermission(context)) background.launch(BackgroundMonitoring.backgroundPermission)
     }
 
+    val profiles: com.heartline.wear.quick.WatchProfileStore = koinInject()
+    val profile by profiles.profile.collectAsStateWithLifecycle()
+    val monitor by settingsStore.settings.collectAsStateWithLifecycle()
+    val userName = profile?.displayName?.takeIf { monitor.showNameOnWatch && it.isNotBlank() }
+
     HeartlineWearTheme {
+        CompositionLocalProvider(LocalUserName provides userName) {
         AppScaffold(timeText = { TimeText() }) {
             when (val g = gateState) {
                 GateState.CheckingPhone -> CheckingScreen(
@@ -217,6 +241,7 @@ fun HeartlineWearApp(startRoute: String? = null) {
                 is GateState.Ready -> AppNavHost(nav, gate)
             }
         }
+        }
     }
 }
 
@@ -233,14 +258,9 @@ private fun AppNavHost(nav: NavHostController, gate: SetupGateViewModel) {
                 is LauncherState.Ready ->
                     LauncherScreen(
                         state.entries,
-                        onOpen = {
-                            when (it) {
-                                Metric.ECG -> nav.navigate(Routes.ECG)
-                                Metric.HEART_RATE -> nav.navigate(Routes.HEART_RATE)
-                                Metric.BLOOD_PRESSURE -> nav.navigate(Routes.BLOOD_PRESSURE)
-                                else -> nav.navigate(Routes.quick(it))
-                            }
-                        },
+                        header = state.header,
+                        onOpen = { nav.navigate(Routes.measure(it)) },
+                        onOptions = { nav.navigate(Routes.options(it)) },
                         onHistory = { nav.navigate(Routes.HISTORY) },
                         onSettings = { nav.navigate(Routes.SETTINGS) },
                     )
@@ -258,6 +278,26 @@ private fun AppNavHost(nav: NavHostController, gate: SetupGateViewModel) {
         composable(Routes.QUICK) { entry ->
             val metric = Metric.valueOf(entry.arguments?.getString("metric") ?: Metric.SPO2.name)
             QuickFlow(metric, onExit = exit)
+        }
+        composable(Routes.OPTIONS) { entry ->
+            val metric = Metric.valueOf(entry.arguments?.getString("metric") ?: Metric.ECG.name)
+            val pinned = (launcherState as? LauncherState.Ready)?.entries?.firstOrNull { it.metric == metric }?.pinned == true
+            MetricOptionsScreen(
+                metric,
+                pinned,
+                onPin = {
+                    launcher.togglePin(metric)
+                    nav.popBackStack()
+                },
+                onMeasure = {
+                    nav.popBackStack()
+                    nav.navigate(Routes.measure(metric))
+                },
+                onHistory = {
+                    nav.popBackStack()
+                    nav.navigate(Routes.HISTORY)
+                },
+            )
         }
         composable(Routes.SETTINGS) {
             val vm: WatchSettingsViewModel = koinViewModel()

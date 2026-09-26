@@ -117,7 +117,7 @@ val phoneModule = module {
             ctx.getString(R.string.bp_needs_calibration),
         )
     }
-    viewModel { HomeViewModel(get(), get(), get(), get(), get()) }
+    viewModel { HomeViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { EcgListViewModel(get(), get()) }
     single { EcgReportBuilder(androidContext()) }
     viewModel { params -> EcgDetailViewModel(params.get(), get(), get(), get()) }
@@ -133,7 +133,7 @@ val phoneModule = module {
     viewModel { com.heartline.phone.ui.share.ShareViewModel(get(), get()) }
     viewModel { OnboardingViewModel(get()) }
     single { DataExporter(androidContext()) }
-    single { com.heartline.phone.widget.WidgetDataSource(get(), get(), get(), { get() }) }
-    single { com.heartline.phone.widget.WidgetUpdater(androidContext(), get(), get(), get()) }
+    single { com.heartline.phone.widget.WidgetDataSource(get(), get(), get(), { get() }, profiles = get(), settings = get()) }
+    single { com.heartline.phone.widget.WidgetUpdater(androidContext(), get(), get(), get(), get(), get()) }
     viewModel { AlertsViewModel(get(), get()) }
 }

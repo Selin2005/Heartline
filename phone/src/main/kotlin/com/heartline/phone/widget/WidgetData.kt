@@ -157,6 +157,8 @@ class WidgetDataSource(
     private val formatter: () -> RecordFormatter,
     private val now: () -> Long = System::currentTimeMillis,
     private val zone: () -> ZoneId = ZoneId::systemDefault,
+    private val profiles: com.heartline.phone.data.ProfileRepository? = null,
+    private val settings: com.heartline.phone.data.SettingsRepository? = null,
 ) {
     suspend fun load(): WidgetSnapshot {
         val nowMs = now()
@@ -178,7 +180,13 @@ class WidgetDataSource(
             formatter(),
             nowMs,
             zone(),
-        )
+        ).copy(name = widgetName())
+    }
+
+    /** The user's name, only when they chose to show it on widgets. */
+    private suspend fun widgetName(): String? {
+        if (settings?.current()?.showNameOnWidgets != true) return null
+        return profiles?.profile?.first()?.displayName?.takeIf { it.isNotBlank() }
     }
 
     /** Minute of the day now, for [WidgetSnapshot.HeartRate.recent]. */

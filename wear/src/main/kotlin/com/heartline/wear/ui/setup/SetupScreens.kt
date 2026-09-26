@@ -145,7 +145,8 @@ fun SetupIncompleteScreen(name: String?, onOpenOnPhone: () -> Unit = {}, opened:
     InfoScreen(
         icon = Icons.Rounded.PersonOutline,
         tint = WearColors.primary,
-        title = stringResource(R.string.setup_incomplete_title),
+        // Greets by name once the phone has sent one (the profile is started but not finished).
+        title = name?.let { stringResource(R.string.setup_incomplete_title_named, it) } ?: stringResource(R.string.setup_incomplete_title),
         body = stringResource(R.string.setup_incomplete_body),
         action = stringResource(R.string.action_open_on_phone),
         onAction = onOpenOnPhone,

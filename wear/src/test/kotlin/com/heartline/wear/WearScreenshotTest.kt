@@ -84,7 +84,13 @@ class WearScreenshotTest(private val size: String) {
         }
     }
 
-    @Test fun launcher() = shot("launcher") { LauncherScreen(WearSample.launcher) }
+    @Test fun launcher() = shot("launcher") { LauncherScreen(WearSample.launcher, WearSample.launcherHeader, nowMs = WearSample.NOW_MS) }
+
+    @Test fun launcherBirthday() = shot("launcher_birthday") {
+        LauncherScreen(WearSample.launcher, WearSample.launcherHeader.copy(birthday = true, done = 3, next = null), nowMs = WearSample.NOW_MS)
+    }
+
+    @Test fun metricOptions() = shot("launcher_options") { com.heartline.wear.ui.screens.MetricOptionsScreen(Metric.ECG, pinned = true, onPin = {}, onMeasure = {}, onHistory = {}) }
 
     @Test fun ecgInstruction() = shot("ecg_instruction") { EcgInstructionScreen(animate = false) }
 

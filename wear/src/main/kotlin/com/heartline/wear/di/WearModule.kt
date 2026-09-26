@@ -144,7 +144,8 @@ val wearModule = module {
     single<PpgSource> {
         if (BuildConfig.USE_FAKE_SENSORS) FakePpgSource() else SdkPpgSource(get<SensorGateway>() as SdkSensorGateway)
     }
-    viewModel { LauncherViewModel(get(), get()) }
+    single { com.heartline.wear.ui.LauncherPrefs(androidContext()) }
+    viewModel { LauncherViewModel(get(), get(), get(), get(), get()) }
     viewModel {
         val context = androidContext()
         SetupGateViewModel(get(), get(), get(), get()) {

@@ -32,4 +32,8 @@ data class HomeState(
     val latestEcg: EcgRecordUi? = null,
     val tiles: Map<Metric, TileValue> = emptyMap(),
     val irregularRhythmNotifications: Boolean = true,
+    /** Greeting on top of Home: the user's name (when set) and the part of the day. */
+    val name: String? = null,
+    val dayPart: com.heartline.shared.profile.DayPart = com.heartline.shared.profile.DayPart.MORNING,
+    val birthday: Boolean = false,
 )

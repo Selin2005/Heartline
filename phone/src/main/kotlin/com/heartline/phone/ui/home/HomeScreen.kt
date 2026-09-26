@@ -57,7 +57,7 @@ fun HomeScreen(
         else -> null
     }
     ReachabilityScaffold(
-        title = stringResource(R.string.app_name),
+        title = homeGreeting(state),
         subtitle = connectedName?.let { stringResource(R.string.home_watch_connected, it) },
         listState = listState,
     ) {
@@ -208,4 +208,20 @@ fun MetricCard(
         Spacer(Modifier.height(if (compact) 8.dp else 14.dp))
         content()
     }
+}
+
+/** "Good evening, Sara" (or just "Good evening" before a name is set); "Happy birthday, Sara!" on the day. */
+@Composable
+private fun homeGreeting(state: HomeState): String {
+    val name = state.name
+    if (state.birthday && name != null) return stringResource(R.string.home_greeting_birthday, name)
+    val part = stringResource(
+        when (state.dayPart) {
+            com.heartline.shared.profile.DayPart.MORNING -> R.string.home_greeting_morning
+            com.heartline.shared.profile.DayPart.AFTERNOON -> R.string.home_greeting_afternoon
+            com.heartline.shared.profile.DayPart.EVENING -> R.string.home_greeting_evening
+            com.heartline.shared.profile.DayPart.NIGHT -> R.string.home_greeting_night
+        },
+    )
+    return if (name == null) part else stringResource(R.string.home_greeting_named, part, name)
 }
