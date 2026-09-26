@@ -96,6 +96,7 @@ object PhoneRoutes {
     val PROFILE = SetupTarget.PROFILE.phoneRoute
     val BP_CALIBRATION = SetupTarget.BP_CALIBRATION.phoneRoute
     val DEV_MODE_HELP = SetupTarget.DEV_MODE_HELP.phoneRoute
+    const val SETTINGS = "settings"
 }
 
 /** Watch navigation routes the phone can open (heartline://watch/<route>). Must match the watch's nav graph. */

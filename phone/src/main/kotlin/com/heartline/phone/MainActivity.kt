@@ -4,6 +4,8 @@ import android.Manifest
 import android.os.Build
 import android.content.Intent
 import android.os.Bundle
+import android.service.quicksettings.TileService
+import com.heartline.phone.link.PhoneRoutes
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.heartline.datalayer.DeepLinks
@@ -29,13 +31,17 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        DeepLinks.route(intent.data, DeepLinks.PHONE_HOST)?.let { deepLink = it }
+        linkOf(intent)?.let { deepLink = it }
     }
+
+    /** A heartline:// link, or the settings for a long-pressed Quick Settings tile. */
+    private fun linkOf(intent: Intent?): String? =
+        if (intent?.action == TileService.ACTION_QS_TILE_PREFERENCES) PhoneRoutes.SETTINGS else DeepLinks.route(intent?.data, DeepLinks.PHONE_HOST)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (savedInstanceState == null) deepLink = DeepLinks.route(intent?.data, DeepLinks.PHONE_HOST)
+        if (savedInstanceState == null) deepLink = linkOf(intent)
         val openAlerts = intent?.getBooleanExtra(PhoneNotifier.EXTRA_OPEN_ALERTS, false) == true
         setContent {
             HeartlineTheme {

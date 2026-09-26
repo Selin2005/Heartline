@@ -577,6 +577,17 @@
     <string name="widget_desc_metric_tile_slim">One reading of your choice in one row</string>
     <string name="widget_name_measure">Measure button</string>
     <string name="widget_desc_measure">One tap starts a measurement of your choice on your watch</string>
+    <string name="qs_name_ecg">ECG</string>
+    <string name="qs_name_bp">Blood pressure</string>
+    <string name="qs_name_measure">Measure</string>
+    <string name="qs_measure_description">Measure %1$s on your watch</string>
+    <string name="qs_tap_to_measure">Tap to measure</string>
+    <string name="settings_quick_tiles">Quick Settings tiles</string>
+    <string name="settings_quick_tiles_text">Start a measurement on your watch from the notification panel</string>
+    <string name="settings_quick_tiles_add">Add</string>
+    <string name="settings_quick_tiles_added">Added to Quick Settings</string>
+    <string name="settings_quick_tiles_manual">Swipe down twice, tap the pencil and drag a Heartline tile into place</string>
+    <string name="settings_quick_tile_measure">The Measure tile starts</string>
     <string name="widget_theme_wallpaper">Wallpaper colours</string>
     <string name="widget_style_metric">Show</string>
     <string name="widget_style_measure_metric">Measure</string>

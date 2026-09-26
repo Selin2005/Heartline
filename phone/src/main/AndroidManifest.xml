@@ -40,6 +40,10 @@
                     android:host="phone"
                     android:scheme="heartline" />
             </intent-filter>
+            <!-- Long-press on a Heartline Quick Settings tile opens its settings. -->
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+            </intent-filter>
         </activity>
 
         <provider
@@ -197,5 +201,54 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_measure_info" />
         </receiver>
+        <!-- Quick Settings tiles: one tap starts a measurement on the watch. -->
+        <service
+            android:name=".qs.EcgQsTile"
+            android:exported="true"
+            android:icon="@drawable/ic_metric_ecg"
+            android:label="@string/qs_name_ecg"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="false" />
+        </service>
+        <service
+            android:name=".qs.BpQsTile"
+            android:exported="true"
+            android:icon="@drawable/ic_metric_bp"
+            android:label="@string/qs_name_bp"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="false" />
+        </service>
+        <service
+            android:name=".qs.MeasureQsTile"
+            android:exported="true"
+            android:icon="@drawable/ic_metric_spo2"
+            android:label="@string/qs_name_measure"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="false" />
+        </service>
     </application>
 </manifest>

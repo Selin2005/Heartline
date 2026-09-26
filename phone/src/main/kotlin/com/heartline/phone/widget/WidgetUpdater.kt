@@ -63,6 +63,7 @@ class WidgetUpdater(
             HeartDayWidget().updateAll(context)
             MetricTileWidget().updateAll(context)
             MeasureButtonWidget().updateAll(context)
+            com.heartline.phone.qs.HeartlineQsTile.refreshAll(context)
         }.onFailure { Log.w(HeartlineWidget.TAG, "widget update failed", it) }
     }
 

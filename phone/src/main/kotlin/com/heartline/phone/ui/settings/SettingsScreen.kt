@@ -13,6 +13,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.rounded.Alarm
+import androidx.compose.material.icons.rounded.Dashboard
+import com.heartline.phone.qs.QuickTilePrefs
+import com.heartline.phone.widget.title
+import com.heartline.shared.model.Metric
 import androidx.compose.material.icons.rounded.Badge
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.PictureAsPdf
@@ -100,6 +104,7 @@ private sealed interface Picker {
     data object Time : Picker
     data object Temperature : Picker
     data object Name : Picker
+    data object QuickTile : Picker
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -119,6 +124,9 @@ fun SettingsScreen(
     onAiPrompt: (String?) -> Unit = {},
     onAiAttachPdf: (Boolean) -> Unit = {},
     onReportName: (ReportName) -> Unit = {},
+    quickTileMetric: Metric = Metric.SPO2,
+    onQuickTileMetric: (Metric) -> Unit = {},
+    onAddQuickTiles: () -> Unit = {},
 ) {
     var editingPrompt by remember { mutableStateOf(false) }
     val colors = HeartlineTheme.colors
@@ -224,6 +232,27 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.settings_live_wave_summary),
                     leading = { IconBadge(Icons.Rounded.ShowChart, colors.ecg) },
                     trailing = { OneUiSwitch(monitor.liveWave) { onChange(SettingChange.LiveWave(it)) } },
+                )
+            }
+        }
+
+        item { SectionHeader(stringResource(R.string.settings_quick_tiles)) }
+        item {
+            RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
+                CardRow(
+                    stringResource(R.string.settings_quick_tiles),
+                    subtitle = stringResource(R.string.settings_quick_tiles_text),
+                    leading = { IconBadge(Icons.Rounded.Dashboard, colors.primary) },
+                    trailing = {
+                        TextButton(onClick = onAddQuickTiles) { Text(stringResource(R.string.settings_quick_tiles_add)) }
+                    },
+                    showDivider = true,
+                )
+                CardRow(
+                    stringResource(R.string.settings_quick_tile_measure),
+                    subtitle = stringResource(quickTileMetric.title),
+                    leading = { Spacer(Modifier.size(40.dp)) },
+                    onClick = { picker = Picker.QuickTile },
                 )
             }
         }
@@ -347,6 +376,12 @@ fun SettingsScreen(
             monitor.temperatureFahrenheit,
             onDismiss = { picker = null },
         ) { onChange(SettingChange.Fahrenheit(it)) }
+        Picker.QuickTile -> ChoiceDialog(
+            stringResource(R.string.settings_quick_tile_measure),
+            QuickTilePrefs.choices.map { stringResource(it.title) to it },
+            quickTileMetric,
+            onDismiss = { picker = null },
+        ) { onQuickTileMetric(it) }
         Picker.Name -> ChoiceDialog(
             stringResource(R.string.settings_report_name),
             ReportName.entries.map { stringResource(it.label) to it },

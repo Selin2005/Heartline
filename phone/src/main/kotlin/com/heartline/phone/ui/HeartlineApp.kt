@@ -63,6 +63,12 @@ import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import com.heartline.phone.ui.components.LocalOpenAppHome
 import com.heartline.shared.nav.EntryLinks
+import com.heartline.phone.qs.BpQsTile
+import com.heartline.phone.qs.EcgQsTile
+import com.heartline.phone.qs.HeartlineQsTile
+import com.heartline.phone.qs.QuickTilePrefs
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -132,12 +138,13 @@ fun HeartlineApp(
             PhoneRoutes.PROFILE -> Routes.PROFILE
             PhoneRoutes.BP_CALIBRATION -> Routes.BP_CALIBRATION
             PhoneRoutes.DEV_MODE_HELP -> Routes.DEV_MODE_HELP
+            PhoneRoutes.SETTINGS -> Routes.SETTINGS
             // Home-screen widgets open their metric.
             Routes.HEART_RATE, Routes.ECG, Routes.BLOOD_PRESSURE -> link.route
             else -> link.route.takeIf { it.startsWith("metric/") && Metric.entries.any { m -> it == Routes.metric(m) } } ?: Routes.HOME
         }
         when {
-            target == Routes.HOME -> navController.navigateTab(Routes.HOME)
+            target == Routes.HOME || target == Routes.SETTINGS -> navController.navigateTab(target)
             // From a widget, Quick Settings or a notification the screen stands alone: Back returns
             // to wherever the user was (the home screen), not to the app's home.
             link.external -> navController.navigate(target) {
@@ -228,6 +235,8 @@ fun HeartlineApp(
                         linkVm.refresh()
                         onPauseOrDispose {}
                     }
+                    val scope = rememberCoroutineScope()
+                    val quickTileMetric by remember { QuickTilePrefs.metric(context) }.collectAsStateWithLifecycle(Metric.SPO2)
                     SettingsScreen(
                         monitor,
                         versionName = BuildConfig.VERSION_NAME,
@@ -251,6 +260,14 @@ fun HeartlineApp(
                         onAiPrompt = vm::setAiPrompt,
                         onAiAttachPdf = vm::setAiAttachPdf,
                         onReportName = vm::setReportName,
+                        quickTileMetric = quickTileMetric,
+                        onQuickTileMetric = { m -> scope.launch { QuickTilePrefs.setMetric(context, m) } },
+                        onAddQuickTiles = {
+                            val asked = addQuickTiles(context, HeartlineQsTile.ALL) { added ->
+                                if (added) scope.launch { snackbar.showSnackbar(context.getString(R.string.settings_quick_tiles_added)) }
+                            }
+                            if (!asked) scope.launch { snackbar.showSnackbar(context.getString(R.string.settings_quick_tiles_manual)) }
+                        },
                     )
                 }
                 composable(Routes.ECG) {
@@ -394,6 +411,20 @@ fun HeartlineApp(
             }
             }
         }
+    }
+}
+
+/** Offers each Quick Settings tile in turn (the system shows one dialog at a time). False when the phone can't ask. */
+private fun addQuickTiles(context: android.content.Context, tiles: List<Class<out HeartlineQsTile>>, onResult: (Boolean) -> Unit): Boolean {
+    val tile = tiles.firstOrNull() ?: return true
+    val (label, icon) = when (tile) {
+        EcgQsTile::class.java -> R.string.qs_name_ecg to R.drawable.ic_metric_ecg
+        BpQsTile::class.java -> R.string.qs_name_bp to R.drawable.ic_metric_bp
+        else -> R.string.qs_name_measure to R.drawable.ic_metric_spo2
+    }
+    return HeartlineQsTile.requestAdd(context, tile, context.getString(label), icon) { added ->
+        onResult(added)
+        addQuickTiles(context, tiles.drop(1), onResult)
     }
 }
 
