@@ -10,12 +10,17 @@ name: Build
 on:
   workflow_dispatch:
     inputs:
+      branch:
+        description: "Branch to build (or a tag / commit SHA)"
+        required: true
+        default: main
+        type: string
       version:
         description: "Version (X.Y.Z). The channel adds -beta.N or -dev.N"
         required: true
         type: string
       channel:
-        description: "Who gets it: stable (everyone), beta (testers who opted in), dev (nobody, debug build)"
+        description: "Release type: stable = main release for everyone · beta = only users with 'Receive beta versions' on · dev = debug build, never offered"
         required: true
         default: beta
         type: choice
@@ -53,7 +58,7 @@ on:
         type: string
 
 concurrency:
-  group: build-${{ inputs.version }}-${{ inputs.channel }}
+  group: build-${{ inputs.branch || inputs.ref }}-${{ inputs.version }}-${{ inputs.channel }}
   cancel-in-progress: false
 
 permissions:
@@ -70,8 +75,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.branch || inputs.ref || github.ref }}
           fetch-depth: 0
+
+      - name: Build summary
+        env:
+          SOURCE: ${{ inputs.branch || inputs.ref || github.ref_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          echo "Building '$SOURCE' at $(git rev-parse --short HEAD) as $CHANNEL"
+          if [ "$CHANNEL" = stable ] && [ "$SOURCE" != "$DEFAULT_BRANCH" ] && [ "${SOURCE#v}" = "$SOURCE" ]; then
+            echo "::warning::A stable release is being built from '$SOURCE', not from $DEFAULT_BRANCH."
+          fi
+          {
+            echo "### Heartline build"
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Source | \`$SOURCE\` ($(git rev-parse --short HEAD)) |"
+            echo "| Channel | $CHANNEL |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Commit being built
         id: sha

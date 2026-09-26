@@ -37,6 +37,7 @@ GitHub → Actions → **Build** → Run workflow:
 
 | Field | Meaning |
 |---|---|
+| Branch | The branch to build (default `main`); a tag or commit SHA works too. Build stable releases from `main`; the workflow warns otherwise. |
 | Version | `X.Y.Z`, without suffix |
 | Channel | **beta**: `vX.Y.Z-beta.N` (N counts up by itself), a pre-release offered only to users with *Receive beta versions* on. **stable**: `vX.Y.Z`, the latest release, offered to everyone. **dev**: `vX.Y.Z-dev.<run>`, a debug build that the app never offers. |
 | Publish a GitHub release | Off: the APKs are only kept as run artifacts |
