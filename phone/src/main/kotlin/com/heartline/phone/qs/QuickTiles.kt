@@ -3,6 +3,7 @@
 
 package com.heartline.phone.qs
 
+import com.heartline.datalayer.diag.HLog
 import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.app.StatusBarManager
@@ -13,7 +14,6 @@ import android.graphics.drawable.Icon
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
-import android.util.Log
 import android.widget.Toast
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -96,7 +96,7 @@ abstract class HeartlineQsTile : TileService() {
                 it.updateTile()
             }
             val result = runCatching { KoinPlatform.getKoin().get<WatchOpener>().open(WidgetRoutes.watch(metric)) }.getOrDefault(OpenResult.NO_WATCH)
-            Log.i(TAG, "measure ${metric.name} from Quick Settings: $result")
+            HLog.i(TAG, "measure ${metric.name} from Quick Settings: $result")
             when (result) {
                 OpenResult.OPENED -> Toast.makeText(this@HeartlineQsTile, R.string.widget_opened_on_watch, Toast.LENGTH_SHORT).show()
                 OpenResult.NOTIFIED -> Toast.makeText(this@HeartlineQsTile, R.string.widget_check_watch, Toast.LENGTH_SHORT).show()

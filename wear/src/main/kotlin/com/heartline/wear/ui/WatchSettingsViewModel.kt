@@ -13,6 +13,8 @@ import com.heartline.wear.sensor.SensorGateway
 import com.heartline.wear.ui.screens.WatchSettingsUi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import com.heartline.datalayer.diag.HLog
+import com.heartline.shared.diag.DiagnosticsPolicy
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -36,6 +38,9 @@ class WatchSettingsViewModel(
             liveWave = s.liveWave,
             highBpm = s.highBpm,
             lowBpm = s.lowBpm,
+            diagnosticLogs = s.diagnosticLogs,
+            detailedLogs = DiagnosticsPolicy.detailed(s.diagnosticLogs, s.detailedLogsUntilMs, System.currentTimeMillis()),
+            logKb = HLog.sizeBytes() / 1024,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WatchSettingsUi(true, true, null, emptyList(), BuildConfig.VERSION_NAME))
 

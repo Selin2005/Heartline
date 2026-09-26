@@ -40,6 +40,13 @@ artifacts, even when no release is published. A debug phone build made with
 explored without a watch. Remove it with Settings → Delete all data.
 
 ## 3. Collect logs
+**From the app (everyone):** Settings → Help & diagnostics → **Export logs**. Pick a folder and
+the phone saves two files, `heartline-phone-….log` and `heartline-watch-….log` (it fetches the
+watch's log over the connection). Attach both to your bug report. For problems that happened
+earlier, *Keep diagnostic logs* must be on (it is by default in beta versions); *Detailed
+logging* adds raw sensor values for 24 hours.
+
+**With adb (developers):**
 ```bash
 tools/device/collect-logs.sh live      # start before testing, Ctrl+C when done
 tools/device/collect-logs.sh dump      # or dump afterwards

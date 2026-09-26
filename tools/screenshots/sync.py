@@ -88,7 +88,7 @@ PHONE = [
         ("body_composition_measures", "All measures"),
         ("body_composition_more", "Ranges and body type"),
     ]),
-    ("settings", "Settings, updates and sharing", "Settings, updates, what's new, sharing, help and about.", [
+    ("settings", "Settings, updates and sharing", "Settings, updates, what's new, diagnostics, sharing, help and about.", [
         ("settings", "Settings"),
         ("settings_monitoring", "Background monitoring"),
         ("settings_sharing", "Sharing"),
@@ -97,6 +97,9 @@ PHONE = [
         ("whats_new", "What's new after an update"),
         ("share_sheet", "Share a result, with AI apps"),
         ("share_sheet_no_ai", "Share a result, no AI apps installed"),
+        ("diagnostics", "Help & diagnostics: export the phone's and watch's logs"),
+        ("diagnostics_saved", "Logs saved as two files"),
+        ("diagnostics_question", "Asked once (stable users): keep diagnostic logs?"),
         ("dev_mode_help", "Help: turning on developer mode on the watch"),
         ("about", "About"),
         ("legal", "Terms of Use"),

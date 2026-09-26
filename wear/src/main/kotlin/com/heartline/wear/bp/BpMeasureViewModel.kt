@@ -3,7 +3,7 @@
 
 package com.heartline.wear.bp
 
-import android.util.Log
+import com.heartline.datalayer.diag.HLog
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.heartline.shared.bp.BpCategory
@@ -156,13 +156,13 @@ class BpMeasureViewModel(
                 return@launch
             }
             if (movement != null && movement > MotionMeter.MAX_STILL) {
-                Log.i(TAG, "BP: moved during recording (${"%.2f".format(movement)} m/s²)")
+                HLog.i(TAG, "BP: moved during recording (${"%.2f".format(movement)} m/s²)")
                 mutable.value = BpState.Moving
                 return@launch
             }
             val recording = buffer.copyOf(collected)
             val features = withContext(Dispatchers.Default) { PpgFeatures.extract(recording, fs) }
-            Log.i(TAG, "BP ${if (capture != null) "calibration round ${capture.round}" else "measurement"}: samples=$collected features=$features")
+            HLog.i(TAG, "BP ${if (capture != null) "calibration round ${capture.round}" else "measurement"}: samples=$collected features=$features")
             mutable.value = if (capture != null) finishCalibration(capture, features, recording) else finishMeasurement(features, recording, startedAt)
         }
     }
@@ -177,7 +177,7 @@ class BpMeasureViewModel(
     }
 
     private suspend fun finishMeasurement(features: com.heartline.shared.bp.PpgFeatureVector?, recording: FloatArray, startedAt: Long): BpState {
-        val outcome = BpEstimator.estimate(bpStore.calibration.value, features, now(), bpStore.history).also { Log.i(TAG, "BP outcome: $it") }
+        val outcome = BpEstimator.estimate(bpStore.calibration.value, features, now(), bpStore.history).also { HLog.i(TAG, "BP outcome: $it") }
         return when (outcome) {
             BpOutcome.NeedsCalibration -> BpState.NeedsCalibration
             BpOutcome.PoorSignal -> BpState.PoorSignal

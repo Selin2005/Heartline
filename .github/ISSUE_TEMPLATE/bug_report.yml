@@ -45,5 +45,8 @@ body:
   - type: textarea
     id: logs
     attributes:
-      label: Logs or screenshots
-      description: Remove any personal information first.
+      label: Logs and screenshots
+      description: |
+        In the phone app: Settings → Help & diagnostics → Export logs, then drag both files
+        (heartline-phone-….log and heartline-watch-….log) here. Names are already removed; check for
+        anything else you'd rather not share.

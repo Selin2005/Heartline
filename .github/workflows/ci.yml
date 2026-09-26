@@ -30,8 +30,10 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: License headers
-        run: python3 tools/ci/license-headers.py
+      - name: License headers and logging
+        run: |
+          python3 tools/ci/license-headers.py
+          python3 tools/ci/check-logging.py
 
       - name: Lint
         run: ./gradlew --console=plain ktlintCheck

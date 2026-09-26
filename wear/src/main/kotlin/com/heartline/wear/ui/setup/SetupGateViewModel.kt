@@ -3,9 +3,9 @@
 
 package com.heartline.wear.ui.setup
 
+import com.heartline.datalayer.diag.HLog
 import android.Manifest
 import android.os.Build
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.heartline.shared.model.Metric
@@ -90,7 +90,7 @@ class SetupGateViewModel(
         job = viewModelScope.launch {
             if (!quiet) mutable.value = GateState.CheckingPhone
             val link = checker.check()
-            Log.i(TAG, "link=${link.stage} status=${link.status}")
+            HLog.i(TAG, "link=${link.stage} status=${link.status}")
             val status = link.status
             when {
                 link.stage == LinkStage.CONNECTED && status != null && !status.setupComplete -> mutable.value = GateState.SetupIncomplete(status)

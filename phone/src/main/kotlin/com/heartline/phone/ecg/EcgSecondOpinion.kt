@@ -3,11 +3,11 @@
 
 package com.heartline.phone.ecg
 
+import com.heartline.datalayer.diag.HLog
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import android.content.Context
-import android.util.Log
 import com.heartline.phone.data.RecordRepository
 import com.heartline.shared.ecg.EcgAnalyzer
 import com.heartline.shared.ecg.EcgFounderInput
@@ -49,7 +49,7 @@ class OnnxEcgFounder private constructor(private val session: OrtSession) : EcgF
                     DoubleArray(out[0].size) { j -> out.sumOf { it[j].toDouble() } / out.size }
                 }
             }
-        }.onFailure { Log.w(TAG, "ECGFounder failed", it) }.getOrNull()
+        }.onFailure { HLog.w(TAG, "ECGFounder failed", it) }.getOrNull()
     }
 
     companion object {
@@ -65,7 +65,7 @@ class OnnxEcgFounder private constructor(private val session: OrtSession) : EcgF
                 check(tmp.renameTo(file)) { "can't install $file" }
             }
             OnnxEcgFounder(OrtEnvironment.getEnvironment().createSession(file.path, OrtSession.SessionOptions()))
-        }.onFailure { Log.w(TAG, "ECGFounder unavailable: ${it.message}") }.getOrNull()
+        }.onFailure { HLog.w(TAG, "ECGFounder unavailable: ${it.message}") }.getOrNull()
     }
 }
 

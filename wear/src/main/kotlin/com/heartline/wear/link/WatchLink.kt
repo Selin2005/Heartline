@@ -3,8 +3,8 @@
 
 package com.heartline.wear.link
 
+import com.heartline.datalayer.diag.HLog
 import android.content.Context
-import android.util.Log
 import com.heartline.datalayer.DeepLinks
 import com.heartline.datalayer.RemoteOpener
 import com.heartline.shared.sync.PhoneStatus
@@ -35,7 +35,7 @@ class WatchLinkStore(context: Context, private val now: () -> Long = System::cur
     val latest: StateFlow<StampedStatus?> = mutable.asStateFlow()
 
     fun update(status: PhoneStatus) {
-        Log.i(TAG, "phone status: $status")
+        HLog.i(TAG, "phone status: $status")
         prefs.edit().putString(KEY_STATUS, Protocol.json.encodeToString(status)).apply()
         mutable.value = StampedStatus(status, now())
     }

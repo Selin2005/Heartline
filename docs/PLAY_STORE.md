@@ -53,6 +53,9 @@ allow apps to update themselves). The store texts are in
   "sharing" under Play's definition.)
 - **Is data encrypted in transit?** Not applicable (no transmission to the developer).
 - **Can users request deletion?** Yes: Settings → Delete all data, or uninstall.
+- App activity / diagnostics (*Crash logs*, *Diagnostics*): kept on the device only when the user
+  agrees (or runs a beta), and shared only when the user exports the files themselves, so not
+  "collected".
 - Data types *processed on device only*: Health and fitness (heart rate, ECG, blood pressure
   estimates, SpO₂, skin temperature, body composition), personal info (name, birth date, sex,
   height, weight).

@@ -3,13 +3,13 @@
 
 package com.heartline.phone.update
 
+import com.heartline.datalayer.diag.HLog
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.net.Uri
 import android.provider.Settings
-import android.util.Log
 import com.heartline.shared.update.Release
 import com.heartline.shared.update.Releases
 import java.io.File
@@ -43,10 +43,10 @@ class Updater(
             val releases = source.releases()
             repository.markChecked(now())
             val update = Releases.update(releases, installedVersion, prefs.beta)
-            Log.i(TAG, "checked ${releases.size} releases; installed=$installedVersion beta=${prefs.beta} update=${update?.version}")
+            HLog.i(TAG, "checked ${releases.size} releases; installed=$installedVersion beta=${prefs.beta} update=${update?.version}")
             if (update != null) Check.Available(update) else Check.UpToDate(Releases.newest(releases, prefs.beta))
         }.getOrElse {
-            Log.w(TAG, "update check failed", it)
+            HLog.w(TAG, "update check failed", it)
             Check.Failed(it.message ?: it.javaClass.simpleName)
         }
     }
@@ -69,7 +69,7 @@ class Updater(
             file.delete()
             throw IOException("Checksum mismatch: the download is damaged or not an official release")
         }
-        Log.i(TAG, "downloaded and verified ${apk.name}")
+        HLog.i(TAG, "downloaded and verified ${apk.name}")
         return file
     }
 

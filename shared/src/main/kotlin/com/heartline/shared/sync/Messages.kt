@@ -65,6 +65,10 @@ data class SetupRequest(val target: SetupTarget)
 @Serializable
 data class Ack(val id: String, val ok: Boolean)
 
+/** Phone → watch: send your diagnostic log back on [Protocol.logsPath] ([delete]: erase it instead). */
+@Serializable
+data class LogRequest(val requestId: String, val delete: Boolean = false)
+
 @Serializable
 data class DeleteRecord(val id: String)
 

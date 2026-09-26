@@ -3,9 +3,9 @@
 
 package com.heartline.wear.tile
 
+import com.heartline.datalayer.diag.HLog
 import android.content.ComponentName
 import android.content.Context
-import android.util.Log
 import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester
 import com.heartline.wear.bp.WatchBpStore
 import com.heartline.wear.data.WatchRecordStore
@@ -57,9 +57,9 @@ class TileUpdates(
     }
 
     fun requestAll(reason: String, scope: CoroutineScope = this.scope) {
-        Log.i(TAG, "update cards and complications ($reason)")
+        HLog.i(TAG, "update cards and complications ($reason)")
         scope.launch {
-            ALL_CARDS.forEach { card -> runCatching { card().triggerUpdateAll(context) }.onFailure { Log.w(TAG, "card update failed", it) } }
+            ALL_CARDS.forEach { card -> runCatching { card().triggerUpdateAll(context) }.onFailure { HLog.w(TAG, "card update failed", it) } }
         }
         COMPLICATIONS.forEach { cls ->
             runCatching { ComplicationDataSourceUpdateRequester.create(context, ComponentName(context, cls)).requestUpdateAll() }

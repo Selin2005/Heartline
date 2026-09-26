@@ -3,9 +3,9 @@
 
 package com.heartline.phone.widget
 
+import com.heartline.datalayer.diag.HLog
 import android.content.Context
 import android.os.Build
-import android.util.Log
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.updateAll
@@ -72,7 +72,7 @@ class WidgetUpdater(
             MetricTileWidget().updateAll(context)
             MeasureButtonWidget().updateAll(context)
             com.heartline.phone.qs.HeartlineQsTile.refreshAll(context)
-        }.onFailure { Log.w(HeartlineWidget.TAG, "widget update failed", it) }
+        }.onFailure { HLog.w(HeartlineWidget.TAG, "widget update failed", it) }
     }
 
     /** Android 15+ widget picker: live previews drawn by the widgets themselves (sample data). */
@@ -80,7 +80,7 @@ class WidgetUpdater(
         if (Build.VERSION.SDK_INT < 35) return
         val manager = GlanceAppWidgetManager(context)
         RECEIVERS.forEach { receiver ->
-            runCatching { manager.setWidgetPreviews(receiver) }.onFailure { Log.w(HeartlineWidget.TAG, "preview for ${receiver.simpleName} failed", it) }
+            runCatching { manager.setWidgetPreviews(receiver) }.onFailure { HLog.w(HeartlineWidget.TAG, "preview for ${receiver.simpleName} failed", it) }
         }
     }
 

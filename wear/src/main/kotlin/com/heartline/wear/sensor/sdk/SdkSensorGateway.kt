@@ -3,9 +3,9 @@
 
 package com.heartline.wear.sensor.sdk
 
+import com.heartline.datalayer.diag.HLog
 import android.app.Activity
 import android.content.Context
-import android.util.Log
 import com.heartline.shared.sensor.TrackerKind
 import com.heartline.wear.sensor.GatewayState
 import com.heartline.wear.sensor.SensorGateway
@@ -39,7 +39,7 @@ class SdkSensorGateway(private val context: Context) : SensorGateway {
         override fun onConnectionSuccess() {
             val capability = service?.trackingCapability
             val trackers = capability?.supportHealthTrackerTypes.orEmpty().mapNotNull { it.toKind() }.toSet()
-            Log.i(TAG, "Connected; service=${capability?.version} trackers=$trackers")
+            HLog.i(TAG, "Connected; service=${capability?.version} trackers=$trackers")
             mutable.value = GatewayState.Connected(trackers, capability?.version)
         }
 
@@ -54,7 +54,7 @@ class SdkSensorGateway(private val context: Context) : SensorGateway {
                 HealthTrackerException.OLD_PLATFORM_VERSION -> SensorProblem.SERVICE_OUTDATED
                 else -> SensorProblem.NOT_SUPPORTED
             }
-            Log.w(TAG, "Connection failed: code=${e.errorCode} resolvable=${e.hasResolution()}", e)
+            HLog.w(TAG, "Connection failed: code=${e.errorCode} resolvable=${e.hasResolution()}", e)
             mutable.value = GatewayState.Failed(problem, e.hasResolution())
         }
     }
@@ -89,7 +89,7 @@ class SdkSensorGateway(private val context: Context) : SensorGateway {
             }
             else -> SensorProblem.NOT_SUPPORTED
         }
-        Log.i(TAG, "health probe -> ${result ?: "OK"}")
+        HLog.i(TAG, "health probe -> ${result ?: "OK"}")
         return result
     }
 
@@ -105,7 +105,7 @@ class SdkSensorGateway(private val context: Context) : SensorGateway {
                 override fun onFlushCompleted() = Unit
 
                 override fun onError(error: HealthTracker.TrackerError) {
-                    Log.w(TAG, "probe tracker error: $error")
+                    HLog.w(TAG, "probe tracker error: $error")
                     outcome.complete(mapError(error))
                 }
             },

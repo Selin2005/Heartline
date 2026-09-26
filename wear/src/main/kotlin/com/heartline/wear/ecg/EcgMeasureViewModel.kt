@@ -3,7 +3,7 @@
 
 package com.heartline.wear.ecg
 
-import android.util.Log
+import com.heartline.datalayer.diag.HLog
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.heartline.shared.dsp.StreamingEcgFilter
@@ -94,7 +94,7 @@ class EcgMeasureViewModel(
         val paired = PairedPpg(fs * recorder.targetSeconds)
         var lastPhase = recorder.phase
         var lastCheckLog = 0L
-        Log.i(REC_TAG, "start: phase=${recorder.phase} target=${recorder.targetSeconds}s fs=$fs")
+        HLog.i(REC_TAG, "start: phase=${recorder.phase} target=${recorder.targetSeconds}s fs=$fs")
         mutable.value = EcgMeasureState.Measuring(0f, recorder.secondsLeft, FloatArray(0), leadOff = true, waitingForTouch = true)
         job = viewModelScope.launch {
             var failure: SensorProblem? = null
@@ -132,7 +132,7 @@ class EcgMeasureViewModel(
                     }
                 }
             failure?.let {
-                Log.w(TAG, "ECG failed: $it")
+                HLog.w(TAG, "ECG failed: $it")
                 mutable.value = EcgMeasureState.Failed(it)
                 return@launch
             }
@@ -144,7 +144,7 @@ class EcgMeasureViewModel(
     /** Phase changes, and once a second while arming why the signal isn't accepted yet. @return time logged, if the check was. */
     private fun logRecorder(recorder: EcgRecorder, before: ContactPhase, elapsedMs: Long, checkDue: Boolean): Long? {
         if (recorder.phase != before) {
-            Log.i(
+            HLog.i(
                 REC_TAG,
                 "t=${elapsedMs}ms phase $before -> ${recorder.phase} collected=${"%.1f".format(recorder.progress * recorder.targetSeconds)}s " +
                     "segments=${recorder.segmentStarts.size} leadOffSeconds=${"%.1f".format(recorder.leadOffSeconds)}",
@@ -152,7 +152,7 @@ class EcgMeasureViewModel(
         }
         if (recorder.phase != ContactPhase.ARMING || !checkDue) return null
         val c = recorder.lastCheck
-        Log.i(
+        HLog.i(
             REC_TAG,
             "t=${elapsedMs}ms arming ${"%.1f".format(recorder.armedSeconds)}s check=" +
                 (c?.let { "${it.rejected ?: "OK"} lenient=${it.lenient} p2p=${it.p2pMv?.let { v -> "%.3f".format(v) }}mV kurtosis=${it.kurtosis?.let { v -> "%.2f".format(v) }} beats=${it.peaks} rr=${it.rrMs} heightRatio=${it.heightRatio?.let { v -> "%.2f".format(v) }}" } ?: "not yet (settling / filling 3 s)"),
@@ -182,9 +182,9 @@ class EcgMeasureViewModel(
         )
         val analysis = withContext(Dispatchers.Default) { EcgAnalyzer.analyze(recording, recorder.sampleRateHz, session) }
         val pat = paired?.takeIf { it.usable }?.let { p -> withContext(Dispatchers.Default) { PulseArrival.compute(p.ecg(), p.ppg(), recorder.sampleRateHz) } }
-        Log.i(TAG, "PAT: ppg=${paired?.usable} samples=${paired?.size} result=$pat")
+        HLog.i(TAG, "PAT: ppg=${paired?.usable} samples=${paired?.size} result=$pat")
         val m = analysis.metrics.copy(pulseArrivalMs = pat?.medianMs, pulseArrivalBeats = pat?.beats)
-        Log.i(
+        HLog.i(
             TAG,
             "ECG done: result=${analysis.result} reason=${m.poorReason} quality=${m.qualityScore} " +
                 "duration=${m.durationSec}s usable=${m.usableSec}s motion=${m.motionSec}s muscle=${m.muscleNoiseSec}s " +

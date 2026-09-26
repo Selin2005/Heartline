@@ -3,7 +3,7 @@
 
 package com.heartline.wear.sensor.sdk
 
-import android.util.Log
+import com.heartline.datalayer.diag.HLog
 import com.heartline.shared.hr.HrSample
 import com.heartline.shared.sensor.TrackerKind
 import com.heartline.wear.sensor.GatewayState
@@ -62,7 +62,7 @@ class SdkHrSource(private val gateway: SdkSensorGateway) : HrSource {
                 override fun onFlushCompleted() = Unit
 
                 override fun onError(error: HealthTracker.TrackerError) {
-                    Log.w(SdkSensorGateway.TAG, "HR tracker error: $error")
+                    HLog.w(SdkSensorGateway.TAG, "HR tracker error: $error")
                     close(SensorException(SdkSensorGateway.mapError(error)))
                 }
             },
@@ -77,7 +77,7 @@ class SdkHrSource(private val gateway: SdkSensorGateway) : HrSource {
         // IBI status 0 marks a reliable interval. A missing status is not a rejection: Hrv.clean
         // still drops implausible beats.
         val good = ibis.filterIndexed { i, _ -> (ibiStatus.getOrNull(i) ?: 0) == 0 }
-        if (ibis.isNotEmpty()) Log.v(SdkSensorGateway.TAG, "HR status=$status ibis=$ibis ibiStatus=$ibiStatus")
+        if (ibis.isNotEmpty()) HLog.v(SdkSensorGateway.TAG, "HR status=$status ibis=$ibis ibiStatus=$ibiStatus")
         return HrSample(
             tsMs = timestamp,
             bpm = getValue(ValueKey.HeartRateSet.HEART_RATE) ?: 0,

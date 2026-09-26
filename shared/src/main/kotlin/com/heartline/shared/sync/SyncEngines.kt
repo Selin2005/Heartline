@@ -58,8 +58,12 @@ class WatchSyncEngine(
     private val onCaptureRequest: suspend (CaptureRequest) -> Unit = {},
     private val onProfile: suspend (UserProfile) -> Unit = {},
     private val onOpen: suspend (String) -> Unit = {},
-    private val onStatus: suspend (PhoneStatus) -> Unit = {}
+    private val onStatus: suspend (PhoneStatus) -> Unit = {},
+    private val onLogRequest: suspend (LogRequest) -> Unit = {}
 ) {
+    /** Watch → phone: the diagnostic log the phone asked for with [LogRequest]. */
+    suspend fun sendLogs(requestId: String, text: ByteArray): Boolean = transport.sendLarge(Protocol.logsPath(requestId), text)
+
     /** Watch → phone: settings changed on the watch (the phone keeps the newer copy). */
     suspend fun sendSettings(settings: MonitorSettings): Boolean =
         transport.send(Protocol.SETTINGS, Protocol.json.encodeToString(settings).encodeToByteArray())
@@ -105,6 +109,7 @@ class WatchSyncEngine(
             Protocol.BP_CALIBRATION_CAPTURE -> onCaptureRequest(
                 Protocol.json.decodeFromString<CaptureRequest>(envelope.data.decodeToString())
             )
+            Protocol.LOGS_REQUEST -> onLogRequest(Protocol.json.decodeFromString<LogRequest>(envelope.data.decodeToString()))
         }
     }
 }
@@ -120,7 +125,8 @@ class PhoneSyncEngine(
     private val onHello: suspend (Hello) -> Unit = {},
     private val onCaptureResult: suspend (CaptureResult) -> Unit = {},
     private val onSetupRequest: suspend (SetupRequest) -> Unit = {},
-    private val onSettings: suspend (MonitorSettings) -> Unit = {}
+    private val onSettings: suspend (MonitorSettings) -> Unit = {},
+    private val onLogs: suspend (requestId: String, text: ByteArray) -> Unit = { _, _ -> }
 ) {
     private val metas = mutableMapOf<String, RecordMeta>()
     private val waves = mutableMapOf<String, FloatArray>()
@@ -165,6 +171,7 @@ class PhoneSyncEngine(
                 onCaptureResult(result)
                 ack(result.id)
             }
+            envelope.path.startsWith(Protocol.LOGS_PREFIX) -> onLogs(envelope.path.removePrefix(Protocol.LOGS_PREFIX), envelope.data)
             envelope.path.startsWith(Protocol.RECORD_WAVE_PREFIX) -> {
                 val id = envelope.path.removePrefix(Protocol.RECORD_WAVE_PREFIX)
                 if (sink.contains(id)) return
@@ -185,6 +192,10 @@ class PhoneSyncEngine(
 
     suspend fun sendProfile(profile: UserProfile): Boolean =
         transport.send(Protocol.PROFILE, Protocol.json.encodeToString(profile).encodeToByteArray())
+
+    /** Phone → watch: send back (or erase) your diagnostic log. */
+    suspend fun requestLogs(request: LogRequest): Boolean =
+        transport.send(Protocol.LOGS_REQUEST, Protocol.json.encodeToString(request).encodeToByteArray())
 
     suspend fun sendStatus(status: PhoneStatus): Boolean =
         transport.send(Protocol.STATUS, Protocol.json.encodeToString(status).encodeToByteArray())

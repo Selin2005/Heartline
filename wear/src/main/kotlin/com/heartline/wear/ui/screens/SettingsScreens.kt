@@ -47,6 +47,9 @@ data class WatchSettingsUi(
     val liveWave: Boolean = true,
     val highBpm: Int = 120,
     val lowBpm: Int = 40,
+    val diagnosticLogs: Boolean = false,
+    val detailedLogs: Boolean = false,
+    val logKb: Long = 0,
 )
 
 /** One setting toggled on the watch. */
@@ -145,6 +148,18 @@ fun DiagnosticsScreen(state: WatchSettingsUi) {
             state.trackers.forEach { tracker ->
                 item { Centered(tracker, small = true) }
             }
+            item { ListHeader { Text(stringResource(R.string.diag_logs), textAlign = TextAlign.Center) } }
+            item {
+                Centered(
+                    when {
+                        !state.diagnosticLogs -> stringResource(R.string.diag_logs_off)
+                        state.detailedLogs -> stringResource(R.string.diag_logs_detailed, state.logKb)
+                        else -> stringResource(R.string.diag_logs_on, state.logKb)
+                    },
+                    small = true,
+                )
+            }
+            item { Centered(stringResource(R.string.diag_logs_hint), small = true) }
         }
     }
 }

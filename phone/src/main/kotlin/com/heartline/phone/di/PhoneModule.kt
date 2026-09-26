@@ -3,9 +3,13 @@
 
 package com.heartline.phone.di
 
-import android.util.Log
+import com.heartline.datalayer.diag.HLog
 import com.heartline.phone.BuildConfig
 import com.heartline.phone.update.ReleaseSource
+import com.heartline.phone.diag.DiagnosticsRepository
+import com.heartline.phone.diag.DiagnosticsViewModel
+import com.heartline.phone.diag.PhoneLogExporter
+import com.heartline.shared.diag.RemoteLogs
 import com.heartline.phone.update.UpdateRepository
 import com.heartline.phone.update.Updater
 import com.heartline.phone.update.UpdatesViewModel
@@ -74,6 +78,18 @@ val phoneModule = module {
     single { UpdateRepository(androidContext(), BuildConfig.VERSION_NAME) }
     single { ReleaseSource("Heartline/${BuildConfig.VERSION_NAME} (Android)") }
     single { Updater(androidContext(), get(), get(), BuildConfig.VERSION_NAME, enabled = BuildConfig.UPDATER) }
+    single { RemoteLogs(send = { get<PhoneSyncEngine>().requestLogs(it) }) }
+    single {
+        DiagnosticsRepository(
+            androidContext(),
+            get(),
+            get(),
+            BuildConfig.VERSION_NAME,
+            get(),
+            sendSettings = { settings -> get<PhoneSyncEngine>().sendSettings(settings) },
+        )
+    }
+    single { PhoneLogExporter(androidContext(), get(), get(), get()) }
     single { get<HeartlineDatabase>().bp() }
     single {
         // PaPaGei is loaded on first use (only once there are enough cuff checks to train on).
@@ -89,15 +105,15 @@ val phoneModule = module {
             object : RecordSink by records {
                 override suspend fun save(meta: RecordMeta, wave: FloatArray?) {
                     records.save(meta, wave)
-                    runCatching { get<BpRepository>().onRecordSaved(meta, wave) }.onFailure { Log.w("Heartline/BP", "refine failed", it) }
-                    runCatching { get<EcgSecondOpinion>().onRecordSaved(records, meta, wave) }.onFailure { Log.w("Heartline/ECG", "second opinion failed", it) }
-                    runCatching { get<ProfileRepository>().onRecordSaved(meta) }.onFailure { Log.w("Heartline/Body", "weight update failed", it) }
+                    runCatching { get<BpRepository>().onRecordSaved(meta, wave) }.onFailure { HLog.w("Heartline/BP", "refine failed", it) }
+                    runCatching { get<EcgSecondOpinion>().onRecordSaved(records, meta, wave) }.onFailure { HLog.w("Heartline/ECG", "second opinion failed", it) }
+                    runCatching { get<ProfileRepository>().onRecordSaved(meta) }.onFailure { HLog.w("Heartline/Body", "weight update failed", it) }
                 }
             },
             get<HeartRepository>(),
             onHello = { hello ->
                 // The watch says hello on start and on every link check: reply with everything it gates on.
-                Log.i("Heartline/Link", "hello from watch: $hello")
+                HLog.i("Heartline/Link", "hello from watch: $hello")
                 get<UpdateRepository>().setWatchVersion(hello.appVersion)
                 val sync = get<PhoneSyncEngine>()
                 // Settings changed on the watch while the phone was away may be newer than ours.
@@ -111,10 +127,11 @@ val phoneModule = module {
             onSetupRequest = { get<PhoneNotifier>().setupRequest(it.target) },
             onSettings = { incoming ->
                 if (get<SettingsRepository>().applyRemote(incoming)) {
-                    Log.i("Heartline/Settings", "changed on watch: $incoming")
+                    HLog.i("Heartline/Settings", "changed on watch: $incoming")
                     Reminders.sync(androidContext(), incoming)
                 }
             },
+            onLogs = { requestId, text -> get<RemoteLogs>().onLogs(requestId, text) },
         )
     }
     single { PhoneStatusPublisher(get(), get(), get(), { get() }) }
@@ -136,6 +153,7 @@ val phoneModule = module {
     viewModel { SettingsViewModel(get(), get(), get(), get(), get()) { Reminders.sync(androidContext(), it) } }
     viewModel { HeartRateViewModel(get(), get()) }
     viewModel { UpdatesViewModel(get(), get(), BuildConfig.VERSION_NAME) }
+    viewModel { DiagnosticsViewModel(get(), get(), get()) }
     viewModel { BpHomeViewModel(get(), get()) }
     viewModel { CalibrationViewModel(get(), openOnWatch = { get<WatchOpener>().open(it) }) }
     viewModel { params -> MetricDetailViewModel(params.get(), get(), get()) }

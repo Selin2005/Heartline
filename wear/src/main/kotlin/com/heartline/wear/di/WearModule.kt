@@ -3,6 +3,9 @@
 
 package com.heartline.wear.di
 
+import com.heartline.datalayer.diag.HLog
+import kotlinx.coroutines.launch
+import com.heartline.wear.diag.WatchLogExporter
 import com.heartline.datalayer.DataLayerTransport
 import com.heartline.shared.sync.Protocol
 import com.heartline.shared.sync.SyncTransport
@@ -54,7 +57,6 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import android.content.pm.PackageManager
 import android.os.Build
-import android.util.Log
 import androidx.core.content.ContextCompat
 import com.heartline.datalayer.RemoteOpener
 import com.heartline.shared.sync.Hello
@@ -108,8 +110,19 @@ val wearModule = module {
                 }
             },
             onStatus = { get<WatchLinkStore>().update(it) },
+            // The phone's Export logs: answer on a channel, off the listener's thread.
+            onLogRequest = { request ->
+                get<CoroutineScope>(APP_SCOPE).launch(Dispatchers.IO) {
+                    if (request.delete) {
+                        HLog.clear()
+                    } else {
+                        get<WatchSyncEngine>().sendLogs(request.requestId, get<WatchLogExporter>().build().encodeToByteArray())
+                    }
+                }
+            },
         )
     }
+    single { WatchLogExporter(androidContext(), get(), get()) }
     single { WatchLinkStore(androidContext()) }
     single { WatchCommandBus() }
     single { RemoteOpener(androidContext(), get()) }
@@ -120,7 +133,7 @@ val wearModule = module {
             get(),
             get<WatchLinkStore>().latest,
             hello = { Hello(appVersion = BuildConfig.VERSION_NAME, deviceName = Build.MODEL, settings = get<WatchSettingsStore>().settings.value) },
-            log = { Log.i("Heartline/Link", it) },
+            log = { HLog.i("Heartline/Link", it) },
         )
     }
     single<SensorGateway> {

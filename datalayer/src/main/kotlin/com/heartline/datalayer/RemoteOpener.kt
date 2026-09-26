@@ -3,10 +3,10 @@
 
 package com.heartline.datalayer
 
+import com.heartline.datalayer.diag.HLog
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.util.Log
 import androidx.wear.remote.interactions.RemoteActivityHelper
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.util.concurrent.Executors
@@ -21,17 +21,17 @@ class RemoteOpener(context: Context, private val transport: DataLayerTransport) 
 
     /** @return true when the other device accepted the launch. */
     suspend fun open(uri: String): Boolean {
-        val node = transport.peerNodeId() ?: return false.also { Log.w(TAG, "open $uri: no peer") }
+        val node = transport.peerNodeId() ?: return false.also { HLog.w(TAG, "open $uri: no peer") }
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).addCategory(Intent.CATEGORY_BROWSABLE)
         return suspendCancellableCoroutine { cont ->
             val future = runCatching { helper.startRemoteActivity(intent, node) }.getOrElse {
-                Log.w(TAG, "open $uri failed", it)
+                HLog.w(TAG, "open $uri failed", it)
                 cont.resume(false)
                 return@suspendCancellableCoroutine
             }
             future.addListener({
-                val ok = runCatching { future.get() }.onFailure { Log.w(TAG, "open $uri failed", it) }.isSuccess
-                if (ok) Log.i(TAG, "opened $uri on $node")
+                val ok = runCatching { future.get() }.onFailure { HLog.w(TAG, "open $uri failed", it) }.isSuccess
+                if (ok) HLog.i(TAG, "opened $uri on $node")
                 if (cont.isActive) cont.resume(ok)
             }, Runnable::run)
         }

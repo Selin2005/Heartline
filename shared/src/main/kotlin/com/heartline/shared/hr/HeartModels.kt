@@ -69,6 +69,10 @@ data class MonitorSettings(
     val accent: com.heartline.shared.design.Accent = com.heartline.shared.design.Accent.BLUE,
     /** A summary of the week on Friday evening (phone notification). */
     val weeklySummary: Boolean = true,
+    /** Keep a diagnostic log file on each device (decided on the phone, see DiagnosticsPolicy). */
+    val diagnosticLogs: Boolean = false,
+    /** Raw sensor values also go into the log file until this time (0 = off). */
+    val detailedLogsUntilMs: Long = 0,
     /** When these settings were last changed (either device); the newer copy wins. */
     val updatedAtMs: Long = 0
 ) {

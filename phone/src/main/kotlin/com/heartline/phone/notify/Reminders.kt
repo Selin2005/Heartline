@@ -3,8 +3,8 @@
 
 package com.heartline.phone.notify
 
+import com.heartline.datalayer.diag.HLog
 import android.content.Context
-import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -121,7 +121,7 @@ class DailyReminderWorker(context: Context, params: WorkerParameters) :
             notifier.dailyReminder()
             Reminders.scheduleDaily(applicationContext, current.dailyReminderMinute)
         }
-        Log.i("Heartline/Reminder", "daily reminder fired (enabled=${current.dailyReminder})")
+        HLog.i("Heartline/Reminder", "daily reminder fired (enabled=${current.dailyReminder})")
         return Result.success()
     }
 }
@@ -146,7 +146,7 @@ class WeeklySummaryWorker(context: Context, params: WorkerParameters) :
         val (title, text) = Reminders.weeklyText(applicationContext, week, name)
         notifier.weeklySummary(title, text)
         Reminders.scheduleWeekly(applicationContext, LocalDateTime.now().plusMinutes(1))
-        Log.i("Heartline/Reminder", "weekly summary: ${week.measurements} measurements")
+        HLog.i("Heartline/Reminder", "weekly summary: ${week.measurements} measurements")
         return Result.success()
     }
 }

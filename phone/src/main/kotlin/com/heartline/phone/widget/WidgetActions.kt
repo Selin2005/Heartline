@@ -3,10 +3,10 @@
 
 package com.heartline.phone.widget
 
+import com.heartline.datalayer.diag.HLog
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.util.Log
 import android.widget.Toast
 import androidx.glance.GlanceId
 import androidx.glance.action.Action
@@ -42,7 +42,7 @@ class MeasureOnWatchAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val route = parameters[WATCH] ?: return
         val result = runCatching { KoinPlatform.getKoin().get<WatchOpener>().open(route) }.getOrDefault(OpenResult.NO_WATCH)
-        Log.i("Heartline/Widget", "measure on watch: $route -> $result")
+        HLog.i("Heartline/Widget", "measure on watch: $route -> $result")
         withContext(Dispatchers.Main) {
             when (result) {
                 OpenResult.OPENED -> Toast.makeText(context, R.string.widget_opened_on_watch, Toast.LENGTH_SHORT).show()

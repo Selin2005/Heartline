@@ -3,13 +3,13 @@
 
 package com.heartline.wear.monitor
 
+import com.heartline.datalayer.diag.HLog
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.SystemClock
-import android.util.Log
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
@@ -81,7 +81,7 @@ object BackgroundMonitoring {
             } else {
                 passive.clearPassiveListenerServiceAsync().await()
             }
-        }.onFailure { Log.w(TAG, "passive listener update failed", it) }
+        }.onFailure { HLog.w(TAG, "passive listener update failed", it) }
 
         val work = WorkManager.getInstance(context)
         if (allowed && settings.irregularRhythmEnabled) {
@@ -94,7 +94,7 @@ object BackgroundMonitoring {
         } else {
             work.cancelUniqueWork(IRN_WORK)
         }
-        Log.i(TAG, "sync allowed=$allowed passive=${settings.passiveHeartRate} irn=${settings.irregularRhythmEnabled} background=${hasBackgroundPermission(context)}")
+        HLog.i(TAG, "sync allowed=$allowed passive=${settings.passiveHeartRate} irn=${settings.irregularRhythmEnabled} background=${hasBackgroundPermission(context)}")
     }
 }
 
@@ -140,7 +140,7 @@ class PassiveHeartRateService :
             val bpm = point.value.toInt().takeIf { it in 25..240 } ?: return@mapNotNull null
             HrSample(tsMs = point.getTimeInstant(boot).toEpochMilli(), bpm = bpm, ibiMs = emptyList(), onBody = true)
         }
-        Log.i("Heartline/Monitor", "passive HR: ${samples.size} samples")
+        HLog.i("Heartline/Monitor", "passive HR: ${samples.size} samples")
         if (samples.isNotEmpty()) runBlocking { heart.onPassive(samples) }
     }
 }
@@ -160,7 +160,7 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
     override suspend fun doWork(): Result {
         if (!BackgroundMonitoring.canRun(applicationContext)) return Result.success()
         if (!BackgroundMonitoring.hasBackgroundPermission(applicationContext)) {
-            runCatching { setForeground(foregroundInfo()) }.onFailure { Log.w(TAG, "foreground window refused", it) }
+            runCatching { setForeground(foregroundInfo()) }.onFailure { HLog.w(TAG, "foreground window refused", it) }
         }
         val motion = StepMotionMonitor(applicationContext).also { it.start() }
         heart.irn.resetWindow()
@@ -168,7 +168,7 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
         try {
             withTimeoutOrNull(WINDOW_MS) {
                 source.stream()
-                    .catch { Log.w(TAG, "IRN window stream failed", it) }
+                    .catch { HLog.w(TAG, "IRN window stream failed", it) }
                     .collect { sample ->
                         count++
                         heart.irn.onSample(sample.copy(moving = sample.moving || motion.movedSince(sample.tsMs - 60_000)))
@@ -177,7 +177,7 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
         } finally {
             motion.stop()
         }
-        Log.i(TAG, "IRN window done: $count samples")
+        HLog.i(TAG, "IRN window done: $count samples")
         return Result.success()
     }
 

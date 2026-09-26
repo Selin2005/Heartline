@@ -33,6 +33,11 @@ import com.heartline.phone.ui.legal.LegalDocumentScreen
 import com.heartline.phone.notify.PhoneNotifier
 import com.heartline.phone.ui.update.UpdatesScreen
 import com.heartline.phone.ui.update.WhatsNewAfterUpdate
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.heartline.phone.diag.DiagnosticsViewModel
+import com.heartline.phone.ui.diagnostics.DiagnosticsQuestion
+import com.heartline.phone.ui.diagnostics.DiagnosticsScreen
+import com.heartline.phone.ui.diagnostics.rememberLogFolderPicker
 import com.heartline.phone.update.UpdatesViewModel
 import com.heartline.phone.ui.heart.AlertsScreen
 import androidx.compose.material3.SnackbarHost
@@ -120,6 +125,7 @@ object Routes {
     const val DEV_MODE_HELP = "help/dev_mode"
     const val DOC = "doc/{doc}"
     const val UPDATES = PhoneNotifier.UPDATES_ROUTE
+    const val DIAGNOSTICS = "diagnostics"
 
     fun doc(doc: BundledDoc) = "doc/${doc.route}"
 
@@ -170,6 +176,16 @@ fun HeartlineApp(
         onDeepLinkHandled()
     }
     WhatsNewAfterUpdate(BuildConfig.VERSION_NAME, onAllNotes = { navController.navigate(Routes.doc(BundledDoc.CHANGELOG)) })
+    // Stable users are asked once whether to keep diagnostic logs (beta users have them on).
+    val diagnostics: DiagnosticsViewModel = koinViewModel()
+    val diagnosticsUi by diagnostics.ui.collectAsStateWithLifecycle()
+    var askedNow by rememberSaveable { mutableStateOf(false) }
+    if (diagnosticsUi.shouldAsk && !askedNow) {
+        DiagnosticsQuestion { keep ->
+            askedNow = true
+            diagnostics.setEnabled(keep)
+        }
+    }
     // One opener for every "Measure on watch" button, with a snackbar saying what happened.
     val opener: OpenOnWatchViewModel = koinViewModel()
     val snackbar = remember { SnackbarHostState() }
@@ -272,6 +288,7 @@ fun HeartlineApp(
                         },
                         onAbout = { navController.navigate(Routes.ABOUT) },
                         onUpdates = { navController.navigate(Routes.UPDATES) },
+                        onDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
                         sharing = sharingPrefs,
                         onAiPrompt = vm::setAiPrompt,
                         onAiAttachPdf = vm::setAiAttachPdf,
@@ -379,6 +396,19 @@ fun HeartlineApp(
                     LaunchedEffect(vm) { vm.startActivity.collect { runCatching { context.startActivity(it) } } }
                     LaunchedEffect(Unit) { vm.check() }
                     UpdatesScreen(ui, onBack = goBack, onCheck = vm::check, onInstall = vm::install, onAutoCheck = { vm.setAutoCheck(it) }, onBeta = { vm.setBeta(it) })
+                }
+                composable(Routes.DIAGNOSTICS) {
+                    val vm: DiagnosticsViewModel = koinViewModel()
+                    val ui by vm.ui.collectAsStateWithLifecycle()
+                    val pickFolder = rememberLogFolderPicker(ui.folder) { vm.export(it) }
+                    DiagnosticsScreen(
+                        ui,
+                        onBack = goBack,
+                        onEnabled = { vm.setEnabled(it) },
+                        onDetailed = { vm.setDetailed(it) },
+                        onExport = pickFolder,
+                        onDelete = { vm.delete() },
+                    )
                 }
                 composable(Routes.DOC) { entry ->
                     val doc = BundledDoc.fromRoute(entry.arguments?.getString("doc")) ?: BundledDoc.TERMS

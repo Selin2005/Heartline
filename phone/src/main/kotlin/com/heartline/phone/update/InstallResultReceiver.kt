@@ -3,12 +3,12 @@
 
 package com.heartline.phone.update
 
+import com.heartline.datalayer.diag.HLog
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Build
-import android.util.Log
 
 /** Receives the installer's result; shows the system confirmation when it asks for one. */
 class InstallResultReceiver : BroadcastReceiver() {
@@ -24,6 +24,6 @@ class InstallResultReceiver : BroadcastReceiver() {
             confirm?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)?.let(context::startActivity)
             return
         }
-        Log.i("Heartline/Update", "install status=$status ${intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE).orEmpty()}")
+        HLog.i("Heartline/Update", "install status=$status ${intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE).orEmpty()}")
     }
 }

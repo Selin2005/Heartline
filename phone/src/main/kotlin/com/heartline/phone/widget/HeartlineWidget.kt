@@ -3,8 +3,8 @@
 
 package com.heartline.phone.widget
 
+import com.heartline.datalayer.diag.HLog
 import android.content.Context
-import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.DpSize
 import androidx.glance.GlanceId
@@ -52,7 +52,7 @@ abstract class HeartlineWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val source = runCatching { KoinPlatform.getKoin().get<WidgetDataSource>() }.getOrNull()
-        val snapshot = source?.let { runCatching { it.load() }.onFailure { e -> Log.w(TAG, "widget data failed", e) }.getOrNull() } ?: WidgetSnapshot()
+        val snapshot = source?.let { runCatching { it.load() }.onFailure { e -> HLog.w(TAG, "widget data failed", e) }.getOrNull() } ?: WidgetSnapshot()
         val appWidgetId = runCatching { GlanceAppWidgetManager(context).getAppWidgetId(id) }.getOrNull()
         val style = appWidgetId?.let { WidgetPrefs.load(context, it) } ?: WidgetStyle()
         val model = WidgetModel(snapshot, style, source?.nowSlot() ?: 28, WallpaperTones.of(context))

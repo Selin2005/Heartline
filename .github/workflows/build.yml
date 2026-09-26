@@ -139,6 +139,7 @@ jobs:
         run: |
           ./gradlew --console=plain ktlintCheck
           python3 tools/ci/license-headers.py
+          python3 tools/ci/check-logging.py
 
       - name: Unit, Robolectric and Paparazzi tests
         if: inputs.run_tests

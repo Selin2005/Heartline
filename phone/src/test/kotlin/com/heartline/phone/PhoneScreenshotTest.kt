@@ -41,6 +41,10 @@ import com.heartline.phone.ui.settings.SettingsScreen
 import com.heartline.phone.legal.BundledDoc
 import com.heartline.phone.ui.legal.LegalDocumentScreen
 import com.heartline.phone.ui.legal.TermsScreen
+import com.heartline.phone.diag.DiagnosticsUi
+import com.heartline.phone.diag.PhoneLogExporter
+import com.heartline.phone.ui.diagnostics.DiagnosticsQuestion
+import com.heartline.phone.ui.diagnostics.DiagnosticsScreen
 import com.heartline.phone.ui.update.UpdatesScreen
 import com.heartline.phone.ui.update.WhatsNewDialog
 import com.heartline.phone.update.UpdateRepository
@@ -223,6 +227,25 @@ class PhoneScreenshotTest(private val theme: String) {
         Box(Modifier.background(HeartlineTheme.colors.background)) {
             WhatsNewDialog("1.2.0-beta.1", ChangelogEntry("1.2.0-beta.1", null, betaRelease.notes))
         }
+    }
+
+    @Test fun diagnostics() = shot("diagnostics") {
+        DiagnosticsScreen(DiagnosticsUi(enabled = true, keptKb = 412), onBack = {})
+    }
+
+    @Test fun diagnosticsSaved() = shot("diagnostics_saved") {
+        DiagnosticsScreen(
+            DiagnosticsUi(
+                enabled = true,
+                keptKb = 412,
+                saved = PhoneLogExporter.Result("heartline-phone-20260926-141503.log", "heartline-watch-20260926-141503.log", watchReached = true),
+            ),
+            onBack = {},
+        )
+    }
+
+    @Test fun diagnosticsQuestion() = shot("diagnostics_question") {
+        Box(Modifier.background(HeartlineTheme.colors.background)) { DiagnosticsQuestion {} }
     }
 
     @Test fun terms() = shot("terms") { TermsScreen(updated = false, initiallyChecked = true) }

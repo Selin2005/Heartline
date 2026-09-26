@@ -24,6 +24,8 @@ ID and the same signing key**, so the phone and watch apps are always built and 
 | `/hl/v1/settings` | P→W | Message | `MonitorSettings{…}` | Watch turns background monitoring on or off |
 | `/hl/v1/profile` | P→W | Message | `UserProfile{birthYear, sex, heightCm, weightKg, …}` | — |
 | `/hl/v1/delete` | P→W | Message | `DeleteRecord{id}` | — |
+| `/hl/v1/logs/request` | P→W | Message | `LogRequest{requestId, delete}` | Watch sends its log file on `/hl/v1/logs/data/<requestId>` (or erases it) |
+| `/hl/v1/logs/data/<requestId>` | W→P | Channel | UTF-8 text: the watch's exported log | Phone saves it as `heartline-watch-….log` |
 | `/hl/v1/open` | P→W | Message | Screen name (`ecg`, `blood_pressure`, …) as plain text | Watch opens that screen |
 
 ## Rules

@@ -3,7 +3,7 @@
 
 package com.heartline.wear.sensor.sdk
 
-import android.util.Log
+import com.heartline.datalayer.diag.HLog
 import com.heartline.shared.sensor.TrackerKind
 import com.heartline.wear.sensor.GatewayState
 import com.heartline.wear.sensor.PpgChunk
@@ -44,7 +44,7 @@ class SdkPpgSource(private val gateway: SdkSensorGateway) : PpgSource {
                 override fun onFlushCompleted() = Unit
 
                 override fun onError(error: HealthTracker.TrackerError) {
-                    Log.w(SdkSensorGateway.TAG, "PPG tracker error: $error")
+                    HLog.w(SdkSensorGateway.TAG, "PPG tracker error: $error")
                     close(SensorException(SdkSensorGateway.mapError(error)))
                 }
             },

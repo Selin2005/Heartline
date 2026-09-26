@@ -22,6 +22,7 @@ Play.
 | **Sensor readings:** ECG waveforms and results, PPG-based blood pressure estimates and features, heart rate, inter-beat intervals and HRV, blood oxygen, skin temperature, stress, body composition, motion used to check you are still | The features of the app | Watch until synced, then the phone |
 | **Your entries:** cuff readings for calibration, symptoms, notes | Calibration and your history | Phone (calibration also on the watch) |
 | **Settings:** alerts, thresholds, goals, update channel | App behaviour | Phone and watch |
+| **Diagnostic logs** (if on, see section 3) | Fixing problems you report | Phone and watch, until exported or deleted |
 
 Heartline reads sensors through the Samsung Health Sensor SDK on the watch. Heartline does not
 read from or write to Samsung Health, Google Fit or Health Connect.
@@ -37,7 +38,19 @@ read from or write to Samsung Health, Google Fit or Health Connect.
   AI* feature hands a summary to an AI app installed on your phone, only after you confirm, and
   under that app's privacy policy.
 
-## 3. Network access
+## 3. Diagnostic logs
+To help fix problems, the apps can keep a **diagnostic log** on each device: what the app did,
+errors, connection and sensor states, and measurement values (for example ECG quality or blood
+pressure features). Your name and birth date are removed before anything is written.
+- It is **on by default for beta versions** and **off for stable versions** until you agree when
+  the app asks. Change it any time in Settings → Help & diagnostics.
+- It uses at most about 8 MB on the phone and 8 MB on the watch; older entries are removed first.
+- *Detailed logging* adds raw sensor values for 24 hours, then switches itself off.
+- Logs are **never sent automatically**. *Export logs* saves two text files (phone and watch)
+  into a folder you choose; you decide whether to send them to us, for example with a bug report.
+- Turning diagnostic logs off, or *Delete logs*, erases them on both devices.
+
+## 4. Network access
 - **Update check (GitHub version only):** once a day, and when you tap *Check now*, the phone app
   asks `api.github.com` for the list of Heartline releases and may download an APK from
   `github.com`. Like every web request, this reveals your IP address and basic device information
@@ -47,7 +60,7 @@ read from or write to Samsung Health, Google Fit or Health Connect.
 - The **Google Play version** doesn't make any network request of its own; Google Play handles
   updates.
 
-## 4. Permissions
+## 5. Permissions
 | Permission | Used for |
 |---|---|
 | Body sensors / health data (heart rate, SpO₂, skin temperature, additional Samsung health data) | Taking the measurements you start, and background heart rate for rhythm alerts if you turn them on |
@@ -58,29 +71,29 @@ read from or write to Samsung Health, Google Fit or Health Connect.
 
 You can revoke any permission in the system settings. The related features stop working.
 
-## 5. Retention and deletion
+## 6. Retention and deletion
 Your data is kept on your devices until you delete it. The watch only keeps measurements until
 they have reached the phone. **Settings → Delete all data** on the phone removes all your
 measurements, and you can delete single records at any time. Uninstalling Heartline removes
 everything it stored on that device, including your profile and settings.
 We can't delete data you have exported or shared, because we never had it.
 
-## 6. Children
+## 7. Children
 Heartline is intended for adults (18+) and is not directed at children.
 
-## 7. Security
+## 8. Security
 Data is stored in the app's private storage, protected by Android's app sandbox and your device
 lock. Updates downloaded from GitHub are checked against published SHA-256 checksums before
 installation. Please report vulnerabilities as described in [SECURITY.md](../SECURITY.md).
 
-## 8. Your rights
+## 9. Your rights
 Because all data is under your control on your devices, you can access, export, correct and
 delete it yourself at any time from the app. If you have a question or request, contact us below.
 
-## 9. Changes
+## 10. Changes
 We'll update this policy when Heartline's data practices change. The version number changes with
 every update, and the app asks you to accept the new version.
 
-## 10. Contact
+## 11. Contact
 Open an issue at https://github.com/selin2005/heartline/issues. For anything sensitive, use
 [private reporting](https://github.com/selin2005/heartline/security/advisories/new).

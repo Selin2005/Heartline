@@ -3,7 +3,7 @@
 
 package com.heartline.wear.sensor.sdk
 
-import android.util.Log
+import com.heartline.datalayer.diag.HLog
 import com.heartline.shared.model.Metric
 import com.heartline.shared.model.RecordKind
 import com.heartline.shared.model.RecordSummary
@@ -78,7 +78,7 @@ abstract class SdkQuickSource(
                 val fraction = sdkProgress ?: (good / (seconds * 4f))
                 trySend(QuickEvent.Progress(fraction.coerceIn(0f, 0.98f), hint))
             }
-            Log.w(SdkSensorGateway.TAG, "$tracker: no result after $timeoutSeconds s (hint=$problem)")
+            HLog.w(SdkSensorGateway.TAG, "$tracker: no result after $timeoutSeconds s (hint=$problem)")
             trySend(QuickEvent.Failed(null, problem ?: QuickHint.LOW_SIGNAL))
             close()
         }
@@ -94,7 +94,7 @@ abstract class SdkQuickSource(
                 override fun onFlushCompleted() = Unit
 
                 override fun onError(error: HealthTracker.TrackerError) {
-                    Log.w(SdkSensorGateway.TAG, "$tracker error: $error")
+                    HLog.w(SdkSensorGateway.TAG, "$tracker error: $error")
                     close(SensorException(SdkSensorGateway.mapError(error)))
                 }
             },
@@ -117,7 +117,7 @@ class SdkSpo2Source(private val gateway: SdkSensorGateway) :
 
     override fun ProducerScope<QuickEvent>.onData(points: List<DataPoint>): Boolean {
         points.forEach {
-            Log.i(
+            HLog.i(
                 QUICK_RAW_TAG,
                 "SpO2 status=${it.getValue(ValueKey.SpO2Set.STATUS)} spo2=${it.getValue(ValueKey.SpO2Set.SPO2)} " +
                     "hr=${it.getValue(ValueKey.SpO2Set.HEART_RATE)} t=${it.timestamp}",
@@ -159,7 +159,7 @@ class SdkSkinTempSource(private val gateway: SdkSensorGateway) :
 
     override fun ProducerScope<QuickEvent>.onData(points: List<DataPoint>): Boolean {
         points.forEach {
-            Log.i(
+            HLog.i(
                 QUICK_RAW_TAG,
                 "SkinTemp status=${it.getValue(ValueKey.SkinTemperatureSet.STATUS)} " +
                     "object=${it.getValue(ValueKey.SkinTemperatureSet.OBJECT_TEMPERATURE)} " +
@@ -190,7 +190,7 @@ class SdkBiaSource(private val gateway: SdkSensorGateway) :
         val p = profile ?: throw SensorException(SensorProblem.NOT_SUPPORTED)
         val sex = p.calcSex ?: throw SensorException(SensorProblem.NOT_SUPPORTED)
         val age = p.age() ?: throw SensorException(SensorProblem.NOT_SUPPORTED)
-        Log.i(RAW_TAG, "profile age=$age sex=$sex heightCm=${p.heightCm} weightKg=${p.weightKg}")
+        HLog.i(RAW_TAG, "profile age=$age sex=$sex heightCm=${p.heightCm} weightKg=${p.weightKg}")
         measuredWith = p
         val sdkProfile = TrackerUserProfile.Builder()
             .setAge(age)
@@ -210,13 +210,13 @@ class SdkBiaSource(private val gateway: SdkSensorGateway) :
     override fun onStart() = statuses.clear()
 
     override fun onStop() {
-        Log.i(SdkSensorGateway.TAG, "BIA statuses seen: $statuses")
+        HLog.i(SdkSensorGateway.TAG, "BIA statuses seen: $statuses")
     }
 
     override fun ProducerScope<QuickEvent>.onData(points: List<DataPoint>): Boolean {
         points.forEach { point ->
             statuses.merge(point.getValue(ValueKey.BiaSet.STATUS), 1, Int::plus)
-            Log.i(RAW_TAG, rawBia(point))
+            HLog.i(RAW_TAG, rawBia(point))
         }
         val p = points.last()
         val status = p.getValue(ValueKey.BiaSet.STATUS)

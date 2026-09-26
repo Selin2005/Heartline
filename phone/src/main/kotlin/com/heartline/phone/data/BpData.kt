@@ -3,13 +3,13 @@
 
 package com.heartline.phone.data
 
+import com.heartline.datalayer.diag.HLog
 import androidx.room.Dao
 import androidx.room.Entity
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
-import android.util.Log
 import com.heartline.shared.bp.BpCalibration
 import com.heartline.shared.bp.BpDataset
 import com.heartline.shared.bp.BpDatasetEntry
@@ -164,7 +164,7 @@ class BpRepository(
             val model = embedders().mapNotNull { HybridBpModel(it).train(samples) }.minByOrNull { it.looMaeHybrid } ?: return@withContext null
             val classical = BpEstimate(summary.systolic, summary.diastolic, summary.pulse ?: 0, summary.uncertainty ?: 0)
             val (sys, dia) = model.correct(classical, features, wave) ?: return@withContext null
-            Log.i(TAG, "refined ${summary.systolic}/${summary.diastolic} → $sys/$dia (LOO ${"%.1f".format(model.looMaeHybrid)} vs ${"%.1f".format(model.looMaeClassical)})")
+            HLog.i(TAG, "refined ${summary.systolic}/${summary.diastolic} → $sys/$dia (LOO ${"%.1f".format(model.looMaeHybrid)} vs ${"%.1f".format(model.looMaeClassical)})")
             summary.copy(systolic = sys, diastolic = dia, algorithm = ALGORITHM_HYBRID, watchSystolic = summary.systolic, watchDiastolic = summary.diastolic)
         }
 

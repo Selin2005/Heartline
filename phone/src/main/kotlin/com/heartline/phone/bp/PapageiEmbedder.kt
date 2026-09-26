@@ -3,11 +3,11 @@
 
 package com.heartline.phone.bp
 
+import com.heartline.datalayer.diag.HLog
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import android.content.Context
-import android.util.Log
 import com.heartline.shared.bp.PapageiInput
 import com.heartline.shared.bp.PpgEmbedder
 import com.heartline.shared.bp.PpgFeatureVector
@@ -37,7 +37,7 @@ class PapageiEmbedder private constructor(private val session: OrtSession) : Ppg
                     DoubleArray(out[0].size) { j -> out.sumOf { it[j].toDouble() } / out.size }
                 }
             }
-        }.onFailure { Log.w(TAG, "PaPaGei failed", it) }.getOrNull()
+        }.onFailure { HLog.w(TAG, "PaPaGei failed", it) }.getOrNull()
     }
 
     companion object {
@@ -49,6 +49,6 @@ class PapageiEmbedder private constructor(private val session: OrtSession) : Ppg
         fun fromAssets(context: Context): PapageiEmbedder? = runCatching {
             val bytes = context.assets.open(ASSET).use { it.readBytes() }
             PapageiEmbedder(OrtEnvironment.getEnvironment().createSession(bytes, OrtSession.SessionOptions()))
-        }.onFailure { Log.i(TAG, "PaPaGei not available: ${it.message}") }.getOrNull()
+        }.onFailure { HLog.i(TAG, "PaPaGei not available: ${it.message}") }.getOrNull()
     }
 }

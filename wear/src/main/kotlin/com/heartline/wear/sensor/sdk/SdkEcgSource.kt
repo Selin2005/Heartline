@@ -3,8 +3,8 @@
 
 package com.heartline.wear.sensor.sdk
 
+import com.heartline.datalayer.diag.HLog
 import android.os.SystemClock
-import android.util.Log
 import com.heartline.shared.sensor.TrackerKind
 import com.heartline.wear.sensor.EcgChunk
 import com.heartline.wear.sensor.EcgSource
@@ -31,7 +31,7 @@ class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
         if (TrackerKind.ECG_ON_DEMAND !in (state as GatewayState.Connected).trackers) throw SensorException(SensorProblem.NOT_SUPPORTED)
         val tracker = gateway.tracker(TrackerKind.ECG_ON_DEMAND) ?: throw SensorException(SensorProblem.NOT_SUPPORTED)
 
-        Log.i(EcgRawLog.TAG, "ECG tracker started")
+        HLog.i(EcgRawLog.TAG, "ECG tracker started")
         var missing = 0
         val raw = EcgRawLog()
         tracker.setEventListener(
@@ -60,14 +60,14 @@ class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
                 override fun onFlushCompleted() = Unit
 
                 override fun onError(error: HealthTracker.TrackerError) {
-                    Log.w(SdkSensorGateway.TAG, "ECG tracker error: $error")
+                    HLog.w(SdkSensorGateway.TAG, "ECG tracker error: $error")
                     close(SensorException(SdkSensorGateway.mapError(error)))
                 }
             },
         )
         awaitClose {
             tracker.unsetEventListener()
-            if (missing > 0) Log.w(SdkSensorGateway.TAG, "ECG: $missing points had no ECG_MV value")
+            if (missing > 0) HLog.w(SdkSensorGateway.TAG, "ECG: $missing points had no ECG_MV value")
             raw.end()
         }
     }
@@ -114,7 +114,7 @@ private class EcgRawLog {
         if (!leadOff) contactBatches++
         if (saturated) saturatedBatches++
         if (batches <= FULL_BATCHES || leadOff != lastLeadOff) {
-            Log.i(
+            HLog.i(
                 TAG,
                 "batch#$batches n=${points.size} LEAD_OFF=$flags leadOff=$leadOff saturated=$saturated " +
                     "mV=[${values.minOrNull()}..${values.maxOrNull()}] thresholds=[$min..$max] ppg=$ppg " +
@@ -133,7 +133,7 @@ private class EcgRawLog {
         secondBatches++
         if (leadOff) secondLeadOffBatches++
         if (now - secondStart >= 1_000) {
-            Log.i(
+            HLog.i(
                 TAG,
                 "1s: points=$secondPoints missingMv=$secondMissing LEAD_OFF=$secondFlags " +
                     "leadOffBatches=$secondLeadOffBatches/$secondBatches mV=[$secondMin..$secondMax]",
@@ -150,7 +150,7 @@ private class EcgRawLog {
     }
 
     fun end() {
-        Log.i(
+        HLog.i(
             TAG,
             "end: batches=$batches contact=$contactBatches saturated=$saturatedBatches " +
                 "LEAD_OFF first point=$firstFlags other points=$otherFlags",

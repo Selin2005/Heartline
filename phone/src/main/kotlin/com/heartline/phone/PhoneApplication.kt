@@ -3,12 +3,17 @@
 
 package com.heartline.phone
 
+import com.heartline.datalayer.diag.HLog
 import android.app.Application
-import android.util.Log
 import com.heartline.phone.data.BpRepository
 import com.heartline.phone.link.PhoneStatusPublisher
 import com.heartline.phone.notify.Reminders
 import com.heartline.phone.update.UpdateWorker
+import com.heartline.phone.diag.DiagnosticsRepository
+import com.heartline.phone.data.ProfileRepository
+import com.heartline.shared.diag.Redactor
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import com.heartline.phone.widget.WidgetUpdater
 import com.heartline.phone.data.DemoData
 import com.heartline.phone.data.HeartRepository
@@ -32,17 +37,18 @@ class PhoneApplication : Application() {
         db.heart().deleteDemoAlerts()
         // Demo minutes have no ids; no real minute could have arrived before this fix (the link never worked).
         db.heart().deleteMinutes()
-        Log.i("Heartline/Data", "purged demo data: records=$records calibrations=$calibrations")
+        HLog.i("Heartline/Data", "purged demo data: records=$records calibrations=$calibrations")
         if (calibrations > 0) get<BpRepository>().resendCalibration(orNull = true)
     }
 
     override fun onCreate() {
         super.onCreate()
+        HLog.init(this)
         startKoin {
             androidContext(this@PhoneApplication)
             modules(phoneModule)
         }
-        Log.i("Heartline/App", "phone app ${BuildConfig.VERSION_NAME} (${BuildConfig.BUILD_TYPE}) on ${android.os.Build.MODEL}, API ${android.os.Build.VERSION.SDK_INT}")
+        HLog.i("Heartline/App", "phone app ${BuildConfig.VERSION_NAME} (${BuildConfig.BUILD_TYPE}) on ${android.os.Build.MODEL}, API ${android.os.Build.VERSION.SDK_INT}")
         val scope = get<CoroutineScope>(APP_SCOPE)
         scope.launch {
             val settings = get<SettingsRepository>()
@@ -56,5 +62,8 @@ class PhoneApplication : Application() {
         get<WidgetUpdater>().start(scope)
         scope.launch { Reminders.sync(this@PhoneApplication, get<SettingsRepository>().current()) }
         UpdateWorker.schedule(this, enabled = BuildConfig.UPDATER)
+        // Diagnostic logs: on for beta users, stable users are asked; names never reach the file.
+        get<DiagnosticsRepository>().start(scope)
+        get<ProfileRepository>().profile.onEach { HLog.setRedactor(Redactor.of(it)) }.launchIn(scope)
     }
 }

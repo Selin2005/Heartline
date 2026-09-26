@@ -673,4 +673,31 @@
     <string name="update_notif_text">Tap to see what\'s new and install it.</string>
     <string name="whats_new_all">All release notes</string>
     <string name="whats_new_after_update">Heartline was updated to %1$s</string>
+
+    <!-- Help & diagnostics -->
+    <string name="diag_title">Help &amp; diagnostics</string>
+    <string name="diag_settings_sub">Export logs for a bug report</string>
+    <string name="diag_intro">Logs help us fix problems. They include measurement values and device details, but not your name or birth date. They stay on your phone and watch until you save them.</string>
+    <string name="diag_export">Export logs</string>
+    <string name="diag_step_phone">Collecting the phone\'s logs…</string>
+    <string name="diag_step_watch">Asking the watch for its logs…</string>
+    <string name="diag_step_saving">Saving…</string>
+    <string name="diag_saved">Saved %1$s and %2$s. Attach both to your bug report.</string>
+    <string name="diag_watch_unreachable">The watch didn\'t answer, so its file only says so. Open Heartline on the watch and export again.</string>
+    <string name="diag_failed">Couldn\'t save the logs: %1$s</string>
+    <string name="diag_off_hint">Diagnostic logs are off, so the export only covers the last few minutes. Turn them on to capture problems that happened earlier.</string>
+    <string name="diag_settings">Log settings</string>
+    <string name="diag_keep">Keep diagnostic logs</string>
+    <string name="diag_keep_on">On phone and watch · %1$d KB on this phone (8 MB at most)</string>
+    <string name="diag_keep_off">Off: nothing is written to storage</string>
+    <string name="diag_detailed">Detailed logging</string>
+    <string name="diag_detailed_sub">Adds raw sensor values for 24 hours</string>
+    <string name="diag_detailed_until">On until %1$s</string>
+    <string name="diag_detailed_needs_logs">Turn on diagnostic logs first</string>
+    <string name="diag_delete">Delete logs</string>
+    <string name="diag_report_sub">Open a bug report on GitHub and attach the two files</string>
+    <string name="diag_ask_title">Help us fix problems?</string>
+    <string name="diag_ask_body">Heartline can keep a diagnostic log on this phone and your watch (up to 8 MB each). It\'s never sent anywhere unless you export it, and you can turn it off any time in Settings → Help &amp; diagnostics.</string>
+    <string name="diag_ask_yes">Keep logs</string>
+    <string name="diag_ask_no">No thanks</string>
 </resources>

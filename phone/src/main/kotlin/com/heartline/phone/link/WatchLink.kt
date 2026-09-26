@@ -3,7 +3,7 @@
 
 package com.heartline.phone.link
 
-import android.util.Log
+import com.heartline.datalayer.diag.HLog
 import com.heartline.datalayer.DataLayerTransport
 import com.heartline.datalayer.DeepLinks
 import com.heartline.datalayer.RemoteOpener
@@ -45,7 +45,8 @@ class PhoneStatusPublisher(
     fun start(scope: CoroutineScope) {
         scope.launch {
             status.drop(1).collect {
-                Log.i(TAG, "status changed -> $it")
+                // The name stays out of logs.
+                HLog.i(TAG, "status changed -> ${it.copy(displayName = if (it.displayName.isBlank()) "" else "<name>")}")
                 sync().sendStatus(it)
             }
         }

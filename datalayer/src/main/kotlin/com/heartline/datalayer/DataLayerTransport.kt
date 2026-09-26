@@ -3,8 +3,8 @@
 
 package com.heartline.datalayer
 
+import com.heartline.datalayer.diag.HLog
 import android.content.Context
-import android.util.Log
 import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.ChannelClient
 import com.google.android.gms.wearable.Node
@@ -43,22 +43,22 @@ class DataLayerTransport(context: Context, private val peerCapability: String) :
     override val incoming: Flow<Envelope> = inbox.asSharedFlow()
 
     suspend fun deliver(envelope: Envelope) {
-        Log.i(TAG, "received ${envelope.path} (${envelope.data.size} B)")
+        HLog.i(TAG, "received ${envelope.path} (${envelope.data.size} B)")
         inbox.emit(envelope)
     }
 
     /** Nodes running the other Heartline app. */
     suspend fun peers(): Set<Node> = runCatching {
         capabilities.getCapability(peerCapability, CapabilityClient.FILTER_REACHABLE).await().nodes
-    }.onFailure { Log.w(TAG, "capability lookup '$peerCapability' failed", it) }
+    }.onFailure { HLog.w(TAG, "capability lookup '$peerCapability' failed", it) }
         .getOrDefault(emptySet())
-        .also { found -> Log.i(TAG, "capability '$peerCapability' -> ${found.joinToString { "${it.displayName}(${it.id})" }.ifEmpty { "none" }}") }
+        .also { found -> HLog.i(TAG, "capability '$peerCapability' -> ${found.joinToString { "${it.displayName}(${it.id})" }.ifEmpty { "none" }}") }
 
     /** Every device connected over Bluetooth/Wi-Fi, Heartline or not. */
     suspend fun connectedNodes(): List<Node> = runCatching { nodes.connectedNodes.await() }
-        .onFailure { Log.w(TAG, "connectedNodes failed", it) }
+        .onFailure { HLog.w(TAG, "connectedNodes failed", it) }
         .getOrDefault(emptyList())
-        .also { found -> Log.i(TAG, "connected nodes -> ${found.joinToString { "${it.displayName}(${it.id}, nearby=${it.isNearby})" }.ifEmpty { "none" }}") }
+        .also { found -> HLog.i(TAG, "connected nodes -> ${found.joinToString { "${it.displayName}(${it.id}, nearby=${it.isNearby})" }.ifEmpty { "none" }}") }
 
     override suspend fun probe(): PeerProbe = when {
         peers().isNotEmpty() -> PeerProbe.REACHABLE
@@ -72,19 +72,19 @@ class DataLayerTransport(context: Context, private val peerCapability: String) :
     override suspend fun send(path: String, data: ByteArray): Boolean {
         val targets = peers()
         if (targets.isEmpty()) {
-            Log.w(TAG, "send $path: no peer")
+            HLog.w(TAG, "send $path: no peer")
             return false
         }
         return targets.map { node ->
             runCatching { messages.sendMessage(node.id, path, data).await() }
-                .onSuccess { Log.i(TAG, "sent $path (${data.size} B) to ${node.displayName}") }
-                .onFailure { Log.w(TAG, "sendMessage $path to ${node.displayName} failed", it) }
+                .onSuccess { HLog.i(TAG, "sent $path (${data.size} B) to ${node.displayName}") }
+                .onFailure { HLog.w(TAG, "sendMessage $path to ${node.displayName} failed", it) }
                 .isSuccess
         }.any { it }
     }
 
     override suspend fun sendLarge(path: String, data: ByteArray): Boolean {
-        val node = peers().firstOrNull() ?: return false.also { Log.w(TAG, "sendLarge $path: no peer") }
+        val node = peers().firstOrNull() ?: return false.also { HLog.w(TAG, "sendLarge $path: no peer") }
         return runCatching {
             val channel = channels.openChannel(node.id, path).await()
             try {
@@ -94,8 +94,8 @@ class DataLayerTransport(context: Context, private val peerCapability: String) :
             } finally {
                 channels.close(channel)
             }
-        }.onSuccess { Log.i(TAG, "streamed $path (${data.size} B)") }
-            .onFailure { Log.w(TAG, "channel $path failed", it) }
+        }.onSuccess { HLog.i(TAG, "streamed $path (${data.size} B)") }
+            .onFailure { HLog.w(TAG, "channel $path failed", it) }
             .isSuccess
     }
 
@@ -103,7 +103,7 @@ class DataLayerTransport(context: Context, private val peerCapability: String) :
     suspend fun readChannel(channel: ChannelClient.Channel): ByteArray = withContext(Dispatchers.IO) {
         channels.getInputStream(channel).await().use { it.readBytes() }.also {
             channels.close(channel)
-            Log.i(TAG, "received stream ${channel.path} (${it.size} B)")
+            HLog.i(TAG, "received stream ${channel.path} (${it.size} B)")
         }
     }
 

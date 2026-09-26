@@ -3,6 +3,7 @@
 
 package com.heartline.wear.sensor
 
+import com.heartline.datalayer.diag.HLog
 import com.heartline.shared.hr.Hrv
 import com.heartline.shared.model.Metric
 import com.heartline.shared.model.RecordKind
@@ -11,7 +12,6 @@ import com.heartline.shared.profile.StressIndex
 import com.heartline.shared.profile.UserProfile
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import android.util.Log
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
@@ -124,7 +124,7 @@ class StressSource(
     }
 
     private fun log(message: String) {
-        runCatching { Log.i(TAG, message) }
+        runCatching { HLog.i(TAG, message) }
     }
 
     private companion object {
