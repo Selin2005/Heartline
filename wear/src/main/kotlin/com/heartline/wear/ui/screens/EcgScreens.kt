@@ -46,6 +46,9 @@ import com.heartline.shared.model.EcgResult
 import com.heartline.shared.model.Severity
 import com.heartline.wear.R
 import com.heartline.wear.ui.components.GoodResult
+import com.heartline.wear.ui.components.EdgeGlowSweep
+import com.heartline.wear.ui.components.EdgePulse
+import com.heartline.wear.ui.components.EdgeRipple
 import com.heartline.wear.ui.components.PersonalNote
 import com.heartline.wear.ui.components.ActionScreen
 import com.heartline.wear.ui.components.EcgKeyIllustration
@@ -103,6 +106,11 @@ fun EcgMeasuringScreen(
             strokeWidth = 6.dp,
             colors = ProgressIndicatorDefaults.colors(indicatorColor = color, trackColor = WearColors.surfaceHigh),
         )
+        // A ripple comes in from the rim the moment the finger makes contact, then the rim beats.
+        if (!leadOff && !waitingForTouch) {
+            EdgeRipple("touch", color)
+            EdgePulse(bpm, color)
+        }
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
@@ -209,6 +217,7 @@ fun EcgResultScreen(result: EcgResult, averageBpm: Int?, metrics: EcgMetrics? = 
         Severity.NEUTRAL -> Icons.Rounded.QuestionMark
         else -> Icons.Rounded.PriorityHigh
     }
+    Box(Modifier.fillMaxSize()) {
     ActionScreen(stringResource(R.string.action_done), onDone) {
         val small = isSmallRound()
         Box(
@@ -246,6 +255,9 @@ fun EcgResultScreen(result: EcgResult, averageBpm: Int?, metrics: EcgMetrics? = 
             )
         }
         metrics?.let { EcgDetails(it) }
+    }
+        // A normal rhythm: a band of light runs once around the rim.
+        if (result.severity == Severity.NORMAL) EdgeGlowSweep(result, color)
     }
 }
 

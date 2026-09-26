@@ -63,6 +63,14 @@ class LauncherPrefs(context: Context) {
         state.value = next
     }
 
+    /** True the first time [kind] is claimed on [day] (a celebration plays once a day). */
+    fun claim(kind: String, day: Long): Boolean {
+        val key = "celebrated_$kind"
+        if (prefs.getLong(key, -1) == day) return false
+        prefs.edit().putLong(key, day).apply()
+        return true
+    }
+
     private companion object {
         const val KEY = "pinned"
     }
@@ -104,6 +112,18 @@ class LauncherViewModel(
     fun connect() = gateway.connect()
 
     fun togglePin(metric: Metric) = prefs?.toggle(metric)
+
+    /**
+     * Whether to throw confetti now: on the user's birthday, and when today's check-ins are all
+     * done; each at most once a day.
+     */
+    fun celebrate(header: LauncherHeader): Boolean {
+        val p = prefs ?: return false
+        val day = Instant.ofEpochMilli(now()).atZone(zone()).toLocalDate().toEpochDay()
+        val birthday = header.birthday && p.claim("birthday", day)
+        val allDone = header.next == null && header.total > 0 && p.claim("checkins", day)
+        return birthday || allDone
+    }
 
     companion object {
         private const val DAY_MS = 86_400_000L

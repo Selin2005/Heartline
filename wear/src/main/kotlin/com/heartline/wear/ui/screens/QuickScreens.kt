@@ -156,6 +156,9 @@ fun QuickMeasuringScreen(
 @Composable
 fun QuickResultScreen(metric: Metric, summary: RecordSummary, onDone: () -> Unit = {}) {
     val small = isSmallRound()
+    val good = (summary is RecordSummary.Spo2 && summary.percent >= 95 && !summary.lowConfidence) ||
+        (summary is RecordSummary.Stress && StressIndex.level(summary.score) == StressLevel.LOW)
+    Box(Modifier.fillMaxSize()) {
     ActionScreen(stringResource(R.string.action_done), onDone) {
         Text(stringResource(metric.label), style = MaterialTheme.typography.titleSmall, color = WearColors.metric(metric))
         when (summary) {
@@ -185,6 +188,8 @@ fun QuickResultScreen(metric: Metric, summary: RecordSummary, onDone: () -> Unit
             }
             else -> Unit
         }
+    }
+    if (good) com.heartline.wear.ui.components.EdgeGlowSweep(summary, WearColors.metric(metric))
     }
 }
 

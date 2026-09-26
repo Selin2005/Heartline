@@ -27,6 +27,8 @@ import com.heartline.wear.ui.theme.WearColors
 fun HeartRateScreen(bpm: Int?, onBody: Boolean, animate: Boolean = true) {
     val color = WearColors.metric(com.heartline.shared.model.Metric.HEART_RATE)
     Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
+        // The rim glows with each beat.
+        if (animate && onBody) com.heartline.wear.ui.components.EdgePulse(bpm, color)
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,

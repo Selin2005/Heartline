@@ -3,6 +3,7 @@ package com.heartline.wear.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import com.heartline.wear.ui.components.LocalUserName
+import com.heartline.wear.ui.components.LocalCelebrations
 import androidx.compose.runtime.LaunchedEffect
 import android.content.Intent
 import android.net.Uri
@@ -57,6 +58,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.remember
 import com.heartline.wear.monitor.BackgroundMonitoring
 import com.heartline.wear.monitor.WatchSettingsStore
 import kotlinx.coroutines.launch
@@ -194,7 +196,7 @@ fun HeartlineWearApp(startRoute: String? = null) {
     val userName = profile?.displayName?.takeIf { monitor.showNameOnWatch && it.isNotBlank() }
 
     HeartlineWearTheme {
-        CompositionLocalProvider(LocalUserName provides userName) {
+        CompositionLocalProvider(LocalUserName provides userName, LocalCelebrations provides monitor.celebrations) {
         AppScaffold(timeText = { TimeText() }) {
             when (val g = gateState) {
                 GateState.CheckingPhone -> CheckingScreen(
@@ -255,15 +257,19 @@ private fun AppNavHost(nav: NavHostController, gate: SetupGateViewModel) {
     SwipeDismissableNavHost(navController = nav, startDestination = Routes.LAUNCHER) {
         composable(Routes.LAUNCHER) {
             when (val state = launcherState) {
-                is LauncherState.Ready ->
+                is LauncherState.Ready -> {
+                    // Decided once per visit to the launcher (and at most once a day per reason).
+                    val celebrate = remember(state.header.birthday, state.header.next) { launcher.celebrate(state.header) }
                     LauncherScreen(
                         state.entries,
                         header = state.header,
+                        celebrate = celebrate,
                         onOpen = { nav.navigate(Routes.measure(it)) },
                         onOptions = { nav.navigate(Routes.options(it)) },
                         onHistory = { nav.navigate(Routes.HISTORY) },
                         onSettings = { nav.navigate(Routes.SETTINGS) },
                     )
+                }
                 is LauncherState.Problem -> SensorErrorScreen(state.problem, onAction = {
                     if (state.problem == SensorProblem.SDK_POLICY) nav.navigate(Routes.DEV_MODE) else launcher.connect()
                 })

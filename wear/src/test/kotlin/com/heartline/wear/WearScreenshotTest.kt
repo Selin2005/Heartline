@@ -1,5 +1,8 @@
 package com.heartline.wear
 
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
@@ -87,7 +90,17 @@ class WearScreenshotTest(private val size: String) {
     @Test fun launcher() = shot("launcher") { LauncherScreen(WearSample.launcher, WearSample.launcherHeader, nowMs = WearSample.NOW_MS) }
 
     @Test fun launcherBirthday() = shot("launcher_birthday") {
-        LauncherScreen(WearSample.launcher, WearSample.launcherHeader.copy(birthday = true, done = 3, next = null), nowMs = WearSample.NOW_MS)
+        LauncherScreen(WearSample.launcher, WearSample.launcherHeader.copy(birthday = true, done = 3, next = null), nowMs = WearSample.NOW_MS, celebrate = true, confettiFrameMs = 420)
+    }
+
+    @Test fun confettiLate() = shot("confetti_late") {
+        LauncherScreen(WearSample.launcher, WearSample.launcherHeader.copy(birthday = true, done = 3, next = null), nowMs = WearSample.NOW_MS, celebrate = true, confettiFrameMs = 1_000)
+    }
+
+    @Test fun glowSweep() = shot("edge_glow") {
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
+            com.heartline.wear.ui.components.EdgeGlowSweep("x", com.heartline.wear.ui.theme.WearColors.metric(Metric.SPO2), frameMs = 500)
+        }
     }
 
     @Test fun metricOptions() = shot("launcher_options") { com.heartline.wear.ui.screens.MetricOptionsScreen(Metric.ECG, pinned = true, onPin = {}, onMeasure = {}, onHistory = {}) }

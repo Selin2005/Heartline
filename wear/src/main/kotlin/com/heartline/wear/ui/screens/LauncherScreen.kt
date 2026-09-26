@@ -14,7 +14,10 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import com.heartline.wear.ui.components.EdgeConfetti
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,6 +74,28 @@ fun LauncherScreen(
     onHistory: () -> Unit = {},
     onSettings: () -> Unit = {},
     nowMs: Long = System.currentTimeMillis(),
+    celebrate: Boolean = false,
+    confettiFrameMs: Long? = null,
+) {
+    Box(Modifier.fillMaxSize()) {
+        LauncherList(entries, header, onOpen, onOptions, onHistory, onSettings, nowMs)
+        if (celebrate) {
+            val haptics = LocalHapticFeedback.current
+            LaunchedEffect(Unit) { haptics.performHapticFeedback(HapticFeedbackType.Confirm) }
+            EdgeConfetti("launcher", frameMs = confettiFrameMs)
+        }
+    }
+}
+
+@Composable
+private fun LauncherList(
+    entries: List<LauncherEntry>,
+    header: LauncherHeader?,
+    onOpen: (Metric) -> Unit,
+    onOptions: (Metric) -> Unit,
+    onHistory: () -> Unit,
+    onSettings: () -> Unit,
+    nowMs: Long,
 ) {
     val state = rememberTransformingLazyColumnState()
     val quick = header?.next ?: entries.firstOrNull()?.metric

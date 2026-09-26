@@ -112,6 +112,7 @@ fun BpResultScreen(
     onDone: () -> Unit = {},
 ) {
     val needsConfirming = (beyondCalibration || safety != BpSafety.NONE) && !confirmed
+    Box(Modifier.fillMaxSize()) {
     ActionScreen(stringResource(R.string.action_done), onDone) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text("$systolic/$diastolic", style = MaterialTheme.typography.displayMedium)
@@ -146,6 +147,8 @@ fun BpResultScreen(
                 Text(stringResource(R.string.bp_measure_again), maxLines = 1)
             }
         }
+    }
+        if (category == BpCategory.NORMAL && !needsConfirming) com.heartline.wear.ui.components.EdgeGlowSweep(systolic, category.color)
     }
 }
 
