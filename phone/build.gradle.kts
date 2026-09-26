@@ -8,13 +8,13 @@ plugins {
 
 android {
     namespace = "com.heartline.phone"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         // Same applicationId as :wear — required by the Wearable Data Layer.
         applicationId = "com.heartline.app"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 37
         // Set by the Build workflow form: -Pheartline.versionName=1.2.0 -Pheartline.versionCode=<run number>.
         versionCode = (findProperty("heartline.versionCode") ?: "1").toString().toInt()
         versionName = (findProperty("heartline.versionName") ?: "0.1.0").toString()

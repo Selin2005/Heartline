@@ -8,13 +8,13 @@ plugins {
 
 android {
     namespace = "com.heartline.wear"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         // Same applicationId as :phone — required by the Wearable Data Layer.
         applicationId = "com.heartline.app"
         minSdk = 30
-        targetSdk = 36
+        targetSdk = 37
         // Set by the Build workflow form: -Pheartline.versionName=1.2.0 -Pheartline.versionCode=<run number>.
         versionCode = (findProperty("heartline.versionCode") ?: "1").toString().toInt()
         versionName = (findProperty("heartline.versionName") ?: "0.1.0").toString()
@@ -98,7 +98,7 @@ dependencies {
     implementation(libs.wear.protolayout)
     implementation(libs.wear.protolayout.material3)
     implementation(libs.wear.complications.data.source.ktx)
-    // Pin: newer navigation needs compileSdk 37 (see MASTER_PLAN R6).
+    // Navigation stays on 2.9.x; compileSdk 37 now allows newer versions (MASTER_PLAN R6).
     implementation(libs.androidx.navigation.compose)
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
