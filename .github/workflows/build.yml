@@ -1,20 +1,27 @@
 name: Build
 
-# Runs only from the form (Actions → Build → Run workflow), not on every commit.
+# Runs from the form (Actions → Build → Run workflow) or from the Promote workflow, never on every commit.
+#
+# Channels:
+#   stable  release build for everyone: tag vX.Y.Z, the "latest" GitHub release
+#   beta    release build for testers: tag vX.Y.Z-beta.N, a pre-release; the app only offers it
+#           to users who turned on "Receive beta versions"
+#   dev     debug build with full logs: tag vX.Y.Z-dev.<run>, a pre-release the app never offers
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version name (e.g. 1.2.0)"
+        description: "Version (X.Y.Z). The channel adds -beta.N or -dev.N"
         required: true
         type: string
+      channel:
+        description: "Who gets it: stable (everyone), beta (testers who opted in), dev (nobody, debug build)"
+        required: true
+        default: beta
+        type: choice
+        options: [beta, stable, dev]
       release:
-        description: "Publish a GitHub release with both APKs"
-        required: false
-        default: false
-        type: boolean
-      dev:
-        description: "Dev build: debug APKs (full logs), pre-release tagged -dev. Off: R8 release APKs"
+        description: "Publish a GitHub release (off: APKs only as run artifacts)"
         required: false
         default: true
         type: boolean
@@ -23,88 +30,202 @@ on:
         required: false
         default: true
         type: boolean
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      channel:
+        required: true
+        type: string
+      release:
+        required: false
+        default: true
+        type: boolean
+      run_tests:
+        required: false
+        default: true
+        type: boolean
+      ref:
+        description: "Commit or tag to build (Promote builds the tested beta's commit)"
+        required: false
+        default: ""
+        type: string
 
 concurrency:
-  group: build-${{ github.ref }}-${{ inputs.version }}
+  group: build-${{ inputs.version }}-${{ inputs.channel }}
   cancel-in-progress: false
 
 permissions:
   contents: write
+  models: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     env:
-      VERSION: ${{ inputs.version }}
-      VARIANT: ${{ inputs.dev && 'debug' || 'release' }}
-      SUFFIX: ${{ inputs.dev && '-dev' || '' }}
+      CHANNEL: ${{ inputs.channel }}
+      VARIANT: ${{ inputs.channel == 'dev' && 'debug' || 'release' }}
     steps:
-      - name: Check the version name
-        run: |
-          if ! [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+){1,2}([-.+][0-9A-Za-z.]+)?$ ]]; then
-            echo "::error::Version must look like 1.2 or 1.2.0 (optionally 1.2.0-beta1), got '$VERSION'"
-            exit 1
-          fi
-
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Commit being built
+        id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Work out the version
+        id: version
+        run: python3 tools/release/release.py version --base "${{ inputs.version }}" --channel "$CHANNEL" --run "${{ github.run_number }}" | tee -a "$GITHUB_OUTPUT"
 
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Lint
+      - name: Release signing key
+        if: env.CHANNEL != 'dev'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
+            echo "::error::Stable and beta builds need the release key: add the RELEASE_KEYSTORE_BASE64, RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS and RELEASE_KEY_PASSWORD secrets (docs/RELEASING.md)."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          {
+            echo "HEARTLINE_KEYSTORE_FILE=$RUNNER_TEMP/release.jks"
+            echo "HEARTLINE_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "HEARTLINE_KEY_ALIAS=$KEY_ALIAS"
+            echo "HEARTLINE_KEY_PASSWORD=${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
+          } >> "$GITHUB_ENV"
+
+      - name: Lint and license headers
         if: inputs.run_tests
-        run: ./gradlew --console=plain ktlintCheck
+        run: |
+          ./gradlew --console=plain ktlintCheck
+          python3 tools/ci/license-headers.py
 
       - name: Unit, Robolectric and Paparazzi tests
         if: inputs.run_tests
         run: ./gradlew --console=plain test verifyPaparazziDebug
 
+      # Written before the build so the notes are inside the APK ("What's new" after updating).
+      - name: Release notes (GitHub Models)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 tools/release/release.py notes \
+            --version "${{ steps.version.outputs.version }}" \
+            --previous "${{ steps.version.outputs.previous }}" \
+            --out "$RUNNER_TEMP/notes.md" \
+            --changelog CHANGELOG.md
+
       - name: Assemble APKs (${{ env.VARIANT }})
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           task=assemble${VARIANT^}
           ./gradlew --console=plain ":phone:$task" ":wear:$task" \
-            -Pheartline.versionName="$VERSION$SUFFIX" \
+            -Pheartline.versionName="$VERSION" \
             -Pheartline.versionCode="${{ github.run_number }}"
           mkdir -p dist
-          cp phone/build/outputs/apk/$VARIANT/*.apk "dist/Heartline-phone-$VERSION$SUFFIX.apk"
-          cp wear/build/outputs/apk/$VARIANT/*.apk "dist/Heartline-watch-$VERSION$SUFFIX.apk"
-          ls -l dist
+          cp phone/build/outputs/apk/$VARIANT/*.apk "dist/Heartline-phone-$VERSION.apk"
+          cp wear/build/outputs/apk/$VARIANT/*.apk "dist/Heartline-watch-$VERSION.apk"
+          (cd dist && sha256sum *.apk > SHA256SUMS)
+          ls -l dist && cat dist/SHA256SUMS
 
-      # Always downloadable from the run page, released or not.
-      - name: Upload phone APK
+      # Google Play bundles (no GitHub updater inside); uploaded as run artifacts only.
+      - name: Google Play bundles
+        if: env.CHANNEL != 'dev'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          ./gradlew --console=plain :phone:bundlePlay :wear:bundlePlay \
+            -Pheartline.versionName="$VERSION" \
+            -Pheartline.versionCode="${{ github.run_number }}"
+          mkdir -p play
+          cp phone/build/outputs/bundle/play/*.aab "play/Heartline-phone-$VERSION.aab"
+          cp wear/build/outputs/bundle/play/*.aab "play/Heartline-watch-$VERSION.aab"
+
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: Heartline-phone-${{ env.VERSION }}${{ env.SUFFIX }}
-          path: dist/Heartline-phone-*.apk
+          name: Heartline-${{ steps.version.outputs.version }}
+          path: dist/
           if-no-files-found: error
 
-      - name: Upload watch APK
+      - name: Upload Play bundles
+        if: env.CHANNEL != 'dev'
         uses: actions/upload-artifact@v4
         with:
-          name: Heartline-watch-${{ env.VERSION }}${{ env.SUFFIX }}
-          path: dist/Heartline-watch-*.apk
+          name: Heartline-play-${{ steps.version.outputs.version }}
+          path: play/
           if-no-files-found: error
+
+      - name: Release body
+        if: inputs.release
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          {
+            case "$CHANNEL" in
+              beta) echo "> **Beta:** a pre-release for testers. The app offers it only with *Settings → Updates → Receive beta versions* on." ;;
+              dev) echo "> **Development build** (debug, full logging). Not offered as an update." ;;
+            esac
+            echo
+            cat "$RUNNER_TEMP/notes.md"
+            echo
+            echo "### Install"
+            echo "Install **Heartline-phone-$VERSION.apk** on your phone and **Heartline-watch-$VERSION.apk** on your Galaxy Watch; both are needed. Already installed? The phone app updates itself (Settings → Updates) and tells you when the watch needs the new version. See [installing on a device](https://github.com/${{ github.repository }}/blob/main/docs/DEVICE_TESTING.md)."
+            echo
+            echo "Heartline is not a medical device. See the [Terms of Use](https://github.com/${{ github.repository }}/blob/main/legal/TERMS_OF_USE.md)."
+            echo
+            echo "SHA-256 checksums: \`SHA256SUMS\`."
+          } > "$RUNNER_TEMP/body.md"
 
       - name: Publish GitHub release
         if: inputs.release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.VERSION }}${{ env.SUFFIX }}
-          name: Heartline ${{ env.VERSION }}${{ inputs.dev && ' (dev)' || '' }}
-          target_commitish: ${{ github.sha }}
-          prerelease: ${{ inputs.dev }}
-          generate_release_notes: true
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Heartline ${{ steps.version.outputs.version }}
+          target_commitish: ${{ steps.sha.outputs.sha }}
+          prerelease: ${{ env.CHANNEL != 'stable' }}
+          make_latest: ${{ env.CHANNEL == 'stable' }}
+          body_path: ${{ runner.temp }}/body.md
           fail_on_unmatched_files: true
-          files: dist/*.apk
-          body: |
-            Install **Heartline-phone** on the phone and **Heartline-watch** on the Galaxy Watch
-            (both are needed; see docs/DEVICE_TESTING.md).
-            ${{ inputs.dev && 'Dev build: debug APKs with full logging.' || 'Release build (R8), signed with the shared test key.' }}
+          files: |
+            dist/*.apk
+            dist/SHA256SUMS
+
+      # Keeps CHANGELOG.md on the default branch in step with the releases (stable and beta only).
+      - name: Commit CHANGELOG.md
+        if: inputs.release && env.CHANNEL != 'dev'
+        continue-on-error: true
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "$DEFAULT_BRANCH"
+          git checkout -B changelog-update "origin/$DEFAULT_BRANCH"
+          python3 tools/release/release.py changelog --version "$VERSION" --notes "$RUNNER_TEMP/notes.md" --changelog CHANGELOG.md
+          git add CHANGELOG.md
+          git diff --cached --quiet || { git commit -m "Changelog for $VERSION" && git push origin "HEAD:$DEFAULT_BRANCH"; }
 
       - name: Upload test reports
         if: failure()

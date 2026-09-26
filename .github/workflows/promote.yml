@@ -1,0 +1,43 @@
+name: Promote beta to stable
+
+# When a beta has been tested and is ready for everyone: builds the same commit as a stable
+# release (vX.Y.Z, the "latest" release). Its notes cover everything since the previous stable
+# release, so they include all the betas in between.
+on:
+  workflow_dispatch:
+    inputs:
+      beta:
+        description: "Beta tag to promote, e.g. v1.2.0-beta.3"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  models: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+    steps:
+      - id: parse
+        env:
+          BETA: ${{ inputs.beta }}
+        run: |
+          if ! [[ "$BETA" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)-beta\.[0-9]+$ ]]; then
+            echo "::error::Expected a beta tag like v1.2.0-beta.3, got '$BETA'"
+            exit 1
+          fi
+          echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+
+  stable:
+    needs: check
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+    with:
+      version: ${{ needs.check.outputs.version }}
+      channel: stable
+      ref: ${{ inputs.beta }}
+      run_tests: true
+      release: true
