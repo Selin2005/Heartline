@@ -38,6 +38,8 @@ import com.heartline.wear.ui.setup.SetupGateViewModel
 import com.heartline.wear.ui.setup.SetupIncompleteScreen
 import com.heartline.wear.ui.setup.SetupPermissions
 import org.koin.compose.koinInject
+import com.heartline.datalayer.RemoteOpener
+import com.heartline.shared.AppInfo
 import androidx.wear.compose.material3.AppScaffold
 import androidx.wear.compose.material3.TimeText
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
@@ -321,6 +323,8 @@ private fun AppNavHost(nav: NavHostController, gate: SetupGateViewModel) {
         composable(Routes.SETTINGS) {
             val vm: WatchSettingsViewModel = koinViewModel()
             val state by vm.state.collectAsStateWithLifecycle()
+            val scope = rememberCoroutineScope()
+            val remote: RemoteOpener = koinInject()
             WatchSettingsScreen(
                 state,
                 onToggle = { toggle, on ->
@@ -336,6 +340,7 @@ private fun AppNavHost(nav: NavHostController, gate: SetupGateViewModel) {
                 },
                 onDevMode = { nav.navigate(Routes.DEV_MODE) },
                 onDiagnostics = { nav.navigate(Routes.DIAGNOSTICS) },
+                onSourceCode = { scope.launch { remote.open(AppInfo.REPO_URL) } },
             )
         }
         composable(Routes.DIAGNOSTICS) {

@@ -9,6 +9,9 @@ Settings, updates, what's new, sharing, help and about.
 | **Settings** | <img src="settings_light.png" width="240" alt=""> | <img src="settings_dark.png" width="240" alt=""> |
 | **Background monitoring** | <img src="settings_monitoring_light.png" width="240" alt=""> | <img src="settings_monitoring_dark.png" width="240" alt=""> |
 | **Sharing** | <img src="settings_sharing_light.png" width="240" alt=""> | <img src="settings_sharing_dark.png" width="240" alt=""> |
+| **Updates and beta versions** | <img src="settings_updates_light.png" width="240" alt=""> | <img src="settings_updates_dark.png" width="240" alt=""> |
+| **Up to date** | <img src="update_up_to_date_light.png" width="240" alt=""> | <img src="update_up_to_date_dark.png" width="240" alt=""> |
+| **What's new after an update** | <img src="whats_new_light.png" width="240" alt=""> | <img src="whats_new_dark.png" width="240" alt=""> |
 | **Share a result, with AI apps** | <img src="share_sheet_light.png" width="240" alt=""> | <img src="share_sheet_dark.png" width="240" alt=""> |
 | **Share a result, no AI apps installed** | <img src="share_sheet_no_ai_light.png" width="240" alt=""> | <img src="share_sheet_no_ai_dark.png" width="240" alt=""> |
 | **Help: turning on developer mode on the watch** | <img src="dev_mode_help_light.png" width="240" alt=""> | <img src="dev_mode_help_dark.png" width="240" alt=""> |

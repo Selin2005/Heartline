@@ -4,6 +4,11 @@
 package com.heartline.phone.di
 
 import android.util.Log
+import com.heartline.phone.BuildConfig
+import com.heartline.phone.update.ReleaseSource
+import com.heartline.phone.update.UpdateRepository
+import com.heartline.phone.update.Updater
+import com.heartline.phone.update.UpdatesViewModel
 import com.heartline.datalayer.DataLayerTransport
 import com.heartline.datalayer.RemoteOpener
 import com.heartline.phone.link.PhoneStatusPublisher
@@ -66,6 +71,9 @@ val phoneModule = module {
     single { get<HeartlineDatabase>().heart() }
     single { HeartRepository(get()) { alert -> get<PhoneNotifier>().alert(alert) } }
     single { SettingsRepository(androidContext()) }
+    single { UpdateRepository(androidContext(), BuildConfig.VERSION_NAME) }
+    single { ReleaseSource("Heartline/${BuildConfig.VERSION_NAME} (Android)") }
+    single { Updater(androidContext(), get(), get(), BuildConfig.VERSION_NAME, enabled = BuildConfig.UPDATER) }
     single { get<HeartlineDatabase>().bp() }
     single {
         // PaPaGei is loaded on first use (only once there are enough cuff checks to train on).
@@ -90,6 +98,7 @@ val phoneModule = module {
             onHello = { hello ->
                 // The watch says hello on start and on every link check: reply with everything it gates on.
                 Log.i("Heartline/Link", "hello from watch: $hello")
+                get<UpdateRepository>().setWatchVersion(hello.appVersion)
                 val sync = get<PhoneSyncEngine>()
                 // Settings changed on the watch while the phone was away may be newer than ours.
                 hello.settings?.let { get<SettingsRepository>().applyRemote(it) }
@@ -126,6 +135,7 @@ val phoneModule = module {
     viewModel { params -> EcgDetailViewModel(params.get(), get(), get(), get()) }
     viewModel { SettingsViewModel(get(), get(), get(), get(), get()) { Reminders.sync(androidContext(), it) } }
     viewModel { HeartRateViewModel(get(), get()) }
+    viewModel { UpdatesViewModel(get(), get(), BuildConfig.VERSION_NAME) }
     viewModel { BpHomeViewModel(get(), get()) }
     viewModel { CalibrationViewModel(get(), openOnWatch = { get<WatchOpener>().open(it) }) }
     viewModel { params -> MetricDetailViewModel(params.get(), get(), get()) }

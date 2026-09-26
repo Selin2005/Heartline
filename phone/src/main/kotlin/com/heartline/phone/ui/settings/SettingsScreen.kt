@@ -53,6 +53,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Straighten
@@ -146,6 +147,8 @@ fun SettingsScreen(
     onWatch: () -> Unit = {},
     onExport: () -> Unit = {},
     onAbout: () -> Unit = {},
+    onUpdates: () -> Unit = {},
+    updatesSubtitle: String? = null,
     listState: LazyListState = rememberLazyListState(),
     sharing: SettingsRepository.SharingPrefs = SettingsRepository.SharingPrefs(),
     onAiPrompt: (String?) -> Unit = {},
@@ -408,7 +411,12 @@ fun SettingsScreen(
                     onClick = onAbout,
                 )
                 CardRow(stringResource(R.string.settings_licenses), showDivider = true, onClick = onAbout)
-                CardRow(stringResource(R.string.settings_version, versionName))
+                CardRow(
+                    stringResource(R.string.updates_title),
+                    subtitle = updatesSubtitle ?: stringResource(R.string.settings_version, versionName),
+                    leading = { IconBadge(Icons.Rounded.SystemUpdate, colors.onSurfaceVariant) },
+                    onClick = onUpdates,
+                )
             }
         }
     }

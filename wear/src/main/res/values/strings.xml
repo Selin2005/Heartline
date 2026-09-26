@@ -345,4 +345,6 @@
     <string name="live_hrv">HRV %1$d ms</string>
     <string name="hint_breathe">Breathe slowly and relax</string>
     <string name="live_pulse">%1$d bpm</string>
+    <string name="source_code">Source code</string>
+    <string name="source_code_sub">Free software (AGPL-3.0). Opens on your phone.</string>
 </resources>

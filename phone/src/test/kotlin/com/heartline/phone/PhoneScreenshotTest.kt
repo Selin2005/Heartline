@@ -41,6 +41,14 @@ import com.heartline.phone.ui.settings.SettingsScreen
 import com.heartline.phone.legal.BundledDoc
 import com.heartline.phone.ui.legal.LegalDocumentScreen
 import com.heartline.phone.ui.legal.TermsScreen
+import com.heartline.phone.ui.update.UpdatesScreen
+import com.heartline.phone.ui.update.WhatsNewDialog
+import com.heartline.phone.update.UpdateRepository
+import com.heartline.phone.update.UpdatesUi
+import com.heartline.shared.text.ChangelogEntry
+import com.heartline.shared.update.AppVersion
+import com.heartline.shared.update.GitHubAsset
+import com.heartline.shared.update.Release
 import com.heartline.phone.ui.theme.HeartlineTheme
 import androidx.compose.foundation.background
 import androidx.compose.ui.unit.dp
@@ -188,6 +196,34 @@ class PhoneScreenshotTest(private val theme: String) {
     }
 
     @Test fun onboarding() = shot("onboarding") { OnboardingScreen() }
+
+    private val betaRelease = Release(
+        version = AppVersion.parse("1.2.0-beta.1")!!,
+        tag = "v1.2.0-beta.1",
+        notes = "### New\n- Updates and beta versions right in the app\n- What's new after every update\n\n### Fixed\n- Smoother ECG paper scrolling",
+        pageUrl = "",
+        publishedAt = null,
+        phoneApk = GitHubAsset("Heartline-phone-1.2.0-beta.1.apk", 60_000_000, "p"),
+        watchApk = GitHubAsset("Heartline-watch-1.2.0-beta.1.apk", 20_000_000, "w"),
+        checksums = GitHubAsset("SHA256SUMS", 200, "s"),
+    )
+
+    @Test fun updates() = shot("settings_updates") {
+        UpdatesScreen(
+            UpdatesUi("1.1.0", enabled = true, prefs = UpdateRepository.Prefs(beta = true, watchVersion = "1.1.0"), available = betaRelease),
+            onBack = {},
+        )
+    }
+
+    @Test fun updateUpToDate() = shot("update_up_to_date") {
+        UpdatesScreen(UpdatesUi("1.1.0", enabled = true, prefs = UpdateRepository.Prefs(watchVersion = "1.1.0"), upToDate = true), onBack = {})
+    }
+
+    @Test fun whatsNew() = shot("whats_new") {
+        Box(Modifier.background(HeartlineTheme.colors.background)) {
+            WhatsNewDialog("1.2.0-beta.1", ChangelogEntry("1.2.0-beta.1", null, betaRelease.notes))
+        }
+    }
 
     @Test fun terms() = shot("terms") { TermsScreen(updated = false, initiallyChecked = true) }
 

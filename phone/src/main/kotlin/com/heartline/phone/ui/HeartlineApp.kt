@@ -30,6 +30,10 @@ import com.heartline.phone.export.DataExporter
 import com.heartline.phone.ui.about.AboutScreen
 import com.heartline.phone.legal.BundledDoc
 import com.heartline.phone.ui.legal.LegalDocumentScreen
+import com.heartline.phone.notify.PhoneNotifier
+import com.heartline.phone.ui.update.UpdatesScreen
+import com.heartline.phone.ui.update.WhatsNewAfterUpdate
+import com.heartline.phone.update.UpdatesViewModel
 import com.heartline.phone.ui.heart.AlertsScreen
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -115,6 +119,7 @@ object Routes {
     const val ABOUT = "about"
     const val DEV_MODE_HELP = "help/dev_mode"
     const val DOC = "doc/{doc}"
+    const val UPDATES = PhoneNotifier.UPDATES_ROUTE
 
     fun doc(doc: BundledDoc) = "doc/${doc.route}"
 
@@ -147,6 +152,7 @@ fun HeartlineApp(
             PhoneRoutes.BP_CALIBRATION -> Routes.BP_CALIBRATION
             PhoneRoutes.DEV_MODE_HELP -> Routes.DEV_MODE_HELP
             PhoneRoutes.SETTINGS -> Routes.SETTINGS
+            Routes.UPDATES -> Routes.UPDATES
             // Home-screen widgets open their metric.
             Routes.HEART_RATE, Routes.ECG, Routes.BLOOD_PRESSURE -> link.route
             else -> link.route.takeIf { it.startsWith("metric/") && Metric.entries.any { m -> it == Routes.metric(m) } } ?: Routes.HOME
@@ -163,6 +169,7 @@ fun HeartlineApp(
         }
         onDeepLinkHandled()
     }
+    WhatsNewAfterUpdate(BuildConfig.VERSION_NAME, onAllNotes = { navController.navigate(Routes.doc(BundledDoc.CHANGELOG)) })
     // One opener for every "Measure on watch" button, with a snackbar saying what happened.
     val opener: OpenOnWatchViewModel = koinViewModel()
     val snackbar = remember { SnackbarHostState() }
@@ -264,6 +271,7 @@ fun HeartlineApp(
                             )
                         },
                         onAbout = { navController.navigate(Routes.ABOUT) },
+                        onUpdates = { navController.navigate(Routes.UPDATES) },
                         sharing = sharingPrefs,
                         onAiPrompt = vm::setAiPrompt,
                         onAiAttachPdf = vm::setAiAttachPdf,
@@ -364,6 +372,13 @@ fun HeartlineApp(
                 }
                 composable(Routes.ABOUT) {
                     AboutScreen(BuildConfig.VERSION_NAME, onBack = goBack, onOpenDoc = { navController.navigate(Routes.doc(it)) })
+                }
+                composable(Routes.UPDATES) {
+                    val vm: UpdatesViewModel = koinViewModel()
+                    val ui by vm.ui.collectAsStateWithLifecycle()
+                    LaunchedEffect(vm) { vm.startActivity.collect { runCatching { context.startActivity(it) } } }
+                    LaunchedEffect(Unit) { vm.check() }
+                    UpdatesScreen(ui, onBack = goBack, onCheck = vm::check, onInstall = vm::install, onAutoCheck = { vm.setAutoCheck(it) }, onBeta = { vm.setBeta(it) })
                 }
                 composable(Routes.DOC) { entry ->
                     val doc = BundledDoc.fromRoute(entry.arguments?.getString("doc")) ?: BundledDoc.TERMS

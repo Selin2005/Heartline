@@ -8,6 +8,7 @@ import android.util.Log
 import com.heartline.phone.data.BpRepository
 import com.heartline.phone.link.PhoneStatusPublisher
 import com.heartline.phone.notify.Reminders
+import com.heartline.phone.update.UpdateWorker
 import com.heartline.phone.widget.WidgetUpdater
 import com.heartline.phone.data.DemoData
 import com.heartline.phone.data.HeartRepository
@@ -54,5 +55,6 @@ class PhoneApplication : Application() {
         get<PhoneStatusPublisher>().start(scope)
         get<WidgetUpdater>().start(scope)
         scope.launch { Reminders.sync(this@PhoneApplication, get<SettingsRepository>().current()) }
+        UpdateWorker.schedule(this, enabled = BuildConfig.UPDATER)
     }
 }

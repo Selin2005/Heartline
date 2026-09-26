@@ -33,15 +33,30 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        // The release key comes from the environment (the Build workflow's secrets). Without it,
+        // release builds fall back to the shared test key so they still install next to debug builds.
+        System.getenv("HEARTLINE_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }?.let { keystore ->
+            create("release") {
+                storeFile = file(keystore)
+                storePassword = System.getenv("HEARTLINE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("HEARTLINE_KEY_ALIAS")
+                keyPassword = System.getenv("HEARTLINE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
-            // R8 with the shared test keystore until a release key exists (P11).
+            // R8; signed with the release key when the environment provides one.
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+        }
+        // Google Play: the same release build, named like the phone's so both are bundled together.
+        create("play") {
+            initWith(getByName("release"))
+            matchingFallbacks += "release"
         }
     }
 
@@ -72,6 +87,9 @@ android {
         }
     }
 }
+
+// Unit and screenshot tests run on debug; the play build type only differs in packaging.
+tasks.matching { it.name == "testPlayUnitTest" }.configureEach { enabled = false }
 
 dependencies {
     implementation(project(":shared"))

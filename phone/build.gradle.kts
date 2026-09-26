@@ -14,6 +14,8 @@ android {
     compileSdk = 37
 
     defaultConfig {
+        // The in-app GitHub updater; off in the "play" build type.
+        buildConfigField("boolean", "UPDATER", "true")
         // Same applicationId as :wear — required by the Wearable Data Layer.
         applicationId = "com.heartline.app"
         minSdk = 26
@@ -37,17 +39,33 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        // The release key comes from the environment (the Build workflow's secrets). Without it,
+        // release builds fall back to the shared test key so they still install next to debug builds.
+        System.getenv("HEARTLINE_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }?.let { keystore ->
+            create("release") {
+                storeFile = file(keystore)
+                storePassword = System.getenv("HEARTLINE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("HEARTLINE_KEY_ALIAS")
+                keyPassword = System.getenv("HEARTLINE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
-            // R8 with the shared test keystore until a release key exists (P11).
+            // R8; signed with the release key when the environment provides one.
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             // Phones paired with a Galaxy Watch are ARM; ONNX Runtime's x86 libraries (≈ 46 MB) are for emulators only.
             ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+        }
+        // Google Play: the same release build, without the GitHub updater (Play updates the app).
+        create("play") {
+            initWith(getByName("release"))
+            matchingFallbacks += "release"
+            buildConfigField("boolean", "UPDATER", "false")
         }
     }
 
@@ -88,6 +106,9 @@ val bundleDocs = tasks.register<Sync>("bundleDocs") {
 }
 android.sourceSets.getByName("main").assets.directories.add(bundledDocs.get().asFile.path)
 tasks.named("preBuild") { dependsOn(bundleDocs) }
+
+// Unit and screenshot tests run on debug; the play build type only differs in packaging.
+tasks.matching { it.name == "testPlayUnitTest" }.configureEach { enabled = false }
 
 dependencies {
     implementation(project(":shared"))

@@ -28,6 +28,8 @@ import com.heartline.wear.tile.StressCard
 import com.heartline.wear.tile.TileData
 import com.heartline.wear.tile.TodayCard
 import com.heartline.wear.tile.WellnessCard
+import com.heartline.wear.tile.Greeting
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
@@ -48,6 +50,11 @@ class CardScreenshotTest {
                 }
             }
         }
+    }
+
+    // The Today card greets by the time of day: pin it to the morning the goldens were recorded in.
+    @Before fun morning() {
+        Greeting.hourNow = { 9 }
     }
 
     @Test fun heart() = shot("heart", HeartCard(CardSamples.full))

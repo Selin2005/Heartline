@@ -23,7 +23,10 @@ object Greeting {
         else -> R.string.greeting_night
     }
 
-    fun title(context: Context, name: String?, hour: Int = java.time.LocalTime.now().hour): String {
+    /** The current hour; screenshot tests pin it so the greeting doesn't depend on when they run. */
+    internal var hourNow: () -> Int = { java.time.LocalTime.now().hour }
+
+    fun title(context: Context, name: String?, hour: Int = hourNow()): String {
         val part = context.getString(part(hour))
         return if (name.isNullOrBlank()) part else context.getString(R.string.greeting_named, part, name)
     }

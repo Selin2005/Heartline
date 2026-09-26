@@ -8,7 +8,7 @@ import androidx.annotation.StringRes
 import com.heartline.phone.R
 
 /** Documents bundled from the repository into assets/docs/ (see bundleDocs in build.gradle.kts). */
-enum class BundledDoc(val file: String, @StringRes val title: Int, val repoDir: String) {
+enum class BundledDoc(val file: String, @param:StringRes val title: Int, val repoDir: String) {
     TERMS("TERMS_OF_USE.md", R.string.legal_terms, "legal"),
     PRIVACY("PRIVACY_POLICY.md", R.string.legal_privacy, "legal"),
     DISCLAIMER("MEDICAL_DISCLAIMER.md", R.string.settings_disclaimer, "legal"),

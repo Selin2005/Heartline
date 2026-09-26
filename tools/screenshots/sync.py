@@ -93,7 +93,7 @@ PHONE = [
         ("settings_monitoring", "Background monitoring"),
         ("settings_sharing", "Sharing"),
         ("settings_updates", "Updates and beta versions"),
-        ("update_available", "Update available"),
+        ("update_up_to_date", "Up to date"),
         ("whats_new", "What's new after an update"),
         ("share_sheet", "Share a result, with AI apps"),
         ("share_sheet_no_ai", "Share a result, no AI apps installed"),
