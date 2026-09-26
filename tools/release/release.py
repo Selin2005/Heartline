@@ -125,7 +125,7 @@ def ai_notes(version: str, entries, stat: str):
         "version number, no closing remarks."
     )
     body = {
-        "model": os.environ.get("CHANGELOG_MODEL", "openai/gpt-4.1-mini"),
+        "model": os.environ.get("CHANGELOG_MODEL") or "openai/gpt-4.1-mini",
         "temperature": 0.2,
         "messages": [
             {"role": "system", "content": system},

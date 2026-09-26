@@ -1,0 +1,1 @@
+ECG, blood pressure estimates and heart rhythm checks with your Galaxy Watch.

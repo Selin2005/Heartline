@@ -43,9 +43,10 @@
             android:name="com.google.android.wearable"
             android:required="true" />
 
+        <!-- Not standalone: setup (terms, profile) and history need the phone app. -->
         <meta-data
             android:name="com.google.android.wearable.standalone"
-            android:value="true" />
+            android:value="false" />
 
         <activity
             android:name=".MainActivity"

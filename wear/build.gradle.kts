@@ -15,7 +15,7 @@ android {
 
     defaultConfig {
         // Same applicationId as :phone — required by the Wearable Data Layer.
-        applicationId = "com.heartline.app"
+        applicationId = "io.github.selin2005.heartline"
         minSdk = 30
         targetSdk = 37
         // Set by the Build workflow form: -Pheartline.versionName=1.2.0 -Pheartline.versionCode=<run number>.

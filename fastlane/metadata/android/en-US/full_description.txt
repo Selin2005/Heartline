@@ -1,0 +1,22 @@
+Heartline brings heart health features to your Galaxy Watch and keeps your history on your phone, in a clean One UI style.
+
+WHAT YOU CAN DO
+• Record a 30-second single-lead ECG with your watch and see a wellness rhythm label: sinus rhythm, signs of AFib, high or low heart rate, inconclusive or poor recording.
+• View every ECG on ECG paper and save it as a PDF to share with your doctor.
+• Estimate blood pressure with your watch after calibrating it with your own cuff.
+• Turn on background checks for an irregular rhythm and high or low heart rate.
+• Check blood oxygen, skin temperature, stress and body composition.
+• Follow trends, daily goals and a weekly summary.
+• Use widgets on the phone and tiles and complications on the watch.
+
+PRIVATE BY DESIGN
+Your data stays on your watch and phone. There is no account, no server, no ads and no analytics. Data only leaves your devices when you export or share it.
+
+FREE SOFTWARE
+Heartline is free software under the GNU AGPL-3.0. The source code is at github.com/selin2005/heartline.
+
+REQUIREMENTS
+A Galaxy Watch4 or newer, paired with an Android phone. Install Heartline on both.
+
+IMPORTANT
+Heartline is not a medical device. It does not diagnose, treat or prevent any condition, and it cannot detect a heart attack, stroke or other emergency. Blood pressure values are estimates. Don't change your medication or treatment based on Heartline. If you think you are having a medical emergency, call your local emergency number.

@@ -17,7 +17,7 @@ android {
         // The in-app GitHub updater; off in the "play" build type.
         buildConfigField("boolean", "UPDATER", "true")
         // Same applicationId as :wear — required by the Wearable Data Layer.
-        applicationId = "com.heartline.app"
+        applicationId = "io.github.selin2005.heartline"
         minSdk = 26
         targetSdk = 37
         // Set by the Build workflow form: -Pheartline.versionName=1.2.0 -Pheartline.versionCode=<run number>.

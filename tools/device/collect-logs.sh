@@ -52,7 +52,7 @@ header() { # serial name
   {
     echo "device : $(adb -s "$1" shell getprop ro.product.model | tr -d '\r') ($1)"
     echo "sdk    : $(adb -s "$1" shell getprop ro.build.version.sdk | tr -d '\r')"
-    echo "app    : $(adb -s "$1" shell dumpsys package com.heartline.app | grep -m1 versionName | tr -d ' \r')"
+    echo "app    : $(adb -s "$1" shell dumpsys package io.github.selin2005.heartline | grep -m1 versionName | tr -d ' \r')"
     echo "time   : $(date '+%Y-%m-%d %H:%M:%S %z')"
   } > "$out/$2-info.txt"
 }

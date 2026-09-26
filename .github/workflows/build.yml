@@ -126,6 +126,7 @@ jobs:
       - name: Release notes (GitHub Models)
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          CHANGELOG_MODEL: ${{ vars.CHANGELOG_MODEL }}
         run: |
           python3 tools/release/release.py notes \
             --version "${{ steps.version.outputs.version }}" \
