@@ -58,6 +58,11 @@ class ComplicationsTest {
             c.stress(ComplicationType.SHORT_TEXT, data),
             c.spo2(ComplicationType.RANGED_VALUE, data),
             c.ecgShortcut(ComplicationType.SMALL_IMAGE),
+            c.shortcut(com.heartline.shared.model.Metric.BLOOD_PRESSURE, ComplicationType.SMALL_IMAGE),
+            c.shortcut(com.heartline.shared.model.Metric.SPO2, ComplicationType.MONOCHROMATIC_IMAGE),
+            c.body(ComplicationType.RANGED_VALUE, data),
+            c.temperature(ComplicationType.SHORT_TEXT, data),
+            c.today(ComplicationType.LONG_TEXT, data),
         )
         all.forEach { assertNotNull("$it", it.tapAction) }
         assertTrue(c.ecgShortcut(ComplicationType.SMALL_IMAGE) is SmallImageComplicationData)
@@ -66,5 +71,16 @@ class ComplicationsTest {
     @Test
     fun unsupportedTypesGiveNoData() {
         assertTrue(c.ecg(ComplicationType.RANGED_VALUE, data) is NoDataComplicationData)
+    }
+
+    @Test
+    fun bodyTemperatureAndToday() {
+        assertEquals("21.4%", (c.body(ComplicationType.SHORT_TEXT, data) as ShortTextComplicationData).text.text())
+        assertEquals(21.4f, (c.body(ComplicationType.RANGED_VALUE, data) as RangedValueComplicationData).value, 0.01f)
+        assertEquals("+0.2°", (c.temperature(ComplicationType.SHORT_TEXT, data) as ShortTextComplicationData).text.text())
+        // ECG done; blood pressure is next.
+        assertEquals("1/3", (c.today(ComplicationType.SHORT_TEXT, data) as ShortTextComplicationData).text.text())
+        assertEquals("1 of 3 done today · Next: BP", (c.today(ComplicationType.LONG_TEXT, data) as LongTextComplicationData).text.text())
+        assertEquals("0/3", (c.today(ComplicationType.SHORT_TEXT, empty) as ShortTextComplicationData).text.text())
     }
 }

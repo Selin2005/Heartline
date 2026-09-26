@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Colour badge for a "start measurement" watch-face shortcut: the icon on the metric's colour. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#FFFFC933" />
+            <size android:width="48dp" android:height="48dp" />
+        </shape>
+    </item>
+    <item
+        android:bottom="12dp"
+        android:drawable="@drawable/ic_metric_stress"
+        android:left="12dp"
+        android:right="12dp"
+        android:top="12dp" />
+</layer-list>

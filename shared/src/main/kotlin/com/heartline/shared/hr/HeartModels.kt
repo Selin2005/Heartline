@@ -54,6 +54,12 @@ data class MonitorSettings(
     /** Show the live wave while measuring on the watch (off: countdown only). */
     val liveWave: Boolean = true,
     val temperatureFahrenheit: Boolean = false,
+    /** Greet the user by name in the watch app and on its tiles. */
+    val showNameOnWatch: Boolean = true,
+    /** Show the name on the phone's home-screen widgets too (off: they can be seen by anyone). */
+    val showNameOnWidgets: Boolean = false,
+    /** Confetti and light effects for birthdays, goals and good results on the watch. */
+    val celebrations: Boolean = true,
     /** When these settings were last changed (either device); the newer copy wins. */
     val updatedAtMs: Long = 0
 ) {

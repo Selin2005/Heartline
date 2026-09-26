@@ -69,6 +69,8 @@ class TileUpdates(
             QuickMeasureTileService::class.java,
             WellnessTileService::class.java,
             StressTileService::class.java,
+            TodayTileService::class.java,
+            BodyTileService::class.java,
         )
 
         val COMPLICATIONS: List<Class<*>> = listOf(
@@ -78,6 +80,9 @@ class TileUpdates(
             StressComplicationService::class.java,
             Spo2ComplicationService::class.java,
             EcgShortcutComplicationService::class.java,
+            BodyComplicationService::class.java,
+            TemperatureComplicationService::class.java,
+            TodayComplicationService::class.java,
         )
     }
 }

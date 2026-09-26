@@ -67,6 +67,12 @@ class TileRenderTest {
         stressLevel = StressLevel.MEDIUM,
         hrvMs = 42,
         temperature = "+0.2°",
+        heartHours = listOf(56..64, 54..60, 55..62, 58..70, 62..95, 70..118, 66..84, 64..80, 68..90, 66..78, 64..76, 70..74),
+        spo2History = listOf(96, 97, 95, 98, 97),
+        stressHistory = listOf(52, 41, 47, 30, 35, 44, 38),
+        body = TileData.Body(21.4f, 32.1f, 72.4f, -0.3f),
+        doneToday = setOf(com.heartline.shared.model.Metric.ECG),
+        name = "Sara",
     )
     private val empty = TileData(null, null, null, null)
 
@@ -76,6 +82,8 @@ class TileRenderTest {
         "quick" to QuickMeasureTileService(),
         "wellness" to WellnessTileService(),
         "stress" to StressTileService(),
+        "today" to com.heartline.wear.tile.TodayTileService(),
+        "body" to com.heartline.wear.tile.BodyTileService(),
     )
 
     @Test

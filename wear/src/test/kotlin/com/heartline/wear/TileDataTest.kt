@@ -47,3 +47,17 @@ class TileDataTest {
         assertEquals("+0.3°", data.temperature)
     }
 }
+
+class HeartHoursTest {
+    @Test
+    fun hourlyRangesRoundTrip() {
+        val h = com.heartline.wear.monitor.HeartHours
+        var hours = h.empty()
+        hours = h.record(hours, 9, 70)
+        hours = h.record(hours, 9, 64)
+        hours = h.record(hours, 10, 90)
+        org.junit.Assert.assertEquals(64..70, hours[9])
+        org.junit.Assert.assertEquals(hours, h.decode(h.encode(hours)))
+        org.junit.Assert.assertEquals(h.empty(), h.decode("garbage"))
+    }
+}

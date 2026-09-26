@@ -166,17 +166,120 @@ class Complications(private val context: Context) {
     }
 
     /** Starts an ECG straight from the watch face. */
-    fun ecgShortcut(type: ComplicationType): ComplicationData {
-        val description = text(context.getString(R.string.complication_ecg_shortcut))
-        val tap = tap(TileRoutes.ECG)
+    fun ecgShortcut(type: ComplicationType): ComplicationData = shortcut(Metric.ECG, type)
+
+    /** Starts [metric] straight from the watch face (a round colour badge, or its icon on monochrome faces). */
+    fun shortcut(metric: Metric, type: ComplicationType): ComplicationData {
+        val (badge, label) = when (metric) {
+            Metric.ECG -> R.drawable.complication_ecg_badge to R.string.complication_ecg_shortcut
+            Metric.BLOOD_PRESSURE -> R.drawable.complication_bp_badge to R.string.complication_bp_shortcut
+            Metric.SPO2 -> R.drawable.complication_spo2_badge to R.string.complication_spo2_shortcut
+            Metric.STRESS -> R.drawable.complication_stress_badge to R.string.complication_stress_shortcut
+            else -> R.drawable.complication_body_badge to R.string.complication_body_shortcut
+        }
+        val description = text(context.getString(label))
+        val tap = tap(TileRoutes.measure(metric))
+        val icon = TileIcons.drawable(metric)
         return when (type) {
             ComplicationType.SMALL_IMAGE -> SmallImageComplicationData.Builder(
-                SmallImage.Builder(Icon.createWithResource(context, R.drawable.complication_ecg_badge), SmallImageType.ICON).build(),
+                SmallImage.Builder(Icon.createWithResource(context, badge), SmallImageType.ICON).build(),
                 description,
             ).setTapAction(tap).build()
-            ComplicationType.MONOCHROMATIC_IMAGE -> MonochromaticImageComplicationData.Builder(mono(R.drawable.ic_metric_ecg), description).setTapAction(tap).build()
-            ComplicationType.SHORT_TEXT -> ShortTextComplicationData.Builder(text(context.getString(R.string.metric_ecg)), description)
-                .setMonochromaticImage(mono(R.drawable.ic_metric_ecg))
+            ComplicationType.MONOCHROMATIC_IMAGE -> MonochromaticImageComplicationData.Builder(mono(icon), description).setTapAction(tap).build()
+            ComplicationType.SHORT_TEXT -> ShortTextComplicationData.Builder(text(context.getString(metric.shortTitle)), description)
+                .setMonochromaticImage(mono(icon))
+                .setTapAction(tap)
+                .build()
+            else -> noData
+        }
+    }
+
+    /** Body fat: "21.4%", a gauge (0–45 %), or "21.4% fat · 72.4 kg". */
+    fun body(type: ComplicationType, data: TileData): ComplicationData {
+        val description = text(context.getString(R.string.tile_body))
+        val tap = tap(TileRoutes.measure(Metric.BODY_COMPOSITION))
+        val icon = mono(R.drawable.ic_metric_body)
+        val fat = data.body?.fatPercent
+        val value = fat?.let { String.format(java.util.Locale.US, "%.1f%%", it) } ?: "--"
+        return when (type) {
+            ComplicationType.SHORT_TEXT -> ShortTextComplicationData.Builder(text(value), description)
+                .setTitle(text(context.getString(R.string.complication_fat)))
+                .setMonochromaticImage(icon)
+                .setTapAction(tap)
+                .build()
+            ComplicationType.RANGED_VALUE -> RangedValueComplicationData.Builder((fat ?: 0f).coerceIn(0f, 45f), 0f, 45f, description)
+                .setText(text(value))
+                .setMonochromaticImage(icon)
+                .setColorRamp(ColorRamp(intArrayOf(Palette.Dark.BODY.toInt(), Palette.Dark.STATUS_WARN.toInt()), true))
+                .setTapAction(tap)
+                .build()
+            ComplicationType.LONG_TEXT -> LongTextComplicationData.Builder(
+                text(
+                    data.body?.let { b ->
+                        listOfNotNull(context.getString(R.string.complication_fat_value, value), b.weightKg?.let { context.getString(R.string.tile_body_weight, it) }).joinToString(" · ")
+                    } ?: context.getString(R.string.complication_no_data),
+                ),
+                description,
+            )
+                .setTitle(text(context.getString(R.string.tile_body)))
+                .setMonochromaticImage(icon)
+                .setTapAction(tap)
+                .build()
+            else -> noData
+        }
+    }
+
+    /** Skin temperature: the change from the user's usual, or the reading. */
+    fun temperature(type: ComplicationType, data: TileData): ComplicationData {
+        val description = text(context.getString(R.string.metric_skin_temp))
+        val tap = tap(TileRoutes.measure(Metric.SKIN_TEMPERATURE))
+        val icon = mono(R.drawable.ic_metric_temp)
+        return when (type) {
+            ComplicationType.SHORT_TEXT -> ShortTextComplicationData.Builder(text(data.temperature ?: "--"), description)
+                .setTitle(text(context.getString(R.string.tile_temp_short)))
+                .setMonochromaticImage(icon)
+                .setTapAction(tap)
+                .build()
+            ComplicationType.LONG_TEXT -> LongTextComplicationData.Builder(text(data.temperature ?: context.getString(R.string.complication_no_data)), description)
+                .setTitle(text(context.getString(R.string.metric_skin_temp)))
+                .setMonochromaticImage(icon)
+                .setTapAction(tap)
+                .build()
+            else -> noData
+        }
+    }
+
+    /** Today's check-ins: "1/3", a ring filling as they are done, or "1 of 3 done · Next: BP". */
+    fun today(type: ComplicationType, data: TileData): ComplicationData {
+        val checks = TodayChecks.of(data)
+        val done = checks.count { it.second }
+        val next = checks.firstOrNull { !it.second }?.first
+        val description = text(context.getString(R.string.complication_today))
+        val tap = tap(next?.let { TileRoutes.measure(it) } ?: TileRoutes.LAUNCHER)
+        val icon = mono(R.drawable.ic_heart)
+        return when (type) {
+            ComplicationType.SHORT_TEXT -> ShortTextComplicationData.Builder(text("$done/${checks.size}"), description)
+                .setTitle(text(context.getString(R.string.complication_today)))
+                .setMonochromaticImage(icon)
+                .setTapAction(tap)
+                .build()
+            ComplicationType.RANGED_VALUE -> RangedValueComplicationData.Builder(done.toFloat(), 0f, checks.size.toFloat(), description)
+                .setText(text("$done/${checks.size}"))
+                .setMonochromaticImage(icon)
+                .setColorRamp(ColorRamp(intArrayOf(Palette.Dark.PRIMARY.toInt(), Palette.Dark.STATUS_NORMAL.toInt()), true))
+                .setTapAction(tap)
+                .build()
+            ComplicationType.LONG_TEXT -> LongTextComplicationData.Builder(
+                text(
+                    listOfNotNull(
+                        context.getString(R.string.tile_today_done, done, checks.size),
+                        next?.let { context.getString(R.string.tile_today_next, context.getString(it.shortTitle)) },
+                    ).joinToString(" · "),
+                ),
+                description,
+            )
+                .setTitle(text(Greeting.title(context, data.name)))
+                .setMonochromaticImage(icon)
                 .setTapAction(tap)
                 .build()
             else -> noData
@@ -196,9 +299,23 @@ class Complications(private val context: Context) {
             spo2 = 97,
             stressScore = 38,
             stressLevel = StressLevel.MEDIUM,
+            temperature = "+0.2°",
+            body = TileData.Body(21.4f, 32.1f, 72.4f, -0.3f),
+            doneToday = setOf(Metric.ECG),
         )
     }
 }
+
+internal val Metric.shortTitle: Int
+    get() = when (this) {
+        Metric.ECG -> R.string.metric_ecg
+        Metric.BLOOD_PRESSURE -> R.string.complication_bp_short
+        Metric.HEART_RATE -> R.string.metric_hr
+        Metric.SPO2 -> R.string.tile_spo2_short
+        Metric.SKIN_TEMPERATURE -> R.string.tile_temp_short
+        Metric.BODY_COMPOSITION -> R.string.complication_body_short
+        Metric.STRESS -> R.string.metric_stress
+    }
 
 internal val EcgResult.shortLabel: Int
     get() = when (this) {
@@ -249,3 +366,30 @@ class EcgShortcutComplicationService : HeartlineComplicationService() {
     // The shortcut needs no data.
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? = complications.ecgShortcut(request.complicationType)
 }
+
+class BodyComplicationService : HeartlineComplicationService() {
+    override fun build(type: ComplicationType, data: TileData) = complications.body(type, data)
+}
+
+class TemperatureComplicationService : HeartlineComplicationService() {
+    override fun build(type: ComplicationType, data: TileData) = complications.temperature(type, data)
+}
+
+class TodayComplicationService : HeartlineComplicationService() {
+    override fun build(type: ComplicationType, data: TileData) = complications.today(type, data)
+}
+
+/** "Start a measurement" shortcuts for the watch face; they need no data. */
+abstract class ShortcutComplicationService(private val metric: Metric) : HeartlineComplicationService() {
+    override fun build(type: ComplicationType, data: TileData) = complications.shortcut(metric, type)
+
+    override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? = complications.shortcut(metric, request.complicationType)
+}
+
+class BpShortcutComplicationService : ShortcutComplicationService(Metric.BLOOD_PRESSURE)
+
+class Spo2ShortcutComplicationService : ShortcutComplicationService(Metric.SPO2)
+
+class StressShortcutComplicationService : ShortcutComplicationService(Metric.STRESS)
+
+class BodyShortcutComplicationService : ShortcutComplicationService(Metric.BODY_COMPOSITION)

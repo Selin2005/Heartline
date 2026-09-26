@@ -60,23 +60,33 @@ class WatchSettingsStore(context: Context, private val now: () -> Long = System:
     /** Today's heart rate (latest, lowest, highest) for tiles and complications; changes once a minute. */
     val heart: StateFlow<HeartToday?> = heartState.asStateFlow()
 
-    fun recordHeartRate(bpm: Int, day: Long = localDay()) {
-        val today = heartToday()?.takeIf { prefs.getLong(KEY_HR_DAY, -1) == day }
+    fun recordHeartRate(bpm: Int, day: Long = localDay(), hour: Int = localHour()) {
+        val sameDay = prefs.getLong(KEY_HR_DAY, -1) == day
+        val today = heartToday()?.takeIf { sameDay }
+        val hours = HeartHours.record(if (sameDay) HeartHours.decode(prefs.getString(KEY_HR_HOURS, null)) else HeartHours.empty(), hour, bpm)
         prefs.edit()
             .putInt(KEY_HR, bpm)
             .putLong(KEY_HR_DAY, day)
             .putInt(KEY_HR_MIN, minOf(today?.min ?: bpm, bpm))
             .putInt(KEY_HR_MAX, maxOf(today?.max ?: bpm, bpm))
+            .putString(KEY_HR_HOURS, HeartHours.encode(hours))
             .apply()
         heartState.value = heartToday()
     }
+
+    private fun localHour() = java.time.Instant.ofEpochMilli(now()).atZone(java.time.ZoneId.systemDefault()).hour
 
     private fun localDay() = java.time.Instant.ofEpochMilli(now()).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toEpochDay()
 
     fun heartToday(): HeartToday? {
         val bpm = latestHeartRate ?: return null
         val sameDay = prefs.getLong(KEY_HR_DAY, -1) == localDay()
-        return HeartToday(bpm, prefs.getInt(KEY_HR_MIN, -1).takeIf { sameDay && it > 0 }, prefs.getInt(KEY_HR_MAX, -1).takeIf { sameDay && it > 0 })
+        return HeartToday(
+            bpm,
+            prefs.getInt(KEY_HR_MIN, -1).takeIf { sameDay && it > 0 },
+            prefs.getInt(KEY_HR_MAX, -1).takeIf { sameDay && it > 0 },
+            if (sameDay) HeartHours.decode(prefs.getString(KEY_HR_HOURS, null)) else HeartHours.empty(),
+        )
     }
 
     var irnState: IrnState
@@ -90,11 +100,31 @@ class WatchSettingsStore(context: Context, private val now: () -> Long = System:
         const val KEY_HR_DAY = "hr_day"
         const val KEY_HR_MIN = "hr_min"
         const val KEY_HR_MAX = "hr_max"
+        const val KEY_HR_HOURS = "hr_hours"
     }
 }
 
-/** Latest background heart rate with today's range (null before the first reading today). */
-data class HeartToday(val bpm: Int, val min: Int?, val max: Int?)
+/**
+ * Latest background heart rate with today's range (null before the first reading today) and each
+ * hour's lowest–highest ([hours], 24 entries, null for hours without readings).
+ */
+data class HeartToday(val bpm: Int, val min: Int?, val max: Int?, val hours: List<IntRange?> = HeartHours.empty())
+
+/** Today's hourly heart-rate ranges, stored as "min-max" per hour ("" when empty). */
+object HeartHours {
+    fun empty(): List<IntRange?> = List(24) { null }
+
+    fun record(hours: List<IntRange?>, hour: Int, bpm: Int): List<IntRange?> = hours.mapIndexed { i, r ->
+        if (i != hour) r else r?.let { minOf(it.first, bpm)..maxOf(it.last, bpm) } ?: bpm..bpm
+    }
+
+    fun encode(hours: List<IntRange?>): String = hours.joinToString(",") { it?.let { r -> "${r.first}-${r.last}" } ?: "" }
+
+    fun decode(text: String?): List<IntRange?> {
+        val parts = text?.split(",")?.takeIf { it.size == 24 } ?: return empty()
+        return parts.map { p -> p.split("-").takeIf { it.size == 2 }?.let { (a, b) -> a.toIntOrNull()?.let { lo -> b.toIntOrNull()?.let { hi -> lo..hi } } } }
+    }
+}
 
 /** Watch notifications: the ongoing monitoring notice and heart alerts. */
 class WatchNotifier(private val context: Context) {

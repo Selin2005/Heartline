@@ -41,6 +41,7 @@ import com.heartline.wear.R
 import com.heartline.wear.bp.WatchBpStore
 import com.heartline.wear.data.WatchRecordStore
 import com.heartline.wear.monitor.WatchSettingsStore
+import com.heartline.wear.quick.WatchProfileStore
 import com.heartline.wear.ui.components.label
 import com.heartline.wear.ui.screens.label
 import kotlinx.coroutines.CoroutineScope
@@ -197,15 +198,19 @@ class TileDataLoader(
     private val records: WatchRecordStore,
     private val settings: WatchSettingsStore,
     private val bp: WatchBpStore,
+    private val profiles: WatchProfileStore? = null,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     suspend fun load(): TileData {
         val nowMs = now()
+        val showName = settings.settings.value.showNameOnWatch
         return TileData.from(
             records.recent.first(),
             settings.latestHeartRate,
             bp.calibration.value?.takeIf { it.isValid(nowMs) }?.daysLeft(nowMs),
             settings.heartToday(),
+            nowMs = nowMs,
+            name = profiles?.profile?.value?.displayName?.takeIf { showName },
         ) { ecg -> ecg.result?.let { context.getString(it.label) } }
     }
 }
@@ -248,195 +253,3 @@ abstract class HeartlineTileService : TileService() {
     }
 }
 
-/** Card with a ring on the left (value within its range) and the reading on the right. */
-internal fun MaterialScope.ringCard(
-    context: Context,
-    route: String,
-    metric: Metric,
-    value: String,
-    detail: String,
-    progress: Float,
-    ringColor: LayoutColor = TileColors.metric(metric),
-): LayoutElementBuilders.LayoutElement = graphicDataCard(
-    onClick = context.launch(route),
-    title = { text(value.layoutString, typography = TileType.big, color = TileColors.of(Palette.Dark.ON_BACKGROUND)) },
-    content = { text(detail.layoutString, typography = Typography.LABEL_SMALL, color = TileColors.of(Palette.Dark.ON_SURFACE_VARIANT), maxLines = 2) },
-    height = expand(),
-    colors = CardColors(
-        backgroundColor = TileColors.metricContainer(metric),
-        titleColor = TileColors.of(Palette.Dark.ON_BACKGROUND),
-        contentColor = TileColors.of(Palette.Dark.ON_SURFACE_VARIANT),
-        graphicProgressIndicatorColors = ProgressIndicatorColors(ringColor, TileColors.of(0x33FFFFFF)),
-    ),
-    graphic = {
-        LayoutElementBuilders.Box.Builder()
-            .setWidth(expand())
-            .setHeight(expand())
-            .addContent(circularProgressIndicator(staticProgress = progress.coerceIn(0.02f, 1f), colors = ProgressIndicatorColors(ringColor, TileColors.of(0x33FFFFFF))))
-            .addContent(icon(TileIcons.id(metric), tintColor = ringColor))
-            .build()
-    },
-)
-
-/** Heart: live heart rate with today's range as a ring, last ECG, and an ECG button. */
-class HeartTileService : HeartlineTileService() {
-    override fun MaterialScope.layout(context: Context, data: TileData) = primaryLayout(
-        titleSlot = { text(context.getString(R.string.tile_heart).layoutString) },
-        mainSlot = {
-            val bpm = data.heartRate
-            val range = if (data.heartMin != null && data.heartMax != null) "${data.heartMin}–${data.heartMax}" else null
-            LayoutElementBuilders.Column.Builder()
-                .setWidth(expand())
-                .setHeight(expand())
-                .addContent(
-                    ringCard(
-                        context,
-                        TileRoutes.HEART_RATE,
-                        Metric.HEART_RATE,
-                        bpm?.toString() ?: "–",
-                        listOfNotNull(context.getString(R.string.unit_bpm), range?.let { context.getString(R.string.tile_today_range, it) }).joinToString("\n"),
-                        progress = bpm?.let { (it - 40) / 140f } ?: 0f,
-                    ),
-                )
-                .addContent(
-                    text(
-                        (data.lastEcg?.let { context.getString(R.string.tile_last_ecg, it) } ?: context.getString(R.string.tile_no_ecg)).layoutString,
-                        typography = Typography.LABEL_SMALL,
-                        color = data.ecgResult?.let { TileColors.severity(it.severity) } ?: TileColors.of(Palette.Dark.ON_SURFACE_VARIANT),
-                    ),
-                )
-                .build()
-        },
-        bottomSlot = {
-            textEdgeButton(onClick = context.launch(TileRoutes.ECG), colors = ButtonColors(containerColor = TileColors.metric(Metric.ECG), labelColor = TileColors.of(0xFF000000))) {
-                text(context.getString(R.string.metric_ecg).layoutString, typography = TileType.button)
-            }
-        },
-    )
-}
-
-/** Blood pressure: latest reading and category, calibration days as a ring, and Measure. */
-class BpTileService : HeartlineTileService() {
-    override fun MaterialScope.layout(context: Context, data: TileData) = primaryLayout(
-        titleSlot = { text(context.getString(R.string.metric_bp).layoutString) },
-        mainSlot = {
-            val days = data.bpDaysLeft
-            ringCard(
-                context,
-                TileRoutes.BLOOD_PRESSURE,
-                Metric.BLOOD_PRESSURE,
-                data.lastBp ?: "–",
-                listOfNotNull(
-                    data.bpCategory?.let { context.getString(it.label) },
-                    days?.let { context.getString(R.string.tile_days_left, it) } ?: context.getString(R.string.tile_calibrate_on_phone),
-                ).joinToString("\n"),
-                progress = days?.let { it / 28f } ?: 0f,
-                ringColor = data.bpCategory?.let { TileColors.severity(it.severity()) } ?: TileColors.metric(Metric.BLOOD_PRESSURE),
-            )
-        },
-        bottomSlot = {
-            textEdgeButton(onClick = context.launch(TileRoutes.BLOOD_PRESSURE), colors = ButtonColors(containerColor = TileColors.metric(Metric.BLOOD_PRESSURE), labelColor = TileColors.of(0xFF000000))) {
-                text(context.getString(if (data.bpDaysLeft != null) R.string.tile_measure else R.string.tile_calibrate).layoutString, typography = TileType.button)
-            }
-        },
-    )
-}
-
-/** Four round buttons that start a measurement, and "All" for the app. */
-class QuickMeasureTileService : HeartlineTileService() {
-    override fun MaterialScope.layout(context: Context, data: TileData) = primaryLayout(
-        titleSlot = { text(context.getString(R.string.tile_quick_title).layoutString) },
-        mainSlot = {
-            fun MaterialScope.metricButton(metric: Metric) = iconButton(
-                onClick = context.launch(TileRoutes.measure(metric)),
-                iconContent = { icon(TileIcons.id(metric), tintColor = TileColors.metric(metric)) },
-                width = expand(),
-                height = expand(),
-                colors = ButtonColors(containerColor = TileColors.metricContainer(metric), iconColor = TileColors.metric(metric)),
-            )
-            LayoutElementBuilders.Column.Builder()
-                .setWidth(expand())
-                .setHeight(expand())
-                .addContent(
-                    buttonGroup(height = expand()) {
-                        buttonGroupItem { metricButton(Metric.ECG) }
-                        buttonGroupItem { metricButton(Metric.BLOOD_PRESSURE) }
-                    },
-                )
-                .addContent(LayoutElementBuilders.Spacer.Builder().setHeight(androidx.wear.protolayout.DimensionBuilders.dp(6f)).build())
-                .addContent(
-                    buttonGroup(height = expand()) {
-                        buttonGroupItem { metricButton(Metric.SPO2) }
-                        buttonGroupItem { metricButton(Metric.STRESS) }
-                    },
-                )
-                .build()
-        },
-        bottomSlot = {
-            textEdgeButton(onClick = context.launch(TileRoutes.LAUNCHER)) { text(context.getString(R.string.tile_all).layoutString, typography = TileType.button) }
-        },
-    )
-}
-
-/** SpO2, stress and skin temperature side by side; each opens its measurement. */
-class WellnessTileService : HeartlineTileService() {
-    override fun MaterialScope.layout(context: Context, data: TileData) = primaryLayout(
-        titleSlot = { text(context.getString(R.string.tile_wellness).layoutString) },
-        mainSlot = {
-            fun MaterialScope.valueCard(metric: Metric, value: String?, label: Int) = LayoutElementBuilders.Box.Builder()
-                .setWidth(expand())
-                .setHeight(expand())
-                .setModifiers(
-                    ModifiersBuilders.Modifiers.Builder()
-                        .setClickable(context.launch(TileRoutes.measure(metric)))
-                        .setBackground(
-                            ModifiersBuilders.Background.Builder()
-                                .setColor(androidx.wear.protolayout.ColorBuilders.argb(TileColors.metricContainer(metric).staticArgb))
-                                .setCorner(ModifiersBuilders.Corner.Builder().setRadius(androidx.wear.protolayout.DimensionBuilders.dp(22f)).build())
-                                .build(),
-                        )
-                        .build(),
-                )
-                .addContent(
-                    LayoutElementBuilders.Column.Builder()
-                        .addContent(icon(TileIcons.id(metric), tintColor = TileColors.metric(metric)))
-                        .addContent(LayoutElementBuilders.Spacer.Builder().setHeight(androidx.wear.protolayout.DimensionBuilders.dp(4f)).build())
-                        .addContent(text((value ?: "–").layoutString, typography = TileType.value, color = TileColors.of(Palette.Dark.ON_BACKGROUND)))
-                        .addContent(text(context.getString(label).layoutString, typography = Typography.LABEL_SMALL, color = TileColors.of(Palette.Dark.ON_SURFACE_VARIANT)))
-                        .build(),
-                )
-                .build()
-            buttonGroup(height = expand()) {
-                buttonGroupItem { valueCard(Metric.SPO2, data.spo2?.let { "$it%" }, R.string.tile_spo2_short) }
-                buttonGroupItem { valueCard(Metric.STRESS, data.stressScore?.toString(), R.string.metric_stress) }
-                buttonGroupItem { valueCard(Metric.SKIN_TEMPERATURE, data.temperature, R.string.tile_temp_short) }
-            }
-        },
-    )
-}
-
-/** Stress: score on a ring coloured by level, HRV, and Measure. */
-class StressTileService : HeartlineTileService() {
-    override fun MaterialScope.layout(context: Context, data: TileData) = primaryLayout(
-        titleSlot = { text(context.getString(R.string.metric_stress).layoutString) },
-        mainSlot = {
-            ringCard(
-                context,
-                TileRoutes.measure(Metric.STRESS),
-                Metric.STRESS,
-                data.stressScore?.toString() ?: "–",
-                listOfNotNull(
-                    data.stressLevel?.let { context.getString(it.label) },
-                    data.hrvMs?.let { context.getString(R.string.stress_hrv, it) },
-                ).joinToString("\n").ifEmpty { context.getString(R.string.tile_not_measured) },
-                progress = (data.stressScore ?: 0) / 100f,
-                ringColor = data.stressLevel?.let { TileColors.severity(it.severity()) } ?: TileColors.metric(Metric.STRESS),
-            )
-        },
-        bottomSlot = {
-            textEdgeButton(onClick = context.launch(TileRoutes.measure(Metric.STRESS)), colors = ButtonColors(containerColor = TileColors.metric(Metric.STRESS), labelColor = TileColors.of(0xFF000000))) {
-                text(context.getString(R.string.tile_measure).layoutString, typography = TileType.button)
-            }
-        },
-    )
-}
