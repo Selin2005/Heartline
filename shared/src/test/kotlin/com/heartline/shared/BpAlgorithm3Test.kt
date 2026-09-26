@@ -95,7 +95,9 @@ class BpAlgorithm3Test {
         val raw = FloatArray(ppg.size) { 200_000f - 3_000f * ppg[it] }
         val pat = PulseArrival.compute(ecg, raw, efs)
         assertNotNull(pat)
-        assertEquals(230.0, pat!!.medianMs, 15.0)
+        // Algorithm 6 times the intersecting-tangent foot: for this sigmoid upstroke (scale 20 ms)
+        // the tangent at the steepest point meets the foot level 2 × 20 ms earlier.
+        assertEquals(190.0, pat!!.medianMs, 15.0)
         assertTrue(pat.beats >= 15)
         assertNull(PulseArrival.compute(ecg, FloatArray(ecg.size), efs))
     }

@@ -11,7 +11,8 @@ import com.heartline.shared.ecg.RPeakDetector
 data class PulseArrivalTime(val medianMs: Double, val beats: Int, val spreadMs: Double)
 
 /**
- * Pulse arrival time (PAT): ECG R peak → the PPG pulse's steepest upstroke at the wrist.
+ * Pulse arrival time (PAT): ECG R peak → the PPG pulse's foot at the wrist (intersecting tangent
+ * at the steepest upstroke, which unlike the upstroke itself doesn't move with ejection time).
  *
  * PAT shortens as pressure rises (pulse wave velocity grows with pressure); it tracks systolic
  * changes better than pulse shape alone, though it includes the pre-ejection period
@@ -27,6 +28,16 @@ object PulseArrival {
     const val MIN_BEATS = 8
 
     fun compute(ecg: FloatArray, ppg: FloatArray, fs: Int): PulseArrivalTime? {
+        val pats = perBeat(ecg, ppg, fs)?.map { it.second } ?: return null
+        if (pats.size < MIN_BEATS) return null
+        val sorted = pats.sorted()
+        val q1 = sorted[sorted.size / 4]
+        val q3 = sorted[sorted.size * 3 / 4]
+        return PulseArrivalTime(sorted[sorted.size / 2], pats.size, q3 - q1)
+    }
+
+    /** Every beat's (R peak sample index, arrival time in ms), for beat-to-beat analysis (arm-raise maneuver). */
+    fun perBeat(ecg: FloatArray, ppg: FloatArray, fs: Int): List<Pair<Int, Double>>? {
         if (ecg.size != ppg.size || ecg.size < fs * 8) return null
         val peaks = RPeakDetector.detect(ecg, fs)
         if (peaks.size < MIN_BEATS) return null
@@ -41,12 +52,11 @@ object PulseArrival {
             if (r + from >= end) return@mapNotNull null
             val steepest = (r + from..end).maxBy { slope[it] }
             // An edge of the window is not a real upstroke.
-            if (steepest == r + from || steepest == end || slope[steepest] <= 0f) null else (steepest - r) * 1000.0 / fs
+            if (steepest == r + from || steepest == end || slope[steepest] <= 0f) return@mapNotNull null
+            // Intersecting-tangent foot: the lowest point before the upstroke sets the level.
+            val foot = (maxOf(r + from / 2, steepest - (0.25 * fs).toInt())..steepest).minBy { x[it] }
+            r to (PpgFeatures.tangentOnset(x, foot, steepest) - r) * 1000.0 / fs
         }
-        if (pats.size < MIN_BEATS) return null
-        val sorted = pats.sorted()
-        val q1 = sorted[sorted.size / 4]
-        val q3 = sorted[sorted.size * 3 / 4]
-        return PulseArrivalTime(sorted[sorted.size / 2], pats.size, q3 - q1)
+        return pats
     }
 }

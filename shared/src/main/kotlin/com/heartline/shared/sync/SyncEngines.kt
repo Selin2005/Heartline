@@ -25,6 +25,9 @@ interface Outbox {
 
     suspend fun pendingMessages(): List<PendingMessage> = emptyList()
 
+    /** Raw BP session logs (id, encoded bytes) waiting for the phone. */
+    suspend fun pendingSessions(): List<Pair<String, ByteArray>> = emptyList()
+
     /** Called for acked records and messages alike. */
     suspend fun markDelivered(id: String)
 }
@@ -80,6 +83,10 @@ class WatchSyncEngine(
             if (!transport.send(message.path, message.payload)) break
             sent++
         }
+        for ((id, bytes) in outbox.pendingSessions()) {
+            if (!transport.sendLarge(Protocol.sessionPath(id), bytes)) break
+            sent++
+        }
         return sent
     }
 
@@ -120,7 +127,9 @@ class PhoneSyncEngine(
     private val onHello: suspend (Hello) -> Unit = {},
     private val onCaptureResult: suspend (CaptureResult) -> Unit = {},
     private val onSetupRequest: suspend (SetupRequest) -> Unit = {},
-    private val onSettings: suspend (MonitorSettings) -> Unit = {}
+    private val onSettings: suspend (MonitorSettings) -> Unit = {},
+    /** A raw BP session log arrived (id, encoded bytes); acked after it returns. */
+    private val onSessionLog: suspend (String, ByteArray) -> Unit = { _, _ -> }
 ) {
     private val metas = mutableMapOf<String, RecordMeta>()
     private val waves = mutableMapOf<String, FloatArray>()
@@ -164,6 +173,11 @@ class PhoneSyncEngine(
                 val result = Protocol.json.decodeFromString<CaptureResult>(envelope.data.decodeToString())
                 onCaptureResult(result)
                 ack(result.id)
+            }
+            envelope.path.startsWith(Protocol.BP_SESSION_PREFIX) -> {
+                val id = envelope.path.removePrefix(Protocol.BP_SESSION_PREFIX)
+                onSessionLog(id, envelope.data)
+                ack(id)
             }
             envelope.path.startsWith(Protocol.RECORD_WAVE_PREFIX) -> {
                 val id = envelope.path.removePrefix(Protocol.RECORD_WAVE_PREFIX)

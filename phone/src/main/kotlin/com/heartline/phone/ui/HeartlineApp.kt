@@ -333,6 +333,10 @@ fun HeartlineApp(
                                         ShareFormat("json", "application/json", R.string.share_format_bp_data) { name, _, _ ->
                                             vm.exportDataset(java.io.File(context.cacheDir, "exports"), name)
                                         },
+                                        // Every sensor of every session, for developing the algorithm (tools/bp-ml/read_session.py).
+                                        ShareFormat("zip", "application/zip", R.string.share_format_bp_sessions) { name, _, _ ->
+                                            vm.exportSessions(java.io.File(context.cacheDir, "exports"), name)
+                                        },
                                     ),
                                     text = { prompt, person -> ResultSummary.bp(context.resources, state, person, prompt) },
                                 ),
@@ -352,6 +356,7 @@ fun HeartlineApp(
                         onProfileChange = vm::setProfile,
                         onAddStanding = { vm.addStandingRound() },
                         onFinish = { vm.finish() },
+                        onPreciseChange = vm::setPrecise,
                     )
                 }
                 composable(Routes.METRIC) { entry ->

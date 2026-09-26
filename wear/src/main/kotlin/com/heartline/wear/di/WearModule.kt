@@ -12,7 +12,9 @@ import com.heartline.wear.data.WatchDatabase
 import com.heartline.wear.data.WatchRecordStore
 import com.heartline.wear.bp.BpMeasureViewModel
 import com.heartline.wear.bp.WatchBpStore
-import com.heartline.wear.sensor.AndroidMotionMeter
+import com.heartline.wear.sensor.AndroidImuRecorder
+import com.heartline.wear.sensor.BpAuxSensors
+import com.heartline.wear.sensor.SdkBpAuxSensors
 import com.heartline.shared.model.Metric
 import com.heartline.wear.ecg.EcgMeasureViewModel
 import com.heartline.wear.quick.QuickMeasureViewModel
@@ -163,7 +165,21 @@ val wearModule = module {
             get<WatchSyncEngine>().sendSettings(changed)
         }
     }
-    viewModel { BpMeasureViewModel(get(), get(), get(), get(), motion = AndroidMotionMeter(androidContext())) }
+    viewModel {
+        val gateway = get<SensorGateway>() as? SdkSensorGateway
+        BpMeasureViewModel(
+            get(),
+            get(),
+            get(),
+            get(),
+            imu = AndroidImuRecorder(androidContext()),
+            ecg = get<EcgSource>(),
+            aux = if (BuildConfig.USE_FAKE_SENSORS || gateway == null) BpAuxSensors.NONE else SdkBpAuxSensors(gateway),
+            heightCm = { get<WatchProfileStore>().profile.value?.heightCm?.toDouble()?.takeIf { it > 0 } },
+            device = Build.MODEL,
+            appVersion = BuildConfig.VERSION_NAME,
+        )
+    }
     viewModel { params -> QuickMeasureViewModel(get<QuickSources>()[params.get<Metric>()]!!, get(), get(), get()) }
     viewModel { EcgMeasureViewModel(get(), get(), get()) }
 }

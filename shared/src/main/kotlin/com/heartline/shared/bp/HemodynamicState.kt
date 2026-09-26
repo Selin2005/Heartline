@@ -45,16 +45,17 @@ data class BpProfile(
 
 /**
  * What the watch knew about the measurement besides the pulse wave: the mean gravity vector in
- * the watch's frame (arm position) while recording. Null values are unknown and not used.
+ * the watch's frame (arm position), skin temperature (°C) and skin conductance (µS, Watch8+).
+ * Null values are unknown and not used.
  */
-data class MeasurementContext(val gravity: List<Double>? = null) {
+data class MeasurementContext(val gravity: List<Double>? = null, val skinTempC: Double? = null, val edaMicroSiemens: Double? = null) {
     companion object {
         val NONE = MeasurementContext()
     }
 }
 
 enum class HemodynamicState {
-    /** At rest in a steady state: the calibrated model applies. */
+    /** At rest in a steady state: the calibrated model applies as is. */
     STEADY,
 
     /** The pulse rate or amplitude is still changing (just stood up, just moved, recovering). */
@@ -67,20 +68,19 @@ enum class HemodynamicState {
     IRREGULAR
 }
 
-enum class UnsteadyReason {
+/** Why a state other than [HemodynamicState.STEADY] was chosen (logged and shown as a short note). */
+enum class StateReason {
     HEART_RATE_CHANGING,
     PULSE_AMPLITUDE_CHANGING,
     COMPENSATORY_RESPONSE,
-    IRREGULAR_RHYTHM,
-    ARM_POSITION
+    IRREGULAR_RHYTHM
 }
 
 /**
- * [lowPressureSuspected]: the pattern (racing pulse, weak and changing wrist pulse) fits a drop
- * in pressure that the body is compensating for — the situation where pulse-wave analysis reads
- * falsely *high*. Wellness wording only.
+ * The body's state during the recording. It never blocks a reading: it tells the fusion
+ * ([BpFusion]) how far each channel can be trusted in it.
  */
-data class StateAssessment(val state: HemodynamicState, val reason: UnsteadyReason? = null, val lowPressureSuspected: Boolean = false) {
+data class StateAssessment(val state: HemodynamicState, val reason: StateReason? = null) {
     val steady: Boolean get() = state == HemodynamicState.STEADY
 
     companion object {
@@ -89,12 +89,12 @@ data class StateAssessment(val state: HemodynamicState, val reason: UnsteadyReas
 }
 
 /**
- * Decides whether a recording is in a steady state (algorithm 5, see
+ * Recognises the body's state during a recording (algorithms 5–6, see
  * docs/algorithms/BP_ALGORITHM.md). Calibrated pulse-wave analysis only holds in the resting,
  * steady state it was calibrated in. After standing up, a vasovagal episode or with blood loss or
- * dehydration the pulse races, the wrist arteries constrict and the wave narrows: the model reads
- * all of that as *high* pressure while the real pressure is normal or low. Those states are
- * recognised here and no number is given for them.
+ * dehydration the pulse races, the wrist arteries constrict and the wave narrows: pulse-wave
+ * analysis alone reads all of that as *high* pressure. The state decides how the channels are
+ * weighed, so the reading leans on the ones that stay valid (transit times, hydrostatic).
  */
 object HemodynamicStateClassifier {
     /** Rhythm: coefficient of variation of intervals (sinus arrhythmia at rest stays well below). */
@@ -116,8 +116,8 @@ object HemodynamicStateClassifier {
     const val ORTHOSTATIC_HR_RISE = 15.0
     const val ORTHOSTATIC_PI = 0.75
 
-    /** The forearm pointing more than this far from every calibration position, degrees. */
-    const val ARM_ANGLE_DEG = 35.0
+    /** Skin conductance this many times the calibration's: a strong sympathetic response. */
+    const val EDA_SURGE = 2.0
 
     fun assess(
         features: PpgFeatureVector,
@@ -127,7 +127,7 @@ object HemodynamicStateClassifier {
         val profile = calibration.profile
         if (features.version < PpgFeatureVector.STATE_VERSION) return StateAssessment.STEADY
         if (!profile.atrialFibrillation && irregular(features.ibiCv, features.ectopicCount, features.rejectedFraction)) {
-            return StateAssessment(HemodynamicState.IRREGULAR, UnsteadyReason.IRREGULAR_RHYTHM)
+            return StateAssessment(HemodynamicState.IRREGULAR, StateReason.IRREGULAR_RHYTHM)
         }
         val refHr = calibration.referenceHeartRate()
         val refPi = calibration.referencePerfusionIndex()
@@ -143,17 +143,14 @@ object HemodynamicStateClassifier {
                 COMPENSATORY_PI
         }
         val weakPulse = piRatio != null && piRatio < piLimit
-        if (hrRise > riseLimit && weakPulse) {
-            // A falling rate or a weak, changing pulse after a sudden rise is the compensating phase of a drop.
-            val low = (changing || amplitudeChanging || features.hrSlopeBpmPerS < 0)
-            return StateAssessment(HemodynamicState.COMPENSATORY, UnsteadyReason.COMPENSATORY_RESPONSE, low)
+        // A sympathetic surge on the skin (Watch8+) counts as a weak pulse when the index is missing.
+        val refEda = calibration.referenceEda()
+        val edaSurge = refEda > 0 && (context.edaMicroSiemens ?: 0.0) > refEda * EDA_SURGE
+        if (hrRise > riseLimit && (weakPulse || (piRatio == null && edaSurge))) {
+            return StateAssessment(HemodynamicState.COMPENSATORY, StateReason.COMPENSATORY_RESPONSE)
         }
-        if (changing) {
-            return StateAssessment(HemodynamicState.TRANSIENT, UnsteadyReason.HEART_RATE_CHANGING, weakPulse && hrRise > riseLimit / 2)
-        }
-        if (amplitudeChanging) return StateAssessment(HemodynamicState.TRANSIENT, UnsteadyReason.PULSE_AMPLITUDE_CHANGING)
-        val angle = context.gravity?.let { calibration.armAngleDeg(it) }
-        if (angle != null && angle > ARM_ANGLE_DEG) return StateAssessment(HemodynamicState.TRANSIENT, UnsteadyReason.ARM_POSITION)
+        if (changing) return StateAssessment(HemodynamicState.TRANSIENT, StateReason.HEART_RATE_CHANGING)
+        if (amplitudeChanging) return StateAssessment(HemodynamicState.TRANSIENT, StateReason.PULSE_AMPLITUDE_CHANGING)
         return StateAssessment.STEADY
     }
 

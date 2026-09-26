@@ -20,6 +20,9 @@ object Protocol {
     const val BP_CALIBRATION = "$ROOT/bp/calibration"
     const val BP_CALIBRATION_CAPTURE = "$ROOT/bp/calib-capture"
     const val HR_BATCH = "$ROOT/hr/batch"
+
+    /** Raw blood-pressure session logs (BpSessionLog, gzip), watch → phone, acked by id. */
+    const val BP_SESSION_PREFIX = "$ROOT/bp/session/"
     const val ALERT = "$ROOT/alert"
     const val OPEN = "$ROOT/open"
     const val STATUS = "$ROOT/status"
@@ -30,6 +33,8 @@ object Protocol {
     const val CAPABILITY_WATCH = "heartline_watch"
 
     fun wavePath(id: String) = "$RECORD_WAVE_PREFIX$id"
+
+    fun sessionPath(id: String) = "$BP_SESSION_PREFIX$id"
 
     val json = Json {
         ignoreUnknownKeys = true

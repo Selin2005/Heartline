@@ -68,9 +68,13 @@ data class Ack(val id: String, val ok: Boolean)
 @Serializable
 data class DeleteRecord(val id: String)
 
-/** Phone → watch: take calibration round [round] (1..3) for wizard [captureId]. */
+/**
+ * Phone → watch: take calibration round [round] (1..3, 4 = standing) for wizard [captureId].
+ * [precise]: record it in precise mode (ECG + PPG + motion, finger on the key), so the transit
+ * time channels get cuff points too (algorithm 6).
+ */
 @Serializable
-data class CaptureRequest(val captureId: String, val round: Int)
+data class CaptureRequest(val captureId: String, val round: Int, val precise: Boolean = false)
 
 /** Watch → phone: PPG features recorded for a calibration round. */
 @Serializable
@@ -82,5 +86,9 @@ data class CaptureResult(
     /** Raw PPG of the round (100 Hz), kept with the calibration so it can be re-analysed later. */
     val ppg: List<Float>? = null,
     /** Mean gravity vector in the watch's frame during the round (arm position), if known. */
-    val gravity: List<Double>? = null
+    val gravity: List<Double>? = null,
+    /** Algorithm 6: the round on every channel (IR, BCG, ECG transit times, skin sensors). */
+    val capture: com.heartline.shared.bp.ChannelCapture? = null,
+    /** The raw session log of this round (BpSessionLog id), for the export. */
+    val sessionId: String? = null
 )

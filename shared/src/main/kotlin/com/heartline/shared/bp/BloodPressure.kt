@@ -16,6 +16,11 @@ import kotlinx.serialization.Serializable
  * [atMs] is set for points added after the calibration (a cuff check); base points use the
  * calibration's time. [gravity] is the watch's mean gravity vector while recording (arm
  * position), [standing] marks the optional standing round (algorithm 5).
+ *
+ * Algorithm 6 adds every other channel the round measured, each null when not available:
+ * infrared PPG features and raw wave, wrist-BCG transit time, and in precise (ECG) mode the
+ * pulse arrival time, pre-ejection period and the pure transit time, plus skin temperature and
+ * skin conductance.
  */
 @Serializable
 data class CalibrationPoint(
@@ -26,8 +31,53 @@ data class CalibrationPoint(
     val ppg: List<Float>? = null,
     val atMs: Long? = null,
     val gravity: List<Double>? = null,
-    val standing: Boolean = false
-)
+    val standing: Boolean = false,
+    val irFeatures: PpgFeatureVector? = null,
+    val ppgIr: List<Float>? = null,
+    val bcgPttMs: Double? = null,
+    val patMs: Double? = null,
+    val pepMs: Double? = null,
+    val pttMs: Double? = null,
+    val skinTempC: Double? = null,
+    val edaMicroSiemens: Double? = null
+) {
+    companion object {
+        /** A calibration point from a round's [capture] and the cuff reading taken with it. */
+        fun of(
+            capture: ChannelCapture,
+            cuffSystolic: Int,
+            cuffDiastolic: Int,
+            cuffPulse: Int?,
+            atMs: Long? = null,
+            standing: Boolean = false
+        ) = CalibrationPoint(
+            capture.features,
+            cuffSystolic,
+            cuffDiastolic,
+            cuffPulse,
+            capture.ppg.takeIf { capture.fs == BpCalibration.PPG_FS },
+            atMs,
+            capture.gravity,
+            standing,
+            capture.irFeatures,
+            capture.ppgIr,
+            capture.bcgPttMs,
+            capture.patMs,
+            capture.pepMs,
+            capture.pttMs,
+            capture.skinTempC,
+            capture.edaMicroSiemens
+        )
+    }
+
+    /** The value of a transit-time channel, if this round measured it. */
+    fun transit(channel: BpChannel): Double? = when (channel) {
+        BpChannel.BCG_PTT -> bcgPttMs
+        BpChannel.PAT -> patMs
+        BpChannel.ECG_PTT -> pttMs
+        else -> null
+    }
+}
 
 /**
  * SHM-style calibration: 3 cuff readings, valid for 28 days. Algorithm 3 adds
@@ -41,7 +91,9 @@ data class BpCalibration(
     val createdAtMs: Long,
     val points: List<CalibrationPoint>,
     val extraPoints: List<CalibrationPoint> = emptyList(),
-    val profile: BpProfile = BpProfile()
+    val profile: BpProfile = BpProfile(),
+    /** Sign that makes a raised hand a positive forearm pitch (measured by the arm-raise maneuver). */
+    val armSign: Double = 1.0
 ) {
     val validUntilMs: Long get() = createdAtMs + if (profile.shortValidity) SHORT_VALIDITY_MS else VALIDITY_MS
 
@@ -68,6 +120,18 @@ data class BpCalibration(
         return if (values.isEmpty()) 0.0 else values[values.size / 2]
     }
 
+    /** Median skin conductance of the seated rounds, or 0 when none measured it. */
+    fun referenceEda(): Double =
+        points.filter { !it.standing }.mapNotNull { it.edaMicroSiemens }.sorted().let { if (it.isEmpty()) 0.0 else it[it.size / 2] }
+
+    /** Mean skin temperature of the seated rounds, or null. */
+    fun referenceSkinTemp(): Double? = points.filter { !it.standing }.mapNotNull { it.skinTempC }.takeIf { it.isNotEmpty() }?.average()
+
+    /** Mean forearm pitch of the seated rounds (degrees, with [armSign]), or null without gravity. */
+    fun referencePitchDeg(): Double? = points.filter {
+        !it.standing
+    }.mapNotNull { p -> p.gravity?.let { ImuStreams.pitchDeg(it, armSign) } }.takeIf { it.isNotEmpty() }?.average()
+
     /** Angle from [gravity] to the nearest calibration arm position, degrees; null when unknown. */
     fun armAngleDeg(gravity: List<Double>): Double? =
         timedPoints().mapNotNull { (p, _) -> p.gravity?.let { HemodynamicStateClassifier.angleDeg(gravity, it) } }.minOrNull()
@@ -83,10 +147,16 @@ data class BpCalibration(
      */
     fun upgraded(fs: Int = PPG_FS): BpCalibration {
         fun CalibrationPoint.up(): CalibrationPoint {
-            if (features.version >= PpgFeatureVector.VERSION) return this
-            val raw = ppg ?: return this
-            val fresh = PpgFeatures.extract(raw.toFloatArray(), fs) ?: return this
-            return copy(features = fresh)
+            var p = this
+            if (features.version <
+                PpgFeatureVector.VERSION
+            ) {
+                ppg?.let { raw -> PpgFeatures.extract(raw.toFloatArray(), fs)?.let { p = p.copy(features = it) } }
+            }
+            if ((irFeatures?.version ?: 0) < PpgFeatureVector.VERSION) {
+                ppgIr?.let { raw -> PpgFeatures.extract(raw.toFloatArray(), fs)?.let { p = p.copy(irFeatures = it) } }
+            }
+            return p
         }
         return copy(points = points.map { it.up() }, extraPoints = extraPoints.map { it.up() })
     }
@@ -111,10 +181,12 @@ data class BpCalibration(
  * the estimated change from the calibration's reference, mmHg.
  *
  * Algorithm 5: [heartRateDominated] means most of the change comes from a faster or slower
- * pulse rather than the pulse shape, which says little about pressure; [rangeOnly] means the
- * reading is too uncertain for one number or a category, so a range is shown instead;
- * [ectopicBeats] premature beats were left out; [notValidated]: a condition (pregnancy) for which
- * cuffless estimates are not validated.
+ * pulse rather than the pulse shape, which says little about pressure; [ectopicBeats] premature
+ * beats were left out; [notValidated]: a condition (pregnancy) for which cuffless estimates are
+ * not validated.
+ *
+ * Algorithm 6: always one number with its ±. [state] is the body's state during the recording,
+ * [channels] every channel's own estimate that went into the fused number (see [BpFusion]).
  */
 data class BpEstimate(
     val systolic: Int,
@@ -125,9 +197,10 @@ data class BpEstimate(
     val beyondCalibration: Boolean = false,
     val deltaSystolic: Double = 0.0,
     val heartRateDominated: Boolean = false,
-    val rangeOnly: Boolean = false,
     val ectopicBeats: Int = 0,
-    val notValidated: Boolean = false
+    val notValidated: Boolean = false,
+    val state: StateAssessment = StateAssessment.STEADY,
+    val channels: List<ChannelEstimate> = emptyList()
 ) {
     /** A very high reading driven by the pulse rate alone is not presented as very high. */
     val safety: BpSafety get() = BpSafety.of(systolic, diastolic).let {
@@ -139,10 +212,6 @@ data class BpEstimate(
             it
         }
     }
-
-    /** Systolic and diastolic range shown for a [rangeOnly] reading (± one uncertainty). */
-    val systolicRange: IntRange get() = (systolic - uncertaintySys)..(systolic + uncertaintySys)
-    val diastolicRange: IntRange get() = (diastolic - uncertaintyDia)..(diastolic + uncertaintyDia)
 }
 
 enum class OutOfRangeReason {
@@ -159,14 +228,6 @@ sealed interface BpOutcome {
 
     /** The recording is not a trustworthy pulse wave: measure again. Never used for a real change in pressure. */
     data class OutOfRange(val reason: OutOfRangeReason) : BpOutcome
-
-    /**
-     * Algorithm 5: the body is not in the steady state the calibration holds for (pulse racing or
-     * changing, compensating response, irregular rhythm, arm elsewhere). No number is given, since
-     * pulse-wave analysis reads these states as falsely high. [lowPressureSuspected]: the pattern
-     * fits a drop in pressure.
-     */
-    data class Unsteady(val reason: UnsteadyReason, val lowPressureSuspected: Boolean = false) : BpOutcome
 }
 
 /**
@@ -262,33 +323,49 @@ object BpEstimator {
         return x
     }
 
+    /** Relaxed signal gate for an irregular rhythm, where beats vary by nature (longer recording). */
+    const val MIN_QUALITY_IRREGULAR = 0.35
+    const val MIN_BEATS_IRREGULAR = 8
+
     /**
+     * In a compensating state the wrist wave narrows from vasoconstriction, not pressure: only
+     * this share of the shape change is trusted, the rest goes into the ±.
+     */
+    const val COMPENSATORY_SHAPE = 0.3
+
+    /**
+     * Pulse-wave-analysis estimate of one PPG channel ([BpChannel.PWA_GREEN] or
+     * [BpChannel.PWA_IR]). Never refuses for the body's state: [state] (assessed here when null)
+     * only changes how much of the shape change is trusted and the ±.
+     *
      * @param history this user's recent in-range readings' features: once there are enough, the
      * "typical spread" of each feature is learned from them instead of the population default.
-     * @param context arm position during the recording, if the watch knew it.
+     * @param context arm position, skin temperature and conductance during the recording.
+     * @param hydrostaticMmHg how much higher the pressure at the wrist was than at calibration
+     * because of the arm's height (ρgh); removed from the estimate.
      */
     fun estimate(
         calibration: BpCalibration?,
         features: PpgFeatureVector?,
         nowMs: Long,
         history: List<PpgFeatureVector> = emptyList(),
-        context: MeasurementContext = MeasurementContext.NONE
+        context: MeasurementContext = MeasurementContext.NONE,
+        channel: BpChannel = BpChannel.PWA_GREEN,
+        state: StateAssessment? = null,
+        hydrostaticMmHg: Double = 0.0
     ): BpOutcome {
         if (calibration == null || !calibration.isValid(nowMs)) return BpOutcome.NeedsCalibration
         if (features == null || features.version < PpgFeatureVector.MIN_MODEL_VERSION) return BpOutcome.PoorSignal
+        val select = selector(channel)
+        if (calibration.timedPoints().count { select(it.first) != null } < BpCalibration.REQUIRED_POINTS) return BpOutcome.NeedsCalibration
         val profile = calibration.profile
-        // An irregular rhythm makes the recording look noisy: say so before calling it poor signal.
-        val state = HemodynamicStateClassifier.assess(features, calibration, context)
-        // (Only when the pulses themselves are clean: noise also gives irregular spacing.)
-        if (state.state == HemodynamicState.IRREGULAR &&
-            features.quality >= MIN_QUALITY
-        ) {
-            return BpOutcome.Unsteady(UnsteadyReason.IRREGULAR_RHYTHM)
-        }
-        if (features.quality < MIN_QUALITY || features.beats < MIN_BEATS) return BpOutcome.PoorSignal
+        val assessed = state ?: HemodynamicStateClassifier.assess(features, calibration, context)
+        val irregular = assessed.state == HemodynamicState.IRREGULAR || profile.atrialFibrillation
+        val minQuality = if (irregular) MIN_QUALITY_IRREGULAR else MIN_QUALITY
+        val minBeats = if (irregular) MIN_BEATS_IRREGULAR else MIN_BEATS
+        if (features.quality < minQuality || features.beats < minBeats) return BpOutcome.PoorSignal
         if (!isPlausible(features)) return BpOutcome.OutOfRange(OutOfRangeReason.SIGNAL_INCONSISTENT)
-        if (!state.steady) return BpOutcome.Unsteady(state.reason ?: UnsteadyReason.HEART_RATE_CHANGING, state.lowPressureSuspected)
-        val model = fit(calibration, nowMs, features.version)
+        val model = fit(calibration, nowMs, features.version, select)
         val f = corrected(features)
         val scale = personalScale(history)
         val delta = DoubleArray(f.size) { if (model.active[it]) f[it] - model.refFeatures[it] else 0.0 }
@@ -301,33 +378,42 @@ object BpEstimator {
             }
         }
         val coreFar = coreFeatures.any { z[it] > NOISY_FEATURE_Z }
-        if (coreFar && features.quality < MARGINAL_QUALITY) return BpOutcome.OutOfRange(OutOfRangeReason.SIGNAL_INCONSISTENT)
+        if (coreFar && features.quality < MARGINAL_QUALITY && !irregular) return BpOutcome.OutOfRange(OutOfRangeReason.SIGNAL_INCONSISTENT)
 
         val shape = delta.indices.filter { it != HR }
-        val hrSys = HR_CAP_SYS * tanh(model.sysWeights[HR] * delta[HR] * profile.heartRateWeight / HR_CAP_SYS)
-        val hrDia = HR_CAP_DIA * tanh(model.diaWeights[HR] * delta[HR] * profile.heartRateWeight / HR_CAP_DIA)
-        val shapeSys = shape.sumOf { model.sysWeights[it] * delta[it] }
+        // In a compensating state the fast pulse is the compensation itself, not a sign of pressure.
+        val rateWeight = if (assessed.state == HemodynamicState.COMPENSATORY) 0.0 else profile.heartRateWeight
+        val hrSys = HR_CAP_SYS * tanh(model.sysWeights[HR] * delta[HR] * rateWeight / HR_CAP_SYS)
+        val hrDia = HR_CAP_DIA * tanh(model.diaWeights[HR] * delta[HR] * rateWeight / HR_CAP_DIA)
+        val rawShapeSys = shape.sumOf { model.sysWeights[it] * delta[it] }
+        val rawShapeDia = shape.sumOf { model.diaWeights[it] * delta[it] }
+        val trust = if (assessed.state == HemodynamicState.COMPENSATORY) COMPENSATORY_SHAPE else 1.0
+        val shapeSys = rawShapeSys * trust
         val dSys = shapeSys + hrSys
-        val dDia = shape.sumOf { model.diaWeights[it] * delta[it] } + hrDia
+        val dDia = rawShapeDia * trust + hrDia
         val hrDominated = abs(hrSys) >= HR_DOMINANT_MMHG && abs(hrSys) > abs(shapeSys)
         val days = (nowMs - model.latestPointMs).coerceAtLeast(0) / BpCalibration.DAY_MS.toDouble()
         // Uncertainty grows with how far today's wave is from calibration (weights are uncertain too).
         val extrapolation = 0.5 * sqrt(shape.sumOf { (priorSys[it] * delta[it]).let { v -> v * v } } + hrSys * hrSys)
         val refPi = calibration.referencePerfusionIndex()
         val vasomotor = refPi > 0 && features.perfusionIndex > 0 && features.perfusionIndex / refPi !in PERFUSION_RANGE
+        val refTemp = calibration.referenceSkinTemp()
+        val cold = refTemp != null && context.skinTempC != null && refTemp - context.skinTempC > COLD_SKIN_DELTA
         val doubt = listOf(
             if (hrDominated) HR_DOMINATED_SD else 0.0,
             if (vasomotor) PERFUSION_SD else 0.0,
+            if (cold) PERFUSION_SD else 0.0,
             ECTOPIC_SD * features.ectopicCount.coerceAtMost(2),
-            if (profile.atrialFibrillation) AF_SD else 0.0
+            if (irregular) AF_SD else 0.0,
+            rawShapeSys * (1 - trust)
         )
         val sdSys = sqrt(
             BASE_SD * BASE_SD + model.residualSys * model.residualSys + (DRIFT_SD_PER_DAY * days).let { it * it } +
                 extrapolation * extrapolation + doubt.sumOf { it * it }
         )
         val sdDia = sdSys * 0.7
-        val rawSys = model.refSys + dSys
-        val rawDia = model.refDia + dDia
+        val rawSys = model.refSys + dSys - hydrostaticMmHg
+        val rawDia = model.refDia + dDia - hydrostaticMmHg
         val systolic = rawSys.roundToInt().coerceIn(SYSTOLIC_LIMITS)
         val diastolic = rawDia.roundToInt().coerceIn(DIASTOLIC_LIMITS).coerceAtMost(systolic - 15)
         val beyond = coreFeatures.any { z[it] > BEYOND_FEATURE_Z } ||
@@ -337,52 +423,32 @@ object BpEstimator {
             rawSys < model.minSys - BEYOND_DELTA_SYS ||
             rawSys > model.maxSys + BEYOND_DELTA_SYS ||
             hrDominated
-        val sd = sdSys.roundToInt()
         return BpOutcome.Ok(
             BpEstimate(
                 systolic,
                 diastolic,
                 features.heartRateBpm.roundToInt(),
-                sd,
+                sdSys.roundToInt(),
                 sdDia.roundToInt(),
                 beyondCalibration = beyond,
                 deltaSystolic = dSys,
                 heartRateDominated = hrDominated,
-                rangeOnly = hrDominated || sd > RANGE_ONLY_SD,
                 ectopicBeats = features.ectopicCount,
-                notValidated = profile.pregnancy
+                notValidated = profile.pregnancy,
+                state = assessed,
+                channels = listOf(ChannelEstimate(channel, rawSys, rawDia, sdSys, sdDia))
             )
         )
     }
 
-    /**
-     * Extraction plus [estimate] for one raw recording. A recording too irregular to give a
-     * feature vector (atrial fibrillation smears every beat) is reported as an irregular rhythm,
-     * not as a poor signal.
-     */
-    fun estimateRecording(
-        calibration: BpCalibration?,
-        raw: FloatArray,
-        fs: Int,
-        nowMs: Long,
-        history: List<PpgFeatureVector> = emptyList(),
-        context: MeasurementContext = MeasurementContext.NONE
-    ): Pair<PpgFeatureVector?, BpOutcome> {
-        val features = PpgFeatures.extract(raw, fs)
-        if (features == null && calibration?.isValid(nowMs) == true && !calibration.profile.atrialFibrillation) {
-            val rhythm = PpgFeatures.rhythm(raw, fs)
-            if (rhythm != null &&
-                rhythm.shapeQuality >= IRREGULAR_SHAPE_QUALITY &&
-                HemodynamicStateClassifier.irregular(rhythm.ibiCv, rhythm.ectopicCount)
-            ) {
-                return null to BpOutcome.Unsteady(UnsteadyReason.IRREGULAR_RHYTHM)
-            }
-        }
-        return features to estimate(calibration, features, nowMs, history, context)
+    /** Which feature vector of a calibration point a PWA channel uses. */
+    internal fun selector(channel: BpChannel): (CalibrationPoint) -> PpgFeatureVector? = when (channel) {
+        BpChannel.PWA_IR -> { p -> p.irFeatures }
+        else -> { p -> p.features }
     }
 
-    /** Pulses of an irregular recording must look at least this alike to call it a rhythm, not noise. */
-    private const val IRREGULAR_SHAPE_QUALITY = 0.8
+    /** Skin this much colder than at calibration (°C): the wrist vessels have constricted. */
+    private const val COLD_SKIN_DELTA = 2.0
 
     /** Index of the heart rate in [PpgFeatureVector.modelArray]. */
     private const val HR = 0
@@ -447,9 +513,10 @@ object BpEstimator {
     internal fun fit(
         calibration: BpCalibration,
         nowMs: Long = calibration.createdAtMs,
-        currentVersion: Int = PpgFeatureVector.VERSION
+        currentVersion: Int = PpgFeatureVector.VERSION,
+        select: (CalibrationPoint) -> PpgFeatureVector? = { it.features }
     ): Model {
-        val timed = calibration.timedPoints()
+        val timed = calibration.timedPoints().mapNotNull { (p, at) -> select(p)?.let { p.copy(features = it) to at } }
         val points = timed.map { it.first }
         val weights = timed.map { (_, at) ->
             val age = (nowMs - at).coerceAtLeast(0) / BpCalibration.DAY_MS.toDouble()

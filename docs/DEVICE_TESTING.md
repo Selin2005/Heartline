@@ -106,3 +106,25 @@ To capture them, enlarge the buffer first: `adb logcat -G 16M && adb logcat -c`,
     composition first. Heartline tells you which key doesn't sense a finger (upper, lower or both).
 14. **Updates:** Settings → Updates → *Check now* finds the newest stable release; with *Receive
     beta versions* on, it also offers betas. After updating, *What's new* shows the changelog.
+15. **Blood pressure sensors (algorithm 6).** Every session writes a raw log. Capture
+    `adb logcat -v time -s Heartline/BP Heartline/BpRaw Heartline/Sensor` and export
+    Phone → Blood pressure → Share → **BP raw sessions (zip)**. Then check each item below and
+    report what you see, so the algorithm can be tuned on real data:
+    - **IR and red PPG:** the `Heartline/Sensor` line `PPG channels:` lists GREEN, IR and RED, and
+      the `ppg` stream in the log has finite `ir` / `red` values. If only GREEN is listed, the
+      watch doesn't offer them to third-party apps.
+    - **Accelerometer rate:** `Heartline/BpRaw` prints `accel=N@RHz`. The ballistocardiogram needs
+      R ≥ 100 Hz (at least 80). Note the value for your watch model.
+    - **Ballistocardiogram:** after a quick measurement at rest (arm on a table), the values
+      `bcg.quality` (≥ 0.5 is usable) and `bcg.pttMs` (typically 80–250 ms) are in the log.
+    - **PPG inside ECG:** in precise mode, `ecg.ppg=true` in the capabilities and `precise.patMs`
+      plus `precise.pepMs` in the values (`precise.pepMeasured=1` when the BCG gave the PEP).
+    - **Arm raise:** the `hydro.sign` value is 1 or −1, `hydro.maxOffset` is about 40 mmHg with the
+      arms fully raised, and `hydro.patSlope` is negative (−0.3 to −2 mmHg/ms).
+    - **Clocks:** PPG timestamps (SDK) and accelerometer timestamps (Android sensor clock, moved to
+      wall-clock) must line up within a few ms; the transit channels depend on it.
+    - **Skin temperature / EDA:** `skinTemp=true` (Watch5+) and `eda=true` (Watch8+) in the
+      capabilities; the preparation step before the recording lasts about 10 s.
+    - **Bathroom scenario (carefully, sitting):** after standing up quickly, a quick measurement
+      shows a number with the note *Fast pulse: weighted towards transit time*, never a much
+      higher reading than a cuff taken right after.

@@ -199,29 +199,17 @@ fun BpHomeScreen(
                 RoundedCard(Modifier.gutter()) {
                     CardTitle(stringResource(R.string.bp_latest))
                     Spacer(Modifier.height(8.dp))
-                    if (latest.rangeOnly && latest.uncertainty != null) {
-                        // Too uncertain for one number (mostly a pulse change): the range, no category.
-                        val u = latest.uncertainty
-                        MetricValue(
-                            "${latest.systolic - u}–${latest.systolic + u}",
-                            stringResource(R.string.bp_range_diastolic, latest.diastolic - u * 7 / 10, latest.diastolic + u * 7 / 10),
-                            large = true,
-                        )
-                    } else {
-                        MetricValue(
-                            "${latest.systolic}/${latest.diastolic}",
-                            latest.uncertainty?.let { stringResource(R.string.bp_unit_uncertainty, it) } ?: stringResource(R.string.unit_mmhg),
-                            large = true,
-                        )
-                    }
+                    MetricValue(
+                        "${latest.systolic}/${latest.diastolic}",
+                        latest.uncertainty?.let { stringResource(R.string.bp_unit_uncertainty, it) } ?: stringResource(R.string.unit_mmhg),
+                        large = true,
+                    )
                     latest.pulse?.let {
                         Text(stringResource(R.string.bp_pulse, it), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
                     }
                     ReadingNotes(latest)
-                    if (!latest.rangeOnly) {
-                        Spacer(Modifier.height(14.dp))
-                        CategoryScale(latest.category)
-                    }
+                    Spacer(Modifier.height(14.dp))
+                    CategoryScale(latest.category)
                 }
             }
             item {
@@ -283,7 +271,7 @@ fun BpHomeScreen(
                                 stringResource(R.string.bp_tag_beyond).takeIf { r.beyondCalibration && !r.confirmed },
                                 stringResource(R.string.bp_tag_confirmed).takeIf { r.confirmed },
                                 stringResource(R.string.bp_tag_refined).takeIf { r.refined },
-                                stringResource(R.string.bp_tag_range).takeIf { r.rangeOnly },
+                                stringResource(R.string.bp_tag_precise).takeIf { r.channels?.contains("ECG_PTT") == true || r.channels?.contains("PAT") == true },
                             ).joinToString(" · "),
                             leading = { Box(Modifier.size(10.dp).clip(CircleShape).background(colors.bpCategory(r.category))) },
                             trailing = {
@@ -307,6 +295,18 @@ fun BpHomeScreen(
     }
 }
 
+/** Readable sensor names for the stored channel list ("PWA_GREEN,BCG_PTT" → "PPG · motion"). */
+private fun channelNames(channels: String): String = channels.split(',').map {
+    when (it.trim()) {
+        "PWA_GREEN" -> "PPG"
+        "PWA_IR" -> "IR"
+        "BCG_PTT" -> "motion"
+        "PAT", "ECG_PTT" -> "ECG"
+        "HYDRO_MAP" -> "arm raise"
+        else -> it
+    }
+}.distinct().joinToString(" · ")
+
 /** What the latest reading needs the user to know: refined, beyond the calibration, confirmed, very high or low. */
 @Composable
 private fun ReadingNotes(r: BpReadingUi) {
@@ -314,14 +314,22 @@ private fun ReadingNotes(r: BpReadingUi) {
     @Composable
     fun note(text: String, color: Color) = Text(text, style = MaterialTheme.typography.bodySmall, color = color, modifier = Modifier.padding(top = 4.dp))
     if (r.refined) note(stringResource(R.string.bp_refined_note, r.watchSystolic ?: 0, r.watchDiastolic ?: 0), colors.onSurfaceVariant)
-    if (r.rangeOnly) note(stringResource(R.string.bp_range_note), colors.statusWarn)
+    r.bodyState?.let { state ->
+        when (state) {
+            "TRANSIENT" -> note(stringResource(R.string.bp_state_transient), colors.onSurfaceVariant)
+            "COMPENSATORY" -> note(stringResource(R.string.bp_state_compensatory), colors.onSurfaceVariant)
+            "IRREGULAR" -> note(stringResource(R.string.bp_state_irregular), colors.onSurfaceVariant)
+            else -> Unit
+        }
+    }
+    r.channels?.takeIf { it.isNotBlank() }?.let { note(stringResource(R.string.bp_channels, channelNames(it)), colors.onSurfaceVariant) }
     if (r.confirmed) {
         note(stringResource(R.string.bp_confirmed), colors.onSurfaceVariant)
     } else if (r.beyondCalibration) {
         note(stringResource(R.string.bp_beyond_calibration), colors.statusWarn)
     }
     when (r.safety) {
-        BpSafety.VERY_HIGH -> if (!r.rangeOnly) note(stringResource(R.string.bp_safety_high), colors.statusAlert)
+        BpSafety.VERY_HIGH -> note(stringResource(R.string.bp_safety_high), colors.statusAlert)
         BpSafety.LOW -> note(stringResource(R.string.bp_safety_low), colors.statusWarn)
         BpSafety.NONE -> Unit
     }
@@ -409,6 +417,7 @@ fun BpCalibrationScreen(
     onProfileChange: (BpProfile) -> Unit = {},
     onAddStanding: () -> Unit = {},
     onFinish: () -> Unit = {},
+    onPreciseChange: (Boolean) -> Unit = {},
 ) {
     val colors = HeartlineTheme.colors
     ReachabilityScaffold(
@@ -494,6 +503,16 @@ fun BpCalibrationScreen(
                         Text(stringResource(R.string.bp_profile_why), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                     }
                     BpProfileEditor(state.profile, onProfileChange)
+                }
+            }
+            item {
+                RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
+                    CardRow(
+                        stringResource(R.string.bp_calibration_precise),
+                        subtitle = stringResource(R.string.bp_calibration_precise_hint),
+                        trailing = { OneUiSwitch(state.precise) { onPreciseChange(it) } },
+                        onClick = { onPreciseChange(!state.precise) },
+                    )
                 }
             }
         }

@@ -14,7 +14,10 @@ import com.heartline.shared.bp.BpCalibration
 import com.heartline.shared.bp.BpDataset
 import com.heartline.shared.bp.BpDatasetEntry
 import com.heartline.shared.bp.BpEstimate
+import com.heartline.shared.bp.BpPipeline
 import com.heartline.shared.bp.BpProfile
+import com.heartline.shared.bp.BpSessionLog
+import com.heartline.shared.bp.BpSessionReplay
 import com.heartline.shared.bp.BpSafety
 import com.heartline.shared.bp.CalibrationPoint
 import com.heartline.shared.bp.HybridBpModel
@@ -94,6 +97,8 @@ class BpRepository(
     /** Candidate encoders for the personal model; the one with the lowest leave-one-out error on this user's checks wins. */
     private val embedders: () -> List<PpgEmbedder> = { listOf(MorphologyEmbedder) },
     private val now: () -> Long = System::currentTimeMillis,
+    /** Where the watch's raw session logs are kept (algorithm 6); null keeps none. */
+    private val sessionsDir: java.io.File? = null,
     private val sync: () -> PhoneSyncEngine,
 ) {
     private val captures = MutableSharedFlow<CaptureResult>(extraBufferCapacity = 8)
@@ -138,6 +143,37 @@ class BpRepository(
 
     val validations: Flow<List<BpValidationEntity>> = dao.validations()
 
+    /** Keeps a raw session log from the watch (every sensor of one measurement or calibration round). */
+    suspend fun saveSession(id: String, bytes: ByteArray) = withContext(Dispatchers.IO) {
+        val dir = sessionsDir ?: return@withContext
+        // Only a well-formed log is kept.
+        runCatching { BpSessionLog.decode(bytes) }.onFailure { Log.w(TAG, "bad session $id", it) }.getOrNull() ?: return@withContext
+        java.io.File(dir.apply { mkdirs() }, "$id.hlbp").writeBytes(bytes)
+    }
+
+    suspend fun session(id: String): BpSessionLog? = withContext(Dispatchers.IO) {
+        sessionsDir?.let { java.io.File(it, "$id.hlbp") }?.takeIf { it.exists() }?.let { runCatching { BpSessionLog.decode(it.readBytes()) }.getOrNull() }
+    }
+
+    /**
+     * Every raw session log, the calibration and the cuff-checked dataset in one zip, for
+     * developing the algorithm on real data (tools/bp-ml/read_session.py reads it).
+     */
+    suspend fun exportSessions(target: java.io.File): java.io.File = withContext(Dispatchers.IO) {
+        val data = dataset()
+        java.util.zip.ZipOutputStream(target.apply { parentFile?.mkdirs() }.outputStream().buffered()).use { zip ->
+            fun put(name: String, bytes: ByteArray) {
+                zip.putNextEntry(java.util.zip.ZipEntry(name))
+                zip.write(bytes)
+                zip.closeEntry()
+            }
+            data?.let { put("dataset.json", Protocol.json.encodeToString(it).encodeToByteArray()) }
+            sessionsDir?.listFiles().orEmpty().filter { it.extension == "hlbp" }.sortedBy { it.name }.forEach { put("sessions/${it.name}", it.readBytes()) }
+            put("README.txt", SESSIONS_README.encodeToByteArray())
+        }
+        target
+    }
+
     /**
      * Stores a cuff check and adds it to the calibration as a point (features from the reading's
      * pulse wave, when the watch sent it), then sends the updated calibration to the watch.
@@ -145,10 +181,18 @@ class BpRepository(
     suspend fun addValidation(validation: BpValidationEntity) {
         dao.insertValidation(validation)
         val record = records.get(validation.readingId) ?: return
-        val wave = records.wave(record) ?: return
-        val features = withContext(Dispatchers.Default) { PpgFeatures.extract(wave, record.entity.sampleRateHz.takeIf { it > 0 } ?: BpCalibration.PPG_FS) } ?: return
         val cal = calibration.first()?.takeIf { it.isValid(now()) } ?: return
-        val point = CalibrationPoint(features, validation.cuffSystolic, validation.cuffDiastolic, null, null, record.entity.startedAtMs)
+        val at = record.entity.startedAtMs
+        // With the reading's raw session, the cuff check teaches every channel (IR, BCG, ECG transit times).
+        val sessionId = (record.summary as? RecordSummary.BloodPressure)?.sessionId
+        val fromSession = sessionId?.let { session(it) }?.let { log ->
+            withContext(Dispatchers.Default) { BpPipeline.capture(BpSessionReplay.input(log)) }
+        }?.let { CalibrationPoint.of(it, validation.cuffSystolic, validation.cuffDiastolic, null, at) }
+        val point = fromSession ?: run {
+            val wave = records.wave(record) ?: return
+            val features = withContext(Dispatchers.Default) { PpgFeatures.extract(wave, record.entity.sampleRateHz.takeIf { it > 0 } ?: BpCalibration.PPG_FS) } ?: return
+            CalibrationPoint(features, validation.cuffSystolic, validation.cuffDiastolic, null, null, at)
+        }
         saveCalibration(upgradeIfNeeded(cal).withExtraPoint(point))
     }
 
@@ -158,16 +202,14 @@ class BpRepository(
         val refined = if (wave != null) refine(meta, wave, summary) else null
         if (refined != null) records.updateSummary(meta.id, refined)
         val final = refined ?: summary
-        // A range-only reading is too uncertain to raise a "very high" alert.
-        val alert = final.safety == BpSafety.LOW || (final.safety == BpSafety.VERY_HIGH && !final.rangeOnly)
-        if (final.confirmed && alert) onSafety(final)
+        if (final.confirmed && final.safety != BpSafety.NONE) onSafety(final)
     }
 
     /** The personal model's refinement of a reading, or null when the model isn't (yet) better than the watch's estimate. */
     internal suspend fun refine(meta: RecordMeta, wave: FloatArray, summary: RecordSummary.BloodPressure): RecordSummary.BloodPressure? =
         withContext(Dispatchers.Default) {
-            // The personal model learned steady readings; an uncertain, range-only one is left as the watch gave it.
-            if (summary.rangeOnly) return@withContext null
+            // The personal model learned steady readings; one taken in another state is left as the watch gave it.
+            if (summary.rangeOnly || (summary.bodyState != null && summary.bodyState != "STEADY")) return@withContext null
             val fs = meta.sampleRateHz.takeIf { it > 0 } ?: BpCalibration.PPG_FS
             val features = PpgFeatures.extract(wave, fs) ?: return@withContext null
             val samples = trainingSamples(excluding = meta.id)
@@ -196,7 +238,7 @@ class BpRepository(
             val record = records.get(v.readingId) ?: return@mapNotNull null
             val wave = records.wave(record) ?: return@mapNotNull null
             val s = record.summary as? RecordSummary.BloodPressure
-            BpDatasetEntry(record.entity.startedAtMs, wave.toList(), v.cuffSystolic, v.cuffDiastolic, s?.systolic, s?.diastolic)
+            BpDatasetEntry(record.entity.startedAtMs, wave.toList(), v.cuffSystolic, v.cuffDiastolic, s?.systolic, s?.diastolic, s?.sessionId)
         }
         return BpDataset(sampleRateHz = BpCalibration.PPG_FS, calibration = cal, entries = entries)
     }
@@ -208,6 +250,13 @@ class BpRepository(
     }
 
     private companion object {
+        const val SESSIONS_README = """Heartline blood-pressure export
+dataset.json: the calibration (every round with its channels) and every cuff check (cuff reading, the
+watch's reading and its session id).
+sessions/<id>.hlbp: one raw session each (gzip; format in shared/.../bp/BpSessionLog.kt): every sample
+of every sensor with its timestamp, events, intermediate values and the result.
+Read with tools/bp-ml/read_session.py.
+"""
         const val TAG = "Heartline/BP"
         const val ALGORITHM_HYBRID = 4
     }

@@ -13,6 +13,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.compose.material.icons.rounded.Sensors
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,7 +45,6 @@ import com.heartline.wear.ui.screens.BpNeedsCalibrationScreen
 import com.heartline.wear.ui.screens.BpMeasuringScreen
 import com.heartline.wear.ui.screens.BpOutOfRangeScreen
 import com.heartline.wear.ui.screens.BpResultScreen
-import com.heartline.wear.ui.screens.BpUnsteadyScreen
 import com.heartline.wear.ui.screens.MeasuringScreen
 import com.heartline.wear.ui.screens.SensorErrorScreen
 import com.heartline.wear.ui.theme.WearColors
@@ -76,16 +76,18 @@ fun BpFlow(
     val activity = LocalActivity.current
     val haptics = LocalHapticFeedback.current
     val permissions = PermissionPolicy.permissionsFor(Metric.BLOOD_PRESSURE, Build.VERSION.SDK_INT).toTypedArray()
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { if (it.values.all { ok -> ok }) vm.start() }
-    fun start() {
+    var mode by remember { mutableStateOf(BpMode.QUICK) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { if (it.values.all { ok -> ok }) vm.start(mode) }
+    fun start(chosen: BpMode = BpMode.QUICK) {
+        mode = chosen
         val missing = permissions.filter { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
-        if (missing.isEmpty()) vm.start() else launcher.launch(missing.toTypedArray())
+        if (missing.isEmpty()) vm.start(chosen) else launcher.launch(missing.toTypedArray())
     }
 
     LaunchedEffect(Unit) { if (!calibrationSession) vm.checkReady() }
     // A round requested by the phone starts right away while this screen is open.
     LaunchedEffect(calibrationSession, capture, state is BpState.Idle || state is BpState.CalibrationRecorded) {
-        if (calibrationSession && capture != null && (state is BpState.Idle || state is BpState.CalibrationRecorded)) start()
+        if (calibrationSession && capture != null && (state is BpState.Idle || state is BpState.CalibrationRecorded)) start(if (capture?.precise == true) BpMode.PRECISE else BpMode.QUICK)
     }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { if (state is BpState.Measuring) vm.cancel() }
     DisposableEffect(Unit) { onDispose { vm.cancel() } }
@@ -100,7 +102,7 @@ fun BpFlow(
     LaunchedEffect(state is BpState.Done || state is BpState.CalibrationRecorded) {
         when (val s = state) {
             is BpState.Done -> vibrate(
-                if (!s.rangeOnly && (s.category == com.heartline.shared.bp.BpCategory.NORMAL || s.category == com.heartline.shared.bp.BpCategory.ELEVATED)) Buzz.DONE else Buzz.ATTENTION,
+                if (s.category == com.heartline.shared.bp.BpCategory.NORMAL || s.category == com.heartline.shared.bp.BpCategory.ELEVATED) Buzz.DONE else Buzz.ATTENTION,
             )
             is BpState.CalibrationRecorded -> vibrate(Buzz.DONE)
             else -> Unit
@@ -115,7 +117,12 @@ fun BpFlow(
         BpState.Idle -> if (calibrationSession && capture == null) {
             CheckingScreen(Icons.Rounded.PhoneAndroid, stringResource(R.string.bp_waiting_phone_title), stringResource(R.string.bp_waiting_phone_body))
         } else {
-            BpInstructionScreen(capture?.round, onStart = ::start)
+            BpInstructionScreen(
+                capture?.round,
+                onStart = { start() },
+                onPrecise = if (vm.preciseAvailable && capture == null) ({ start(BpMode.PRECISE) }) else null,
+                precise = capture?.precise == true,
+            )
         }
         BpState.NeedsCalibration -> BpNeedsCalibrationScreen(
             onOpenOnPhone = {
@@ -135,7 +142,10 @@ fun BpFlow(
             endIndex = s.endIndex,
             calibrationRound = capture?.round,
             showWave = prefs.liveWave,
+            settling = s.settling,
+            phase = s.phase,
         )
+        BpState.Preparing -> CheckingScreen(Icons.Rounded.Sensors, stringResource(R.string.metric_bp), stringResource(R.string.bp_preparing))
         is BpState.Done -> BpResultScreen(
             s.systolic,
             s.diastolic,
@@ -145,16 +155,15 @@ fun BpFlow(
             beyondCalibration = s.beyondCalibration,
             confirmed = s.confirmed,
             safety = s.safety,
-            rangeOnly = s.rangeOnly,
-            uncertaintyDia = s.uncertaintyDia,
             notValidated = s.notValidated,
             ectopicBeats = s.ectopicBeats,
-            onMeasureAgain = ::start,
+            bodyState = s.bodyState,
+            channels = s.channels,
+            onMeasureAgain = { start(mode) },
             onDone = done,
         )
         BpState.OutOfRange -> BpOutOfRangeScreen(onRetry = { vm.reset() })
         BpState.Moving -> BpOutOfRangeScreen(moving = true, onRetry = { vm.reset() })
-        is BpState.Unsteady -> BpUnsteadyScreen(s.reason, s.lowPressureSuspected, onRetry = { vm.reset() })
         is BpState.CalibrationRecorded -> BpCalibrationRecordedScreen(s.round, onDone = done)
         BpState.PoorSignal -> SensorErrorScreen(SensorProblem.OFF_BODY, onAction = { vm.reset() })
         is BpState.Failed -> SensorErrorScreen(s.problem, onAction = {

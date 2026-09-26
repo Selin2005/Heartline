@@ -3,6 +3,7 @@
 
 package com.heartline.wear.data
 
+import com.heartline.shared.bp.BpSessionLog
 import com.heartline.shared.model.RecordMeta
 import com.heartline.shared.sync.Outbox
 import com.heartline.shared.sync.OutboxItem
@@ -54,7 +55,29 @@ class WatchRecordStore(
     override suspend fun pendingMessages(): List<PendingMessage> =
         messages?.pending().orEmpty().map { PendingMessage(it.id, it.path, it.payload) }
 
+    /**
+     * Keeps a raw BP session log until the phone has it (see [BpSessionLog]). Oldest logs are
+     * dropped beyond [MAX_SESSION_BYTES] so a watch that is never synced can't fill up.
+     */
+    suspend fun addSession(log: BpSessionLog) = withContext(Dispatchers.IO) {
+        val dir = File(root, SESSIONS).apply { mkdirs() }
+        File(dir, "${log.header.id}.hlbp").writeBytes(log.encode())
+        val files = dir.listFiles().orEmpty().sortedBy { it.lastModified() }
+        var total = files.sumOf { it.length() }
+        for (f in files) {
+            if (total <= MAX_SESSION_BYTES) break
+            total -= f.length()
+            f.delete()
+        }
+    }
+
+    override suspend fun pendingSessions(): List<Pair<String, ByteArray>> = withContext(Dispatchers.IO) {
+        File(root, SESSIONS).listFiles().orEmpty().filter { it.extension == "hlbp" }.sortedBy { it.lastModified() }
+            .map { it.nameWithoutExtension to it.readBytes() }
+    }
+
     override suspend fun markDelivered(id: String) {
+        withContext(Dispatchers.IO) { File(File(root, SESSIONS), "$id.hlbp").delete() }
         messages?.delete(id)
         dao.get(id)?.wavePath?.let { withContext(Dispatchers.IO) { File(root, it).delete() } }
         dao.markDelivered(id)
@@ -68,5 +91,7 @@ class WatchRecordStore(
 
     companion object {
         const val HISTORY = 400
+        const val SESSIONS = "bp-sessions"
+        const val MAX_SESSION_BYTES = 64L * 1024 * 1024
     }
 }

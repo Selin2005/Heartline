@@ -119,9 +119,9 @@ class BloodPressureTest {
         val out = BpEstimator.estimate(calibration(), features(135.0, 0.95, 9), 1_000)
         val e = (out as? BpOutcome.Ok)?.estimate ?: error("refused: $out")
         assertTrue("$e", e.beyondCalibration)
-        // Mostly a faster pulse: shown as a range, never as a confident high number (algorithm 5).
+        // Mostly a faster pulse: flagged with a wide ±, never a confident high number (algorithms 5–6).
         assertTrue("$e", e.systolic > 121)
-        assertTrue("$e", e.rangeOnly)
+        assertTrue("$e", e.heartRateDominated)
         assertTrue("$e", e.uncertaintySys > 8)
         assertTrue(e.deltaSystolic > 0)
     }

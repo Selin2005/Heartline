@@ -44,8 +44,14 @@ sealed interface RecordSummary {
         /** When the phone's personal model refined the reading (algorithm 4): what the watch showed. */
         val watchSystolic: Int? = null,
         val watchDiastolic: Int? = null,
-        /** Algorithm 5: too uncertain for one number (mostly a pulse-rate change): shown as the range ± [uncertainty]. */
-        val rangeOnly: Boolean = false
+        /** Algorithm 5 only (no longer written): the reading was shown as a range ± [uncertainty]. */
+        val rangeOnly: Boolean = false,
+        /** Algorithm 6: the channels fused (BpChannel names, comma-separated), the body's state and the mode. */
+        val channels: String? = null,
+        val bodyState: String? = null,
+        val mode: String? = null,
+        /** Raw session log id (BpSessionLog) of this reading. */
+        val sessionId: String? = null
     ) : RecordSummary {
         val safety get() = BpSafety.of(systolic, diastolic)
     }

@@ -10,13 +10,14 @@ import com.heartline.shared.bp.BpEstimate
 import com.heartline.shared.bp.BpEstimator
 import com.heartline.shared.bp.BpEvaluation
 import com.heartline.shared.bp.BpOutcome
+import com.heartline.shared.bp.BpPipeline
 import com.heartline.shared.bp.BpProfile
 import com.heartline.shared.bp.BpSafety
+import com.heartline.shared.bp.BpSessionInput
 import com.heartline.shared.bp.CalibrationPoint
-import com.heartline.shared.bp.MeasurementContext
+import com.heartline.shared.bp.HemodynamicState
 import com.heartline.shared.bp.PpgFeatureVector
 import com.heartline.shared.bp.PpgFeatures
-import com.heartline.shared.bp.UnsteadyReason
 import com.heartline.shared.sample.SyntheticPpg
 import com.heartline.shared.sample.SyntheticPpg.Scenario
 import com.heartline.shared.sync.Protocol
@@ -52,8 +53,9 @@ class BpAlgorithm5Test {
         profile = profile
     )
 
-    private fun measure(s: Scenario, cal: BpCalibration = calibration(), context: MeasurementContext = MeasurementContext(atRest)) =
-        BpEstimator.estimateRecording(cal, raw(s), fs, 1_000, context = context).second
+    private fun measure(s: Scenario, cal: BpCalibration = calibration()) = BpPipeline.run(cal, BpSessionInput(raw(s), fs), 1_000).outcome
+
+    private fun ok(out: BpOutcome) = (out as? BpOutcome.Ok)?.estimate ?: error("no number: $out")
 
     @Test
     fun extractorMeasuresRhythmAndPerfusion() {
@@ -71,7 +73,7 @@ class BpAlgorithm5Test {
     }
 
     @Test
-    fun bathroomEpisodeIsNeverReadAsHighPressure() {
+    fun bathroomEpisodeWithOnlyGreenPpgIsNotReadAsHighPressure() {
         // Racing pulse settling from 125 to 110, weak and recovering wrist pulse (vasoconstriction).
         val episode = Scenario(
             heartRateStart = 125.0,
@@ -82,17 +84,19 @@ class BpAlgorithm5Test {
             perfusionIndex = 0.45,
             seed = 11
         )
-        val out = measure(episode)
-        assertTrue("$out", out is BpOutcome.Unsteady)
-        out as BpOutcome.Unsteady
-        assertEquals(UnsteadyReason.COMPENSATORY_RESPONSE, out.reason)
-        assertTrue("a drop in pressure fits this pattern", out.lowPressureSuspected)
+        // Algorithm 6: always a number. With only the green PPG the shape change is mostly
+        // vasoconstriction, so little of it is trusted and the ± shows the doubt (the old model read 147/93).
+        val e = ok(measure(episode))
+        assertEquals(HemodynamicState.COMPENSATORY, e.state.state)
+        assertTrue("$e", e.systolic <= 115)
+        assertTrue("$e", e.uncertaintySys >= 8)
     }
 
     @Test
-    fun compensatingResponseWithoutATrendIsStillNotANumber() {
-        val out = measure(Scenario(heartRateStart = 118.0, stiffness = 0.5, perfusionIndex = 0.5, seed = 12))
-        assertEquals(BpOutcome.Unsteady(UnsteadyReason.COMPENSATORY_RESPONSE, false), out)
+    fun compensatingResponseStillGivesANumber() {
+        val e = ok(measure(Scenario(heartRateStart = 118.0, stiffness = 0.5, perfusionIndex = 0.5, seed = 12)))
+        assertEquals(HemodynamicState.COMPENSATORY, e.state.state)
+        assertTrue("$e", e.systolic <= 115)
     }
 
     @Test
@@ -101,8 +105,8 @@ class BpAlgorithm5Test {
         // term alone added ≈ 18 mmHg here and the narrower wave added more.
         val e = (measure(Scenario(heartRateStart = 110.0, stiffness = 0.3, seed = 13)) as BpOutcome.Ok).estimate
         assertTrue("$e", abs(e.systolic - 104) <= 12)
-        // Mostly rate-driven: a range without a category, flagged for a second reading.
-        assertTrue("$e", e.rangeOnly && e.beyondCalibration)
+        // Mostly rate-driven: flagged for a second reading.
+        assertTrue("$e", e.heartRateDominated && e.beyondCalibration)
     }
 
     @Test
@@ -127,15 +131,18 @@ class BpAlgorithm5Test {
     }
 
     @Test
-    fun aChangingPulseMeansMeasureAgainLater() {
-        val out = measure(Scenario(heartRateStart = 70.0, heartRateEnd = 98.0, seed = 15))
-        assertEquals(BpOutcome.Unsteady(UnsteadyReason.HEART_RATE_CHANGING, false), out)
+    fun aChangingPulseStillGivesANumberWithItsState() {
+        val e = ok(measure(Scenario(heartRateStart = 70.0, heartRateEnd = 98.0, stiffness = 0.3, seed = 15)))
+        assertEquals(HemodynamicState.TRANSIENT, e.state.state)
+        assertTrue("$e", abs(e.systolic - 104) <= 12)
     }
 
     @Test
-    fun irregularRhythmGivesNoNumber() {
-        val out = measure(Scenario(heartRateStart = 85.0, irregular = 0.3, seed = 16))
-        assertEquals(BpOutcome.Unsteady(UnsteadyReason.IRREGULAR_RHYTHM), out)
+    fun irregularRhythmGivesAWiderNumber() {
+        val e = ok(measure(Scenario(seconds = 45.0, heartRateStart = 85.0, irregular = 0.3, stiffness = 0.3, seed = 16)))
+        assertEquals(HemodynamicState.IRREGULAR, e.state.state)
+        assertTrue("$e", e.uncertaintySys >= 8)
+        assertTrue("$e", abs(e.systolic - 104) <= 15)
     }
 
     @Test
@@ -158,9 +165,9 @@ class BpAlgorithm5Test {
         val b = (BpEstimator.estimate(calibration(), withPvc, 1_000) as BpOutcome.Ok).estimate
         assertTrue("clean=$a pvc=$b", abs(a.systolic - b.systolic) <= 3)
         assertEquals(1, b.ectopicBeats)
-        // Frequent premature beats: no number.
-        val many = measure(Scenario(heartRateStart = 70.0, ectopicBeats = setOf(4, 9, 14, 19), seed = 19))
-        assertEquals(BpOutcome.Unsteady(UnsteadyReason.IRREGULAR_RHYTHM), many)
+        // Frequent premature beats: still a number, weighed as an irregular rhythm.
+        val many = ok(measure(Scenario(heartRateStart = 70.0, stiffness = 0.3, ectopicBeats = setOf(4, 9, 14, 19), seed = 19)))
+        assertEquals(HemodynamicState.IRREGULAR, many.state.state)
     }
 
     @Test
@@ -174,20 +181,9 @@ class BpAlgorithm5Test {
     }
 
     @Test
-    fun armFarFromEveryCalibrationPositionIsNotMeasured() {
-        val s = Scenario(heartRateStart = 70.0, stiffness = 0.3, seed = 21)
-        assertTrue(measure(s) is BpOutcome.Ok)
-        val hanging = MeasurementContext(listOf(0.0, 9.8, 0.0))
-        assertEquals(BpOutcome.Unsteady(UnsteadyReason.ARM_POSITION), measure(s, context = hanging))
-        // Unknown position: measured as before.
-        assertTrue(measure(s, context = MeasurementContext.NONE) is BpOutcome.Ok)
-    }
-
-    @Test
-    fun aRateDrivenReadingIsARangeAndNeverVeryHigh() {
-        val e = BpEstimate(186, 104, 125, 14, 10, beyondCalibration = true, heartRateDominated = true, rangeOnly = true)
+    fun aRateDrivenReadingIsNeverVeryHigh() {
+        val e = BpEstimate(186, 104, 125, 14, 10, beyondCalibration = true, heartRateDominated = true)
         assertEquals(BpSafety.NONE, e.safety)
-        assertEquals(172..200, e.systolicRange)
         assertEquals(BpSafety.VERY_HIGH, e.copy(heartRateDominated = false).safety)
         assertEquals(BpSafety.LOW, BpEstimate(84, 55, 120, heartRateDominated = true).safety)
     }
@@ -229,9 +225,10 @@ class BpAlgorithm5Test {
             BpDatasetEntry(1_000, raw(Scenario(heartRateStart = 70.0, stiffness = 0.3, seed = 40)).toList(), 104, 70),
             BpDatasetEntry(2_000, raw(Scenario(heartRateStart = 118.0, perfusionIndex = 0.5, seed = 41)).toList(), 96, 64)
         )
-        val report = BpEvaluation.evaluate(BpDataset(calibration = cal, entries = entries), incremental = false)
-        assertEquals(1, report.count)
+        val report = BpEvaluation.evaluateRaw(BpDataset(calibration = cal, entries = entries), incremental = false)
+        // Both get a number; the compensating one is counted as taken in an unsteady state.
+        assertEquals(2, report.count)
         assertEquals(1, report.unsteady)
-        assertNotNull(report)
+        assertNotNull(report.maeSysFastPulse)
     }
 }

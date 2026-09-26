@@ -46,8 +46,9 @@ data class BpReadingUi(
     /** Refined by the phone's personal model; [watchSystolic]/[watchDiastolic] is what the watch showed. */
     val watchSystolic: Int? = null,
     val watchDiastolic: Int? = null,
-    /** Algorithm 5: too uncertain for one number (mostly a pulse change): shown as a range, no category. */
-    val rangeOnly: Boolean = false,
+    /** Algorithm 6: the channels fused (comma-separated BpChannel names) and the body's state. */
+    val channels: String? = null,
+    val bodyState: String? = null,
 ) {
     val category get() = BpCategory.of(systolic, diastolic)
     val safety get() = BpSafety.of(systolic, diastolic)
@@ -99,7 +100,8 @@ class BpHomeViewModel(
                 s.confirmed,
                 s.watchSystolic,
                 s.watchDiastolic,
-                s.rangeOnly,
+                s.channels,
+                s.bodyState,
             ) to r.entity.startedAtMs
         }
         val latest = readings.firstOrNull()
@@ -150,6 +152,9 @@ class BpHomeViewModel(
     }
 
     /** The user's BP data (calibration and cuff-checked readings with raw PPG) as JSON, for offline analysis. */
+    /** Every raw session log with the calibration and cuff checks, as a zip (see [BpRepository.exportSessions]). */
+    suspend fun exportSessions(dir: java.io.File, fileName: String): java.io.File = repository.exportSessions(java.io.File(dir, fileName))
+
     suspend fun exportDataset(dir: java.io.File, fileName: String): java.io.File = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val data = repository.dataset()
         java.io.File(dir.apply { mkdirs() }, fileName).apply { writeText(data?.let { Protocol.json.encodeToString(it) } ?: "{}") }
@@ -172,6 +177,8 @@ data class CalibrationUi(
     val completedRounds: Int = 0,
     val inputError: Boolean = false,
     val profile: BpProfile = BpProfile.NONE,
+    /** Record the rounds in precise mode (finger on the watch key: ECG + PPG + motion). */
+    val precise: Boolean = false,
 ) {
     enum class Phase { INTRO, WAITING_FOR_WATCH, ENTER_CUFF, OFFER_STANDING, DONE }
 
@@ -192,6 +199,7 @@ class CalibrationViewModel(
     private var captured: PpgFeatureVector? = null
     private var capturedPpg: List<Float>? = null
     private var capturedGravity: List<Double>? = null
+    private var capturedChannels: com.heartline.shared.bp.ChannelCapture? = null
 
     init {
         // A recalibration keeps the profile the user already entered.
@@ -205,6 +213,7 @@ class CalibrationViewModel(
                     captured = result.features
                     capturedPpg = result.ppg
                     capturedGravity = result.gravity
+                    capturedChannels = result.capture
                     mutable.value = ui.copy(phase = CalibrationUi.Phase.ENTER_CUFF)
                 }
             }
@@ -215,10 +224,14 @@ class CalibrationViewModel(
         mutable.value = mutable.value.copy(profile = profile)
     }
 
+    fun setPrecise(precise: Boolean) {
+        mutable.value = mutable.value.copy(precise = precise)
+    }
+
     /** Asks the watch to record this round; the open calibration screen there starts measuring at once. */
     fun startRound() = viewModelScope.launch {
         mutable.value = mutable.value.copy(phase = CalibrationUi.Phase.WAITING_FOR_WATCH, inputError = false)
-        repository.requestCapture(CaptureRequest(captureId, mutable.value.round))
+        repository.requestCapture(CaptureRequest(captureId, mutable.value.round, mutable.value.precise))
         openOnWatch(CALIBRATION_ROUTE)
     }
 
@@ -230,14 +243,17 @@ class CalibrationViewModel(
             return@launch
         }
         val ui = mutable.value
-        points += CalibrationPoint(features, systolic!!, diastolic!!, pulse, capturedPpg, gravity = capturedGravity, standing = ui.standingRound)
+        // With the watch's full capture every channel gets this cuff point (IR, BCG, ECG transit times).
+        points += capturedChannels?.let { CalibrationPoint.of(it, systolic!!, diastolic!!, pulse, standing = ui.standingRound) }
+            ?: CalibrationPoint(features, systolic!!, diastolic!!, pulse, capturedPpg, gravity = capturedGravity, standing = ui.standingRound)
         captured = null
         capturedPpg = null
         capturedGravity = null
+        capturedChannels = null
         when {
             points.size < BpCalibration.REQUIRED_POINTS -> {
                 mutable.value = ui.copy(round = ui.round + 1, phase = CalibrationUi.Phase.WAITING_FOR_WATCH, completedRounds = points.size, inputError = false)
-                repository.requestCapture(CaptureRequest(captureId, ui.round + 1))
+                repository.requestCapture(CaptureRequest(captureId, ui.round + 1, ui.precise))
                 openOnWatch(CALIBRATION_ROUTE)
             }
             ui.standingRound -> save()
@@ -248,7 +264,7 @@ class CalibrationViewModel(
     /** The optional 4th round: standing, watch arm across the chest at heart level. */
     fun addStandingRound() = viewModelScope.launch {
         mutable.value = mutable.value.copy(round = BpCalibration.STANDING_ROUND, phase = CalibrationUi.Phase.WAITING_FOR_WATCH, inputError = false)
-        repository.requestCapture(CaptureRequest(captureId, BpCalibration.STANDING_ROUND))
+        repository.requestCapture(CaptureRequest(captureId, BpCalibration.STANDING_ROUND, mutable.value.precise))
         openOnWatch(CALIBRATION_ROUTE)
     }
 

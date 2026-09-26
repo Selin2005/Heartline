@@ -78,7 +78,13 @@ val phoneModule = module {
     single {
         // PaPaGei is loaded on first use (only once there are enough cuff checks to train on).
         val papagei by lazy { PapageiEmbedder.fromAssets(androidContext()) }
-        BpRepository(get(), get(), onSafety = { get<PhoneNotifier>().bpSafety(it) }, embedders = { listOfNotNull(MorphologyEmbedder, papagei) }) { get() }
+        BpRepository(
+            get(),
+            get(),
+            onSafety = { get<PhoneNotifier>().bpSafety(it) },
+            embedders = { listOfNotNull(MorphologyEmbedder, papagei) },
+            sessionsDir = java.io.File(androidContext().filesDir, "bp-sessions"),
+        ) { get() }
     }
     single { ProfileRepository(androidContext()) { get() } }
     single {
@@ -115,6 +121,8 @@ val phoneModule = module {
                     Reminders.sync(androidContext(), incoming)
                 }
             },
+            // Raw blood-pressure session logs (every sensor), kept for the export.
+            onSessionLog = { id, bytes -> get<BpRepository>().saveSession(id, bytes) },
         )
     }
     single { PhoneStatusPublisher(get(), get(), get(), { get() }) }

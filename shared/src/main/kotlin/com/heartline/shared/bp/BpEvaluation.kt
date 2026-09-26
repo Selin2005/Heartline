@@ -16,7 +16,9 @@ data class BpDatasetEntry(
     val cuffDiastolic: Int,
     /** What the watch showed at the time (for reference), if anything. */
     val watchSystolic: Int? = null,
-    val watchDiastolic: Int? = null
+    val watchDiastolic: Int? = null,
+    /** The reading's raw session log (every sensor) in the same export, if the watch recorded one. */
+    val sessionId: String? = null
 )
 
 /**
@@ -43,8 +45,8 @@ data class BpDataset(
  * - the proportional-bias slope of (watch − cuff) against cuff: 0 is ideal; a negative slope
  *   means readings are pulled towards the calibration (Falter et al. 2022 found this for
  *   Galaxy Watch). Relating the difference to the cuff, not the mean, keeps it interpretable.
- * - [refused]: readings the algorithm gave no number for; [unsteady] of them because the body was
- *   not in a steady state (algorithm 5).
+ * - [refused]: readings the algorithm gave no number for; [unsteady]: readings taken while the
+ *   body was not in a steady state (algorithm 6 still gives a number, weighed for the state).
  * - [maeSysFastPulse]: MAE of readings whose pulse was more than [FAST_PULSE_RISE] bpm above the
  *   calibration's (where the old model read high); null without such readings.
  */
@@ -76,30 +78,37 @@ object BpEvaluation {
 
     val current = Algorithm { cal, f, at -> BpEstimator.estimate(cal, f, at) }
 
+    /** The full algorithm-6 pipeline on a raw recording (window selection, state, fusion). */
+    fun interface RawAlgorithm {
+        fun estimate(calibration: BpCalibration, ppg: FloatArray, fs: Int, atMs: Long): BpOutcome
+    }
+
+    val pipeline = RawAlgorithm { cal, ppg, fs, at -> BpPipeline.run(cal, BpSessionInput(ppg, fs), at).outcome }
+
     /**
      * Replays [algorithm] on every entry. With [incremental], each earlier cuff check becomes a
      * calibration point for the later readings (as the app does); the entry being evaluated is
      * never part of its own calibration.
      */
-    fun evaluate(dataset: BpDataset, algorithm: Algorithm = current, incremental: Boolean = true): BpEvaluationReport {
+    fun evaluate(dataset: BpDataset, algorithm: Algorithm = current, incremental: Boolean = true): BpEvaluationReport =
+        evaluateRaw(dataset, { cal, ppg, fs, at -> algorithm.estimate(cal, PpgFeatures.extract(ppg, fs), at) }, incremental)
+
+    /** Like [evaluate], with an algorithm that takes the raw recording ([pipeline]). */
+    fun evaluateRaw(dataset: BpDataset, algorithm: RawAlgorithm = pipeline, incremental: Boolean = true): BpEvaluationReport {
         val fs = dataset.sampleRateHz
         val base = dataset.calibration.upgraded(fs).copy(extraPoints = emptyList())
         val sorted = dataset.entries.sortedBy { it.atMs }
         val pairs = mutableListOf<Pair<BpEstimate, BpDatasetEntry>>()
         var refused = 0
-        var unsteady = 0
         val fastPulse = mutableSetOf<BpDatasetEntry>()
         var cal = base
         for (entry in sorted) {
-            val features = PpgFeatures.extract(entry.ppg.toFloatArray(), fs)
-            when (val out = algorithm.estimate(cal, features, entry.atMs)) {
+            val raw = entry.ppg.toFloatArray()
+            val features = PpgFeatures.extract(raw, fs)
+            when (val out = algorithm.estimate(cal, raw, fs, entry.atMs)) {
                 is BpOutcome.Ok -> {
                     pairs += out.estimate to entry
                     if (out.estimate.pulse - cal.referenceHeartRate() > BpEvaluationReport.FAST_PULSE_RISE) fastPulse += entry
-                }
-                is BpOutcome.Unsteady -> {
-                    refused++
-                    unsteady++
                 }
                 else -> refused++
             }
@@ -108,7 +117,12 @@ object BpEvaluation {
             }
         }
         val fast = pairs.filter { it.second in fastPulse }.map { (e, c) -> abs(e.systolic - c.cuffSystolic).toDouble() }
-        return report(pairs, refused).copy(unsteady = unsteady, maeSysFastPulse = fast.takeIf { it.isNotEmpty() }?.average())
+        return report(pairs, refused).copy(
+            unsteady = pairs.count {
+                !it.first.state.steady
+            },
+            maeSysFastPulse = fast.takeIf { it.isNotEmpty() }?.average()
+        )
     }
 
     internal fun report(pairs: List<Pair<BpEstimate, BpDatasetEntry>>, refused: Int): BpEvaluationReport {

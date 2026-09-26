@@ -105,7 +105,15 @@ object PpgFeatures {
         // Only beats within 20 % of the typical length: an ectopic or a missed foot would smear the
         // average. The premature beat, its compensatory pause and the stronger beat after it
         // (post-extrasystolic potentiation) are left out too.
-        val kept = beats.filterIndexed { i, (a, b) -> i !in rhythm.excluded && abs((b - a) - len) <= len * 0.2 }
+        // In an irregular rhythm (AF) a pulse's shape also depends on the interval before it (filling
+        // time, the previous beat's tail): only beats whose previous interval is typical too are kept.
+        val irregular = rhythm.ibiCv > HemodynamicStateClassifier.IRREGULAR_CV
+        fun typical(i: Int) = abs((beats[i].second - beats[i].first) - len) <= len * 0.2
+        val kept = beats.filterIndexed { i, _ ->
+            i !in rhythm.excluded &&
+                typical(i) &&
+                (!irregular || (i > 0 && beats[i - 1].second == beats[i].first && typical(i - 1)))
+        }
         if (kept.size < 5) return null
 
         // Each beat normalised to 0..1 (foot..peak) and stretched to the typical length, at 4× the
@@ -184,6 +192,32 @@ object PpgFeatures {
         val beats = feet.zipWithNext().filter { (a, b) -> b - a in (fs * 0.33).toInt()..(fs * 1.6).toInt() }
         if (beats.size < 5) return null
         return Detected(x, inverted, beats)
+    }
+
+    /**
+     * One pulse: foot and next foot (sample indices), the steepest point of its upstroke, the
+     * intersecting-tangent onset (fractional index: where the tangent at the steepest point meets
+     * the foot level; the standard transit-time marker, which unlike the upstroke doesn't move
+     * with the ejection time) and its height above the foot (filtered, upright units).
+     */
+    data class Pulse(val foot: Int, val nextFoot: Int, val upstroke: Int, val onset: Double, val amplitude: Double)
+
+    /** Every plausible pulse of a recording, in order (for beat-to-beat analysis such as the arm-raise maneuver). */
+    fun pulses(raw: FloatArray, fs: Int): List<Pulse>? {
+        val d = detect(raw, fs) ?: return null
+        return d.beats.map { (a, b) ->
+            val peak = (a..b).maxBy { d.x[it] }
+            val up = if (peak > a + 1) (a + 1 until peak).maxBy { d.x[it + 1] - d.x[it - 1] } else a
+            Pulse(a, b, up, tangentOnset(d.x, a, up), (d.x[peak] - d.x[a]).toDouble())
+        }
+    }
+
+    /** Intersecting tangent: the steepest-slope line at [up] meets the level of the foot [foot]. */
+    internal fun tangentOnset(x: FloatArray, foot: Int, up: Int): Double {
+        if (up <= 0 || up >= x.size - 1) return up.toDouble()
+        val slope = (x[up + 1] - x[up - 1]) / 2.0
+        if (slope <= 1e-12) return up.toDouble()
+        return (up - (x[up] - x[foot]) / slope).coerceIn(foot.toDouble(), up.toDouble())
     }
 
     /**
