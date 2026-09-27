@@ -1,4 +1,4 @@
-# Blood pressure on the watch — algorithms 3 and 4
+# Blood pressure on the watch — algorithms 3 to 6
 
 Heartline estimates blood pressure (BP) from the watch's green PPG pulse wave. It uses the same
 approach as Samsung Health Monitor: calibrated pulse-wave analysis (PWA). This document explains
@@ -33,6 +33,163 @@ changes need re-calibration at the change point (Tae et al. 2026). Algorithm 3:
    stiffness-index timing; Millasseau 2002), which shortens as pressure rises.
 
 Algorithm 4 is the phone's personal learned model, described below.
+
+## Algorithm 6: every sensor, one fused number (current)
+
+Algorithm 5 refused to give a number in an unsteady state, and in the compensating state it
+showed a "possible low pressure" message. Users rejected both: a person whose pressure drops feels
+it, and the point of the app is to show the most accurate number the watch can measure.
+Algorithm 6 therefore never refuses for the body's state. Instead it measures with **every
+sensor the watch has**. Each sensor gives an independent estimate, and they are fused with weights
+set by the body's state.
+
+### Channels
+
+| Channel | Sensor | What it measures | Why it helps |
+|---|---|---|---|
+| `PWA_GREEN` | green PPG | pulse shape (algorithms 3–5) | baseline tracking at rest |
+| `PWA_IR` | infrared PPG (SDK `PpgType.IR`) | the same, deeper tissue | less affected by skin vasoconstriction |
+| `BCG_PTT` | accelerometer (fastest rate) + PPG | wrist ballistocardiogram I wave → PPG foot (Yousefian & Mukkamala 2019) | transit time **without** the pre-ejection period, which stress halves |
+| `PAT` | ECG + its PPG (precise mode) | R peak → PPG foot | classic PAT; unreliable under stress (kept, down-weighted) |
+| `ECG_PTT` | ECG + accelerometer + PPG | PAT − PEP, with PEP = R → BCG I wave | the true arterial transit time |
+| `HYDRO_MAP` | PPG + accelerometer, arm-raise maneuver | mean pressure where the PPG amplitude peaks (Shaltis & Asada 2008) | cuff-free absolute pressure; only reachable when the mean pressure is very low |
+
+- **Timing marker.** Transit times use the PPG pulse's **intersecting-tangent foot**. The
+  steepest upstroke moves with the ejection time, so a fast pulse would otherwise read as a
+  shorter transit time.
+- **Transit estimator.** Each transit channel is calibrated like pulse-wave analysis (Bayesian,
+  population prior of −0.8 mmHg/ms for PTT and −0.5 for PAT with a ±50 % prior, recent cuff points
+  weighted more; `TransitEstimator`).
+- **Arm-raise slope.** The maneuver measures the PAT slope **in the session** from the known
+  hydrostatic pressure change (0.78 mmHg/cm; McCombie 2007). The slope then reflects the body's
+  state now instead of the calibration day.
+
+### Other sensors
+
+- **Arm height.** The rotation vector and gravity give the forearm angle. The wrist pressure
+  differs from the calibration's by ρgh (arm length 0.33 × height from the profile). This
+  difference is removed from the pulse-wave channels in full, and from the transit channels for
+  the arm's share of the path (50 %).
+- **Skin temperature** (Watch5+) and **skin conductance** (EDA, Watch8+) are read just before the
+  recording.
+  - A cold wrist widens the pulse-wave ±.
+  - A conductance surge marks a sympathetic response when the perfusion index is missing.
+
+### State-weighted fusion (`BpFusion`)
+
+- **Combination.** The channels are combined by inverse variance, after each channel's ± is
+  multiplied by a factor for the body's state. For example, in a compensating state green PWA gets
+  × 2.5 and IR PWA × 1.8, while the BCG and ECG transit times get only × 1.2.
+- **Disagreement.** When channels disagree more than their ± allow, the fused ± grows by the
+  Birge ratio.
+- **Compensating state, PWA channels.** Only 30 % of the shape change is trusted (the rest is
+  vasoconstriction and goes into the ±), and the pulse-rate term is off, because the fast pulse
+  is the compensation itself.
+
+### Recording
+
+- **Quick mode** (no touch):
+  - skin temperature and conductance first (about 10 s);
+  - then green, IR and red PPG with the motion sensors, for at least 20 s and until the pulse is
+    steady (at most 60 s; 45 s of beats for an irregular rhythm);
+  - `BpWindowSelector` picks the steadiest 20 s window.
+- **Precise mode** (finger on the lower key, 34 s): ECG, its PPG and the motion sensors, with a
+  slow arm raise in the middle:
+
+  | Seconds | Step |
+  |---|---|
+  | 0–12 | rest |
+  | 12–18 | raise |
+  | 18–20 | hold |
+  | 20–26 | lower |
+  | 26–34 | rest |
+
+  Calibration rounds can be precise too (phone setting), so the ECG channels get cuff points.
+- **Irregular rhythm.** Only beats whose own and preceding intervals are typical are averaged
+  (pulse shape depends on the filling time before it). The ± is wider, but the reading is shown.
+
+### Raw session logs (for developing the algorithm on real data)
+
+Every session, including failed ones and calibration rounds, writes a `BpSessionLog` (gzip,
+format in `BpSessionLog.kt`):
+
+- every sample of every sensor with its timestamp (PPG points exactly as the SDK gives them, with
+  statuses; ECG; accelerometer, gyroscope, rotation; skin temperature; EDA);
+- the phase events;
+- every intermediate value: features per channel, state, BCG, PAT, PEP, PTT, maneuver, each
+  channel's estimate, fusion weights and the result.
+
+The logs go to the phone with the readings. Share → **BP raw sessions (zip)** exports them with
+the calibration and cuff checks, and `tools/bp-ml/read_session.py` reads them.
+`BpSessionReplay.replay` runs the current pipeline on any logged session, so every change can be
+measured on everything recorded so far.
+
+### Honest limits of algorithm 6
+
+- The channel priors, the state factors and the arm geometry come from the literature. They were
+  checked on **synthetic** multi-sensor sessions (`SyntheticSession`, `BpAlgorithm6Test`),
+  including the bathroom episode: true 92/60 at pulse 125→110 reads within 8 mmHg with the quick
+  sensors, and green PPG alone never reads above 115.
+- Whether a given watch delivers IR/red PPG, a fast enough accelerometer and aligned clocks is
+  unknown until tested; see the device checklist (docs/DEVICE_TESTING.md, item 15). Each missing
+  channel simply drops out of the fusion, which then shows a wider ±.
+- The Shaltis mean pressure needs the amplitude to peak within reach of a raised arm (≈ 45 mmHg of
+  hydrostatic drop). That happens only when the mean pressure is very low; otherwise the maneuver
+  gives the slope and a lower bound.
+
+## What changed in algorithm 5 (and why)
+
+(Superseded by algorithm 6 above. Algorithm 5 refused to give a number, or showed a low-pressure
+message, in unsteady states. Its state recognition, heart-rate decoupling, rhythm handling and
+health profile remain.)
+
+A user with a usual pressure of 104/70 felt dizzy and short of breath right after using the
+toilet (a vasovagal / orthostatic drop). The watch showed **147/93 ±13, pulse 120, beyond
+calibration**: the opposite of what was happening. The cause was in the model, not the sensor:
+
+1. **The pulse rate drove the estimate.** The prior sensitivity was +0.45 mmHg per bpm, linear
+   and unbounded. Pulse 120 against a calibration at about 70 added about 22 mmHg by itself. Within
+   a person, the rate is a weak pressure signal. After standing up, in a vasovagal episode, with
+   dehydration, anaemia, fever, blood loss, POTS or AF, the pulse races while pressure stays the
+   same or falls.
+2. **The rate was counted twice.** Ejection shortens as the rate rises (LVET ≈ 413 − 1.7·HR ms,
+   Weissler 1968). Upstroke, pulse width and reflection delay therefore shorten with the rate
+   alone, and the model read that as "stiffer, higher pressure".
+3. **Sympathetic vasoconstriction at the wrist** narrows the wave even more, although central
+   pressure is low. Its signature is a small pulse relative to the light level (low perfusion
+   index), which was not measured.
+4. **There was no notion of state.** A pulse still settling after standing, a pulse amplitude
+   still recovering, and an irregular rhythm were all treated as a steady resting recording.
+
+Algorithm 5 rests on one principle, which the ESH 2023 recommendations, ISO 81060-3 and the
+2015–2025 cuffless reviews all point to: a calibrated cuffless reading is only valid in the
+steady state it was calibrated in, so first decide whether the body is in that state.
+
+| Step | What | Where |
+|---|---|---|
+| Rhythm gate | Premature beats (a short interval followed by a compensatory pause) are detected. Each premature beat, its pause and the stronger post-extrasystolic beat are left out of the ensemble. An irregular rhythm (interval CV > 0.15, ≥ 3 premature beats or > 40 % of beats rejected) gives **no number**, like validated cuffs do in AF. This applies only when the pulses themselves are clean (noise also gives irregular spacing). | `PpgFeatures.rhythm`, `HemodynamicStateClassifier` |
+| State features (extractor v4) | Interval CV, premature-beat count, rejected share, pulse-rate trend (bpm/s), **perfusion index** (AC/DC of the raw light level) and the amplitude trend over the recording. | `PpgFeatureVector` v4 |
+| State classifier | **COMPENSATORY**: pulse > 25 bpm above calibration **and** perfusion index < 0.6 × calibration (15 bpm and 0.75 with POTS). **TRANSIENT**: rate changing > 0.5 bpm/s, amplitude changing > 35 %, or the arm more than 35° from every calibration position (gravity vector from the accelerometer). None of these give a number. When a compensating pattern also shows a falling rate or a changing pulse, "a drop in pressure fits this pattern" advice is shown instead. | `HemodynamicState.kt` |
+| Rate decoupling | Timing features are moved to 70 bpm (0.5, 1.2 and 0.9 ms/bpm for upstroke, width and reflection delay: below the LVET slope, because only part of each interval is ejection). The rate term is bounded with tanh at ±6 / ±4 mmHg. | `BpEstimator.corrected`, `HR_CAP_*` |
+| Honest output | If the rate term is ≥ 4 mmHg and outweighs the shape change, the reading is *rate-dominated*: ± widens, it is flagged, it is shown as a **range without a category**, and it is never "very high". A reading with ± > 12 is also shown as a range. The ± also grows with a changed perfusion index, premature beats and AF. | `BpEstimate.rangeOnly`, `BpSafety` |
+| Health profile | Stored with the calibration and editable on the phone. Beta blocker or pacemaker: the rate is left out of the fit and the estimate. POTS / orthostatic hypotension: the same, plus a more sensitive compensatory check. AF: a 45 s recording, no rhythm gate, wider ±. Pregnancy: "not validated, use a cuff". Diabetes, kidney disease or age ≥ 65: the calibration is valid for 14 days and the priors are wider. | `BpProfile` |
+| Standing round | An optional 4th calibration reading while standing (watch arm at heart level). The fit then sees how this user's pulse and pressure respond to standing, which is where the rate misleads most. | `CalibrationViewModel`, `BpCalibration.STANDING_ROUND` |
+| Evaluation | The replay report counts unsteady refusals separately, and gives the MAE of readings whose pulse was > 15 bpm above calibration. | `BpEvaluationReport` |
+
+**Trade-off, stated plainly.** Without the rate term, the shape features alone move the estimate
+less (the old model got much of its sensitivity from the rate). A genuine rise in pressure still
+shows in the right direction, and it is tracked in full once cuff checks have taught the fit this
+user's slopes (`BpAlgorithm5Test.aRealRiseInPressureIsStillShown`). A confident wrong number is
+worse than an honest "measure again".
+
+**Why not only a neural network?** For heart rate the signal labels itself (R–R intervals). For
+pressure the label must come from a cuff, and public datasets (MIMIC, VitalDB, PulseDB) are
+finger PPG from ICU and surgery. On other people and wrist PPG they fall to about 14/8.5 mmHg MAE,
+and they contain almost no wrist vasovagal or orthostatic episodes. A network would learn the
+same "fast pulse = high pressure" shortcut on exactly the out-of-distribution case above. So the
+learned part stays personal and gated (algorithm 4). It is used only on steady, single-number
+readings (never on range-only ones), and the v4 state features are now stored with every reading
+so a wrist model can later be trained and replayed on real data.
 
 ## Why the first version kept giving the same numbers
 
@@ -155,6 +312,15 @@ on each model (docs/DEVICE_TESTING.md).
 
 ## Honest limits
 
+- Algorithm 5's thresholds (CV 0.15, 25 bpm, perfusion index 0.6, 0.5 bpm/s, 35°) and the rate
+  slopes are literature-informed starting points, checked on synthetic scenarios
+  (`SyntheticPpg.scenario`, `BpAlgorithm5Test`). They must be confirmed on exported real data
+  before they are tightened.
+- The perfusion index needs the raw light level; readings without it (older calibrations until
+  they are upgraded from their raw PPG) skip the compensatory check.
+- The rate-dependent pulse shortening differs between people. It is corrected with population
+  slopes, not fitted per user.
+
 - Calibrated cuffless BP devices mainly track the user's **baseline**. They follow slow, moderate
   changes, but are poor at large or fast changes, especially long after calibration
   (Mukkamala et al., *Hypertension* 2022/2023). Readings that stay close to the calibration are
@@ -195,3 +361,15 @@ of ≤ 5 mmHg with SD ≤ 8 mmHg across many people. Heartline makes no such cla
 - Elgendi M. Optimal signal quality index for photoplethysmogram signals. *Bioengineering* 2016.
 - Wang W., Mohseni P. et al. / Moulaeifard M. et al. Generalizable deep learning for PPG-based blood pressure estimation: a benchmarking study, 2025.
 - ISO 81060-2:2018, non-invasive sphygmomanometers — clinical investigation of intermittent automated measurement type.
+- ISO 81060-3:2022, non-invasive sphygmomanometers — continuous automated measurement type (cuffless validation incl. positions, induced changes and recalibration).
+- Weissler A.M. et al. Systolic time intervals in heart failure in man. *Circulation* 1968 (LVET–heart rate relation).
+- Yousefian P., Mukkamala R. et al. The potential of wearable limb ballistocardiogram in blood pressure monitoring via pulse transit time. *Sci Rep* 2019;9:10666.
+- Carek A.M. et al. SeismoWatch: wearable cuffless blood pressure monitoring using pulse transit time. *IMWUT* 2017.
+- Shaltis P.A., Reisner A.T., Asada H.H. Cuffless blood pressure monitoring using hydrostatic pressure changes. *IEEE TBME* 2008.
+- McCombie D.B., Reisner A.T., Asada H.H. Adaptive hydrostatic blood pressure calibration. *IEEE EMBC* 2007.
+- Pre-ejection period as a stress-dependent parameter for PWV applications. PMC9975268.
+- Payne R.A. et al. Pulse transit time measured from the ECG: an unreliable marker of beat-to-beat blood pressure. *J Appl Physiol* 2006 (pre-ejection period confounding).
+- Mukkamala R. et al. / AHA Scientific Statement. Cuffless devices for the measurement of blood pressure. *Hypertension* 2025.
+- Wearable, cuffless, and portable devices for blood pressure monitoring (2015–2025): a scoping review. *Front Digit Health* 2026.
+- A method for blood pressure hydrostatic pressure correction using wearable inertial sensors and deep learning. *npj Biosensing* 2025.
+- Relationship between pulse transit time, PPG features, and blood pressure in atrial fibrillation. 2025 (PubMed 41337181).

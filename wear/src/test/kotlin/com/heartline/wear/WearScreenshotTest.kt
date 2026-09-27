@@ -189,6 +189,26 @@ class WearScreenshotTest(private val size: String) {
         BpResultScreen(186, 112, 90, BpCategory.CRISIS, uncertainty = 15, beyondCalibration = true, confirmed = true, safety = com.heartline.shared.bp.BpSafety.VERY_HIGH)
     }
 
+    @Test fun bpInstructionWithPrecise() = shot("bp_instruction_precise") { BpInstructionScreen(onPrecise = {}) }
+
+    @Test fun bpResultFused() = shot("bp_result_fused") {
+        BpResultScreen(
+            96,
+            62,
+            117,
+            BpCategory.NORMAL,
+            uncertainty = 7,
+            beyondCalibration = true,
+            bodyState = com.heartline.shared.bp.HemodynamicState.COMPENSATORY,
+            channels = listOf(com.heartline.shared.bp.BpChannel.PWA_GREEN, com.heartline.shared.bp.BpChannel.PWA_IR, com.heartline.shared.bp.BpChannel.BCG_PTT),
+        )
+    }
+
+    @Test fun bpMeasuringPrecise() = shot("bp_measuring_precise") {
+        val ppg = com.heartline.shared.sample.SyntheticPpg.generate(10.0)
+        com.heartline.wear.ui.screens.BpMeasuringScreen(0.45f, 18, ppg.copyOfRange(0, 300), contact = true, bpm = 74, endIndex = 300L, animate = false, phase = com.heartline.wear.bp.BpPhase.RAISE)
+    }
+
     @Test fun bpNeedsCalibration() = shot("bp_needs_calibration") { BpNeedsCalibrationScreen() }
 
     @Test fun bpNeedsCalibrationOpened() = shot("bp_needs_calibration_opened") { BpNeedsCalibrationScreen(opened = true) }

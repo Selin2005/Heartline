@@ -18,3 +18,6 @@ Calibrated blood pressure estimates from the PPG sensor.
 | **Calibration needed, opened on the phone** | <img src="bp_needs_calibration_opened_small.png" width="200" alt=""> | <img src="bp_needs_calibration_opened_large.png" width="200" alt=""> |
 | **Calibration round** | <img src="bp_calibration_round_small.png" width="200" alt=""> | <img src="bp_calibration_round_large.png" width="200" alt=""> |
 | **Calibration round recorded** | <img src="bp_calibration_recorded_small.png" width="200" alt=""> | <img src="bp_calibration_recorded_large.png" width="200" alt=""> |
+| **Bp instruction precise** | <img src="bp_instruction_precise_small.png" width="200" alt=""> | <img src="bp_instruction_precise_large.png" width="200" alt=""> |
+| **Bp measuring precise** | <img src="bp_measuring_precise_small.png" width="200" alt=""> | <img src="bp_measuring_precise_large.png" width="200" alt=""> |
+| **Bp result fused** | <img src="bp_result_fused_small.png" width="200" alt=""> | <img src="bp_result_fused_large.png" width="200" alt=""> |

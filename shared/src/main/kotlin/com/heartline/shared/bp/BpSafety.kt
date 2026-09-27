@@ -32,14 +32,17 @@ enum class BpSafety {
  */
 object BpConfirmation {
     const val WINDOW_MS = 10 * 60_000L
+    const val NO_DIRECTION = 3.0
 
     fun needsConfirming(e: BpEstimate) = e.beyondCalibration || e.safety != BpSafety.NONE
 
     fun confirms(previous: BpEstimate, previousAtMs: Long, current: BpEstimate, nowMs: Long): Boolean {
         if (nowMs - previousAtMs !in 0..WINDOW_MS) return false
         if (!needsConfirming(previous) || !needsConfirming(current)) return false
+        // Two changes too small to have a direction (both within [NO_DIRECTION] mmHg) also agree.
         val sameWay =
             sign(previous.deltaSystolic) == sign(current.deltaSystolic) ||
+                (abs(previous.deltaSystolic) < NO_DIRECTION && abs(current.deltaSystolic) < NO_DIRECTION) ||
                 (previous.safety == current.safety && current.safety != BpSafety.NONE)
         val tolerance = maxOf(15, 2 * maxOf(previous.uncertaintySys, current.uncertaintySys))
         return sameWay && abs(previous.systolic - current.systolic) <= tolerance

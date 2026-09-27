@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
  */
 object HLog {
     /** Tags with raw sensor values: in the file only while detailed logging is on. */
-    private val RAW_TAGS = setOf("Heartline/EcgRaw", "Heartline/EcgRec", "Heartline/BiaRaw", "Heartline/QuickRaw")
+    private val RAW_TAGS = setOf("Heartline/EcgRaw", "Heartline/EcgRec", "Heartline/BiaRaw", "Heartline/QuickRaw", "Heartline/BpRaw")
     private const val FLUSH_MS = 2_000L
     private const val MAX_BUFFER = 32 * 1024
 

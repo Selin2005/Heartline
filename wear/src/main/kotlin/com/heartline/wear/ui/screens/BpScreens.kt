@@ -27,8 +27,12 @@ import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
+import com.heartline.shared.bp.BpCalibration
 import com.heartline.shared.bp.BpCategory
 import com.heartline.shared.bp.BpSafety
+import com.heartline.shared.bp.BpChannel
+import com.heartline.shared.bp.HemodynamicState
+import com.heartline.wear.bp.BpPhase
 import com.heartline.shared.design.Palette
 import com.heartline.shared.model.Metric
 import com.heartline.wear.R
@@ -72,6 +76,11 @@ private fun Badge(icon: ImageVector, tint: Color) {
     }
 }
 
+/** "Calibration 2 of 3", or the optional standing round after the 3 seated ones. */
+@Composable
+private fun calibrationTitle(round: Int) =
+    if (round == BpCalibration.STANDING_ROUND) stringResource(R.string.bp_calibration_standing) else stringResource(R.string.bp_calibration_round, round)
+
 @Composable
 private fun Body(text: String) = Text(
     text,
@@ -81,18 +90,35 @@ private fun Body(text: String) = Text(
     modifier = Modifier.padding(top = 4.dp),
 )
 
-/** Before measuring (or a calibration round when [calibrationRound] is set). */
+/**
+ * Before measuring (or a calibration round when [calibrationRound] is set). [onPrecise], when the
+ * watch has the ECG sensor, offers precise mode: finger on the key with the arm-raise maneuver.
+ */
 @Composable
-fun BpInstructionScreen(calibrationRound: Int? = null, onStart: () -> Unit = {}) {
+fun BpInstructionScreen(calibrationRound: Int? = null, onStart: () -> Unit = {}, onPrecise: (() -> Unit)? = null, precise: Boolean = false) {
     ActionScreen(stringResource(R.string.action_start), onStart) {
         Badge(Icons.Rounded.Speed, WearColors.metric(Metric.BLOOD_PRESSURE))
         Text(
-            if (calibrationRound != null) stringResource(R.string.bp_calibration_round, calibrationRound) else stringResource(R.string.metric_bp),
+            calibrationRound?.let { calibrationTitle(it) } ?: stringResource(R.string.metric_bp),
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 6.dp),
         )
-        Body(stringResource(R.string.bp_instruction))
+        Body(
+            stringResource(
+                when {
+                    precise -> R.string.bp_instruction_precise
+                    calibrationRound == BpCalibration.STANDING_ROUND -> R.string.bp_instruction_standing
+                    else -> R.string.bp_instruction
+                },
+            ),
+        )
+        onPrecise?.let {
+            androidx.wear.compose.material3.FilledTonalButton(onClick = it, modifier = Modifier.padding(top = 6.dp)) {
+                Text(stringResource(R.string.bp_precise_mode), maxLines = 1)
+            }
+            Note(stringResource(R.string.bp_precise_hint), WearColors.onSurfaceVariant)
+        }
     }
 }
 
@@ -111,6 +137,10 @@ fun BpResultScreen(
     beyondCalibration: Boolean = false,
     confirmed: Boolean = false,
     safety: BpSafety = BpSafety.NONE,
+    notValidated: Boolean = false,
+    ectopicBeats: Int = 0,
+    bodyState: HemodynamicState = HemodynamicState.STEADY,
+    channels: List<BpChannel> = emptyList(),
     onMeasureAgain: () -> Unit = {},
     onDone: () -> Unit = {},
 ) {
@@ -138,7 +168,14 @@ fun BpResultScreen(
             color = Color.Black,
             modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(50)).background(category.color).padding(horizontal = 10.dp, vertical = 3.dp),
         )
+        stateNote(bodyState)?.let { Note(stringResource(it), WearColors.onSurfaceVariant) }
+        if (channels.isNotEmpty()) {
+            val names = channels.map { it.label }.distinct().map { stringResource(it) }
+            Note(stringResource(R.string.bp_channels, names.joinToString(" · ")), WearColors.onSurfaceVariant)
+        }
+        if (notValidated) Note(stringResource(R.string.bp_not_validated), WearColors.warn)
         Body(stringResource(R.string.bp_pulse, pulse))
+        if (ectopicBeats > 0) Note(stringResource(R.string.bp_ectopic_removed), WearColors.onSurfaceVariant)
         com.heartline.wear.ui.components.BaselineNote(Metric.BLOOD_PRESSURE, systolic.toFloat())
         if (category == BpCategory.NORMAL && !needsConfirming) PersonalNote(GoodResult.BLOOD_PRESSURE)
         when (safety) {
@@ -154,6 +191,34 @@ fun BpResultScreen(
     }
         if (category == BpCategory.NORMAL && !needsConfirming) com.heartline.wear.ui.components.EdgeGlowSweep(systolic, category.color)
     }
+}
+
+/** What to do in each step of the precise-mode maneuver. */
+val BpPhase.prompt: Int
+    get() = when (this) {
+        BpPhase.REST -> R.string.bp_phase_rest
+        BpPhase.RAISE -> R.string.bp_phase_raise
+        BpPhase.HOLD_UP -> R.string.bp_phase_hold
+        BpPhase.LOWER -> R.string.bp_phase_lower
+        BpPhase.REST_AGAIN -> R.string.bp_phase_rest
+    }
+
+/** Short sensor names for the result screen. */
+val BpChannel.label: Int
+    get() = when (this) {
+        BpChannel.PWA_GREEN -> R.string.bp_channel_ppg
+        BpChannel.PWA_IR -> R.string.bp_channel_ir
+        BpChannel.BCG_PTT -> R.string.bp_channel_bcg
+        BpChannel.PAT, BpChannel.ECG_PTT -> R.string.bp_channel_ecg
+        BpChannel.HYDRO_MAP -> R.string.bp_channel_arm
+    }
+
+/** A short note on the body's state the reading was taken in, or null when steady. */
+fun stateNote(state: HemodynamicState): Int? = when (state) {
+    HemodynamicState.STEADY -> null
+    HemodynamicState.TRANSIENT -> R.string.bp_state_transient
+    HemodynamicState.COMPENSATORY -> R.string.bp_state_compensatory
+    HemodynamicState.IRREGULAR -> R.string.bp_state_irregular
 }
 
 @Composable
@@ -180,6 +245,8 @@ fun BpMeasuringScreen(
     calibrationRound: Int? = null,
     showWave: Boolean = true,
     animate: Boolean = true,
+    settling: Boolean = false,
+    phase: BpPhase? = null,
 ) {
     val color = WearColors.metric(Metric.BLOOD_PRESSURE)
     Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
@@ -195,11 +262,15 @@ fun BpMeasuringScreen(
             modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 18.dp),
         ) {
             Text(
-                calibrationRound?.let { stringResource(R.string.bp_calibration_round, it) } ?: stringResource(R.string.metric_bp),
+                calibrationRound?.let { calibrationTitle(it) } ?: stringResource(R.string.metric_bp),
                 style = MaterialTheme.typography.labelMedium,
                 color = color,
             )
-            CenteredValue("$secondsLeft", stringResource(R.string.unit_sec), MaterialTheme.typography.displayMedium, MaterialTheme.typography.bodySmall)
+            if (settling) {
+                Text(stringResource(R.string.bp_settling), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+            } else {
+                CenteredValue("$secondsLeft", stringResource(R.string.unit_sec), MaterialTheme.typography.displayMedium, MaterialTheme.typography.bodySmall)
+            }
             val waveHeight = if (isSmallRound()) 44.dp else 54.dp
             if (showWave) {
                 SweepTrace(trace, endIndex, windowSamples = 300, color = color, paper = false, centered = false, minRange = 0f, modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp).height(waveHeight))
@@ -213,7 +284,14 @@ fun BpMeasuringScreen(
                 }
             }
             Text(
-                stringResource(if (contact) R.string.bp_keep_still else R.string.bp_adjust_watch),
+                stringResource(
+                    when {
+                        phase != null && !contact -> R.string.bp_touch_key
+                        phase != null -> phase.prompt
+                        contact -> R.string.bp_keep_still
+                        else -> R.string.bp_adjust_watch
+                    },
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = if (contact) WearColors.onSurfaceVariant else WearColors.warn,
                 textAlign = TextAlign.Center,

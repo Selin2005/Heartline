@@ -50,7 +50,21 @@ data class PpgFeatureVector(
     /** Skewness of the filtered signal: clean PPG is clearly skewed (Elgendi 2016 SQI). */
     val skewness: Double = 0.0,
     /** The ensemble beat resampled to [SHAPE_POINTS] points (0..1), for the phone's learned model. */
-    val shape: List<Float> = emptyList()
+    val shape: List<Float> = emptyList(),
+    // Algorithm 5 (v4): rhythm and haemodynamic state, used to decide whether the recording is in
+    // a steady state at all (see HemodynamicStateClassifier). All default to 0 = unknown.
+    /** Coefficient of variation of the beat-to-beat intervals, premature beats excluded. */
+    val ibiCv: Double = 0.0,
+    /** Premature (ectopic) beats found: a short interval followed by a compensatory pause. */
+    val ectopicCount: Int = 0,
+    /** Share of plausible beats left out of the ensemble (ectopic, post-ectopic or off-length). */
+    val rejectedFraction: Double = 0.0,
+    /** Linear trend of the instantaneous pulse rate over the recording, bpm per second. */
+    val hrSlopeBpmPerS: Double = 0.0,
+    /** Perfusion index, % (pulse amplitude / mean light level); 0 when the raw level is unknown. */
+    val perfusionIndex: Double = 0.0,
+    /** Relative change of the pulse amplitude from the first to the last third of the recording. */
+    val amplitudeTrend: Double = 0.0
 ) {
     fun asArray() = doubleArrayOf(heartRateBpm, riseFraction, widthFraction, areaRatio)
 
@@ -62,7 +76,10 @@ data class PpgFeatureVector(
 
     companion object {
         /** Current extractor. */
-        const val VERSION = 3
+        const val VERSION = 4
+
+        /** First extractor with the rhythm and state fields (algorithm 5). */
+        const val STATE_VERSION = 4
 
         /** Oldest extractor whose features the estimator still accepts (the 6 algorithm-2 features are unchanged). */
         const val MIN_MODEL_VERSION = 2
@@ -79,34 +96,24 @@ data class PpgFeatureVector(
  */
 object PpgFeatures {
     fun extract(raw: FloatArray, fs: Int): PpgFeatureVector? {
-        if (raw.size < fs * 8) return null
-        val filtered = raw.filtFilt(Biquad.highPass(0.5, fs.toDouble()), Biquad.lowPass(8.0, fs.toDouble()))
-        if ((filtered.max() - filtered.min()) < 1e-6f) return null
-        val inverted = isInverted(filtered)
-        val x = if (inverted) FloatArray(filtered.size) { -filtered[it] } else filtered
-
-        val half = (0.25 * fs).toInt()
-        val maxima = (half until x.size - half).filter { i -> (i - half..i + half).all { x[it] <= x[i] } }
-        if (maxima.size < 6) return null
-        val threshold = maxima.map { x[it] }.sorted()[maxima.size / 4] * 0.5f
-        val peaks = mutableListOf<Int>()
-        for (m in maxima.filter { x[it] >= threshold }) {
-            if (peaks.isNotEmpty() && m - peaks.last() < fs * 0.35) {
-                if (x[m] > x[peaks.last()]) peaks[peaks.lastIndex] = m
-            } else {
-                peaks += m
-            }
-        }
-        val lookBack = (0.35 * fs).toInt()
-        val feet = peaks.filter { it - lookBack >= 0 }.map { p -> (p - lookBack..p).minBy { x[it] } }.distinct()
-        if (feet.size < 6) return null
-
-        val beats = feet.zipWithNext().filter { (a, b) -> b - a in (fs * 0.33).toInt()..(fs * 1.6).toInt() }
-        if (beats.size < 5) return null
+        val detected = detect(raw, fs) ?: return null
+        val x = detected.x
+        val beats = detected.beats
+        val rhythm = rhythm(detected, fs)
         val lengths = beats.map { (a, b) -> b - a }.sorted()
         val len = lengths[lengths.size / 2]
-        // Only beats within 20 % of the typical length: an ectopic or a missed foot would smear the average.
-        val kept = beats.filter { (a, b) -> abs((b - a) - len) <= len * 0.2 }
+        // Only beats within 20 % of the typical length: an ectopic or a missed foot would smear the
+        // average. The premature beat, its compensatory pause and the stronger beat after it
+        // (post-extrasystolic potentiation) are left out too.
+        // In an irregular rhythm (AF) a pulse's shape also depends on the interval before it (filling
+        // time, the previous beat's tail): only beats whose previous interval is typical too are kept.
+        val irregular = rhythm.ibiCv > HemodynamicStateClassifier.IRREGULAR_CV
+        fun typical(i: Int) = abs((beats[i].second - beats[i].first) - len) <= len * 0.2
+        val kept = beats.filterIndexed { i, _ ->
+            i !in rhythm.excluded &&
+                typical(i) &&
+                (!irregular || (i > 0 && beats[i - 1].second == beats[i].first && typical(i - 1)))
+        }
         if (kept.size < 5) return null
 
         // Each beat normalised to 0..1 (foot..peak) and stretched to the typical length, at 4× the
@@ -140,15 +147,171 @@ object PpgFeatures {
             width25Ms = template.count { it >= 0.25 } * msPerSample,
             apgBa = ba,
             apgDa = da,
-            inverted = inverted,
+            inverted = detected.inverted,
             version = PpgFeatureVector.VERSION,
             reflectionDelayMs = reflectionIdx?.let { (it - peakIdx) * msPerSample } ?: 0.0,
             reflectionIndex = reflectionHeight,
             rmssdMs = rmssd,
             skewness = skewness(x),
-            shape = List(PpgFeatureVector.SHAPE_POINTS) { k -> template[k * (n - 1) / (PpgFeatureVector.SHAPE_POINTS - 1)].toFloat() }
+            shape = List(PpgFeatureVector.SHAPE_POINTS) { k -> template[k * (n - 1) / (PpgFeatureVector.SHAPE_POINTS - 1)].toFloat() },
+            ibiCv = rhythm.ibiCv,
+            ectopicCount = rhythm.ectopicCount,
+            rejectedFraction = 1.0 - kept.size.toDouble() / beats.size,
+            hrSlopeBpmPerS = rhythm.hrSlopeBpmPerS,
+            perfusionIndex = perfusionIndex(raw, x, kept),
+            amplitudeTrend = amplitudeTrend(x, kept)
         )
     }
+
+    /** Filtered, upright signal and its plausible beats (foot to next foot, sample indices). */
+    private class Detected(val x: FloatArray, val inverted: Boolean, val beats: List<Pair<Int, Int>>)
+
+    private fun detect(raw: FloatArray, fs: Int): Detected? {
+        if (raw.size < fs * 8) return null
+        val filtered = raw.filtFilt(Biquad.highPass(0.5, fs.toDouble()), Biquad.lowPass(8.0, fs.toDouble()))
+        if ((filtered.max() - filtered.min()) < 1e-6f) return null
+        val inverted = isInverted(filtered)
+        val x = if (inverted) FloatArray(filtered.size) { -filtered[it] } else filtered
+
+        val half = (0.25 * fs).toInt()
+        val maxima = (half until x.size - half).filter { i -> (i - half..i + half).all { x[it] <= x[i] } }
+        if (maxima.size < 6) return null
+        // Low enough to keep a weak premature beat, so it can be recognised and left out.
+        val threshold = maxima.map { x[it] }.sorted()[maxima.size / 4] * 0.35f
+        val peaks = mutableListOf<Int>()
+        for (m in maxima.filter { x[it] >= threshold }) {
+            if (peaks.isNotEmpty() && m - peaks.last() < fs * 0.35) {
+                if (x[m] > x[peaks.last()]) peaks[peaks.lastIndex] = m
+            } else {
+                peaks += m
+            }
+        }
+        val lookBack = (0.35 * fs).toInt()
+        val feet = peaks.filter { it - lookBack >= 0 }.map { p -> (p - lookBack..p).minBy { x[it] } }.distinct()
+        if (feet.size < 6) return null
+        val beats = feet.zipWithNext().filter { (a, b) -> b - a in (fs * 0.33).toInt()..(fs * 1.6).toInt() }
+        if (beats.size < 5) return null
+        return Detected(x, inverted, beats)
+    }
+
+    /**
+     * One pulse: foot and next foot (sample indices), the steepest point of its upstroke, the
+     * intersecting-tangent onset (fractional index: where the tangent at the steepest point meets
+     * the foot level; the standard transit-time marker, which unlike the upstroke doesn't move
+     * with the ejection time) and its height above the foot (filtered, upright units).
+     */
+    data class Pulse(val foot: Int, val nextFoot: Int, val upstroke: Int, val onset: Double, val amplitude: Double)
+
+    /** Every plausible pulse of a recording, in order (for beat-to-beat analysis such as the arm-raise maneuver). */
+    fun pulses(raw: FloatArray, fs: Int): List<Pulse>? {
+        val d = detect(raw, fs) ?: return null
+        return d.beats.map { (a, b) ->
+            val peak = (a..b).maxBy { d.x[it] }
+            val up = if (peak > a + 1) (a + 1 until peak).maxBy { d.x[it + 1] - d.x[it - 1] } else a
+            Pulse(a, b, up, tangentOnset(d.x, a, up), (d.x[peak] - d.x[a]).toDouble())
+        }
+    }
+
+    /** Intersecting tangent: the steepest-slope line at [up] meets the level of the foot [foot]. */
+    internal fun tangentOnset(x: FloatArray, foot: Int, up: Int): Double {
+        if (up <= 0 || up >= x.size - 1) return up.toDouble()
+        val slope = (x[up + 1] - x[up - 1]) / 2.0
+        if (slope <= 1e-12) return up.toDouble()
+        return (up - (x[up] - x[foot]) / slope).coerceIn(foot.toDouble(), up.toDouble())
+    }
+
+    /**
+     * Beat-to-beat rhythm of a recording, also when it is too irregular for a feature vector
+     * (atrial fibrillation smears every beat length), so the app can say "irregular rhythm"
+     * instead of "poor signal". Null when no pulse is found at all.
+     */
+    fun rhythm(raw: FloatArray, fs: Int): PpgRhythm? = detect(raw, fs)?.let { rhythm(it, fs) }
+
+    private fun rhythm(detected: Detected, fs: Int): PpgRhythm {
+        val beats = detected.beats
+        val lengths = beats.map { (a, b) -> (b - a).toDouble() }
+        val median = lengths.sorted()[lengths.size / 2]
+        fun consecutive(i: Int) = i + 1 < beats.size && beats[i].second == beats[i + 1].first
+        // A premature beat shortens one interval and is followed by a compensatory pause.
+        val excluded = mutableSetOf<Int>()
+        var ectopic = 0
+        var i = 0
+        while (i < beats.size - 1) {
+            if (lengths[i] < median * ECTOPIC_SHORT && consecutive(i) && lengths[i + 1] > median * ECTOPIC_LONG) {
+                ectopic++
+                excluded += i
+                excluded += i + 1
+                if (consecutive(i + 1)) excluded += i + 2
+                i += 2
+            } else {
+                i++
+            }
+        }
+        val clean = beats.indices.filter { it !in excluded }
+        val intervals = clean.map { lengths[it] }
+        val mean = intervals.average()
+        val cv = if (intervals.size < 3 || mean <= 0) {
+            0.0
+        } else {
+            sqrt(intervals.sumOf { (it - mean) * (it - mean) } / (intervals.size - 1)) / mean
+        }
+        // Least-squares slope of the instantaneous rate against time.
+        val slope = if (clean.size < 5) {
+            0.0
+        } else {
+            val t = clean.map { beats[it].first.toDouble() / fs }
+            val hr = clean.map { 60.0 * fs / lengths[it] }
+            val tm = t.average()
+            val hm = hr.average()
+            val varT = t.sumOf { (it - tm) * (it - tm) }
+            if (varT <= 1e-9) 0.0 else t.indices.sumOf { (t[it] - tm) * (hr[it] - hm) } / varT
+        }
+        // Do the pulses look alike, whatever their spacing? (Irregular rhythm: yes; noise: no.)
+        val len = median.toInt()
+        val shapes = clean.map { normalise(resample(detected.x, beats[it].first, beats[it].second, len)) }
+        val template = DoubleArray(len) { k -> shapes.map { it[k] }.sorted()[shapes.size / 2] }
+        val shapeQuality = shapes.map { correlation(it, template) }.sorted().let { if (it.isEmpty()) 0.0 else it[it.size / 2] }
+        return PpgRhythm(
+            beats = beats.size,
+            heartRateBpm = 60.0 * fs / median,
+            ibiCv = cv,
+            ectopicCount = ectopic,
+            hrSlopeBpmPerS = slope,
+            shapeQuality = shapeQuality,
+            excluded = excluded
+        )
+    }
+
+    /** Pulse amplitude of each beat (peak above its foot) on the filtered, upright signal. */
+    private fun amplitudes(x: FloatArray, beats: List<Pair<Int, Int>>) = beats.map { (a, b) -> ((a..b).maxOf { x[it] } - x[a]).toDouble() }
+
+    /**
+     * AC/DC × 100 with DC the mean raw light level. Only meaningful for raw intensity (a large
+     * positive or negative offset, as the watch reports); a signal without one gives 0 (unknown).
+     */
+    private fun perfusionIndex(raw: FloatArray, x: FloatArray, beats: List<Pair<Int, Int>>): Double {
+        val dc = abs(raw.average())
+        val ac = amplitudes(x, beats).sorted().let { it[it.size / 2] }
+        if (dc <= 0.0 || ac <= 0.0 || ac / dc > MAX_AC_DC) return 0.0
+        return 100.0 * ac / dc
+    }
+
+    /** Mean amplitude of the last third of the beats relative to the first third, minus 1. */
+    private fun amplitudeTrend(x: FloatArray, beats: List<Pair<Int, Int>>): Double {
+        val amp = amplitudes(x, beats)
+        val third = amp.size / 3
+        if (third < 2) return 0.0
+        val first = amp.take(third).average()
+        val last = amp.takeLast(third).average()
+        return if (first <= 1e-9) 0.0 else last / first - 1.0
+    }
+
+    /** Premature: shorter than this share of the typical interval, followed by a pause longer than [ECTOPIC_LONG]. */
+    private const val ECTOPIC_SHORT = 0.85
+    private const val ECTOPIC_LONG = 1.1
+
+    /** Pulse amplitude above this share of the light level means there is no real DC offset. */
+    private const val MAX_AC_DC = 0.2
 
     /**
      * The reflected (diastolic) wave: the first local maximum of the beat after the systolic peak,
@@ -265,6 +428,22 @@ object PpgFeatures {
         return if (da <= 0 || db <= 0) 0.0 else num / sqrt(da * db)
     }
 }
+
+/**
+ * Rhythm of one PPG recording (algorithm 5). [shapeQuality]: median correlation of each pulse
+ * with the typical pulse (stretched to one length), high for a clean but irregular rhythm and low
+ * for noise. [excluded]: indices of beats left out of the ensemble (premature beat, compensatory
+ * pause, post-ectopic beat).
+ */
+data class PpgRhythm(
+    val beats: Int,
+    val heartRateBpm: Double,
+    val ibiCv: Double,
+    val ectopicCount: Int,
+    val hrSlopeBpmPerS: Double,
+    val shapeQuality: Double = 0.0,
+    val excluded: Set<Int> = emptySet()
+)
 
 /** Live pulse rate from a few seconds of filtered, upright PPG (for the measuring screen). */
 object PulseRate {
