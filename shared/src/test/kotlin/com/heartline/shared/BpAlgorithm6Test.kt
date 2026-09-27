@@ -49,14 +49,17 @@ class BpAlgorithm6Test {
     /** The user from the report: 104/70 at a resting pulse of about 70. */
     private val base = Spec(systolic = 104.0, diastolic = 70.0, refSystolic = 104.0, stiffness = 0.3, irStiffness = 0.3)
 
-    private fun calibration(precise: Boolean = false): BpCalibration = BpCalibration(
-        "c",
-        0,
-        (1..3).map { i ->
-            val s = SyntheticSession.generate(base.copy(heartRateStart = 68.0 + i, precise = precise, seed = i))
-            CalibrationPoint.of(BpPipeline.capture(s.input)!!, 104 + i - 2, 70, 70)
-        }
-    )
+    private fun rounds(precise: Boolean) = (1..3).map { i ->
+        val s = SyntheticSession.generate(base.copy(heartRateStart = 68.0 + i, precise = precise, seed = i))
+        CalibrationPoint.of(BpPipeline.capture(s.input)!!, 104 + i - 2, 70, 70)
+    }
+
+    /**
+     * Quick rounds always (the calibration every quick measurement uses); for precise mode also
+     * precise rounds, since its ECG-channel PPG must only be compared with rounds of the same source.
+     */
+    private fun calibration(precise: Boolean = false): BpCalibration =
+        BpCalibration("c", 0, rounds(precise = false) + if (precise) rounds(precise = true) else emptyList())
 
     private fun run(spec: Spec, cal: BpCalibration = calibration(spec.precise)) =
         BpPipeline.run(cal, SyntheticSession.generate(spec).input, 1_000)
@@ -223,7 +226,8 @@ class BpAlgorithm6Test {
     @Test
     fun calibrationRoundsCarryEveryChannel() {
         val cal = calibration(precise = true)
-        val p = cal.points.first()
+        val p = cal.points.last()
+        assertEquals(CalibrationPoint.PRECISE_FS, p.featureFs)
         assertNotNull(p.bcgPttMs ?: p.pttMs)
         assertNotNull(p.patMs)
         assertNotNull(p.pepMs)

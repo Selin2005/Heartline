@@ -39,9 +39,24 @@ data class CalibrationPoint(
     val pepMs: Double? = null,
     val pttMs: Double? = null,
     val skinTempC: Double? = null,
-    val edaMicroSiemens: Double? = null
+    val edaMicroSiemens: Double? = null,
+    /**
+     * Sample rate of the PPG the shape [features] come from: 100 for PPG_ON_DEMAND (what every
+     * quick measurement uses), 500 for the PPG inside ECG_ON_DEMAND. The two are different signals
+     * (the ECG tracker's has gaps and gain jumps on real watches), so a calibration from one must
+     * never be compared with a measurement from the other.
+     */
+    val ppgFs: Int = BpCalibration.PPG_FS
 ) {
+    /**
+     * [ppgFs], with precise rounds saved before the field existed recognised by their pulse
+     * arrival time and missing raw PPG (only 100 Hz PPG was kept).
+     */
+    val featureFs: Int get() = if (ppgFs == BpCalibration.PPG_FS && ppg == null && patMs != null) PRECISE_FS else ppgFs
+
     companion object {
+        const val PRECISE_FS = 500
+
         /** A calibration point from a round's [capture] and the cuff reading taken with it. */
         fun of(
             capture: ChannelCapture,
@@ -66,7 +81,8 @@ data class CalibrationPoint(
             capture.pepMs,
             capture.pttMs,
             capture.skinTempC,
-            capture.edaMicroSiemens
+            capture.edaMicroSiemens,
+            capture.fs
         )
     }
 
@@ -98,7 +114,7 @@ data class BpCalibration(
     val validUntilMs: Long get() = createdAtMs + if (profile.shortValidity) SHORT_VALIDITY_MS else VALIDITY_MS
 
     /** Needs 3 rounds recorded with a feature set the estimator accepts, and not expired. */
-    fun isValid(nowMs: Long) = points.size >= REQUIRED_POINTS &&
+    fun isValid(nowMs: Long) = points.count { !it.standing && it.featureFs == PPG_FS } >= REQUIRED_POINTS &&
         nowMs < validUntilMs &&
         points.all { it.features.version >= PpgFeatureVector.MIN_MODEL_VERSION }
 
@@ -352,15 +368,16 @@ object BpEstimator {
         context: MeasurementContext = MeasurementContext.NONE,
         channel: BpChannel = BpChannel.PWA_GREEN,
         state: StateAssessment? = null,
-        hydrostaticMmHg: Double = 0.0
+        hydrostaticMmHg: Double = 0.0,
+        inputFs: Int = BpCalibration.PPG_FS
     ): BpOutcome {
         if (calibration == null || !calibration.isValid(nowMs)) return BpOutcome.NeedsCalibration
         if (features == null || features.version < PpgFeatureVector.MIN_MODEL_VERSION) return BpOutcome.PoorSignal
-        val select = selector(channel)
+        val select = shapeSelector(calibration, channel, inputFs)
         if (calibration.timedPoints().count { select(it.first) != null } < BpCalibration.REQUIRED_POINTS) return BpOutcome.NeedsCalibration
         val profile = calibration.profile
         val assessed = state ?: HemodynamicStateClassifier.assess(features, calibration, context)
-        val irregular = assessed.state == HemodynamicState.IRREGULAR || profile.atrialFibrillation
+        val irregular = assessed.state == HemodynamicState.IRREGULAR || profile.atrialFibrillation || context.recentEcg == RecentRhythm.AF
         val minQuality = if (irregular) MIN_QUALITY_IRREGULAR else MIN_QUALITY
         val minBeats = if (irregular) MIN_BEATS_IRREGULAR else MIN_BEATS
         if (features.quality < minQuality || features.beats < minBeats) return BpOutcome.PoorSignal
@@ -394,7 +411,9 @@ object BpEstimator {
         val hrDominated = abs(hrSys) >= HR_DOMINANT_MMHG && abs(hrSys) > abs(shapeSys)
         val days = (nowMs - model.latestPointMs).coerceAtLeast(0) / BpCalibration.DAY_MS.toDouble()
         // Uncertainty grows with how far today's wave is from calibration (weights are uncertain too).
-        val extrapolation = 0.5 * sqrt(shape.sumOf { (priorSys[it] * delta[it]).let { v -> v * v } } + hrSys * hrSys)
+        // Only the robust core features count here: noisy shape features are down-weighted already.
+        val extrapolation =
+            0.5 * sqrt(shape.filter { it in coreFeatures }.sumOf { (priorSys[it] * delta[it]).let { v -> v * v } } + hrSys * hrSys)
         val refPi = calibration.referencePerfusionIndex()
         val vasomotor = refPi > 0 && features.perfusionIndex > 0 && features.perfusionIndex / refPi !in PERFUSION_RANGE
         val refTemp = calibration.referenceSkinTemp()
@@ -436,9 +455,37 @@ object BpEstimator {
                 ectopicBeats = features.ectopicCount,
                 notValidated = profile.pregnancy,
                 state = assessed,
-                channels = listOf(ChannelEstimate(channel, rawSys, rawDia, sdSys, sdDia))
+                channels = listOf(
+                    ChannelEstimate(
+                        channel,
+                        rawSys,
+                        rawDia,
+                        sdSys,
+                        sdDia,
+                        parts = mapOf(
+                            "base" to BASE_SD,
+                            "residual" to model.residualSys,
+                            "drift" to DRIFT_SD_PER_DAY * days,
+                            "extrapolation" to extrapolation,
+                            "doubt" to sqrt(doubt.sumOf { it * it })
+                        )
+                    )
+                )
             )
         )
+    }
+
+    /**
+     * The calibration points a PWA channel may fit on: same PPG source as the measurement, and
+     * not the standing round (a fast pulse after standing distorts the wave; a real round at
+     * 106 bpm came out upside down). A point whose polarity disagrees with the majority is a
+     * detection failure and is left out too.
+     */
+    internal fun shapeSelector(calibration: BpCalibration, channel: BpChannel, inputFs: Int): (CalibrationPoint) -> PpgFeatureVector? {
+        val base = selector(channel)
+        val usable = calibration.timedPoints().map { it.first }.filter { !it.standing && it.featureFs == inputFs && base(it) != null }
+        val invertedMajority = usable.count { base(it)!!.inverted } * 2 >= usable.size
+        return { p -> base(p)?.takeIf { !p.standing && p.featureFs == inputFs && it.inverted == invertedMajority } }
     }
 
     /** Which feature vector of a calibration point a PWA channel uses. */

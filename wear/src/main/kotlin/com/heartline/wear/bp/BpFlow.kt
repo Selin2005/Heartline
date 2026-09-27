@@ -40,6 +40,7 @@ import com.heartline.wear.ui.components.rememberBuzz
 import com.heartline.wear.sensor.SensorGateway
 import com.heartline.wear.sensor.SensorProblem
 import com.heartline.wear.ui.screens.BpCalibrationRecordedScreen
+import com.heartline.wear.ui.screens.BpCalibrationRetryScreen
 import com.heartline.wear.ui.screens.BpInstructionScreen
 import com.heartline.wear.ui.screens.BpNeedsCalibrationScreen
 import com.heartline.wear.ui.screens.BpMeasuringScreen
@@ -165,6 +166,7 @@ fun BpFlow(
         BpState.OutOfRange -> BpOutOfRangeScreen(onRetry = { vm.reset() })
         BpState.Moving -> BpOutOfRangeScreen(moving = true, onRetry = { vm.reset() })
         is BpState.CalibrationRecorded -> BpCalibrationRecordedScreen(s.round, onDone = done)
+        is BpState.CalibrationRetry -> BpCalibrationRetryScreen(s.round, onRetry = { start() })
         BpState.PoorSignal -> SensorErrorScreen(SensorProblem.OFF_BODY, onAction = { vm.reset() })
         is BpState.Failed -> SensorErrorScreen(s.problem, onAction = {
             if (s.problem == SensorProblem.SERVICE_MISSING || s.problem == SensorProblem.SERVICE_OUTDATED) activity?.let(gateway::resolve) else done()

@@ -417,7 +417,6 @@ fun BpCalibrationScreen(
     onProfileChange: (BpProfile) -> Unit = {},
     onAddStanding: () -> Unit = {},
     onFinish: () -> Unit = {},
-    onPreciseChange: (Boolean) -> Unit = {},
 ) {
     val colors = HeartlineTheme.colors
     ReachabilityScaffold(
@@ -503,16 +502,6 @@ fun BpCalibrationScreen(
                         Text(stringResource(R.string.bp_profile_why), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                     }
                     BpProfileEditor(state.profile, onProfileChange)
-                }
-            }
-            item {
-                RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
-                    CardRow(
-                        stringResource(R.string.bp_calibration_precise),
-                        subtitle = stringResource(R.string.bp_calibration_precise_hint),
-                        trailing = { OneUiSwitch(state.precise) { onPreciseChange(it) } },
-                        onClick = { onPreciseChange(!state.precise) },
-                    )
                 }
             }
         }

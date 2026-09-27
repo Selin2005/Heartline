@@ -374,7 +374,6 @@ fun HeartlineApp(
                         onProfileChange = vm::setProfile,
                         onAddStanding = { vm.addStandingRound() },
                         onFinish = { vm.finish() },
-                        onPreciseChange = vm::setPrecise,
                     )
                 }
                 composable(Routes.METRIC) { entry ->

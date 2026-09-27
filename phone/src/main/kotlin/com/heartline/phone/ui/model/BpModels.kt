@@ -177,8 +177,6 @@ data class CalibrationUi(
     val completedRounds: Int = 0,
     val inputError: Boolean = false,
     val profile: BpProfile = BpProfile.NONE,
-    /** Record the rounds in precise mode (finger on the watch key: ECG + PPG + motion). */
-    val precise: Boolean = false,
 ) {
     enum class Phase { INTRO, WAITING_FOR_WATCH, ENTER_CUFF, OFFER_STANDING, DONE }
 
@@ -224,14 +222,11 @@ class CalibrationViewModel(
         mutable.value = mutable.value.copy(profile = profile)
     }
 
-    fun setPrecise(precise: Boolean) {
-        mutable.value = mutable.value.copy(precise = precise)
-    }
 
     /** Asks the watch to record this round; the open calibration screen there starts measuring at once. */
     fun startRound() = viewModelScope.launch {
         mutable.value = mutable.value.copy(phase = CalibrationUi.Phase.WAITING_FOR_WATCH, inputError = false)
-        repository.requestCapture(CaptureRequest(captureId, mutable.value.round, mutable.value.precise))
+        repository.requestCapture(CaptureRequest(captureId, mutable.value.round))
         openOnWatch(CALIBRATION_ROUTE)
     }
 
@@ -253,7 +248,7 @@ class CalibrationViewModel(
         when {
             points.size < BpCalibration.REQUIRED_POINTS -> {
                 mutable.value = ui.copy(round = ui.round + 1, phase = CalibrationUi.Phase.WAITING_FOR_WATCH, completedRounds = points.size, inputError = false)
-                repository.requestCapture(CaptureRequest(captureId, ui.round + 1, ui.precise))
+                repository.requestCapture(CaptureRequest(captureId, ui.round + 1))
                 openOnWatch(CALIBRATION_ROUTE)
             }
             ui.standingRound -> save()
@@ -264,7 +259,7 @@ class CalibrationViewModel(
     /** The optional 4th round: standing, watch arm across the chest at heart level. */
     fun addStandingRound() = viewModelScope.launch {
         mutable.value = mutable.value.copy(round = BpCalibration.STANDING_ROUND, phase = CalibrationUi.Phase.WAITING_FOR_WATCH, inputError = false)
-        repository.requestCapture(CaptureRequest(captureId, BpCalibration.STANDING_ROUND, mutable.value.precise))
+        repository.requestCapture(CaptureRequest(captureId, BpCalibration.STANDING_ROUND))
         openOnWatch(CALIBRATION_ROUTE)
     }
 

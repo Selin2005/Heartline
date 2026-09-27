@@ -206,6 +206,10 @@ class BpSessionRecorder(
         value("$prefix.hrSlopeBpmPerS", f.hrSlopeBpmPerS)
         value("$prefix.perfusionIndex", f.perfusionIndex)
         value("$prefix.amplitudeTrend", f.amplitudeTrend)
+        value("$prefix.rr.nRmssd", f.rrNRmssd)
+        value("$prefix.rr.entropy", f.rrEntropy)
+        value("$prefix.rr.turningPoint", f.rrTurningPoint)
+        value("$prefix.rr.count", f.rrCount.toDouble())
         value("$prefix.inverted", if (f.inverted) 1.0 else 0.0)
         value("$prefix.version", f.version.toDouble())
     }

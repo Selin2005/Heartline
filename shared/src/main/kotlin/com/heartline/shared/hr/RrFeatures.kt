@@ -22,14 +22,17 @@ data class RrFeatures(
     val turningPointRatio: Double
 ) {
     /** Irregularly irregular: high successive variation, spread-out and non-patterned intervals. */
-    val isIrregular: Boolean
-        get() = count >= MIN_INTERVALS && nRmssd > 0.10 && shannonEntropy > 0.55 && turningPointRatio in 0.45..0.95
+    val isIrregular: Boolean get() = irregular(count, nRmssd, shannonEntropy, turningPointRatio)
 
     /** Clearly regular rhythm. */
     val isRegular: Boolean get() = count >= MIN_INTERVALS && nRmssd < 0.08 && cov < 0.10
 
     companion object {
         const val MIN_INTERVALS = 8
+
+        /** The same rule from stored values (also used by blood pressure on its PPG beats). */
+        fun irregular(count: Int, nRmssd: Double, entropy: Double, turningPoint: Double, minNRmssd: Double = 0.10) =
+            count >= MIN_INTERVALS && nRmssd > minNRmssd && entropy > 0.55 && turningPoint in 0.45..0.95
 
         fun of(rrMs: List<Double>): RrFeatures? {
             val clean = rrMs.filter { it in 250.0..2500.0 }

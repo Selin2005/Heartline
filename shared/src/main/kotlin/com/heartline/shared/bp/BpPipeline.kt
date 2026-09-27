@@ -24,7 +24,9 @@ data class BpSessionInput(
     val precise: PreciseInput? = null,
     val skinTempC: Double? = null,
     val edaMicroSiemens: Double? = null,
-    val heightCm: Double? = null
+    val heightCm: Double? = null,
+    /** The rhythm of the user's latest ECG (ECG AI result, last 30 days), as a prior. */
+    val recentEcg: RecentRhythm? = null
 )
 
 /**
@@ -62,7 +64,7 @@ object BpWindowSelector {
         val len = WINDOW_SECONDS * fs
         if (raw.size <= len) return window(raw, fs, raw.indices)
         val whole = PpgFeatures.rhythm(raw, fs)
-        val irregular = whole != null && HemodynamicStateClassifier.irregular(whole.ibiCv, whole.ectopicCount)
+        val irregular = whole != null && HemodynamicStateClassifier.irregular(whole)
         if (irregular) {
             val n = minOf(raw.size, IRREGULAR_SECONDS * fs)
             window(raw, fs, raw.size - n until raw.size)?.let { return it.copy(irregular = true) }
@@ -88,7 +90,7 @@ object BpWindowSelector {
 
     private fun window(raw: FloatArray, fs: Int, range: IntRange): Window? {
         val f = PpgFeatures.extract(raw.copyOfRange(range.first, range.last + 1), fs) ?: return null
-        val irregular = HemodynamicStateClassifier.irregular(f.ibiCv, f.ectopicCount, f.rejectedFraction)
+        val irregular = HemodynamicStateClassifier.irregular(f)
         val steady = abs(f.hrSlopeBpmPerS) <= HemodynamicStateClassifier.TRANSIENT_HR_SLOPE &&
             abs(f.amplitudeTrend) <= HemodynamicStateClassifier.TRANSIENT_AMPLITUDE &&
             !irregular
@@ -118,7 +120,13 @@ object BpPipeline {
 
         // Quick mode estimates from the steadiest window of the green PPG; precise mode from the
         // heart-level part of its ECG-synchronised PPG.
-        val precise = input.precise
+        // The ECG tracker's PPG has gaps and gain jumps on real watches: repaired before anything else.
+        val precise = input.precise?.let { p ->
+            p.copy(
+                ppg =
+                com.heartline.shared.dsp.PpgRepair.repair(p.ppg) ?: return done(BpOutcome.PoorSignal)
+            )
+        }
         val (raw, fs, times) = if (precise != null) {
             val level = levelSegment(precise)
             Triple(
@@ -130,7 +138,7 @@ object BpPipeline {
                 }
             )
         } else {
-            Triple(input.green, input.fs, input.greenTimesNs)
+            Triple(com.heartline.shared.dsp.PpgRepair.repair(input.green) ?: input.green, input.fs, input.greenTimesNs)
         }
         val window = BpWindowSelector.best(raw, fs)
         log?.event("window", window?.let { "${it.range.first}..${it.range.last} steady=${it.steady} irregular=${it.irregular}" } ?: "none")
@@ -140,7 +148,8 @@ object BpPipeline {
         if (features == null) return done(BpOutcome.PoorSignal)
 
         val gravity = times?.let { t -> input.imu.meanGravity(t[range.first], t[range.last]) } ?: input.imu.meanGravity()
-        val context = MeasurementContext(gravity, input.skinTempC, input.edaMicroSiemens)
+        val context = MeasurementContext(gravity, input.skinTempC, input.edaMicroSiemens, input.recentEcg)
+        log?.note("rhythm.lastEcg", input.recentEcg?.name ?: "none")
         val state = HemodynamicStateClassifier.assess(features, calibration, context)
         log?.note("state", state.state.name)
         state.reason?.let { log?.note("state.reason", it.name) }
@@ -158,15 +167,21 @@ object BpPipeline {
         log?.value("arm.hydrostaticMmHg", hydrostatic)
 
         val channels = mutableListOf<ChannelEstimate>()
-        val green = BpEstimator.estimate(calibration, features, nowMs, history, context, BpChannel.PWA_GREEN, state, hydrostatic)
+        val green = BpEstimator.estimate(calibration, features, nowMs, history, context, BpChannel.PWA_GREEN, state, hydrostatic, fs)
         (green as? BpOutcome.Ok)?.let { channels += it.estimate.channels }
 
         val irFeatures = input.ir?.takeIf { precise == null }?.let { ir ->
-            PpgFeatures.extract(ir.copyOfRange(range.first, minOf(range.last + 1, ir.size)).filterFinite(), fs)
+            PpgFeatures.extract(
+                ir.copyOfRange(range.first, minOf(range.last + 1, ir.size)).let {
+                    com.heartline.shared.dsp.PpgRepair.repair(it)
+                        ?: it
+                },
+                fs
+            )
         }
         log?.features("ir", irFeatures)
         irFeatures?.let { f ->
-            (BpEstimator.estimate(calibration, f, nowMs, emptyList(), context, BpChannel.PWA_IR, state, hydrostatic) as? BpOutcome.Ok)
+            (BpEstimator.estimate(calibration, f, nowMs, emptyList(), context, BpChannel.PWA_IR, state, hydrostatic, fs) as? BpOutcome.Ok)
                 ?.let { channels += it.estimate.channels }
         }
 
@@ -246,6 +261,7 @@ object BpPipeline {
             log?.value("channel.${c.channel}.systolic", c.systolic)
             log?.value("channel.${c.channel}.diastolic", c.diastolic)
             log?.value("channel.${c.channel}.sdSys", c.sdSys)
+            c.parts.forEach { (k, v) -> log?.value("channel.${c.channel}.sd.$k", v) }
         }
         val fused = BpFusion.fuse(channels, state.state)
         if (fused == null) {
@@ -286,7 +302,7 @@ object BpPipeline {
      * phone pairs it with the cuff reading via [CalibrationPoint.of]). Null without a usable pulse.
      */
     fun capture(input: BpSessionInput): ChannelCapture? {
-        val precise = input.precise
+        val precise = input.precise?.let { p -> p.copy(ppg = com.heartline.shared.dsp.PpgRepair.repair(p.ppg) ?: return null) }
         val (raw, fs, times) = if (precise != null) {
             val level = levelSegment(precise)
             Triple(
@@ -298,11 +314,14 @@ object BpPipeline {
                 }
             )
         } else {
-            Triple(input.green, input.fs, input.greenTimesNs)
+            Triple(com.heartline.shared.dsp.PpgRepair.repair(input.green) ?: input.green, input.fs, input.greenTimesNs)
         }
         val window = BpWindowSelector.best(raw, fs) ?: return null
         val range = window.range
-        val ir = input.ir?.takeIf { precise == null }?.copyOfRange(range.first, minOf(range.last + 1, input.ir.size))?.filterFinite()
+        val ir = input.ir?.takeIf { precise == null }?.copyOfRange(range.first, minOf(range.last + 1, input.ir.size))?.let {
+            com.heartline.shared.dsp.PpgRepair.repair(it)
+                ?: it
+        }
         val bcg = input.imu.accel?.let { accel ->
             val t = times ?: return@let null
             val pulses = PpgFeatures.pulses(raw.copyOfRange(range.first, range.last + 1), fs) ?: return@let null
@@ -363,15 +382,6 @@ object BpPipeline {
         BpOutcome.NeedsCalibration -> 1
         BpOutcome.PoorSignal -> 2
         is BpOutcome.OutOfRange -> 3
-    }
-
-    internal fun FloatArray.filterFinite(): FloatArray {
-        if (all { it.isFinite() }) return this
-        // A missing sample (NaN) takes the previous value: a gap of a few samples barely moves the wave.
-        val out = copyOf()
-        var last = firstOrNull { it.isFinite() } ?: 0f
-        for (i in out.indices) if (out[i].isFinite()) last = out[i] else out[i] = last
-        return out
     }
 }
 

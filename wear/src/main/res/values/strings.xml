@@ -74,6 +74,8 @@
     <string name="bp_pulse">Pulse %1$d bpm</string>
     <string name="bp_calibration_round">Calibration %1$d of 3</string>
     <string name="bp_calibration_standing">Standing calibration</string>
+    <string name="bp_calibration_retry_title">Round %1$d again</string>
+    <string name="bp_calibration_retry_body">Your pulse wasn\'t steady enough to calibrate on. Sit still, breathe calmly for a minute, then take this round again with a new cuff reading.</string>
     <string name="bp_instruction_standing">Stand still and hold this arm across your chest, watch at heart level.</string>
     <string name="bp_calibration_recorded">Round %1$d recorded</string>
     <string name="bp_enter_cuff">Enter your cuff reading on the phone. The next round starts from there.</string>

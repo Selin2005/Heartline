@@ -357,6 +357,21 @@ fun BpCalibrationRecordedScreen(round: Int, onDone: () -> Unit = {}) {
     }
 }
 
+/** A calibration round that wasn't steady enough: take it again (the phone keeps waiting). */
+@Composable
+fun BpCalibrationRetryScreen(round: Int, onRetry: () -> Unit = {}) {
+    ActionScreen(stringResource(R.string.action_try_again), onRetry) {
+        Badge(Icons.Rounded.Speed, WearColors.warn)
+        Text(
+            stringResource(R.string.bp_calibration_retry_title, round),
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+        Body(stringResource(R.string.bp_calibration_retry_body))
+    }
+}
+
 @Composable
 fun ProfileNeededScreen(onDone: () -> Unit = {}) {
     ActionScreen(stringResource(R.string.action_done), onDone) {

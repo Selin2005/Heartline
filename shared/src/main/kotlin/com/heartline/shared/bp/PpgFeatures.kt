@@ -5,6 +5,7 @@ package com.heartline.shared.bp
 
 import com.heartline.shared.dsp.Biquad
 import com.heartline.shared.dsp.filtFilt
+import com.heartline.shared.hr.RrFeatures
 import kotlin.math.abs
 import kotlin.math.sqrt
 import kotlinx.serialization.Serializable
@@ -64,7 +65,13 @@ data class PpgFeatureVector(
     /** Perfusion index, % (pulse amplitude / mean light level); 0 when the raw level is unknown. */
     val perfusionIndex: Double = 0.0,
     /** Relative change of the pulse amplitude from the first to the last third of the recording. */
-    val amplitudeTrend: Double = 0.0
+    val amplitudeTrend: Double = 0.0,
+    // v5: the irregular-rhythm features the app's background notification uses (RrFeatures,
+    // Dash 2009) on the clean intervals: normalised RMSSD, Shannon entropy, turning point ratio.
+    val rrNRmssd: Double = 0.0,
+    val rrEntropy: Double = 0.0,
+    val rrTurningPoint: Double = 0.0,
+    val rrCount: Int = 0
 ) {
     fun asArray() = doubleArrayOf(heartRateBpm, riseFraction, widthFraction, areaRatio)
 
@@ -76,7 +83,7 @@ data class PpgFeatureVector(
 
     companion object {
         /** Current extractor. */
-        const val VERSION = 4
+        const val VERSION = 5
 
         /** First extractor with the rhythm and state fields (algorithm 5). */
         const val STATE_VERSION = 4
@@ -107,7 +114,7 @@ object PpgFeatures {
         // (post-extrasystolic potentiation) are left out too.
         // In an irregular rhythm (AF) a pulse's shape also depends on the interval before it (filling
         // time, the previous beat's tail): only beats whose previous interval is typical too are kept.
-        val irregular = rhythm.ibiCv > HemodynamicStateClassifier.IRREGULAR_CV
+        val irregular = HemodynamicStateClassifier.irregular(rhythm)
         fun typical(i: Int) = abs((beats[i].second - beats[i].first) - len) <= len * 0.2
         val kept = beats.filterIndexed { i, _ ->
             i !in rhythm.excluded &&
@@ -159,7 +166,11 @@ object PpgFeatures {
             rejectedFraction = 1.0 - kept.size.toDouble() / beats.size,
             hrSlopeBpmPerS = rhythm.hrSlopeBpmPerS,
             perfusionIndex = perfusionIndex(raw, x, kept),
-            amplitudeTrend = amplitudeTrend(x, kept)
+            amplitudeTrend = amplitudeTrend(x, kept),
+            rrNRmssd = rhythm.rr?.nRmssd ?: 0.0,
+            rrEntropy = rhythm.rr?.shannonEntropy ?: 0.0,
+            rrTurningPoint = rhythm.rr?.turningPointRatio ?: 0.0,
+            rrCount = rhythm.rr?.count ?: 0
         )
     }
 
@@ -170,7 +181,11 @@ object PpgFeatures {
         if (raw.size < fs * 8) return null
         val filtered = raw.filtFilt(Biquad.highPass(0.5, fs.toDouble()), Biquad.lowPass(8.0, fs.toDouble()))
         if ((filtered.max() - filtered.min()) < 1e-6f) return null
-        val inverted = isInverted(filtered)
+        // Raw light intensity (a large offset, as the watch reports it) falls as blood volume
+        // rises: upside down unless the slopes very clearly say otherwise (a fast pulse can make
+        // the two slopes similar; a wrong flip ruined a real calibration round at 106 bpm).
+        val lightIntensity = abs(raw.average()) > LIGHT_DC_FACTOR * (filtered.max() - filtered.min())
+        val inverted = if (lightIntensity) !isUpright(filtered) else isInverted(filtered)
         val x = if (inverted) FloatArray(filtered.size) { -filtered[it] } else filtered
 
         val half = (0.25 * fs).toInt()
@@ -237,7 +252,11 @@ object PpgFeatures {
         var ectopic = 0
         var i = 0
         while (i < beats.size - 1) {
-            if (lengths[i] < median * ECTOPIC_SHORT && consecutive(i) && lengths[i + 1] > median * ECTOPIC_LONG) {
+            // Against the local rhythm (the 2 intervals on each side), not the whole recording's:
+            // breathing slowly speeds and slows the pulse (sinus arrhythmia), which is not ectopy.
+            val local = (maxOf(0, i - 2)..minOf(lengths.size - 1, i + 3)).filter { it != i && it != i + 1 }.map { lengths[it] }.sorted()
+            val ref = if (local.isEmpty()) median else local[local.size / 2]
+            if (lengths[i] < ref * ECTOPIC_SHORT && consecutive(i) && lengths[i + 1] > ref * ECTOPIC_LONG) {
                 ectopic++
                 excluded += i
                 excluded += i + 1
@@ -271,6 +290,9 @@ object PpgFeatures {
         val shapes = clean.map { normalise(resample(detected.x, beats[it].first, beats[it].second, len)) }
         val template = DoubleArray(len) { k -> shapes.map { it[k] }.sorted()[shapes.size / 2] }
         val shapeQuality = shapes.map { correlation(it, template) }.sorted().let { if (it.isEmpty()) 0.0 else it[it.size / 2] }
+        // The app's own irregular-rhythm features (the background notification's, Dash 2009) on the
+        // clean beat-to-beat intervals.
+        val rr = RrFeatures.of(intervals.map { it * 1000.0 / fs })
         return PpgRhythm(
             beats = beats.size,
             heartRateBpm = 60.0 * fs / median,
@@ -278,7 +300,8 @@ object PpgFeatures {
             ectopicCount = ectopic,
             hrSlopeBpmPerS = slope,
             shapeQuality = shapeQuality,
-            excluded = excluded
+            excluded = excluded,
+            rr = rr
         )
     }
 
@@ -307,7 +330,7 @@ object PpgFeatures {
     }
 
     /** Premature: shorter than this share of the typical interval, followed by a pause longer than [ECTOPIC_LONG]. */
-    private const val ECTOPIC_SHORT = 0.85
+    private const val ECTOPIC_SHORT = 0.8
     private const val ECTOPIC_LONG = 1.1
 
     /** Pulse amplitude above this share of the light level means there is no real DC offset. */
@@ -353,6 +376,16 @@ object PpgFeatures {
      * as blood volume rises).
      */
     private const val UPSAMPLE = 4
+
+    /** Clearly upright: the steepest rises are at least twice the steepest falls. */
+    private fun isUpright(x: FloatArray): Boolean {
+        val d = FloatArray(x.size - 1) { x[it + 1] - x[it] }.sorted()
+        val k = (d.size * 0.02).toInt().coerceAtLeast(1)
+        return d.takeLast(k).average() > -d.take(k).average() * 2.0
+    }
+
+    /** A mean level this many times the pulse's range means raw light intensity. */
+    private const val LIGHT_DC_FACTOR = 20.0
 
     fun isInverted(x: FloatArray): Boolean {
         val d = FloatArray(x.size - 1) { x[it + 1] - x[it] }.sorted()
@@ -442,7 +475,8 @@ data class PpgRhythm(
     val ectopicCount: Int,
     val hrSlopeBpmPerS: Double,
     val shapeQuality: Double = 0.0,
-    val excluded: Set<Int> = emptySet()
+    val excluded: Set<Int> = emptySet(),
+    val rr: RrFeatures? = null
 )
 
 /** Live pulse rate from a few seconds of filtered, upright PPG (for the measuring screen). */

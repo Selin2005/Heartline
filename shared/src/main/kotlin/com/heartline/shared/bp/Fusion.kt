@@ -35,7 +35,9 @@ data class ChannelEstimate(
     val diastolic: Double,
     val sdSys: Double,
     val sdDia: Double,
-    val weight: Double = 0.0
+    val weight: Double = 0.0,
+    /** Where the ± comes from (logged): base, residual, drift, extrapolation, doubt. */
+    val parts: Map<String, Double> = emptyMap()
 )
 
 /**

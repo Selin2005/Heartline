@@ -184,6 +184,18 @@ class BpMeasureTest {
     }
 
     @Test
+    fun anUnsteadyCalibrationRoundIsTakenAgain() = runBlocking {
+        bp.setPendingCapture(CaptureRequest("cap-2", 1))
+        // The pulse keeps climbing through the whole recording (as in a real round 2 that skewed a calibration).
+        val climbing = SyntheticPpg.Scenario(seconds = 25.0, heartRateStart = 66.0, heartRateEnd = 96.0)
+        val end = vm(ScenarioSource(climbing)).measure()
+        assertEquals(BpState.CalibrationRetry(1), end)
+        // Nothing was sent; the phone keeps waiting for this round.
+        assertTrue(records.pendingMessages().isEmpty())
+        assertEquals("cap-2", bp.pendingCapture.value?.captureId)
+    }
+
+    @Test
     fun movingArmMeansMeasureAgain() = runBlocking {
         calibrate()
         val moving = object : ImuRecorder {
@@ -209,9 +221,12 @@ class BpMeasureTest {
             precise = true,
             seconds = 36.0,
         )
-        val points = (1..3).map {
-            val s = com.heartline.shared.sample.SyntheticSession.generate(spec.copy(heartRateStart = 68.0 + it, seed = it))
-            CalibrationPoint.of(com.heartline.shared.bp.BpPipeline.capture(s.input)!!, 103 + it, 70, 70)
+        // Quick rounds (every calibration) plus precise rounds (precise mode compares its ECG-channel PPG only with those).
+        val points = listOf(false, true).flatMap { precise ->
+            (1..3).map {
+                val s = com.heartline.shared.sample.SyntheticSession.generate(spec.copy(heartRateStart = 68.0 + it, seed = it, precise = precise))
+                CalibrationPoint.of(com.heartline.shared.bp.BpPipeline.capture(s.input)!!, 103 + it, 70, 70)
+            }
         }
         bp.setCalibration(BpCalibration("c", System.currentTimeMillis(), points))
         val session = com.heartline.shared.sample.SyntheticSession.generate(spec.copy(seed = 9))

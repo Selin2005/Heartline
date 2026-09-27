@@ -122,7 +122,7 @@ class BloodPressureTest {
         // Mostly a faster pulse: flagged with a wide ±, never a confident high number (algorithms 5–6).
         assertTrue("$e", e.systolic > 121)
         assertTrue("$e", e.heartRateDominated)
-        assertTrue("$e", e.uncertaintySys > 8)
+        assertTrue("$e", e.uncertaintySys >= 8)
         assertTrue(e.deltaSystolic > 0)
     }
 

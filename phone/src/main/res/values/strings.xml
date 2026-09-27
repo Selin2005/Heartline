@@ -432,8 +432,6 @@
     <string name="bp_state_compensatory">Fast pulse with a weak wrist pulse: weighted towards transit time rather than pulse shape.</string>
     <string name="bp_state_irregular">Irregular rhythm: averaged over more beats.</string>
     <string name="bp_channels">Sensors: %1$s</string>
-    <string name="bp_calibration_precise">Precise calibration</string>
-    <string name="bp_calibration_precise_hint">Recommended. Keep a finger on the watch\'s lower key during each reading, so the ECG and motion channels are calibrated too.</string>
     <string name="share_format_bp_sessions">BP raw sessions (zip)</string>
     <string name="bp_tag_confirmed">confirmed</string>
     <string name="bp_tag_refined">refined</string>

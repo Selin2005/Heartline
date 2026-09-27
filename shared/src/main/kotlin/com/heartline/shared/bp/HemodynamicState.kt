@@ -3,6 +3,7 @@
 
 package com.heartline.shared.bp
 
+import com.heartline.shared.hr.RrFeatures
 import kotlin.math.abs
 import kotlin.math.acos
 import kotlin.math.sqrt
@@ -48,11 +49,25 @@ data class BpProfile(
  * the watch's frame (arm position), skin temperature (°C) and skin conductance (µS, Watch8+).
  * Null values are unknown and not used.
  */
-data class MeasurementContext(val gravity: List<Double>? = null, val skinTempC: Double? = null, val edaMicroSiemens: Double? = null) {
+data class MeasurementContext(
+    val gravity: List<Double>? = null,
+    val skinTempC: Double? = null,
+    val edaMicroSiemens: Double? = null,
+    /**
+     * The rhythm the app's ECG AI found in the user's latest ECG (last 30 days), if any. ECG is
+     * not recorded for blood pressure; its last result is a prior: atrial fibrillation there turns
+     * on the AF handling, sinus rhythm there asks for stronger evidence before calling the pulse
+     * irregular.
+     */
+    val recentEcg: RecentRhythm? = null
+) {
     companion object {
         val NONE = MeasurementContext()
     }
 }
+
+/** The latest ECG's rhythm class, as far as blood pressure cares. */
+enum class RecentRhythm { SINUS, AF }
 
 enum class HemodynamicState {
     /** At rest in a steady state: the calibrated model applies as is. */
@@ -100,7 +115,6 @@ object HemodynamicStateClassifier {
     /** Rhythm: coefficient of variation of intervals (sinus arrhythmia at rest stays well below). */
     const val IRREGULAR_CV = 0.15
     const val IRREGULAR_ECTOPICS = 3
-    const val IRREGULAR_REJECTED = 0.4
 
     /** Pulse rate changing faster than this over the recording, bpm/s (≈ 10 bpm in 20 s). */
     const val TRANSIENT_HR_SLOPE = 0.5
@@ -126,7 +140,8 @@ object HemodynamicStateClassifier {
     ): StateAssessment {
         val profile = calibration.profile
         if (features.version < PpgFeatureVector.STATE_VERSION) return StateAssessment.STEADY
-        if (!profile.atrialFibrillation && irregular(features.ibiCv, features.ectopicCount, features.rejectedFraction)) {
+        val knownAf = profile.atrialFibrillation || context.recentEcg == RecentRhythm.AF
+        if (!knownAf && irregular(features, context.recentEcg == RecentRhythm.SINUS)) {
             return StateAssessment(HemodynamicState.IRREGULAR, StateReason.IRREGULAR_RHYTHM)
         }
         val refHr = calibration.referenceHeartRate()
@@ -154,9 +169,27 @@ object HemodynamicStateClassifier {
         return StateAssessment.STEADY
     }
 
-    /** Also used on a recording too irregular to give a feature vector at all. */
-    fun irregular(ibiCv: Double, ectopicCount: Int, rejectedFraction: Double = 0.0) =
-        ibiCv > IRREGULAR_CV || ectopicCount >= IRREGULAR_ECTOPICS || rejectedFraction > IRREGULAR_REJECTED
+    /**
+     * Irregular rhythm on the PPG beats, by the app's own irregular-rhythm rule ([RrFeatures],
+     * nRMSSD + entropy + turning points), or frequent premature beats. Breathing-related sinus
+     * arrhythmia (smooth, patterned) is not irregular: a real watch recording with interval CV 0.16
+     * and RMSSD 73 ms at 74 bpm was misread as AF by a plain CV threshold.
+     * [recentSinus]: the latest ECG showed sinus rhythm, so stronger variation is required.
+     */
+    fun irregular(f: PpgFeatureVector, recentSinus: Boolean = false): Boolean {
+        if (f.ectopicCount >= IRREGULAR_ECTOPICS) return true
+        if (f.rrCount > 0) return RrFeatures.irregular(f.rrCount, f.rrNRmssd, f.rrEntropy, f.rrTurningPoint, minNRmssd(recentSinus))
+        // Vectors from before v5 have no entropy: variation must be large both overall and beat to beat.
+        return f.ibiCv > IRREGULAR_CV && f.rmssdMs / f.beatMs > minNRmssd(recentSinus)
+    }
+
+    fun irregular(r: PpgRhythm, recentSinus: Boolean = false): Boolean {
+        if (r.ectopicCount >= IRREGULAR_ECTOPICS) return true
+        val rr = r.rr ?: return false
+        return RrFeatures.irregular(rr.count, rr.nRmssd, rr.shannonEntropy, rr.turningPointRatio, minNRmssd(recentSinus))
+    }
+
+    private fun minNRmssd(recentSinus: Boolean) = if (recentSinus) 0.15 else 0.10
 
     /** Angle between two gravity vectors, degrees; null when either is degenerate. */
     fun angleDeg(a: List<Double>, b: List<Double>): Double? {

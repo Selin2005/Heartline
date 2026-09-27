@@ -23,6 +23,10 @@ import com.heartline.shared.bp.HemodynamicState
 import com.heartline.shared.bp.PpgFeatures
 import com.heartline.shared.bp.PreciseInput
 import com.heartline.shared.bp.PulseRate
+import com.heartline.shared.bp.RecentRhythm
+import com.heartline.shared.bp.CalibrationPoint
+import com.heartline.shared.model.EcgResult
+import kotlinx.coroutines.flow.first
 import com.heartline.shared.dsp.StreamingPpgFilter
 import com.heartline.shared.model.RecordKind
 import com.heartline.shared.model.RecordMeta
@@ -127,6 +131,9 @@ sealed interface BpState {
 
     data class CalibrationRecorded(val round: Int) : BpState
 
+    /** The calibration round wasn't steady or clean enough to calibrate on: take it again. */
+    data class CalibrationRetry(val round: Int) : BpState
+
     data object PoorSignal : BpState
 
     data class Failed(val problem: SensorProblem) : BpState
@@ -169,8 +176,13 @@ class BpMeasureViewModel(
     /** Calibration capture requested by the phone, if any. */
     val pendingCapture: StateFlow<CaptureRequest?> get() = bpStore.pendingCapture
 
-    /** Precise mode needs the ECG sensor. */
-    val preciseAvailable: Boolean get() = ecg != null
+    /**
+     * Precise mode (ECG) is experimental: it needs the ECG sensor and a calibration with pulse
+     * arrival times from the same ECG-channel PPG. Calibration itself is always quick mode, so it
+     * never records an ECG unasked.
+     */
+    val preciseAvailable: Boolean
+        get() = ecg != null && (bpStore.calibration.value?.timedPoints()?.count { it.first.patMs != null && it.first.featureFs == CalibrationPoint.PRECISE_FS } ?: 0) >= 2
 
     fun checkReady() {
         if (bpStore.pendingCapture.value == null && bpStore.calibration.value?.isValid(now()) != true) mutable.value = BpState.NeedsCalibration
@@ -186,8 +198,8 @@ class BpMeasureViewModel(
             mutable.value = BpState.NeedsCalibration
             return
         }
-        val chosen = if (capture?.precise == true || mode == BpMode.PRECISE) BpMode.PRECISE else BpMode.QUICK
-        val effective = if (chosen == BpMode.PRECISE && ecg == null) BpMode.QUICK else chosen
+        // Calibration rounds are always quick: the same PPG source as every quick measurement.
+        val effective = if (capture == null && mode == BpMode.PRECISE && preciseAvailable) BpMode.PRECISE else BpMode.QUICK
         val startedAt = now()
         val id = UUID.randomUUID().toString()
         val log = BpSessionRecorder(id, if (capture != null) "calibration" else "measure", startedAt, now)
@@ -227,7 +239,13 @@ class BpMeasureViewModel(
                     mutable.value = recorded.state
                     return@launch
                 }
-                is Recorded.Session -> recorded.input.copy(imu = streams, skinTempC = temp?.objectC, edaMicroSiemens = eda, heightCm = heightCm())
+                is Recorded.Session -> recorded.input.copy(
+                    imu = streams,
+                    skinTempC = temp?.objectC,
+                    edaMicroSiemens = eda,
+                    heightCm = heightCm(),
+                    recentEcg = recentRhythm(),
+                )
             }
             // Quick mode must be still; the precise maneuver moves the arm on purpose.
             if (effective == BpMode.QUICK) {
@@ -426,6 +444,11 @@ class BpMeasureViewModel(
             log.note("result", "poor signal")
             return BpState.PoorSignal
         }
+        // A calibration round is the reference for everything after it: it must be steady and clean.
+        if (!calibrationGrade(features)) {
+            log.note("result", "calibration round not steady: quality=${features.quality} beats=${features.beats} hrSlope=${features.hrSlopeBpmPerS} amplitudeTrend=${features.amplitudeTrend}")
+            return BpState.CalibrationRetry(capture.round)
+        }
         val result = CaptureResult(
             UUID.randomUUID().toString(),
             capture.captureId,
@@ -511,6 +534,20 @@ class BpMeasureViewModel(
             }
         }
     }
+
+    /** The rhythm of the latest ECG in the last 30 days (the app's ECG AI result), as a prior. */
+    private suspend fun recentRhythm(): RecentRhythm? = runCatching {
+        val since = now() - RECENT_ECG_MS
+        records.history.first().firstOrNull { it.kind == RecordKind.ECG && it.startedAtMs >= since }
+            ?.let { (it.summary as? RecordSummary.Ecg)?.result }
+            ?.let {
+                when (it) {
+                    EcgResult.AFIB_SIGNS -> RecentRhythm.AF
+                    EcgResult.SINUS_RHYTHM -> RecentRhythm.SINUS
+                    else -> null
+                }
+            }
+    }.getOrNull()
 
     /** Stores the raw session log for the phone (every session, including failed ones). */
     private suspend fun finish(log: BpSessionRecorder, header: BpSessionHeader.() -> BpSessionHeader) {
@@ -605,5 +642,14 @@ class BpMeasureViewModel(
         const val ALGORITHM = 6
         const val CHECK_EVERY_SECONDS = 2
         const val EDA_SECONDS = 5
+        const val RECENT_ECG_MS = 30 * 24 * 3_600_000L
+
+        /** A calibration round must be steady and clean (a real round with a rising pulse and a
+         * changing amplitude skewed a whole calibration). */
+        fun calibrationGrade(f: com.heartline.shared.bp.PpgFeatureVector) =
+            f.quality >= 0.7 &&
+                f.beats >= 15 &&
+                kotlin.math.abs(f.hrSlopeBpmPerS) <= com.heartline.shared.bp.HemodynamicStateClassifier.TRANSIENT_HR_SLOPE &&
+                kotlin.math.abs(f.amplitudeTrend) <= com.heartline.shared.bp.HemodynamicStateClassifier.TRANSIENT_AMPLITUDE
     }
 }

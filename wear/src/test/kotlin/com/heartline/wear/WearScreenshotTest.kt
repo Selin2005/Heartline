@@ -215,6 +215,8 @@ class WearScreenshotTest(private val size: String) {
 
     @Test fun bpCalibrationRecorded() = shot("bp_calibration_recorded") { BpCalibrationRecordedScreen(2) }
 
+    @Test fun bpCalibrationRetry() = shot("bp_calibration_retry") { com.heartline.wear.ui.screens.BpCalibrationRetryScreen(2) }
+
     @Test fun spo2Instruction() = shot("spo2_instruction") { QuickInstructionScreen(Metric.SPO2) }
 
     @Test fun bodyInstruction() = shot("body_instruction") { QuickInstructionScreen(Metric.BODY_COMPOSITION) }

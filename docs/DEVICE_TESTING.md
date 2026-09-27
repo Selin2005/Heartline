@@ -124,8 +124,10 @@ To capture them, enlarge the buffer first: `adb logcat -G 16M && adb logcat -c`,
       R ≥ 100 Hz (at least 80). Note the value for your watch model.
     - **Ballistocardiogram:** after a quick measurement at rest (arm on a table), the values
       `bcg.quality` (≥ 0.5 is usable) and `bcg.pttMs` (typically 80–250 ms) are in the log.
-    - **PPG inside ECG:** in precise mode, `ecg.ppg=true` in the capabilities and `precise.patMs`
-      plus `precise.pepMs` in the values (`precise.pepMeasured=1` when the BCG gave the PEP).
+    - **PPG inside ECG:** on a Galaxy Watch8 Classic it carries a value in only 1 of 5 samples (the
+      rest −1) and jumps level when the sensor changes gain; Heartline repairs it (`PpgRepair`).
+      Calibration always runs in quick mode (no ECG); precise mode is offered only once precise
+      rounds exist, and its values are `precise.patMs` / `precise.pepMs`.
     - **Arm raise:** the `hydro.sign` value is 1 or −1, `hydro.maxOffset` is about 40 mmHg with the
       arms fully raised, and `hydro.patSlope` is negative (−0.3 to −2 mmHg/ms).
     - **Clocks:** PPG timestamps (SDK) and accelerometer timestamps (Android sensor clock, moved to

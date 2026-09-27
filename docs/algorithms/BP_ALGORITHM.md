@@ -34,7 +34,61 @@ changes need re-calibration at the change point (Tae et al. 2026). Algorithm 3:
 
 Algorithm 4 is the phone's personal learned model, described below.
 
-## Algorithm 6: every sensor, one fused number (current)
+## Algorithm 6.1: lessons from the first real session logs
+
+The first logs from a real watch (Galaxy Watch8 Classic) looked like this:
+
+- **Calibration:** 4 rounds, calibrated in precise (ECG) mode.
+- **Readings:** two quick readings, 112/71 ±12 and 108/65 ±17. Both were higher than expected,
+  with a wide ±.
+
+The sensors worked:
+
+- PPG came in green, IR and red.
+- The accelerometer ran at about 100 Hz.
+- The BCG quality was 0.61–0.68.
+
+Yet only green pulse-wave analysis was used, because of these bugs:
+
+1. **The PPG inside ECG_ON_DEMAND is not a 500 Hz wave.**
+   - Only every 5th sample carries a value; the rest are −1.
+   - The level jumps by hundreds of thousands of counts when the sensor switches gain.
+   - Everything computed from it (shape features, PAT) was meaningless.
+   - Fix: `PpgRepair` turns −1 into gaps, interpolates them and cancels gain jumps. PAT and
+     precise mode now use the repaired signal.
+2. **A calibration from one PPG source was compared with readings from another.**
+   - Precise rounds (ECG-channel PPG) were used to calibrate quick readings (PPG_ON_DEMAND).
+     The waves differ systematically: upstroke 231–260 ms vs 167–215 ms, width 452–594 ms vs
+     262–442 ms. The model read that difference as a stiffer, higher-pressure wave (+14 mmHg,
+     "beyond calibration").
+   - Fix: every calibration point records its PPG source (`ppgFs`), and a channel only fits on
+     rounds of the same source.
+   - A calibration is valid only with 3 quick seated rounds.
+   - Calibration is always quick mode now: no ECG unasked. IR and BCG get cuff points too.
+   - Precise mode is only offered once precise rounds exist; it stays experimental.
+3. **Breathing-related sinus arrhythmia was read as atrial fibrillation.**
+   - The recording had interval CV 0.16 and RMSSD 73 ms at 74 bpm (a smooth, patterned
+     variation), which the plain CV > 0.15 rule called irregular.
+   - Fix: blood pressure now uses the app's own irregular-rhythm rule (`RrFeatures`: nRMSSD,
+     entropy and turning points, the same rule as the background notification) on the PPG beats.
+   - Premature beats are judged against the local rhythm.
+   - The app's ECG AI is used as a prior. No ECG is recorded for blood pressure; the latest ECG
+     result of the last 30 days is read instead:
+     - atrial fibrillation there turns on the AF handling;
+     - sinus rhythm there asks for stronger evidence.
+4. **A standing round at 106 bpm was detected upside down** and entered the shape fit. Fixes:
+   - Standing rounds are left out of the shape fit.
+   - Rounds whose polarity disagrees with the majority are left out too.
+   - Raw light intensity is assumed upside down unless clearly upright.
+5. **Unsteady calibration rounds** (a pulse rising 1.5 bpm/s, the amplitude changing 42 %) became
+   the reference.
+   - Fix: a round needs a steady window (|pulse trend| ≤ 0.5 bpm/s, |amplitude trend| ≤ 35 %),
+     quality ≥ 0.7 and ≥ 15 beats, or the watch asks to take it again.
+
+These are covered by `BpRealLogTest`, built on the logged numbers. Each channel's ± is now logged
+by component (base, residual, drift, extrapolation, doubt).
+
+## Algorithm 6: every sensor, one fused number
 
 Algorithm 5 refused to give a number in an unsteady state, and in the compensating state it
 showed a "possible low pressure" message. Users rejected both: a person whose pressure drops feels
