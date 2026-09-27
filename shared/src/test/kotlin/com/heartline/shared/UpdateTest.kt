@@ -4,6 +4,11 @@
 package com.heartline.shared
 
 import com.heartline.shared.update.AppVersion
+import com.heartline.shared.update.AppVersion.Channel.BETA
+import com.heartline.shared.update.AppVersion.Channel.DEV
+import com.heartline.shared.update.AppVersion.Channel.STABLE
+import com.heartline.shared.update.GitHubAsset
+import com.heartline.shared.update.GitHubRelease
 import com.heartline.shared.update.Releases
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -56,23 +61,72 @@ class UpdateTest {
     fun picksUpdatesByChannel() {
         val releases = Releases.parse(sample)
         assertEquals(4, releases.size) // the draft is dropped
-        assertEquals("1.1.0", Releases.update(releases, "1.0.0", includeBeta = false)!!.version.toString())
-        val beta = Releases.update(releases, "1.0.0", includeBeta = true)!!
+        assertEquals("1.1.0", Releases.update(releases, "1.0.0", STABLE)!!.version.toString())
+        val beta = Releases.update(releases, "1.0.0", BETA)!!
         assertEquals("1.2.0-beta.2", beta.version.toString())
         assertTrue(beta.isBeta)
         assertEquals("p", beta.phoneApk!!.url)
         assertEquals("s", beta.checksums!!.url)
-        assertNull(Releases.update(releases, "1.1.0", includeBeta = false))
-        assertNull(Releases.update(releases, "1.2.0-beta.2", includeBeta = true))
-        // A beta user who turns betas off only gets the next stable that is newer than their beta.
-        assertNull(Releases.update(releases, "1.2.0-beta.1", includeBeta = false))
-        // Dev builds are never offered, and a dev build is updated by the matching beta.
-        assertEquals("1.2.0-beta.2", Releases.update(releases, "1.2.0-dev.3", includeBeta = true)!!.version.toString())
+        assertNull(Releases.update(releases, "1.1.0", STABLE))
+        assertNull(Releases.update(releases, "1.2.0-beta.2", BETA))
+        // A beta user who switches to stable only gets the next stable that is newer than their beta.
+        assertNull(Releases.update(releases, "1.2.0-beta.1", STABLE))
+        // Stable and beta tracks never get dev builds.
+        assertTrue(listOf(STABLE, BETA).none { Releases.update(releases, "1.2.0-dev.3", it)?.version?.isDev == true })
+    }
+
+    private fun release(tag: String, day: Int) = GitHubRelease(
+        tag = tag,
+        prerelease = '-' in tag,
+        publishedAt = "2026-10-%02dT10:00:00Z".format(day),
+        assets = listOf(GitHubAsset("Heartline-phone-${tag.drop(1)}.apk", url = "u"))
+    )
+
+    /** Published in this order, one per day. */
+    private val timeline = listOf(
+        "v0.0.2.102-dev.57",
+        "v0.0.2.102-beta.1",
+        "v0.0.2.102-dev.60",
+        "v0.0.2.102",
+        "v0.0.2.103-beta.1",
+        "v0.0.2.103-dev.70",
+        "v0.0.2.101"
+    ).mapIndexedNotNull { i, t -> Releases.toRelease(release(t, i + 1)) }
+
+    private fun next(installed: String, track: AppVersion.Channel) = Releases.update(timeline, installed, track)?.version?.toString()
+
+    @Test
+    fun devTrackGetsEverythingNewer() {
+        assertEquals("0.0.2.103-dev.70", next("0.0.2.102-dev.57", DEV))
+        // A dev user who updated to a beta or stable stays on the dev track.
+        assertEquals("0.0.2.103-dev.70", next("0.0.2.102-beta.1", DEV))
+        assertEquals("0.0.2.103-dev.70", next("0.0.2.102", DEV))
+        assertNull(next("0.0.2.103-dev.70", DEV))
+        // Only the late hotfix for 0.0.2.101 is newer by date, and it isn't offered (older version).
+        assertNull(next("0.0.2.103-dev.70", DEV))
+        // A local build that isn't a release: version order, dev before the betas of its version.
+        assertEquals("0.0.2.103-dev.70", next("0.0.2.103-dev.1", DEV))
+    }
+
+    @Test
+    fun betaTrackGetsBetasAndStables() {
+        assertEquals("0.0.2.103-beta.1", next("0.0.2.102-beta.1", BETA))
+        assertEquals("0.0.2.103-beta.1", next("0.0.2.102", BETA))
+        assertNull(next("0.0.2.103-beta.1", BETA))
+    }
+
+    @Test
+    fun stableTrackGetsOnlyStables() {
+        assertEquals("0.0.2.102", next("0.0.2.101", STABLE))
+        assertEquals("0.0.2.102", next("0.0.2.100", STABLE))
+        assertNull(next("0.0.2.102", STABLE))
+        assertEquals("0.0.2.102", Releases.newest(timeline, STABLE)!!.version.toString())
+        assertEquals("0.0.2.101", Releases.newest(timeline, DEV)!!.version.toString()) // newest by date
     }
 
     @Test
     fun watchBehind() {
-        val latest = Releases.update(Releases.parse(sample), "1.0.0", includeBeta = false)
+        val latest = Releases.update(Releases.parse(sample), "1.0.0", STABLE)
         assertTrue(Releases.watchBehind("1.0.0", latest))
         assertFalse(Releases.watchBehind("1.1.0", latest))
         assertFalse(Releases.watchBehind(null, latest))

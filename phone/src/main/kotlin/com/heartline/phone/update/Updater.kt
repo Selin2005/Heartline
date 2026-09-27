@@ -42,9 +42,9 @@ class Updater(
             val prefs = repository.current()
             val releases = source.releases()
             repository.markChecked(now())
-            val update = Releases.update(releases, installedVersion, prefs.beta)
-            HLog.i(TAG, "checked ${releases.size} releases; installed=$installedVersion beta=${prefs.beta} update=${update?.version}")
-            if (update != null) Check.Available(update) else Check.UpToDate(Releases.newest(releases, prefs.beta))
+            val update = Releases.update(releases, installedVersion, prefs.track)
+            HLog.i(TAG, "checked ${releases.size} releases; installed=$installedVersion track=${prefs.track} update=${update?.version}")
+            if (update != null) Check.Available(update) else Check.UpToDate(Releases.newest(releases, prefs.track))
         }.getOrElse {
             HLog.w(TAG, "update check failed", it)
             Check.Failed(it.message ?: it.javaClass.simpleName)

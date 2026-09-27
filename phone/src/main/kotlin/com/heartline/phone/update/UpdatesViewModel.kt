@@ -6,6 +6,7 @@ package com.heartline.phone.update
 import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.heartline.shared.update.AppVersion
 import com.heartline.shared.update.Release
 import com.heartline.shared.update.Releases
 import kotlinx.coroutines.Job
@@ -66,8 +67,8 @@ class UpdatesViewModel(private val updater: Updater, private val repository: Upd
 
     fun setAutoCheck(on: Boolean) = viewModelScope.launch { repository.setAutoCheck(on) }
 
-    fun setBeta(on: Boolean) = viewModelScope.launch {
-        repository.setBeta(on)
+    fun setTrack(track: AppVersion.Channel) = viewModelScope.launch {
+        repository.setTrack(track)
         state.update { it.copy(available = null, upToDate = false) }
         check()
     }

@@ -41,6 +41,23 @@ import com.heartline.phone.ui.theme.HeartlineTheme
 import com.heartline.phone.update.UpdatesUi
 import com.heartline.shared.AppInfo
 import com.heartline.shared.text.Markdown
+import com.heartline.shared.update.AppVersion
+import com.heartline.phone.ui.settings.ChoiceDialog
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+
+private val AppVersion.Channel.title: Int get() = when (this) {
+    AppVersion.Channel.STABLE -> R.string.updates_channel_stable
+    AppVersion.Channel.BETA -> R.string.updates_channel_beta
+    AppVersion.Channel.DEV -> R.string.updates_channel_dev
+}
+
+private val AppVersion.Channel.description: Int get() = when (this) {
+    AppVersion.Channel.STABLE -> R.string.updates_channel_stable_sub
+    AppVersion.Channel.BETA -> R.string.updates_channel_beta_sub
+    AppVersion.Channel.DEV -> R.string.updates_channel_dev_sub
+}
 
 private const val INSTALL_GUIDE = "${AppInfo.REPO_URL}/blob/main/docs/DEVICE_TESTING.md#2-install"
 
@@ -52,8 +69,19 @@ fun UpdatesScreen(
     onCheck: () -> Unit = {},
     onInstall: () -> Unit = {},
     onAutoCheck: (Boolean) -> Unit = {},
-    onBeta: (Boolean) -> Unit = {},
+    onTrack: (AppVersion.Channel) -> Unit = {},
 ) {
+    var choosing by remember { mutableStateOf(false) }
+    if (choosing) {
+        val tracks = listOfNotNull(AppVersion.Channel.STABLE, AppVersion.Channel.BETA, AppVersion.Channel.DEV.takeIf { ui.prefs.devAvailable })
+        ChoiceDialog(
+            stringResource(R.string.updates_channel),
+            tracks.map { stringResource(it.title) to it },
+            ui.prefs.track,
+            onDismiss = { choosing = false },
+            onSelect = onTrack,
+        )
+    }
     val colors = HeartlineTheme.colors
     val uri = LocalUriHandler.current
     fun open(url: String) {
@@ -126,11 +154,10 @@ fun UpdatesScreen(
                     onClick = { onAutoCheck(!ui.prefs.autoCheck) },
                 )
                 CardRow(
-                    stringResource(R.string.updates_beta),
-                    subtitle = stringResource(R.string.updates_beta_sub),
+                    stringResource(R.string.updates_channel),
+                    subtitle = stringResource(ui.prefs.track.description),
                     leading = { IconBadge(Icons.Rounded.Science, colors.onSurfaceVariant) },
-                    trailing = { OneUiSwitch(ui.prefs.beta, onBeta) },
-                    onClick = { onBeta(!ui.prefs.beta) },
+                    onClick = { choosing = true },
                 )
             }
         }

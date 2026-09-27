@@ -53,7 +53,7 @@ class DiagnosticsRepository(
     private val installedBeta = AppVersion.parse(installedVersion)?.channel != AppVersion.Channel.STABLE
 
     val state: Flow<State> = combine(context.diagnosticsStore.data, updates.prefs) { p, u ->
-        State(p[Keys.CHOICE], installedBeta || u.beta, p[Keys.FOLDER])
+        State(p[Keys.CHOICE], installedBeta || u.receivesBetas, p[Keys.FOLDER])
     }
 
     suspend fun current(): State = state.first()

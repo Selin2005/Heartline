@@ -679,8 +679,13 @@
     <string name="updates_settings">Update settings</string>
     <string name="updates_auto">Check automatically</string>
     <string name="updates_auto_sub">Once a day, and notify you about new versions</string>
-    <string name="updates_beta">Receive beta versions</string>
-    <string name="updates_beta_sub">Try new features early. Betas can have bugs.</string>
+    <string name="updates_channel">Update channel</string>
+    <string name="updates_channel_stable">Stable</string>
+    <string name="updates_channel_beta">Beta</string>
+    <string name="updates_channel_dev">Development</string>
+    <string name="updates_channel_stable_sub">Stable: only main releases</string>
+    <string name="updates_channel_beta_sub">Beta: betas and main releases. Try new features early; betas can have bugs.</string>
+    <string name="updates_channel_dev_sub">Development: every new build (development builds, betas and main releases)</string>
     <string name="updates_watch">Watch</string>
     <string name="updates_watch_version">Heartline on the watch: %1$s</string>
     <string name="updates_watch_unknown">not connected yet</string>

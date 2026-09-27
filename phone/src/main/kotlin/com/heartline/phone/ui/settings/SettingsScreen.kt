@@ -578,7 +578,7 @@ private fun GoalDialog(selected: List<Metric>, onDismiss: () -> Unit, onSave: (L
 
 /** Single-choice list in a dialog (One UI style radio list). */
 @Composable
-private fun <T> ChoiceDialog(title: String, options: List<Pair<String, T>>, selected: T, onDismiss: () -> Unit, onSelect: (T) -> Unit) {
+internal fun <T> ChoiceDialog(title: String, options: List<Pair<String, T>>, selected: T, onDismiss: () -> Unit, onSelect: (T) -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },

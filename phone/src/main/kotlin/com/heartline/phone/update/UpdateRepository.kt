@@ -10,39 +10,57 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.heartline.shared.update.AppVersion
+import com.heartline.shared.update.AppVersion.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val Context.updateStore by preferencesDataStore("updates")
 
-/** Update preferences, what was last announced, and the version the watch reported. */
+/**
+ * Update preferences, what was last announced, and the version the watch reported.
+ *
+ * The update track is sticky: it starts at the channel of the installed build and only goes up by
+ * itself (installing a dev build puts you on the dev track; updating from dev to a beta or stable
+ * release keeps you there). The user can pick another track in Settings → Updates.
+ */
 class UpdateRepository(private val context: Context, private val installedVersion: String) {
     data class Prefs(
         val autoCheck: Boolean = true,
-        /** Betas are offered by default when a beta is installed. */
-        val beta: Boolean = false,
+        /** Which releases are offered: stable → stable; beta → beta + stable; dev → everything. */
+        val track: Channel = Channel.STABLE,
+        /** A dev build was installed at some point, so the development track can be chosen. */
+        val devAvailable: Boolean = false,
         val lastCheckMs: Long = 0,
         val notifiedVersion: String? = null,
         val lastSeenVersion: String? = null,
         val watchVersion: String? = null,
-    )
+    ) {
+        val receivesBetas: Boolean get() = track != Channel.STABLE
+    }
 
     private object Keys {
         val AUTO = booleanPreferencesKey("auto_check")
-        val BETA = booleanPreferencesKey("beta")
+        val LEGACY_BETA = booleanPreferencesKey("beta")
+        val TRACK = stringPreferencesKey("track")
+        val HIGHEST = stringPreferencesKey("highest_installed_channel")
         val LAST_CHECK = longPreferencesKey("last_check")
         val NOTIFIED = stringPreferencesKey("notified_version")
         val LAST_SEEN = stringPreferencesKey("last_seen_version")
         val WATCH = stringPreferencesKey("watch_version")
     }
 
-    private val installedIsBeta = AppVersion.parse(installedVersion)?.channel == AppVersion.Channel.BETA
+    private val installedChannel = AppVersion.parse(installedVersion)?.channel ?: Channel.STABLE
+
+    private fun channel(name: String?) = Channel.entries.firstOrNull { it.name == name }
 
     val prefs: Flow<Prefs> = context.updateStore.data.map {
+        val highest = maxOf(channel(it[Keys.HIGHEST]) ?: Channel.STABLE, installedChannel)
+        val legacy = if (it[Keys.LEGACY_BETA] == true) maxOf(highest, Channel.BETA) else highest
         Prefs(
             autoCheck = it[Keys.AUTO] ?: true,
-            beta = it[Keys.BETA] ?: installedIsBeta,
+            track = channel(it[Keys.TRACK]) ?: legacy,
+            devAvailable = highest == Channel.DEV,
             lastCheckMs = it[Keys.LAST_CHECK] ?: 0,
             notifiedVersion = it[Keys.NOTIFIED],
             lastSeenVersion = it[Keys.LAST_SEEN],
@@ -54,7 +72,21 @@ class UpdateRepository(private val context: Context, private val installedVersio
 
     suspend fun setAutoCheck(on: Boolean) = context.updateStore.edit { it[Keys.AUTO] = on }
 
-    suspend fun setBeta(on: Boolean) = context.updateStore.edit { it[Keys.BETA] = on }
+    suspend fun setTrack(track: Channel) = context.updateStore.edit { it[Keys.TRACK] = track.name }
+
+    /**
+     * Called on every start. Installing a build of a higher channel than any before (a beta or dev
+     * build installed by hand) moves the track up to it, replacing an earlier choice.
+     */
+    suspend fun recordInstalled() = context.updateStore.edit {
+        val highest = channel(it[Keys.HIGHEST]) ?: Channel.STABLE
+        if (installedChannel > highest) {
+            it[Keys.HIGHEST] = installedChannel.name
+            it.remove(Keys.TRACK)
+        } else if (it[Keys.HIGHEST] == null) {
+            it[Keys.HIGHEST] = highest.name
+        }
+    }
 
     suspend fun markChecked(nowMs: Long) = context.updateStore.edit { it[Keys.LAST_CHECK] = nowMs }
 

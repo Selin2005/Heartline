@@ -3,6 +3,7 @@
 
 package com.heartline.shared.update
 
+import java.time.Instant
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -68,20 +69,50 @@ object Releases {
         )
     }
 
-    /**
-     * The newest release to offer on top of [current]: stable releases always, betas only when
-     * [includeBeta], development builds never. Null when [current] is already the newest.
-     */
-    fun newest(releases: List<Release>, includeBeta: Boolean): Release? = releases
-        .filter { it.phoneApk != null && it.version.channel != AppVersion.Channel.DEV }
-        .filter { includeBeta || it.version.channel == AppVersion.Channel.STABLE }
-        .maxByOrNull { it.version }
+    /** Which releases a track receives: stable → stable; beta → beta + stable; dev → everything. */
+    fun receives(track: AppVersion.Channel, release: AppVersion.Channel): Boolean = release.ordinal <= track.ordinal
 
-    fun update(releases: List<Release>, current: String, includeBeta: Boolean): Release? {
-        val parsed = AppVersion.parse(current) ?: return null
-        // A development build comes before every beta of its version ("0" sorts below "beta").
-        val installed = if (parsed.isDev) parsed.copy(preRelease = listOf("0")) else parsed
-        return newest(releases, includeBeta)?.takeIf { it.version > installed }
+    private fun instant(release: Release): Instant? = release.publishedAt?.let { runCatching { Instant.parse(it) }.getOrNull() }
+
+    /** The version without its -beta/-dev suffix, to compare bases (0.0.2.102-dev.5 → 0.0.2.102). */
+    private fun base(v: AppVersion) = v.copy(preRelease = emptyList())
+
+    private fun candidates(releases: List<Release>, track: AppVersion.Channel) =
+        releases.filter { it.phoneApk != null && receives(track, it.version.channel) }
+
+    /**
+     * The newest release of [track] (for comparing the watch's version). Dev builds and betas of one
+     * version interleave, so on the dev track "newest" means most recently published.
+     */
+    fun newest(releases: List<Release>, track: AppVersion.Channel): Release? {
+        val offered = candidates(releases, track)
+        return if (track == AppVersion.Channel.DEV) {
+            offered.maxWithOrNull(compareBy<Release>({ instant(it) ?: Instant.EPOCH }, { it.version }))
+        } else {
+            offered.maxByOrNull { it.version }
+        }
+    }
+
+    /**
+     * The release to offer on top of [current], or null when there's nothing newer for [track]:
+     * - stable: the next stable release;
+     * - beta: the next beta or stable release;
+     * - dev: anything published after the installed build (next dev, beta or stable), as long as
+     *   it isn't for an older version. A build that isn't a published release (a local build)
+     *   falls back to version order, with dev builds before the betas of their version.
+     */
+    fun update(releases: List<Release>, current: String, track: AppVersion.Channel): Release? {
+        val installed = AppVersion.parse(current) ?: return null
+        val offered = candidates(releases, track)
+        if (track != AppVersion.Channel.DEV) return offered.filter { it.version > installed }.maxByOrNull { it.version }
+        val installedAt = releases.firstOrNull { it.version == installed }?.let(::instant)
+        val newer = if (installedAt != null) {
+            offered.filter { r -> instant(r)?.isAfter(installedAt) == true && base(r.version) >= base(installed) && r.version != installed }
+        } else {
+            val asOrdered = if (installed.isDev) installed.copy(preRelease = listOf("0")) else installed
+            offered.filter { it.version > asOrdered }
+        }
+        return newer.maxWithOrNull(compareBy<Release>({ instant(it) ?: Instant.EPOCH }, { it.version }))
     }
 
     /** True when the watch runs an older version than [latest] (or its version is unknown but set). */

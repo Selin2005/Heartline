@@ -111,8 +111,8 @@ To capture them, enlarge the buffer first: `adb logcat -G 16M && adb logcat -c`,
     *Measure again*. Moving your arm shows *Keep your arm still*.
 13. **Body composition:** if the watch can't detect your fingers, try Samsung Health's own body
     composition first. Heartline tells you which key doesn't sense a finger (upper, lower or both).
-14. **Updates:** Settings → Updates → *Check now* finds the newest stable release; with *Receive
-    beta versions* on, it also offers betas. After updating, *What's new* shows the changelog.
+14. **Updates:** Settings → Updates → *Check now* finds the newest stable release; with the update
+    channel set to Beta it also offers betas, and on Development every new build. After updating, *What's new* shows the changelog.
 15. **Blood pressure sensors (algorithm 6).** Every session writes a raw log. Capture
     `adb logcat -v time -s Heartline/BP Heartline/BpRaw Heartline/Sensor` and export
     Phone → Blood pressure → Share → **BP raw sessions (zip)**. Then check each item below and

@@ -405,7 +405,7 @@ fun HeartlineApp(
                     val ui by vm.ui.collectAsStateWithLifecycle()
                     LaunchedEffect(vm) { vm.startActivity.collect { runCatching { context.startActivity(it) } } }
                     LaunchedEffect(Unit) { vm.check() }
-                    UpdatesScreen(ui, onBack = goBack, onCheck = vm::check, onInstall = vm::install, onAutoCheck = { vm.setAutoCheck(it) }, onBeta = { vm.setBeta(it) })
+                    UpdatesScreen(ui, onBack = goBack, onCheck = vm::check, onInstall = vm::install, onAutoCheck = { vm.setAutoCheck(it) }, onTrack = { vm.setTrack(it) })
                 }
                 composable(Routes.DIAGNOSTICS) {
                     val vm: DiagnosticsViewModel = koinViewModel()

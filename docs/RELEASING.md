@@ -39,9 +39,21 @@ GitHub → Actions → **Build** → Run workflow:
 |---|---|
 | Branch | The branch to build (default `main`); a tag or commit SHA works too. Build stable releases from `main`; the workflow warns otherwise. |
 | Version | `X.Y.Z`, without suffix |
-| Channel | **beta**: `vX.Y.Z-beta.N` (N counts up by itself), a pre-release offered only to users with *Receive beta versions* on. **stable**: `vX.Y.Z`, the latest release, offered to everyone. **dev**: `vX.Y.Z-dev.<run>`, a debug build that the app never offers. |
+| Channel | **stable**: `vX.Y.Z` (or `vX.Y.Z.W`), the latest release. **beta**: `…-beta.N` (N counts up by itself), a pre-release. **dev**: `…-dev.<run>`, a debug build with full logs. |
 | Publish a GitHub release | Off: the APKs are only kept as run artifacts |
 | Run lint and tests | Leave on for anything users will get |
+
+Who is offered what in the app depends on the user's update channel (Settings → Updates):
+
+| Update channel | Offered |
+|---|---|
+| Stable | stable releases |
+| Beta | beta and stable releases |
+| Development | dev, beta and stable releases, by publication time |
+
+The channel starts at the kind of build installed and is sticky: a dev user who updates to a
+beta or stable release keeps getting dev builds, and a beta user who updates to a stable
+release keeps getting betas.
 
 The workflow:
 1. works out the version and the previous release of that channel;

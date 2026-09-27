@@ -64,7 +64,7 @@ class PhoneLogExporter(
             "System" to "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), build ${Build.DISPLAY}",
             "Exported" to ZonedDateTime.now().toString(),
             "Time zone" to ZoneId.systemDefault().id,
-            "Updates" to "auto=${u.autoCheck} beta=${u.beta} updater=${BuildConfig.UPDATER}",
+            "Updates" to "auto=${u.autoCheck} track=${u.track} updater=${BuildConfig.UPDATER}",
             "Watch app" to (u.watchVersion ?: "never connected"),
             "Notifications" to if (notifications) "allowed" else "denied",
             "Monitoring" to "irregularRhythm=${s.irregularRhythmEnabled} hrAlerts=${s.heartRateAlertsEnabled} (${s.lowBpm}-${s.highBpm}) " +

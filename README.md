@@ -55,8 +55,18 @@ A **Google Play** release is being prepared (see [docs/PLAY_STORE.md](docs/PLAY_
 ### Updates and beta versions
 The phone app checks for new releases once a day and installs them after checking their
 SHA-256 checksum: **Settings → Updates**.
-- **Stable** releases are offered to everyone.
-- Turn on **Receive beta versions** to try new features early.
+- Which versions you're offered depends on your **update channel**, which starts at the kind of
+  build you installed:
+
+  | Channel | You get |
+  |---|---|
+  | **Stable** | main releases |
+  | **Beta** | betas and the main releases after them |
+  | **Development** | every new build: development builds, betas and main releases |
+
+  Updating from a development build to a beta or main release keeps you on the development
+  channel (and from a beta to a main release on the beta channel). Change the channel in
+  **Settings → Updates → Update channel**.
 - After each update, **What's new** shows the release notes.
 - When the watch app is behind, the phone tells you and links to the watch APK.
 
