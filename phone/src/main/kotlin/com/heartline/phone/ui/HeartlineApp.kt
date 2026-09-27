@@ -289,6 +289,7 @@ fun HeartlineApp(
                         onAbout = { navController.navigate(Routes.ABOUT) },
                         onUpdates = { navController.navigate(Routes.UPDATES) },
                         onDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
+                        diagnosticLogs = monitor.diagnosticLogs,
                         sharing = sharingPrefs,
                         onAiPrompt = vm::setAiPrompt,
                         onAiAttachPdf = vm::setAiAttachPdf,

@@ -677,6 +677,11 @@
     <!-- Help & diagnostics -->
     <string name="diag_title">Help &amp; diagnostics</string>
     <string name="diag_settings_sub">Export logs for a bug report</string>
+    <string name="diag_export_logs">Logs and bug reports</string>
+    <string name="diag_settings_on">Diagnostic logs on · export them for a bug report</string>
+    <string name="diag_settings_off">Diagnostic logs off · export or turn them on</string>
+    <string name="build_dev">Development build</string>
+    <string name="build_beta">Beta</string>
     <string name="diag_intro">Logs help us fix problems. They include measurement values and device details, but not your name or birth date. They stay on your phone and watch until you save them.</string>
     <string name="diag_export">Export logs</string>
     <string name="diag_step_phone">Collecting the phone\'s logs…</string>

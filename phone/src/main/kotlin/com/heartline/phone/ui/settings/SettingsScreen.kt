@@ -54,6 +54,7 @@ import java.time.format.FormatStyle
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Info
+import com.heartline.shared.update.AppVersion
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Person
@@ -150,6 +151,7 @@ fun SettingsScreen(
     onAbout: () -> Unit = {},
     onUpdates: () -> Unit = {},
     onDiagnostics: () -> Unit = {},
+    diagnosticLogs: Boolean = false,
     updatesSubtitle: String? = null,
     listState: LazyListState = rememberLazyListState(),
     sharing: SettingsRepository.SharingPrefs = SettingsRepository.SharingPrefs(),
@@ -403,6 +405,17 @@ fun SettingsScreen(
                 CardRow(stringResource(R.string.settings_delete_all), onClick = onDeleteAll)
             }
         }
+        item { SectionHeader(stringResource(R.string.diag_title)) }
+        item {
+            RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
+                CardRow(
+                    stringResource(R.string.diag_export_logs),
+                    subtitle = stringResource(if (diagnosticLogs) R.string.diag_settings_on else R.string.diag_settings_off),
+                    leading = { IconBadge(Icons.Rounded.BugReport, colors.primary) },
+                    onClick = onDiagnostics,
+                )
+            }
+        }
         item { SectionHeader(stringResource(R.string.settings_about)) }
         item {
             RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
@@ -414,15 +427,8 @@ fun SettingsScreen(
                 )
                 CardRow(stringResource(R.string.settings_licenses), showDivider = true, onClick = onAbout)
                 CardRow(
-                    stringResource(R.string.diag_title),
-                    subtitle = stringResource(R.string.diag_settings_sub),
-                    leading = { IconBadge(Icons.Rounded.BugReport, colors.onSurfaceVariant) },
-                    showDivider = true,
-                    onClick = onDiagnostics,
-                )
-                CardRow(
                     stringResource(R.string.updates_title),
-                    subtitle = updatesSubtitle ?: stringResource(R.string.settings_version, versionName),
+                    subtitle = updatesSubtitle ?: buildLabel(versionName),
                     leading = { IconBadge(Icons.Rounded.SystemUpdate, colors.onSurfaceVariant) },
                     onClick = onUpdates,
                 )
@@ -506,6 +512,17 @@ fun SettingsScreen(
             )
         }
         null -> Unit
+    }
+}
+
+/** "Version 0.0.2.102-dev.57 · Development build" (beta and dev builds say which they are). */
+@Composable
+private fun buildLabel(versionName: String): String {
+    val version = stringResource(R.string.settings_version, versionName)
+    return when (AppVersion.parse(versionName)?.channel) {
+        AppVersion.Channel.DEV -> "$version · ${stringResource(R.string.build_dev)}"
+        AppVersion.Channel.BETA -> "$version · ${stringResource(R.string.build_beta)}"
+        else -> version
     }
 }
 

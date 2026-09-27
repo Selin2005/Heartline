@@ -25,6 +25,17 @@ class UpdateTest {
     }
 
     @Test
+    fun fourPartVersions() {
+        assertEquals(AppVersion(0, 0, 2, build = 102), v("v0.0.2.102"))
+        assertEquals("0.0.2.102-dev.57", v("0.0.2.102-dev.57").toString())
+        assertEquals(AppVersion.Channel.DEV, v("0.0.2.102-dev.57").channel)
+        assertEquals(AppVersion.Channel.BETA, v("0.0.2.102-beta.1").channel)
+        val sorted = "0.0.2 0.0.2.101 0.0.2.102-beta.1 0.0.2.102 0.0.2.103 0.0.3".split(" ")
+        assertEquals(sorted, sorted.reversed().map(::v).sorted().map { it.toString() })
+        assertEquals("0.0.2", v("0.0.2").toString())
+    }
+
+    @Test
     fun semverOrdering() {
         val sorted = "1.0.0-alpha 1.0.0-alpha.1 1.0.0-beta.2 1.0.0-beta.10 1.0.0-rc.1 1.0.0 1.0.1 1.1.0-beta.1 1.1.0 2.0.0".split(" ")
         assertEquals(sorted, sorted.shuffled(java.util.Random(4)).map(::v).sorted().map { it.toString() })

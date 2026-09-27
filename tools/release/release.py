@@ -26,7 +26,7 @@ import subprocess
 import sys
 import urllib.request
 
-SEMVER = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$")
+SEMVER = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?(?:-([0-9A-Za-z.-]+))?$")
 MODELS_URL = "https://models.github.ai/inference/chat/completions"
 TRAILER = re.compile(r"^(Co-Authored-By|Signed-off-by|Claude-Session|Change-Id):", re.I)
 
@@ -39,15 +39,24 @@ def parse(tag: str):
     m = SEMVER.match(tag)
     if not m:
         return None
-    pre = m.group(4).split(".") if m.group(4) else []
-    return int(m.group(1)), int(m.group(2)), int(m.group(3)), pre
+    pre = m.group(5).split(".") if m.group(5) else []
+    # The optional fourth number (0.0.2.102) is kept apart so it's printed only when given.
+    return int(m.group(1)), int(m.group(2)), int(m.group(3)), pre, m.group(4)
 
 
 def sort_key(v):
-    major, minor, patch, pre = v
+    major, minor, patch, pre, build = v
     # SemVer: a release sorts after its pre-releases; numeric identifiers before alphanumeric ones.
     ids = [(0, int(p), "") if p.isdigit() else (1, 0, p) for p in pre]
-    return (major, minor, patch, 1 if not pre else 0, ids)
+    return (major, minor, patch, int(build or 0), 1 if not pre else 0, ids)
+
+
+def base_of(v) -> str:
+    return f"{v[0]}.{v[1]}.{v[2]}" + (f".{v[4]}" if v[4] is not None else "")
+
+
+def same_base(a, b) -> bool:
+    return a[:3] == b[:3] and int(a[4] or 0) == int(b[4] or 0)
 
 
 def tags():
@@ -73,9 +82,9 @@ def channel_of(v) -> str:
 def cmd_version(a) -> None:
     base = parse(a.base)
     if not base or base[3]:
-        sys.exit(f"::error::The version must look like 1.2.0 (no suffix; the channel adds it), got '{a.base}'")
+        sys.exit(f"::error::The version must look like 1.2.0 or 0.0.2.102 (no suffix; the channel adds it), got '{a.base}'")
     all_tags = tags()
-    b = f"{base[0]}.{base[1]}.{base[2]}"
+    b = base_of(base)
     if a.channel == "stable":
         name = b
         if any(t == f"v{b}" for t, _ in all_tags):
@@ -83,7 +92,7 @@ def cmd_version(a) -> None:
     elif a.channel == "beta":
         if any(t == f"v{b}" for t, _ in all_tags):
             sys.exit(f"::error::v{b} is already released as stable; betas must come before it")
-        numbers = [int(v[3][1]) for t, v in all_tags if v[:3] == base[:3] and len(v[3]) == 2 and v[3][0] == "beta" and v[3][1].isdigit()]
+        numbers = [int(v[3][1]) for t, v in all_tags if same_base(v, base) and len(v[3]) == 2 and v[3][0] == "beta" and v[3][1].isdigit()]
         name = f"{b}-beta.{max(numbers, default=0) + 1}"
     else:
         name = f"{b}-dev.{a.run}"
