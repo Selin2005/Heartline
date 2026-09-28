@@ -31,6 +31,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -277,19 +278,29 @@ def cmd_telegram(a) -> None:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return
     if not token or not chat:
-        print("No TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID: not announcing on Telegram")
+        print("::warning::Not announced on Telegram: the TELEGRAM_BOT_TOKEN secret is missing (docs/RELEASING.md)")
         return
     request = urllib.request.Request(
         f"https://api.telegram.org/bot{token}/sendMessage",
         data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json"},
     )
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            json.load(response)
-    except urllib.error.HTTPError as e:
-        # Telegram explains what is wrong (chat not found, bot not an admin, bad thread id …).
-        sys.exit(f"Telegram refused the message: {e.code} {e.read().decode(errors='replace')}")
+    # Network hiccups, rate limits (429) and Telegram's 5xx are retried; anything else (chat not
+    # found, bot not an admin, bad topic id) won't get better by retrying.
+    for attempt in range(1, 5):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                json.load(response)
+            break
+        except urllib.error.HTTPError as e:
+            reason = f"{e.code} {e.read().decode(errors='replace')}"
+            retry = e.code == 429 or e.code >= 500
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            reason, retry = str(e), True
+        if not retry or attempt == 4:
+            sys.exit(f"::error::Telegram announcement failed: {reason}")
+        print(f"Telegram attempt {attempt} failed ({reason}); retrying", file=sys.stderr)
+        time.sleep(5 * 2 ** attempt)
     print(f"Announced {a.version} on Telegram")
 
 

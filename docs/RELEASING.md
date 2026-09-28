@@ -49,8 +49,10 @@ buttons to the download and the install guide. Dev builds aren't announced.
    - variable `TELEGRAM_CHAT_ID`: only if the group isn't `@HeartlineCamiunity` (a private group
      uses its numeric ID, `-100…`).
 
-Without the token the step is skipped. A failed announcement shows a warning in the run but
-doesn't fail the build. To preview a message:
+The message is sent only after the whole build succeeded and the release is published. Network
+errors and Telegram rate limits are retried; if it still fails (wrong token, bot not an admin,
+wrong topic ID) the run turns red with Telegram's reason, while the release stays published: fix
+the setting and post it by hand or re-run the job. Without the token the step only warns. To preview a message:
 `python3 tools/release/release.py telegram --version 1.2.0 --channel stable --notes notes.md --release-url URL --dry-run`.
 
 ## Making a release

@@ -251,26 +251,6 @@ jobs:
             dist/*.apk
             dist/SHA256SUMS
 
-      # Announces stable and beta releases in the community's Telegram topic (Announcements &
-      # Builds). Needs the TELEGRAM_BOT_TOKEN secret and the TELEGRAM_THREAD_ID variable
-      # (docs/RELEASING.md); without the token it is skipped. A failed announcement doesn't fail
-      # the build, since the release is already published.
-      - name: Announce on Telegram
-        if: inputs.release && env.CHANNEL != 'dev'
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          CHANGELOG_MODEL: ${{ vars.CHANGELOG_MODEL }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID || '@HeartlineCamiunity' }}
-          TELEGRAM_THREAD_ID: ${{ vars.TELEGRAM_THREAD_ID }}
-        run: |
-          python3 tools/release/release.py telegram \
-            --version "${{ steps.version.outputs.version }}" \
-            --channel "$CHANNEL" \
-            --notes "$RUNNER_TEMP/notes.md" \
-            --release-url "${{ steps.release.outputs.url }}"
-
       # Keeps CHANGELOG.md on the default branch in step with the releases (stable and beta only).
       - name: Commit CHANGELOG.md
         if: inputs.release && env.CHANNEL != 'dev'
@@ -286,6 +266,26 @@ jobs:
           python3 tools/release/release.py changelog --version "$VERSION" --notes "$RUNNER_TEMP/notes.md" --changelog CHANGELOG.md
           git add CHANGELOG.md
           git diff --cached --quiet || { git commit -m "Changelog for $VERSION" && git push origin "HEAD:$DEFAULT_BRANCH"; }
+
+      # Announces stable and beta releases in the community's Telegram topic (Announcements &
+      # Builds), only once everything above succeeded: tests, APKs, bundles and the published
+      # release. Needs the TELEGRAM_BOT_TOKEN secret and the TELEGRAM_THREAD_ID variable
+      # (docs/RELEASING.md). Network errors are retried; a message that still can't be sent
+      # marks the run red, although the release itself stays published.
+      - name: Announce on Telegram
+        if: success() && inputs.release && env.CHANNEL != 'dev'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CHANGELOG_MODEL: ${{ vars.CHANGELOG_MODEL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID || '@HeartlineCamiunity' }}
+          TELEGRAM_THREAD_ID: ${{ vars.TELEGRAM_THREAD_ID }}
+        run: |
+          python3 tools/release/release.py telegram \
+            --version "${{ steps.version.outputs.version }}" \
+            --channel "$CHANNEL" \
+            --notes "$RUNNER_TEMP/notes.md" \
+            --release-url "${{ steps.release.outputs.url }}"
 
       - name: Upload test reports
         if: failure()
