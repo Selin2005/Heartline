@@ -13,15 +13,18 @@ Release helpers for the Build workflow.
       Writes user-facing release notes. With --changelog they cover the commits since the newest
       version already in CHANGELOG.md (its tag), or the whole history when it has none yet, and
       are added to it; --previous is only used without --changelog, or when that version's tag
-      is missing. With GITHUB_TOKEN it asks GitHub Models (CHANGELOG_MODEL, default
-      openai/gpt-4.1-mini); otherwise, or if that fails, it lists the commit subjects.
+      is missing. With OPENCODE_API_KEY it asks OpenCode Go (OPENCODE_MODEL, default
+      glm-5.3-flash); otherwise, or if that fails, it lists the commit subjects.
 
   release.py changelog --version 1.2.0 --notes notes.md --changelog CHANGELOG.md
       Adds already written notes to CHANGELOG.md (replacing that version's section, if any).
 
+  release.py release-notes --tag v1.2.0 --out notes.md
+      Reads the notes back from a published GitHub release (gh CLI), for re-announcing it.
+
   release.py telegram --version 1.2.0 --channel stable --notes notes.md --release-url URL [--dry-run]
-      Announces the release in the community's Telegram topic: title, a short summary (GitHub
-      Models, when GITHUB_TOKEN is set), the notes and buttons to the release and the install
+      Announces the release in the community's Telegram topic: title, a short summary (OpenCode
+      Go, when OPENCODE_API_KEY is set), the notes and buttons to the release and the install
       guide. Needs TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID (TELEGRAM_THREAD_ID for a forum topic);
       without them it does nothing. --dry-run prints the message instead of sending it.
 """
@@ -38,7 +41,8 @@ import urllib.error
 import urllib.request
 
 SEMVER = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?(?:-([0-9A-Za-z.-]+))?$")
-MODELS_URL = "https://models.github.ai/inference/chat/completions"
+OPENCODE_URL = "https://opencode.ai/zen/go/v1/chat/completions"
+NOTES_START, NOTES_END = "<!-- notes -->", "<!-- /notes -->"
 TELEGRAM_LIMIT = 4096
 TRAILER = re.compile(r"^(Co-Authored-By|Signed-off-by|Claude-Session|Change-Id):", re.I)
 
@@ -153,45 +157,45 @@ def commits(previous: str):
     return entries, docs
 
 
-# GitHub Models, then its older Azure endpoint (plain model names) if the first one doesn't answer.
-MODEL_ENDPOINTS = [
-    (MODELS_URL, lambda m: m),
-    ("https://models.inference.ai.azure.com/chat/completions", lambda m: m.split("/", 1)[-1]),
-]
-
-
 def ask_model(system: str, user: str):
-    """One GitHub Models completion, or None without a token or when no endpoint answers."""
-    token = os.environ.get("GITHUB_TOKEN")
-    if not token:
+    """One OpenCode Go chat completion, or None without OPENCODE_API_KEY or when it fails."""
+    key = os.environ.get("OPENCODE_API_KEY")
+    if not key:
         return None
-    model = os.environ.get("CHANGELOG_MODEL") or "openai/gpt-4.1-mini"
-    for url, name in MODEL_ENDPOINTS:
+    url = os.environ.get("OPENCODE_URL") or OPENCODE_URL
+    model = os.environ.get("OPENCODE_MODEL") or "glm-5.3-flash"
+    # The API takes the plain id; some clients prefix it with the provider, so try that too.
+    names = [model] + ([f"opencode-go/{model}"] if "/" not in model else [])
+    for name in names:
         body = {
-            "model": name(model),
+            "model": name,
             "temperature": 0.2,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
         }
         request = urllib.request.Request(
             url,
             data=json.dumps(body).encode(),
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/json",
-                "X-GitHub-Api-Version": "2022-11-28",
-                "Content-Type": "application/json",
-            },
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "Accept": "application/json"},
         )
         raw = b""
         try:
-            with urllib.request.urlopen(request, timeout=90) as response:
+            with urllib.request.urlopen(request, timeout=120) as response:
                 raw = response.read()
-            return json.loads(raw)["choices"][0]["message"]["content"].strip()
+            text = json.loads(raw)["choices"][0]["message"]["content"] or ""
+            # Reasoning models may put their thinking before the answer.
+            text = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
+            if text:
+                print(f"Text by {name} (OpenCode Go)", file=sys.stderr)
+                return text
+            reason = "empty answer"
         except urllib.error.HTTPError as e:
             reason = f"HTTP {e.code}: {e.read()[:300].decode(errors='replace')}"
-        except Exception as e:  # noqa: BLE001 - try the next endpoint, then fall back to plain text
+            if e.code in (400, 404) and name != names[-1]:
+                continue
+        except Exception as e:  # noqa: BLE001 - fall back to text without the model
             reason = f"{e}; reply: {raw[:300].decode(errors='replace')!r}"
-        print(f"::warning::GitHub Models failed at {url} ({reason})", file=sys.stderr)
+        print(f"::warning::OpenCode Go ({name}) failed: {reason}", file=sys.stderr)
+        return None
     return None
 
 
@@ -311,6 +315,28 @@ def telegram_message(version: str, channel: str, notes: str, release_url: str, s
     return f"{head}\n\n{body}{tail}"
 
 
+def notes_from_body(body: str) -> str:
+    """The notes inside a release text: between the notes markers, or (older releases) the text
+    before '### Install' without the leading quote lines."""
+    if NOTES_START in body and NOTES_END in body:
+        return body.split(NOTES_START, 1)[1].split(NOTES_END, 1)[0].strip()
+    head = body.split("### Install", 1)[0]
+    return "\n".join(line for line in head.splitlines() if not line.startswith(">")).strip()
+
+
+def cmd_release_notes(a) -> None:
+    body = subprocess.run(
+        ["gh", "release", "view", a.tag, "--json", "body", "--jq", ".body"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    notes = notes_from_body(body)
+    if not notes:
+        sys.exit(f"::error::No release notes found in {a.tag}")
+    with open(a.out, "w", encoding="utf-8") as f:
+        f.write(notes + "\n")
+    print(notes)
+
+
 def cmd_telegram(a) -> None:
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     chat = os.environ.get("TELEGRAM_CHAT_ID", "")
@@ -384,6 +410,9 @@ def main() -> None:
     c.add_argument("--version", required=True)
     c.add_argument("--notes", required=True)
     c.add_argument("--changelog", required=True)
+    rn = sub.add_parser("release-notes")
+    rn.add_argument("--tag", required=True)
+    rn.add_argument("--out", required=True)
     tg = sub.add_parser("telegram")
     tg.add_argument("--version", required=True)
     tg.add_argument("--channel", choices=["stable", "beta", "dev"], required=True)
@@ -398,6 +427,8 @@ def main() -> None:
         cmd_notes(a)
     elif a.cmd == "telegram":
         cmd_telegram(a)
+    elif a.cmd == "release-notes":
+        cmd_release_notes(a)
     else:
         add_to_changelog(a.changelog, a.version, open(a.notes, encoding="utf-8").read())
 

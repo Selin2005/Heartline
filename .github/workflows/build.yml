@@ -66,7 +66,6 @@ concurrency:
 
 permissions:
   contents: write
-  models: read
 
 defaults:
   run:
@@ -74,9 +73,40 @@ defaults:
     shell: bash
 
 jobs:
+  # A re-run of a build whose release is already published only announces it again: every
+  # release text carries the run id, so this finds the release this run made, if any.
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.find.outputs.tag }}
+      url: ${{ steps.find.outputs.url }}
+    steps:
+      - name: Release already published by this run?
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MARKER: "heartline-run: ${{ github.run_id }} "
+        run: |
+          found=$(gh api "repos/${{ github.repository }}/releases?per_page=50" \
+            --jq '.[] | select((.body // "") | contains(env.MARKER)) | [.tag_name, .html_url] | @tsv' | head -n1)
+          if [ -n "$found" ]; then
+            tag=$(cut -f1 <<<"$found"); url=$(cut -f2 <<<"$found")
+            echo "Run ${{ github.run_id }} already published $tag: only the Telegram announcement runs again."
+            echo "::notice::Re-run of a published release ($tag): announcing it again, nothing is rebuilt."
+            { echo "tag=$tag"; echo "url=$url"; } >> "$GITHUB_OUTPUT"
+          else
+            echo "No release from run ${{ github.run_id }} yet: full build."
+          fi
+
   build:
+    needs: check
+    if: needs.check.outputs.tag == ''
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    outputs:
+      tag: v${{ steps.version.outputs.version }}
+      url: ${{ steps.release.outputs.url }}
     env:
       CHANNEL: ${{ inputs.channel }}
       VARIANT: ${{ inputs.channel == 'dev' && 'debug' || 'release' }}
@@ -161,10 +191,10 @@ jobs:
         run: ./gradlew --console=plain test verifyPaparazziDebug
 
       # Written before the build so the notes are inside the APK ("What's new" after updating).
-      - name: Release notes (GitHub Models)
+      - name: Release notes (OpenCode Go)
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          CHANGELOG_MODEL: ${{ vars.CHANGELOG_MODEL }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          OPENCODE_MODEL: ${{ vars.OPENCODE_MODEL }}
         run: |
           python3 tools/release/release.py notes \
             --version "${{ steps.version.outputs.version }}" \
@@ -226,7 +256,9 @@ jobs:
               dev) echo "> **Development build** (debug, full logging). 📲 Update from the app: *Settings → Updates*, on the *Development* update channel." ;;
             esac
             echo
+            echo "<!-- notes -->"
             cat "$RUNNER_TEMP/notes.md"
+            echo "<!-- /notes -->"
             echo
             echo "### Install"
             echo "Install **Heartline-phone-$VERSION.apk** on your phone and **Heartline-watch-$VERSION.apk** on your Galaxy Watch; both are needed. Already installed? The phone app updates itself (Settings → Updates) and tells you when the watch needs the new version. See [installing on a device](https://github.com/${{ github.repository }}/blob/main/docs/DEVICE_TESTING.md)."
@@ -234,6 +266,8 @@ jobs:
             echo "Heartline is not a medical device. See the [Terms of Use](https://github.com/${{ github.repository }}/blob/main/legal/TERMS_OF_USE.md)."
             echo
             echo "SHA-256 checksums: \`SHA256SUMS\`."
+            # Lets a re-run of this workflow find its release (job 'check').
+            echo "<!-- heartline-run: ${{ github.run_id }} -->"
           } > "$RUNNER_TEMP/body.md"
 
       - name: Publish GitHub release
@@ -268,27 +302,6 @@ jobs:
           git add CHANGELOG.md
           git diff --cached --quiet || { git commit -m "Changelog for $VERSION" && git push origin "HEAD:$DEFAULT_BRANCH"; }
 
-      # Announces stable and beta releases in the community's Telegram topic (Announcements &
-      # Builds), only once everything above succeeded: tests, APKs, bundles and the published
-      # release. Needs the TELEGRAM_BOT_TOKEN secret and the TELEGRAM_THREAD_ID variable
-      # (docs/RELEASING.md). Network errors are retried; a message that still can't be sent
-      # marks the run red, although the release itself stays published.
-      - name: Announce on Telegram
-        if: success() && inputs.release && env.CHANNEL != 'dev'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          CHANGELOG_MODEL: ${{ vars.CHANGELOG_MODEL }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID || '@HeartlineCamiunity' }}
-          # Topic 'Announcements & Builds' (t.me/HeartlineCamiunity/5); a variable or secret overrides it.
-          TELEGRAM_THREAD_ID: ${{ vars.TELEGRAM_THREAD_ID || secrets.TELEGRAM_THREAD_ID || '5' }}
-        run: |
-          python3 tools/release/release.py telegram \
-            --version "${{ steps.version.outputs.version }}" \
-            --channel "$CHANNEL" \
-            --notes "$RUNNER_TEMP/notes.md" \
-            --release-url "${{ steps.release.outputs.url }}"
-
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@v4
@@ -298,3 +311,42 @@ jobs:
             **/build/reports/
             **/build/paparazzi/failures/
           if-no-files-found: ignore
+
+  # Announces stable and beta releases in the community's Telegram topic (Announcements & Builds)
+  # after a successful build, or again when a run whose release is already published is re-run.
+  # The notes come from the published release, the summary is written anew. Network errors are
+  # retried; a message that still can't be sent turns the run red (the release stays published).
+  announce:
+    needs: [check, build]
+    if: >-
+      always() && inputs.release && inputs.channel != 'dev' &&
+      (needs.build.result == 'success' || (needs.build.result == 'skipped' && needs.check.outputs.tag != ''))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TAG: ${{ needs.check.outputs.tag || needs.build.outputs.tag }}
+      URL: ${{ needs.check.outputs.url || needs.build.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/release
+
+      - name: Release notes from ${{ env.TAG }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/release/release.py release-notes --tag "$TAG" --out "$RUNNER_TEMP/notes.md"
+
+      - name: Announce on Telegram
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          OPENCODE_MODEL: ${{ vars.OPENCODE_MODEL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID || '@HeartlineCamiunity' }}
+          # Topic 'Announcements & Builds' (t.me/HeartlineCamiunity/5); a variable or secret overrides it.
+          TELEGRAM_THREAD_ID: ${{ vars.TELEGRAM_THREAD_ID || secrets.TELEGRAM_THREAD_ID || '5' }}
+        run: |
+          python3 tools/release/release.py telegram \
+            --version "${TAG#v}" \
+            --channel "${{ inputs.channel }}" \
+            --notes "$RUNNER_TEMP/notes.md" \
+            --release-url "$URL"

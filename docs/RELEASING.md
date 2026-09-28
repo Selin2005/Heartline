@@ -28,10 +28,13 @@ In GitHub → Settings → Secrets and variables → Actions, add:
 | `RELEASE_KEY_PASSWORD` | key password (defaults to the keystore password) |
 
 Also check Settings → Actions → General → Workflow permissions is **Read and write**, so the
-workflow can publish releases and update `CHANGELOG.md`. Release notes use
-[GitHub Models](https://docs.github.com/github-models) through the workflow's own token (the
-`models: read` permission); no extra key is needed. Set the repository variable `CHANGELOG_MODEL`
-to use a different model.
+workflow can publish releases and update `CHANGELOG.md`.
+
+Release notes and the Telegram summary are written by **GLM 5.3 Flash** through
+[OpenCode Go](https://opencode.ai/docs/go/): add the secret `OPENCODE_API_KEY` (a key from the
+OpenCode console). The repository variable `OPENCODE_MODEL` picks another model (default
+`glm-5.3-flash`). Without the key, or when the model doesn't answer, the notes are the list of
+commit subjects (the run shows a warning with the reason).
 
 ### 3. Telegram announcements (optional)
 Stable and beta releases are announced in the *Announcements & Builds* topic of the
@@ -83,7 +86,7 @@ release keeps getting betas.
 The workflow:
 1. works out the version and the previous release of that channel;
 2. runs lint, license header check and all tests;
-3. writes the release notes with GitHub Models from the commits since the newest version already
+3. writes the release notes with GLM (OpenCode Go) from the commits since the newest version already
    in `CHANGELOG.md` (from the first commit while it lists none), falling back to the commit
    list, and puts them in `CHANGELOG.md` **before** building, so the app shows them in *What's
    new*. Commits that only change agent setup, workflows, tools or tests are left out, and
@@ -91,7 +94,14 @@ The workflow:
 4. builds the phone and watch APKs (release build, or debug for dev) and `SHA256SUMS`, and for
    stable and beta also the Google Play bundles (`.aab`, run artifacts only);
 5. publishes the GitHub release with the notes, APKs and checksums;
-6. commits the new `CHANGELOG.md` section to the default branch.
+6. commits the new `CHANGELOG.md` section to the default branch;
+7. for stable and beta, announces the release on Telegram (job `announce`).
+
+**Re-running a run** whose release is already published (*Re-run all jobs*) rebuilds nothing: the
+`check` job finds the release by the run id in its text, and only `announce` runs, reading the
+notes back from the release and writing a new summary. *Re-run failed jobs* after a failed
+announcement does the same. A run that failed before publishing builds again in full, with the
+same version.
 
 Want to edit the notes? Edit the release on GitHub, and the section in `CHANGELOG.md` (the app
 shows the text that was bundled into the APK).
