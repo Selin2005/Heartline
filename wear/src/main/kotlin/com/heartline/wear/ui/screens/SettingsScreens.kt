@@ -32,7 +32,7 @@ import com.heartline.wear.R
 import androidx.compose.ui.graphics.Color
 import androidx.wear.compose.material3.SwitchButtonDefaults
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumnState
-import androidx.compose.material.icons.rounded.ShowChart
+import androidx.compose.material.icons.automirrored.rounded.ShowChart
 import androidx.compose.material.icons.rounded.Vibration
 import androidx.wear.compose.material3.SwitchButton
 import com.heartline.wear.ui.theme.WearColors
@@ -119,7 +119,7 @@ fun WatchSettingsScreen(
                 ) { onToggle(WatchToggle.HEART_RATE_ALERTS, it) }
             }
             item { Toggle(Icons.Rounded.Vibration, stringResource(R.string.settings_haptics), state.haptics) { onToggle(WatchToggle.HAPTICS, it) } }
-            item { Toggle(Icons.Rounded.ShowChart, stringResource(R.string.settings_live_wave), state.liveWave) { onToggle(WatchToggle.LIVE_WAVE, it) } }
+            item { Toggle(Icons.AutoMirrored.Rounded.ShowChart, stringResource(R.string.settings_live_wave), state.liveWave) { onToggle(WatchToggle.LIVE_WAVE, it) } }
             item {
                 Text(
                     stringResource(R.string.settings_synced_with_phone),

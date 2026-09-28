@@ -43,7 +43,7 @@ import java.io.File
 data class ShareFormat(
     val extension: String,
     val mime: String,
-    @StringRes val label: Int,
+    @param:StringRes val label: Int,
     /** Writes the file; [name] is the name to print (the user's Settings choice) or null. */
     val build: suspend (fileName: String, name: String?, profile: UserProfile?) -> File,
 )

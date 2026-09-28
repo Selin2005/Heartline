@@ -239,8 +239,8 @@ class CalibrationViewModel(
         }
         val ui = mutable.value
         // With the watch's full capture every channel gets this cuff point (IR, BCG, ECG transit times).
-        points += capturedChannels?.let { CalibrationPoint.of(it, systolic!!, diastolic!!, pulse, standing = ui.standingRound) }
-            ?: CalibrationPoint(features, systolic!!, diastolic!!, pulse, capturedPpg, gravity = capturedGravity, standing = ui.standingRound)
+        points += capturedChannels?.let { CalibrationPoint.of(it, systolic, diastolic, pulse, standing = ui.standingRound) }
+            ?: CalibrationPoint(features, systolic, diastolic, pulse, capturedPpg, gravity = capturedGravity, standing = ui.standingRound)
         captured = null
         capturedPpg = null
         capturedGravity = null

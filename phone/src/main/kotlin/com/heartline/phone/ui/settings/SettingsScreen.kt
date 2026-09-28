@@ -36,7 +36,7 @@ import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material3.OutlinedTextField
 import com.heartline.phone.data.SettingsRepository
 import androidx.compose.material.icons.rounded.MonitorHeart
-import androidx.compose.material.icons.rounded.ShowChart
+import androidx.compose.material.icons.automirrored.rounded.ShowChart
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material3.AlertDialog
@@ -269,7 +269,7 @@ fun SettingsScreen(
                 CardRow(
                     stringResource(R.string.settings_live_wave),
                     subtitle = stringResource(R.string.settings_live_wave_summary),
-                    leading = { IconBadge(Icons.Rounded.ShowChart, colors.ecg) },
+                    leading = { IconBadge(Icons.AutoMirrored.Rounded.ShowChart, colors.ecg) },
                     trailing = { OneUiSwitch(monitor.liveWave) { onChange(SettingChange.LiveWave(it)) } },
                 )
             }
