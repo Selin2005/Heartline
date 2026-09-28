@@ -50,7 +50,8 @@ Watches and phones Heartline has been tested on: [Tested devices](docs/TESTED_DE
 2. Install the phone app on the phone and the watch app on the watch with `adb`.
    Step by step: [Installing on a device](docs/DEVICE_TESTING.md).
 3. Until Heartline is approved as a Samsung Health partner, turn on **developer mode** in the
-   watch's Health Sensor Service (the phone app shows how).
+   watch's **Health Platform** app (called Health Sensor Service on older watches). The phone app
+   shows how.
 
 A **Google Play** release is being prepared (see [docs/PLAY_STORE.md](docs/PLAY_STORE.md)).
 

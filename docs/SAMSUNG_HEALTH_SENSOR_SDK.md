@@ -30,9 +30,9 @@ Health Sensor Service checks the package name and signing certificate of every a
 - **Registered partners** work on every watch. Registration is requested through
   [Samsung's partner process](https://developer.samsung.com/health/sensor/process.html) and ties
   the approval to the application ID and the SHA-256 of the release signing key.
-- **Everyone else** only works while **developer mode** is on (Settings → Apps → Health Sensor
-  Service → tap the title about 10 times → Developer mode). Otherwise every tracker fails with
-  `SDK_POLICY_ERROR`, which Heartline shows as a guide (`SensorErrorScreen`, phone *Help*).
+- **Everyone else** only works while **developer mode** is on (Settings → Apps → Health
+  Platform, or Health Sensor Service on older watches → tap the title about 10 times → Developer
+  mode). Otherwise every tracker fails with `SDK_POLICY_ERROR`, which Heartline shows as a guide (`SensorErrorScreen`, phone *Help*).
 
 Until Heartline is approved as a partner, users have to turn on developer mode. Partner approval
 is also a prerequisite for the Google Play release (see [PLAY_STORE.md](PLAY_STORE.md)).
