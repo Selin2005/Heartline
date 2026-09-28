@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Resources only the system reads, which the release build's resource shrinker would otherwise
-  remove: the Wear OS capability the phone and watch find each other by (res/values/wear.xml).
+  Resources only the system reads, which a resource shrinker would remove (isShrinkResources is
+  off, this guards against turning it on): the Wear OS capability the phone and watch find each
+  other by (res/values/wear.xml). tools/ci/check-apks.py checks every build for it.
 -->
 <resources xmlns:tools="http://schemas.android.com/tools"
     tools:keep="@array/android_wear_capabilities" />

@@ -20,7 +20,7 @@ android {
         applicationId = "io.github.selin2005.heartline"
         minSdk = 26
         targetSdk = 37
-        // Set by the Build workflow form: -Pheartline.versionName=1.2.0 -Pheartline.versionCode=<run number>.
+        // Set by the Build workflow: -Pheartline.versionName=1.2.0 -Pheartline.versionCode=<minutes since 2026>.
         versionCode = (findProperty("heartline.versionCode") ?: "1").toString().toInt()
         versionName = (findProperty("heartline.versionName") ?: "0.1.0").toString()
         // `-Pheartline.demoData=true` seeds sample records on first launch (UI exploration without a watch).
@@ -52,15 +52,18 @@ android {
     }
 
     buildTypes {
-        // Dev builds (debug) are signed with the same release key as betas and releases, so users can
-        // move between the dev, beta and stable channels without uninstalling.
+        // Local builds and tests. The Build workflow makes every channel (dev, beta and stable) from
+        // the release build type below, so all three are the same app and install over each other.
         debug {
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
         release {
-            // R8; signed with the release key when the environment provides one.
+            // R8 shrinks the libraries only (proguard-rules.pro keeps Heartline's own code whole and
+            // unrenamed). Resources are all kept: some are read only by the system, such as the Wear OS
+            // capability the phone and watch find each other by. Signed with the release key when the
+            // environment provides one.
             isMinifyEnabled = true
-            isShrinkResources = true
+            isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             // Phones paired with a Galaxy Watch are ARM; ONNX Runtime's x86 libraries (≈ 46 MB) are for emulators only.
