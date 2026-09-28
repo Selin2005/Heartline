@@ -18,6 +18,8 @@ apks/
 *.apk
 *.aab
 *.jks
+*.jks.b64
+*.keystore.b64
 release.keystore
 keystore/release*
 dist/
