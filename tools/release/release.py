@@ -46,6 +46,8 @@ SEMVER = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?(?:-([0-9A-Za-z.-]+))?$"
 OPENCODE_URL = "https://opencode.ai/zen/go/v1/chat/completions"
 NOTES_START, NOTES_END = "<!-- notes -->", "<!-- /notes -->"
 TELEGRAM_LIMIT = 4096
+# Cloudflare (in front of OpenCode) blocks urllib's default "Python-urllib/3.x" (error 1010).
+USER_AGENT = "heartline-release/1.0 (+https://github.com/selin2005/heartline)"
 TRAILER = re.compile(r"^(Co-Authored-By|Signed-off-by|Claude-Session|Change-Id):", re.I)
 
 
@@ -198,7 +200,12 @@ def ask_model(system: str, user: str):
         request = urllib.request.Request(
             url,
             data=json.dumps(body).encode(),
-            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "Accept": "application/json"},
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "User-Agent": USER_AGENT,
+            },
         )
         raw = b""
         try:
@@ -392,7 +399,7 @@ def cmd_telegram(a) -> None:
     request = urllib.request.Request(
         f"https://api.telegram.org/bot{token}/sendMessage",
         data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
     )
     # Network hiccups, rate limits (429) and Telegram's 5xx are retried; anything else (chat not
     # found, bot not an admin, bad topic id) won't get better by retrying.
