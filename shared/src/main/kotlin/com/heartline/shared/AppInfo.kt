@@ -13,6 +13,7 @@ object AppInfo {
     const val REPO_URL = "https://github.com/$REPO_OWNER/$REPO_NAME"
     const val RELEASES_URL = "$REPO_URL/releases"
     const val ISSUES_URL = "$REPO_URL/issues"
+    const val COMMUNITY_URL = "https://t.me/HeartlineCamiunity"
     const val LICENSE_NAME = "GNU AGPL-3.0-or-later"
 
     /**

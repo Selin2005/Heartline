@@ -275,6 +275,10 @@ class WearScreenshotTest(private val size: String) {
         WatchSettingsScreen(settingsUi.copy(heartRateAlerts = false), listState = TransformingLazyColumnState(initialAnchorItemIndex = 3))
     }
 
+    @Test fun settingsLinks() = shot("settings_links") {
+        WatchSettingsScreen(settingsUi, listState = TransformingLazyColumnState(initialAnchorItemIndex = 11))
+    }
+
     @Test fun diagnostics() = shot("diagnostics") { DiagnosticsScreen(settingsUi.copy(diagnosticLogs = true, logKb = 380)) }
 
     @Test fun devMode() = shot("dev_mode") { DevModeGuideScreen() }

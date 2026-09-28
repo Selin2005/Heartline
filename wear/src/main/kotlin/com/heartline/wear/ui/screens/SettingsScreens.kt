@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.DeveloperMode
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MonitorHeart
@@ -100,6 +101,7 @@ fun WatchSettingsScreen(
     onDevMode: () -> Unit = {},
     onDiagnostics: () -> Unit = {},
     onSourceCode: () -> Unit = {},
+    onCommunity: () -> Unit = {},
     listState: TransformingLazyColumnState = rememberTransformingLazyColumnState(),
 ) {
     val list = listState
@@ -132,6 +134,7 @@ fun WatchSettingsScreen(
             item { Row(Icons.Rounded.Info, stringResource(R.string.version), state.appVersion) }
             // AGPL: the source is one tap away; it opens on the phone.
             item { Row(Icons.Rounded.Code, stringResource(R.string.source_code), stringResource(R.string.source_code_sub), onSourceCode) }
+            item { Row(Icons.Rounded.Forum, stringResource(R.string.community), stringResource(R.string.community_sub), onCommunity) }
         }
     }
 }

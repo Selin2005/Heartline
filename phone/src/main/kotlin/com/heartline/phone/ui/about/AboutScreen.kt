@@ -5,10 +5,13 @@ package com.heartline.phone.ui.about
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Article
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.Gavel
 import androidx.compose.material.icons.rounded.HealthAndSafety
 import androidx.compose.material.icons.rounded.NewReleases
@@ -34,13 +37,18 @@ import com.heartline.shared.AppInfo
 
 /** Intended use, disclaimer, the legal documents, source code and open-source notices. */
 @Composable
-fun AboutScreen(versionName: String, onBack: (() -> Unit)? = null, onOpenDoc: (BundledDoc) -> Unit = {}) {
+fun AboutScreen(
+    versionName: String,
+    onBack: (() -> Unit)? = null,
+    onOpenDoc: (BundledDoc) -> Unit = {},
+    listState: LazyListState = rememberLazyListState(),
+) {
     val colors = HeartlineTheme.colors
     val uri = LocalUriHandler.current
     fun open(url: String) {
         runCatching { uri.openUri(url) }
     }
-    ReachabilityScaffold(title = stringResource(R.string.settings_about), subtitle = stringResource(R.string.settings_version, versionName), onBack = onBack) {
+    ReachabilityScaffold(title = stringResource(R.string.settings_about), subtitle = stringResource(R.string.settings_version, versionName), onBack = onBack, listState = listState) {
         listOf(
             R.string.about_use_title to R.string.about_use_body,
             R.string.settings_disclaimer to R.string.about_disclaimer_body,
@@ -75,6 +83,13 @@ fun AboutScreen(versionName: String, onBack: (() -> Unit)? = null, onOpenDoc: (B
                     leading = { IconBadge(Icons.Rounded.Code, colors.primary) },
                     showDivider = true,
                     onClick = { open(AppInfo.REPO_URL) },
+                )
+                CardRow(
+                    stringResource(R.string.about_community),
+                    subtitle = AppInfo.COMMUNITY_URL.removePrefix("https://"),
+                    leading = { IconBadge(Icons.Rounded.Forum, colors.primary) },
+                    showDivider = true,
+                    onClick = { open(AppInfo.COMMUNITY_URL) },
                 )
                 CardRow(
                     stringResource(R.string.about_report_issue),

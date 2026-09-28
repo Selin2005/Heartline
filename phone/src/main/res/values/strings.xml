@@ -659,6 +659,8 @@
     <string name="about_source_code">Source code</string>
     <string name="about_license">Licensed under the %1$s</string>
     <string name="about_report_issue">Report a problem</string>
+    <string name="about_community">Community on Telegram</string>
+    <string name="about_community_sub">Questions, tips and news</string>
     <string name="whats_new_title">What\'s new</string>
 
     <!-- Updates -->

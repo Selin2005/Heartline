@@ -96,6 +96,7 @@ PHONE = [
         ("settings", "Settings"),
         ("settings_monitoring", "Background monitoring"),
         ("settings_sharing", "Sharing"),
+        ("settings_help", "Help & diagnostics, community on Telegram and source code"),
         ("settings_updates", "Updates and beta versions"),
         ("update_up_to_date", "Up to date"),
         ("whats_new", "What's new after an update"),
@@ -106,6 +107,7 @@ PHONE = [
         ("diagnostics_question", "Asked once (stable users): keep diagnostic logs?"),
         ("dev_mode_help", "Help: turning on developer mode on the watch"),
         ("about", "About"),
+        ("about_links", "About: source code, community on Telegram, report a problem, license"),
         ("legal", "Terms of Use"),
         ("launcher_icon", "App icon"),
     ]),
@@ -188,6 +190,7 @@ WEAR = [
     ("settings", "Settings", "Watch settings.", [
         ("settings", "Settings"),
         ("settings_toggles", "Settings: alerts and effects"),
+        ("settings_links", "Settings: source code and community (open on the phone)"),
         ("about", "About"),
     ]),
 ]

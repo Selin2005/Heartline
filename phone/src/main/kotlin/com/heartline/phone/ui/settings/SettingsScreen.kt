@@ -53,6 +53,10 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.Forum
+import androidx.compose.ui.platform.LocalUriHandler
+import com.heartline.shared.AppInfo
 import androidx.compose.material.icons.rounded.Info
 import com.heartline.shared.update.AppVersion
 import androidx.compose.material.icons.rounded.SystemUpdate
@@ -164,6 +168,7 @@ fun SettingsScreen(
 ) {
     var editingPrompt by remember { mutableStateOf(false) }
     val colors = HeartlineTheme.colors
+    val uri = LocalUriHandler.current
     var picker by remember { mutableStateOf<Picker?>(null) }
     val on = stringResource(R.string.state_on)
     val off = stringResource(R.string.state_off)
@@ -412,7 +417,21 @@ fun SettingsScreen(
                     stringResource(R.string.diag_export_logs),
                     subtitle = stringResource(if (diagnosticLogs) R.string.diag_settings_on else R.string.diag_settings_off),
                     leading = { IconBadge(Icons.Rounded.BugReport, colors.primary) },
+                    showDivider = true,
                     onClick = onDiagnostics,
+                )
+                CardRow(
+                    stringResource(R.string.about_community),
+                    subtitle = stringResource(R.string.about_community_sub),
+                    leading = { IconBadge(Icons.Rounded.Forum, colors.onSurfaceVariant) },
+                    showDivider = true,
+                    onClick = { runCatching { uri.openUri(AppInfo.COMMUNITY_URL) } },
+                )
+                CardRow(
+                    stringResource(R.string.about_source_code),
+                    subtitle = AppInfo.REPO_URL.removePrefix("https://"),
+                    leading = { IconBadge(Icons.Rounded.Code, colors.onSurfaceVariant) },
+                    onClick = { runCatching { uri.openUri(AppInfo.REPO_URL) } },
                 )
             }
         }

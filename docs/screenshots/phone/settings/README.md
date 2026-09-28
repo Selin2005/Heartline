@@ -9,6 +9,7 @@ Settings, updates, what's new, diagnostics, sharing, help and about.
 | **Settings** | <img src="settings_light.png" width="240" alt=""> | <img src="settings_dark.png" width="240" alt=""> |
 | **Background monitoring** | <img src="settings_monitoring_light.png" width="240" alt=""> | <img src="settings_monitoring_dark.png" width="240" alt=""> |
 | **Sharing** | <img src="settings_sharing_light.png" width="240" alt=""> | <img src="settings_sharing_dark.png" width="240" alt=""> |
+| **Help & diagnostics, community on Telegram and source code** | <img src="settings_help_light.png" width="240" alt=""> | <img src="settings_help_dark.png" width="240" alt=""> |
 | **Updates and beta versions** | <img src="settings_updates_light.png" width="240" alt=""> | <img src="settings_updates_dark.png" width="240" alt=""> |
 | **Up to date** | <img src="update_up_to_date_light.png" width="240" alt=""> | <img src="update_up_to_date_dark.png" width="240" alt=""> |
 | **What's new after an update** | <img src="whats_new_light.png" width="240" alt=""> | <img src="whats_new_dark.png" width="240" alt=""> |
@@ -19,5 +20,6 @@ Settings, updates, what's new, diagnostics, sharing, help and about.
 | **Asked once (stable users): keep diagnostic logs?** | <img src="diagnostics_question_light.png" width="240" alt=""> | <img src="diagnostics_question_dark.png" width="240" alt=""> |
 | **Help: turning on developer mode on the watch** | <img src="dev_mode_help_light.png" width="240" alt=""> | <img src="dev_mode_help_dark.png" width="240" alt=""> |
 | **About** | <img src="about_light.png" width="240" alt=""> | <img src="about_dark.png" width="240" alt=""> |
+| **About: source code, community on Telegram, report a problem, license** | <img src="about_links_light.png" width="240" alt=""> | <img src="about_links_dark.png" width="240" alt=""> |
 | **Terms of Use** | <img src="legal_light.png" width="240" alt=""> | <img src="legal_dark.png" width="240" alt=""> |
 | **App icon** | <img src="launcher_icon.png" width="240" alt=""> | — |

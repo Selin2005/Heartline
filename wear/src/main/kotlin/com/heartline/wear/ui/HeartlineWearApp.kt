@@ -341,6 +341,7 @@ private fun AppNavHost(nav: NavHostController, gate: SetupGateViewModel) {
                 onDevMode = { nav.navigate(Routes.DEV_MODE) },
                 onDiagnostics = { nav.navigate(Routes.DIAGNOSTICS) },
                 onSourceCode = { scope.launch { remote.open(AppInfo.REPO_URL) } },
+                onCommunity = { scope.launch { remote.open(AppInfo.COMMUNITY_URL) } },
             )
         }
         composable(Routes.DIAGNOSTICS) {

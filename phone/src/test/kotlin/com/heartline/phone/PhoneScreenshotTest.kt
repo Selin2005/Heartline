@@ -185,6 +185,10 @@ class PhoneScreenshotTest(private val theme: String) {
 
     @Test fun about() = shot("about") { AboutScreen("0.1.0", onBack = {}) }
 
+    @Test fun aboutLinks() = shot("about_links") {
+        AboutScreen("0.1.0", onBack = {}, listState = rememberLazyListState(initialFirstVisibleItemIndex = 3))
+    }
+
     @Test fun settings() = shot("settings") { SettingsScreen(watchConnected = true) }
 
     @Test fun settingsMonitoring() = shot("settings_monitoring") {
@@ -197,6 +201,10 @@ class PhoneScreenshotTest(private val theme: String) {
 
     @Test fun settingsSharing() = shot("settings_sharing") {
         SettingsScreen(watchConnected = true, listState = rememberLazyListState(initialFirstVisibleItemIndex = 7))
+    }
+
+    @Test fun settingsHelp() = shot("settings_help") {
+        SettingsScreen(watchConnected = true, listState = rememberLazyListState(initialFirstVisibleItemIndex = 12))
     }
 
     @Test fun onboarding() = shot("onboarding") { OnboardingScreen() }
