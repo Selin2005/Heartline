@@ -67,7 +67,7 @@ GitHub → Actions → **Build** → Run workflow:
 |---|---|
 | Branch | The branch to build (default `main`); a tag or commit SHA works too. Build stable releases from `main`; the workflow warns otherwise. |
 | Version | `X.Y.Z`, without suffix |
-| Channel | **stable**: `vX.Y.Z` (or `vX.Y.Z.W`), the latest release. **beta**: `…-beta.N` (N counts up by itself), a pre-release. **dev**: `…-dev.<run>`, a debug build with full logs. |
+| Channel | **stable**: `vX.Y.Z` (or `vX.Y.Z.W`), the latest release. **beta**: `…-beta.N` (N counts up by itself), a pre-release. **dev**: `…-dev.<run>`, the newest code for early testers. |
 | Publish a GitHub release | Off: the APKs are only kept as run artifacts |
 | Run lint and tests | Leave on for anything users will get |
 
@@ -91,11 +91,12 @@ The workflow:
    list, and puts them in `CHANGELOG.md` **before** building, so the app shows them in *What's
    new*. Commits that only change agent setup, workflows, tools or tests are left out, and
    documentation and policy changes become one line;
-4. builds the phone and watch APKs (release build, or debug for dev) and `SHA256SUMS`, and for
-   stable and beta also the Google Play bundles (`.aab`, run artifacts only);
-5. publishes the GitHub release with the notes, APKs and checksums;
-6. commits the new `CHANGELOG.md` section to the default branch;
-7. for stable and beta, announces the release on Telegram (job `announce`).
+4. builds the phone and watch APKs and `SHA256SUMS`, and for stable and beta also the Google Play
+   bundles (`.aab`, run artifacts only);
+5. checks the APKs (`tools/ci/check-apks.py`, see below) and stops if anything is wrong;
+6. publishes the GitHub release with the notes, APKs and checksums;
+7. commits the new `CHANGELOG.md` section to the default branch;
+8. for stable and beta, announces the release on Telegram (job `announce`).
 
 **Re-running a run** whose release is already published (*Re-run all jobs*) rebuilds nothing: the
 `check` job finds the release by the run id in its text, and only `announce` runs, reading the
@@ -114,7 +115,43 @@ shows the text that was bundled into the APK).
    that exact commit as `v1.3.0` with notes covering everything since the newest version in
    `CHANGELOG.md`.
 
-`versionCode` is the workflow run number, so every build installs over the previous one.
+Promote accepts three- and four-part beta tags (`v1.3.0-beta.2`, `v0.0.2.106-beta.1`).
+
+## One app, three channels
+Dev, beta and stable are **the same build** of the same code: the release build type (R8, not
+debuggable), signed with the release key. Only the version name and `versionCode` differ. So a
+beta behaves exactly like the dev build it came from, and the app can move between channels just
+by changing *Settings → Updates → Update channel*, without uninstalling.
+
+- **Same app ID and key** on phone and watch (`io.github.selin2005.heartline`): the Wear Data Layer
+  only connects the two apps when both match.
+- **`versionCode` = minutes since 2026-01-01 UTC**, from `release.py version`. It counts up with
+  every build of every channel, Promote included, so a later build always installs over an
+  earlier one (Android refuses a lower `versionCode`).
+- **Versions go up too:** a stable or beta version must be higher than every stable and beta
+  release so far (the workflow stops otherwise). A release built later with a lower version would
+  have a higher `versionCode`, and the higher-versioned, earlier build offered on another channel
+  couldn't install over it.
+- **R8 only shrinks the libraries.** `proguard-rules.pro` keeps all of Heartline's code whole and
+  renames nothing (`-dontobfuscate`), and resource shrinking is off, so resources only the system
+  reads (the Wear OS capabilities) stay in.
+- `./gradlew assembleDebug` is for local work and tests only; nothing debuggable is published.
+
+Moving to a channel with an **older** newest release (say from dev to stable) waits for that
+channel's next release: the app offers only versions above the installed one.
+
+### APK checks
+`tools/ci/check-apks.py` runs on every build before anything is published and fails it when:
+- the phone and watch differ in app ID, version name or `versionCode`, or either is debuggable;
+- they aren't signed with the same certificate, or not with the release key;
+- a Wear OS capability is missing (`heartline_phone`, `heartline_watch`);
+- a manifest activity, service, receiver or provider has no class in the APK;
+- any of Heartline's own classes, or the Samsung Health Sensor SDK, ONNX Runtime or Wear Data
+  Layer classes the apps need, is missing or renamed;
+- an asset, Java resource, resource name or ONNX Runtime native library is missing.
+
+Run it on local builds too:
+`python3 tools/ci/check-apks.py --phone phone/build/outputs/apk/release/phone-release.apk --watch wear/build/outputs/apk/release/wear-release.apk`.
 
 ## Google Play
 See [PLAY_STORE.md](PLAY_STORE.md). The Play bundles come from the `play` build type, which leaves

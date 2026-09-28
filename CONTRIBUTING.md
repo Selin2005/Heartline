@@ -26,7 +26,7 @@ Heartline on app stores and keep the license manageable. You keep the copyright 
 Requirements: JDK 21 and the Android SDK (compile SDK 37). No device is needed for most work.
 
 ```bash
-./gradlew :phone:assembleGithubDebug :wear:assembleGithubDebug  # debug APKs
+./gradlew :phone:assembleDebug :wear:assembleDebug  # debug APKs
 ./gradlew test                                    # JVM, Robolectric and Paparazzi tests
 ./gradlew ktlintCheck                             # lint (ktlintFormat fixes most issues)
 ./gradlew recordPaparazziDebug                    # re-record screenshots after a UI change

@@ -32,11 +32,16 @@ and installs the phone update itself. For the watch it shows the download link a
 
 > If you installed an earlier build that used the application ID `com.heartline.app`, uninstall it
 > from both devices first. Newer builds use `io.github.selin2005.heartline`.
+>
+> Dev builds up to 0.0.2.104 were signed with a test key. If Android says the update conflicts
+> with the installed app, uninstall that one build once on both devices; every build after it
+> installs over the previous one.
 
 ### CI builds
 Every run of the **Build** workflow (GitHub → Actions → Build) keeps its APKs as downloadable
-artifacts, even when no release is published. A debug phone build made with
-`-Pheartline.demoData=true` fills the app with sample data on first launch, so the UI can be
+artifacts, even when no release is published. Dev, beta and stable builds are the same app
+(only the version differs), so a dev build installs over a beta and the other way round. A local
+phone build made with `-Pheartline.demoData=true` fills the app with sample data on first launch, so the UI can be
 explored without a watch. Remove it with Settings → Delete all data.
 
 ## 3. Collect logs
@@ -65,7 +70,7 @@ contain personal and health data.** All app logs use `Heartline/*` tags:
 | `Heartline/Monitor` | Background monitoring (passive heart rate, irregular rhythm windows) |
 | `Heartline/Update` | Update checks and downloads (phone) |
 
-Debug builds also log raw sensor values:
+Raw sensor values go to logcat too (and into the exported log only while *Detailed logging* is on):
 
 | Tag | Contents |
 |---|---|
@@ -78,6 +83,22 @@ To capture them, enlarge the buffer first: `adb logcat -G 16M && adb logcat -c`,
 `adb logcat -v time -s Heartline/EcgRaw Heartline/EcgRec Heartline/BiaRaw Heartline/QuickRaw Heartline/Sensor > heartline.log`.
 
 ## 4. Test checklist
+
+### Quick check for every build (5 minutes)
+The build workflow already checks the APKs themselves (`tools/ci/check-apks.py`). On the devices:
+1. **Install** the phone and watch APKs of the same version over the installed ones (no
+   uninstall). Both show that version in Settings → About.
+2. **Connection:** open Heartline on the watch; within a few seconds the phone's home screen shows
+   the watch as connected, and the watch leaves *Connecting to phone*.
+3. **ECG:** record one on the watch; it appears on the phone with its result and the second
+   opinion.
+4. **Blood pressure:** one quick measurement gives a number on the watch and on the phone.
+5. **Updates:** Settings → Updates → *Check now* answers (up to date, or offers the newer build).
+
+Something fails? Export the logs (section 3) from the phone, which includes the watch's, and
+attach them to a bug report.
+
+### Full checklist
 1. **Terms and onboarding:** the app asks you to accept the Terms of Use and Privacy Policy
    before anything else. Enter an invalid value on purpose (for example a height of 40 cm); the
    error must appear under that field.
