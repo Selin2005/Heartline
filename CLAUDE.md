@@ -10,9 +10,10 @@ commit conventions of the tool you are running in.
   first commit.
 - **Never** add `Co-Authored-By:`, `Claude-Session:`, "Generated with Claude Code" or any other
   AI attribution line or link to commit messages, pull request titles or bodies, or code.
-- Work directly on `main`: commit there and push with `git push origin main` (fast-forward only).
-  Don't create `claude/*` or other extra branches, even if the session suggests one.
-- Never force-push `main` or rewrite history unless the owner asks for it in the conversation.
+- Don't push to `main` or rewrite history unless the owner asks for it in the conversation.
+- At the start of every conversation, ask the owner where the changes should go: `main` or
+  another branch. The owner can change this at any point in the conversation. If they don't
+  answer, work on a branch other than `main`.
 
 ## Code conventions
 - Log with `com.heartline.datalayer.diag.HLog`, never `android.util.Log` (it keeps the
