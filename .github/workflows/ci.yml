@@ -4,16 +4,34 @@ name: CI
 # docs/screenshots matches the recorded goldens.
 on:
   pull_request:
+  push:
+    branches: [main]
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number }}
+  group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
+  # Commits must be authored by the owner, without AI attribution lines (CLAUDE.md).
+  authorship:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Commit authorship
+        env:
+          RANGE: ${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || format('{0}..{1}', github.event.before, github.sha) }}
+        run: |
+          # A new branch or force push has no usable "before"; check the pushed commit alone then.
+          if ! git cat-file -e "${RANGE%%..*}^{commit}" 2>/dev/null; then RANGE="${RANGE##*..}~1..${RANGE##*..}"; fi
+          python3 tools/ci/check-commits.py "$RANGE"
+
   check:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

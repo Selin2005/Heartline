@@ -44,6 +44,8 @@ To try the watch UI without the Samsung sensors, build it with fake sensors:
 6. Write user-facing text in plain English and keep the wellness wording: Heartline never
    diagnoses. Avoid words like "diagnose", "detects disease" or "medical-grade".
 7. Describe what changed and why, and link the issue.
+8. Commit under your own name. Leave out AI attribution lines (`Co-Authored-By` an AI tool,
+   session links); CI checks this (`tools/ci/check-commits.py`).
 
 The fork is only a way to prepare your pull request. Please read [TRADEMARK.md](TRADEMARK.md)
 before distributing a modified build: it has to use a different name, icon and application ID.
