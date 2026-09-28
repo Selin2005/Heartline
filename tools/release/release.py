@@ -16,18 +16,27 @@ Release helpers for the Build workflow.
 
   release.py changelog --version 1.2.0 --notes notes.md --changelog CHANGELOG.md
       Adds already written notes to CHANGELOG.md (replacing that version's section, if any).
+
+  release.py telegram --version 1.2.0 --channel stable --notes notes.md --release-url URL [--dry-run]
+      Announces the release in the community's Telegram topic: title, a short summary (GitHub
+      Models, when GITHUB_TOKEN is set), the notes and buttons to the release and the install
+      guide. Needs TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID (TELEGRAM_THREAD_ID for a forum topic);
+      without them it does nothing. --dry-run prints the message instead of sending it.
 """
 import argparse
 import datetime
+import html
 import json
 import os
 import re
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 
 SEMVER = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?(?:-([0-9A-Za-z.-]+))?$")
 MODELS_URL = "https://models.github.ai/inference/chat/completions"
+TELEGRAM_LIMIT = 4096
 TRAILER = re.compile(r"^(Co-Authored-By|Signed-off-by|Claude-Session|Change-Id):", re.I)
 
 
@@ -119,27 +128,15 @@ def commits(previous: str):
     return entries
 
 
-def ai_notes(version: str, entries, stat: str):
+def ask_model(system: str, user: str):
+    """One GitHub Models completion, or None without a token or on any failure."""
     token = os.environ.get("GITHUB_TOKEN")
-    if not token or not entries:
+    if not token:
         return None
-    log = "\n\n".join("\n".join(e) for e in entries)[:24000]
-    system = (
-        "You write release notes for Heartline, a wellness app for Galaxy Watch and Android phones "
-        "(ECG, blood pressure estimates, heart rate, SpO2, stress, body composition). Write for end "
-        "users in plain, friendly English. Use Markdown with only these sections, in this order and "
-        "only when they have content: '### New', '### Improved', '### Fixed'. One short bullet per "
-        "user-visible change; merge related commits. Leave out refactoring, tests, CI, docs and other "
-        "internal work. Never claim medical accuracy or diagnosis. No title, no introduction, no "
-        "version number, no closing remarks."
-    )
     body = {
         "model": os.environ.get("CHANGELOG_MODEL") or "openai/gpt-4.1-mini",
         "temperature": 0.2,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": f"Version {version}. Changed files: {stat}\n\nCommits:\n{log}"},
-        ],
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
     }
     request = urllib.request.Request(
         MODELS_URL,
@@ -153,9 +150,27 @@ def ai_notes(version: str, entries, stat: str):
     )
     try:
         with urllib.request.urlopen(request, timeout=90) as response:
-            text = json.load(response)["choices"][0]["message"]["content"].strip()
-    except Exception as e:  # noqa: BLE001 - any failure falls back to the commit list
-        print(f"::warning::GitHub Models failed ({e}); using the commit list", file=sys.stderr)
+            return json.load(response)["choices"][0]["message"]["content"].strip()
+    except Exception as e:  # noqa: BLE001 - callers fall back to text without the model
+        print(f"::warning::GitHub Models failed ({e})", file=sys.stderr)
+        return None
+
+
+def ai_notes(version: str, entries, stat: str):
+    if not entries:
+        return None
+    log = "\n\n".join("\n".join(e) for e in entries)[:24000]
+    system = (
+        "You write release notes for Heartline, a wellness app for Galaxy Watch and Android phones "
+        "(ECG, blood pressure estimates, heart rate, SpO2, stress, body composition). Write for end "
+        "users in plain, friendly English. Use Markdown with only these sections, in this order and "
+        "only when they have content: '### New', '### Improved', '### Fixed'. One short bullet per "
+        "user-visible change; merge related commits. Leave out refactoring, tests, CI, docs and other "
+        "internal work. Never claim medical accuracy or diagnosis. No title, no introduction, no "
+        "version number, no closing remarks."
+    )
+    text = ask_model(system, f"Version {version}. Changed files: {stat}\n\nCommits:\n{log}")
+    if not text:
         return None
     text = re.sub(r"^```(?:markdown)?\s*|\s*```$", "", text).strip()
     return text if "### " in text or text.startswith("- ") else None
@@ -188,6 +203,96 @@ def cmd_notes(a) -> None:
     print(notes)
 
 
+def inline_html(text: str) -> str:
+    """Markdown inline code, bold and links to Telegram HTML, everything else escaped."""
+    out = html.escape(text, quote=False)
+    out = re.sub(r"`([^`]+)`", r"<code>\1</code>", out)
+    out = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", out)
+    return re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r'<a href="\2">\1</a>', out)
+
+
+def notes_html(notes: str) -> str:
+    """Release notes (### sections and - bullets) as Telegram HTML."""
+    lines = []
+    for line in notes.strip().splitlines():
+        s = line.strip()
+        if s.startswith("#"):
+            lines.append(("\n" if lines else "") + f"<b>{inline_html(s.lstrip('#').strip())}</b>")
+        elif s.startswith(("- ", "* ")):
+            lines.append("• " + inline_html(s[2:]))
+        elif s:
+            lines.append(inline_html(s))
+    return "\n".join(lines)
+
+
+def summary(version: str, notes: str):
+    system = (
+        "Summarise these release notes of Heartline, a wellness app for Galaxy Watch, in one or two "
+        "short, friendly sentences for a community chat. Plain text only, no emoji, no version "
+        "number, no medical claims."
+    )
+    text = ask_model(system, f"Version {version}\n\n{notes}")
+    return re.sub(r"\s+", " ", text).strip() if text else None
+
+
+def telegram_message(version: str, channel: str, notes: str, release_url: str, summary_text) -> str:
+    title = {
+        "stable": f"🚀 <b>Heartline {html.escape(version)}</b> is out",
+        "beta": f"🧪 <b>Heartline {html.escape(version)}</b>: new beta",
+    }.get(channel, f"🛠 <b>Heartline {html.escape(version)}</b>: development build")
+    how = {
+        "stable": "Update in the app: Settings → Updates.",
+        "beta": "On the Beta or Development update channel: Settings → Updates.",
+    }.get(channel, "Development update channel only.")
+    head = title + ("\n\n" + html.escape(summary_text, quote=False) if summary_text else "")
+    tail = f"\n\n{html.escape(how, quote=False)}\n<i>Heartline is a wellness app, not a medical device.</i>"
+    body = notes_html(notes)
+    room = TELEGRAM_LIMIT - len(head) - len(tail) - 80
+    if len(body) > room:
+        # Cut on a line boundary so no HTML tag is split, and point to the full notes.
+        body = body[:room].rsplit("\n", 1)[0] + f'\n… <a href="{html.escape(release_url)}">full notes</a>'
+    return f"{head}\n\n{body}{tail}"
+
+
+def cmd_telegram(a) -> None:
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    chat = os.environ.get("TELEGRAM_CHAT_ID", "")
+    thread = os.environ.get("TELEGRAM_THREAD_ID", "")
+    notes = open(a.notes, encoding="utf-8").read()
+    text = telegram_message(a.version, a.channel, notes, a.release_url, summary(a.version, notes))
+    guide = f"https://github.com/{a.repo}/blob/main/docs/DEVICE_TESTING.md#2-install"
+    payload = {
+        "chat_id": chat,
+        "text": text,
+        "parse_mode": "HTML",
+        "link_preview_options": {"is_disabled": True},
+        "reply_markup": {"inline_keyboard": [[
+            {"text": "📦 Download", "url": a.release_url},
+            {"text": "📖 How to install", "url": guide},
+        ]]},
+    }
+    if thread:
+        payload["message_thread_id"] = int(thread)
+    if a.dry_run:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    if not token or not chat:
+        print("No TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID: not announcing on Telegram")
+        return
+    request = urllib.request.Request(
+        f"https://api.telegram.org/bot{token}/sendMessage",
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            json.load(response)
+    except urllib.error.HTTPError as e:
+        # Telegram explains what is wrong (chat not found, bot not an admin, bad thread id …).
+        sys.exit(f"Telegram refused the message: {e.code} {e.read().decode(errors='replace')}")
+    print(f"Announced {a.version} on Telegram")
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -204,11 +309,20 @@ def main() -> None:
     c.add_argument("--version", required=True)
     c.add_argument("--notes", required=True)
     c.add_argument("--changelog", required=True)
+    tg = sub.add_parser("telegram")
+    tg.add_argument("--version", required=True)
+    tg.add_argument("--channel", choices=["stable", "beta", "dev"], required=True)
+    tg.add_argument("--notes", required=True)
+    tg.add_argument("--release-url", required=True)
+    tg.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", "selin2005/heartline"))
+    tg.add_argument("--dry-run", action="store_true")
     a = p.parse_args()
     if a.cmd == "version":
         cmd_version(a)
     elif a.cmd == "notes":
         cmd_notes(a)
+    elif a.cmd == "telegram":
+        cmd_telegram(a)
     else:
         add_to_changelog(a.changelog, a.version, open(a.notes, encoding="utf-8").read())
 

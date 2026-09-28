@@ -236,6 +236,7 @@ jobs:
           } > "$RUNNER_TEMP/body.md"
 
       - name: Publish GitHub release
+        id: release
         if: inputs.release
         uses: softprops/action-gh-release@v2
         with:
@@ -249,6 +250,26 @@ jobs:
           files: |
             dist/*.apk
             dist/SHA256SUMS
+
+      # Announces stable and beta releases in the community's Telegram topic (Announcements &
+      # Builds). Needs the TELEGRAM_BOT_TOKEN secret and the TELEGRAM_THREAD_ID variable
+      # (docs/RELEASING.md); without the token it is skipped. A failed announcement doesn't fail
+      # the build, since the release is already published.
+      - name: Announce on Telegram
+        if: inputs.release && env.CHANNEL != 'dev'
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CHANGELOG_MODEL: ${{ vars.CHANGELOG_MODEL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID || '@HeartlineCamiunity' }}
+          TELEGRAM_THREAD_ID: ${{ vars.TELEGRAM_THREAD_ID }}
+        run: |
+          python3 tools/release/release.py telegram \
+            --version "${{ steps.version.outputs.version }}" \
+            --channel "$CHANNEL" \
+            --notes "$RUNNER_TEMP/notes.md" \
+            --release-url "${{ steps.release.outputs.url }}"
 
       # Keeps CHANGELOG.md on the default branch in step with the releases (stable and beta only).
       - name: Commit CHANGELOG.md

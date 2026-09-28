@@ -33,6 +33,26 @@ workflow can publish releases and update `CHANGELOG.md`. Release notes use
 `models: read` permission); no extra key is needed. Set the repository variable `CHANGELOG_MODEL`
 to use a different model.
 
+### 3. Telegram announcements (optional)
+Stable and beta releases are announced in the *Announcements & Builds* topic of the
+[community group](https://t.me/HeartlineCamiunity): title, a short summary, the release notes and
+buttons to the download and the install guide. Dev builds aren't announced.
+
+1. In Telegram, open [@BotFather](https://t.me/BotFather), send `/newbot` and copy the token.
+2. Add the bot to the group as an **admin** that can post messages (and manage topics, if the
+   group asks for it).
+3. Find the topic's ID: open the *Announcements & Builds* topic, copy a message link
+   (`https://t.me/HeartlineCamiunity/<topic id>/<message id>`); the first number is the topic ID.
+4. In GitHub → Settings → Secrets and variables → Actions:
+   - secret `TELEGRAM_BOT_TOKEN`: the bot token;
+   - variable `TELEGRAM_THREAD_ID`: the topic ID;
+   - variable `TELEGRAM_CHAT_ID`: only if the group isn't `@HeartlineCamiunity` (a private group
+     uses its numeric ID, `-100…`).
+
+Without the token the step is skipped. A failed announcement shows a warning in the run but
+doesn't fail the build. To preview a message:
+`python3 tools/release/release.py telegram --version 1.2.0 --channel stable --notes notes.md --release-url URL --dry-run`.
+
 ## Making a release
 
 GitHub → Actions → **Build** → Run workflow:
