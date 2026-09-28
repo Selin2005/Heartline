@@ -5,9 +5,11 @@ run-name: "Build ${{ inputs.version }} · ${{ inputs.channel }} · ${{ inputs.br
 #
 # Channels:
 #   stable  release build for everyone: tag vX.Y.Z, the "latest" GitHub release
-#   beta    release build for testers: tag vX.Y.Z-beta.N, a pre-release; the app only offers it
-#           to users who turned on "Receive beta versions"
-#   dev     debug build with full logs: tag vX.Y.Z-dev.<run>, a pre-release the app never offers
+#   beta    release build for testers: tag vX.Y.Z-beta.N, a pre-release; offered on the Beta and
+#           Development update channels
+#   dev     debug build with full logs: tag vX.Y.Z-dev.<run>, a pre-release offered only on the
+#           Development channel
+# All three are signed with the same release key, so users can move between channels.
 on:
   workflow_dispatch:
     inputs:
@@ -21,7 +23,7 @@ on:
         required: true
         type: string
       channel:
-        description: "Release type: stable = main release for everyone · beta = only users with 'Receive beta versions' on · dev = debug build, never offered"
+        description: "Release type: stable = main release for everyone · beta = Beta and Development channels · dev = debug build, Development channel only"
         required: true
         default: beta
         type: choice
@@ -129,7 +131,6 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Release signing key
-        if: env.CHANNEL != 'dev'
         env:
           KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
@@ -137,7 +138,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
-            echo "::error::Stable and beta builds need the release key: add the RELEASE_KEYSTORE_BASE64, RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS and RELEASE_KEY_PASSWORD secrets (docs/RELEASING.md)."
+            echo "::error::Every build (stable, beta and dev) is signed with the release key: add the RELEASE_KEYSTORE_BASE64, RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS and RELEASE_KEY_PASSWORD secrets (docs/RELEASING.md)."
             exit 1
           fi
           echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
@@ -220,8 +221,8 @@ jobs:
         run: |
           {
             case "$CHANNEL" in
-              beta) echo "> **Beta:** a pre-release for testers. The app offers it only with *Settings → Updates → Receive beta versions* on." ;;
-              dev) echo "> **Development build** (debug, full logging). Not offered as an update." ;;
+              beta) echo "> **Beta:** a pre-release for testers. The app offers it on the *Beta* and *Development* update channels (Settings → Updates → Update channel)." ;;
+              dev) echo "> **Development build** (debug, full logging). Offered only on the *Development* update channel." ;;
             esac
             echo
             cat "$RUNNER_TEMP/notes.md"

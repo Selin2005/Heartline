@@ -3,9 +3,11 @@
 ## One-time setup
 
 ### 1. Release signing key
-Every public build (stable and beta) is signed with **one release key**. Updates only install on
-top of a build signed with the same key, so create it once and keep it safe. **Losing it means
-users have to uninstall to get updates.**
+Every build the workflow makes (stable, beta and dev) is signed with **one release key**, so users
+can update between channels without uninstalling. Updates only install on top of a build signed
+with the same key, so create it once and keep it safe. **Losing it means users have to uninstall
+to get updates.** Local builds and pull requests, without the key, use the shared test key in
+`keystore/`; they don't update a build from Releases.
 
 ```bash
 keytool -genkeypair -v -keystore heartline-release.jks -alias heartline \

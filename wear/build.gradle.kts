@@ -34,7 +34,7 @@ android {
             keyPassword = "android"
         }
         // The release key comes from the environment (the Build workflow's secrets). Without it,
-        // release builds fall back to the shared test key so they still install next to debug builds.
+        // every build falls back to the shared test key (local builds, pull requests).
         System.getenv("HEARTLINE_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }?.let { keystore ->
             create("release") {
                 storeFile = file(keystore)
@@ -46,6 +46,11 @@ android {
     }
 
     buildTypes {
+        // Dev builds (debug) are signed with the same release key as betas and releases, so users can
+        // move between the dev, beta and stable channels without uninstalling.
+        debug {
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+        }
         release {
             // R8; signed with the release key when the environment provides one.
             isMinifyEnabled = true
