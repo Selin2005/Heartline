@@ -73,7 +73,7 @@ fun UpdatesScreen(
 ) {
     var choosing by remember { mutableStateOf(false) }
     if (choosing) {
-        val tracks = listOfNotNull(AppVersion.Channel.STABLE, AppVersion.Channel.BETA, AppVersion.Channel.DEV.takeIf { ui.prefs.devAvailable })
+        val tracks = listOf(AppVersion.Channel.STABLE, AppVersion.Channel.BETA, AppVersion.Channel.DEV)
         ChoiceDialog(
             stringResource(R.string.updates_channel),
             tracks.map { stringResource(it.title) to it },

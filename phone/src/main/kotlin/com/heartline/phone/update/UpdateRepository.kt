@@ -29,8 +29,6 @@ class UpdateRepository(private val context: Context, private val installedVersio
         val autoCheck: Boolean = true,
         /** Which releases are offered: stable → stable; beta → beta + stable; dev → everything. */
         val track: Channel = Channel.STABLE,
-        /** A dev build was installed at some point, so the development track can be chosen. */
-        val devAvailable: Boolean = false,
         val lastCheckMs: Long = 0,
         val notifiedVersion: String? = null,
         val lastSeenVersion: String? = null,
@@ -60,7 +58,6 @@ class UpdateRepository(private val context: Context, private val installedVersio
         Prefs(
             autoCheck = it[Keys.AUTO] ?: true,
             track = channel(it[Keys.TRACK]) ?: legacy,
-            devAvailable = highest == Channel.DEV,
             lastCheckMs = it[Keys.LAST_CHECK] ?: 0,
             notifiedVersion = it[Keys.NOTIFIED],
             lastSeenVersion = it[Keys.LAST_SEEN],

@@ -132,6 +132,62 @@ class UpdateTest {
         assertFalse(Releases.watchBehind(null, latest))
     }
 
+    /** Releases as the Build workflow now makes them: every version above every stable and beta so far. */
+    private val channels = listOf(
+        "v0.0.2.107-beta.1",
+        "v0.0.2.107-dev.5",
+        "v0.0.2.107",
+        "v0.0.2.108-dev.9",
+        "v0.0.2.108-beta.1",
+        "v0.0.2.108-dev.12"
+    ).mapIndexedNotNull { i, t ->
+        Releases.toRelease(
+            release(
+                t,
+                i + 1
+            ).copy(
+                assets = listOf(
+                    GitHubAsset("Heartline-phone-${t.drop(1)}.apk", url = "p"),
+                    GitHubAsset("Heartline-watch-${t.drop(1)}.apk", url = "w")
+                )
+            )
+        )
+    }
+
+    @Test
+    fun switchingChannelOnlyOffersLaterBuilds() {
+        // The versionCode counts up with time, so an update installs only if it was published later.
+        for (installed in channels) {
+            for (track in AppVersion.Channel.entries) {
+                val offered = Releases.update(channels, installed.version.toString(), track) ?: continue
+                assertTrue("$installed on $track → $offered", offered.publishedAt!! > installed.publishedAt!!)
+            }
+        }
+        // Stable → Development: the next dev build (or beta) after the installed release.
+        assertEquals("0.0.2.108-dev.12", Releases.update(channels, "0.0.2.107", DEV)!!.version.toString())
+        // Stable → Beta and Development → Stable / Beta.
+        assertEquals("0.0.2.108-beta.1", Releases.update(channels, "0.0.2.107", BETA)!!.version.toString())
+        assertEquals("0.0.2.107", Releases.update(channels, "0.0.2.107-dev.5", STABLE)!!.version.toString())
+        assertEquals("0.0.2.108-beta.1", Releases.update(channels, "0.0.2.108-dev.9", BETA)!!.version.toString())
+        assertEquals("0.0.2.107", Releases.update(channels, "0.0.2.107-beta.1", STABLE)!!.version.toString())
+        // Nothing of the track published since: stays until its next release.
+        assertNull(Releases.update(channels, "0.0.2.108-dev.12", BETA))
+        assertNull(Releases.update(channels, "0.0.2.108-dev.12", STABLE))
+    }
+
+    @Test
+    fun watchBehindAcrossChannels() {
+        fun r(v: String) = channels.first { it.version.toString() == v }
+        // Published later means newer, whatever the channel.
+        assertTrue(Releases.watchBehind("0.0.2.108-dev.9", r("0.0.2.108-beta.1"), channels))
+        assertTrue(Releases.watchBehind("0.0.2.107", r("0.0.2.108-dev.12"), channels))
+        // A watch on a later build isn't told to install an earlier one.
+        assertFalse(Releases.watchBehind("0.0.2.108-dev.12", r("0.0.2.108-beta.1"), channels))
+        assertFalse(Releases.watchBehind("0.0.2.108-beta.1", r("0.0.2.108-beta.1"), channels))
+        // A local watch build: version order.
+        assertTrue(Releases.watchBehind("0.0.2.106", r("0.0.2.107"), channels))
+    }
+
     @Test
     fun checksums() {
         val hash = "a".repeat(64)

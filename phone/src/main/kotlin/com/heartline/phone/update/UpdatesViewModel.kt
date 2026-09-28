@@ -35,8 +35,10 @@ data class UpdatesUi(
     val error: String? = null,
     /** 0..1 while downloading, null otherwise. */
     val progress: Float? = null,
+    /** Every published release from the last check (when the watch's version was published). */
+    val releases: List<Release> = emptyList(),
 ) {
-    val watchBehind: Boolean get() = Releases.watchBehind(prefs.watchVersion, available ?: latest)
+    val watchBehind: Boolean get() = Releases.watchBehind(prefs.watchVersion, available ?: latest, releases)
 }
 
 class UpdatesViewModel(private val updater: Updater, private val repository: UpdateRepository, installed: String) : ViewModel() {
@@ -57,8 +59,8 @@ class UpdatesViewModel(private val updater: Updater, private val repository: Upd
             state.update { it.copy(checking = true, error = null) }
             state.update {
                 when (val result = updater.check()) {
-                    is Updater.Check.Available -> it.copy(checking = false, available = result.release, latest = result.release, upToDate = false)
-                    is Updater.Check.UpToDate -> it.copy(checking = false, available = null, latest = result.latest, upToDate = true)
+                    is Updater.Check.Available -> it.copy(checking = false, available = result.release, latest = result.release, upToDate = false, releases = result.releases)
+                    is Updater.Check.UpToDate -> it.copy(checking = false, available = null, latest = result.latest, upToDate = true, releases = result.releases)
                     is Updater.Check.Failed -> it.copy(checking = false, error = result.message)
                 }
             }

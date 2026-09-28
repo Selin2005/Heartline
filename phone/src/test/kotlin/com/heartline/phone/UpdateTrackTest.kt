@@ -25,17 +25,13 @@ class UpdateTrackTest {
 
     @Test
     fun trackFollowsTheInstalledChannelAndIsSticky() = runTest {
-        installed("1.0.0").current().let {
-            assertEquals(STABLE, it.track)
-            assertFalse(it.devAvailable)
-        }
+        assertEquals(STABLE, installed("1.0.0").current().track)
         // A dev build installed by hand puts the phone on the dev track…
         assertEquals(DEV, installed("1.1.0-dev.5").current().track)
         // …and updating to a beta or a main release keeps it there.
         assertEquals(DEV, installed("1.1.0-beta.1").current().track)
         installed("1.1.0").current().let {
             assertEquals(DEV, it.track)
-            assertTrue(it.devAvailable)
             assertTrue(it.receivesBetas)
         }
         // An explicit choice wins and survives later updates.

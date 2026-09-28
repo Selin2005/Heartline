@@ -28,10 +28,11 @@ class Updater(
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     sealed interface Check {
-        data class Available(val release: Release) : Check
+        /** [releases]: all published releases, to compare the watch's version against. */
+        data class Available(val release: Release, val releases: List<Release> = emptyList()) : Check
 
         /** [latest] is the newest release of the chosen channels (to compare the watch against). */
-        data class UpToDate(val latest: Release?) : Check
+        data class UpToDate(val latest: Release?, val releases: List<Release> = emptyList()) : Check
 
         data class Failed(val message: String) : Check
     }
@@ -44,7 +45,7 @@ class Updater(
             repository.markChecked(now())
             val update = Releases.update(releases, installedVersion, prefs.track)
             HLog.i(TAG, "checked ${releases.size} releases; installed=$installedVersion track=${prefs.track} update=${update?.version}")
-            if (update != null) Check.Available(update) else Check.UpToDate(Releases.newest(releases, prefs.track))
+            if (update != null) Check.Available(update, releases) else Check.UpToDate(Releases.newest(releases, prefs.track), releases)
         }.getOrElse {
             HLog.w(TAG, "update check failed", it)
             Check.Failed(it.message ?: it.javaClass.simpleName)

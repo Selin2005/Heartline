@@ -97,6 +97,10 @@ object Releases {
      * The release to offer on top of [current], or null when there's nothing newer for [track]:
      * - stable: the next stable release;
      * - beta: the next beta or stable release;
+     * - after switching to stable or beta from a build of another channel (a dev build on the beta
+     *   track, a beta on the stable track): also any release of the track published after the
+     *   installed build, such as 0.0.2.108-beta.1 after 0.0.2.108-dev.9. Published later means a
+     *   higher versionCode, so it installs over it;
      * - dev: anything published after the installed build (next dev, beta or stable), as long as
      *   it isn't for an older version. A build that isn't a published release (a local build)
      *   falls back to version order, with dev builds before the betas of their version.
@@ -104,8 +108,13 @@ object Releases {
     fun update(releases: List<Release>, current: String, track: AppVersion.Channel): Release? {
         val installed = AppVersion.parse(current) ?: return null
         val offered = candidates(releases, track)
-        if (track != AppVersion.Channel.DEV) return offered.filter { it.version > installed }.maxByOrNull { it.version }
         val installedAt = releases.firstOrNull { it.version == installed }?.let(::instant)
+        if (track != AppVersion.Channel.DEV) {
+            val left = installedAt.takeIf { !receives(track, installed.channel) }
+            return offered.filter {
+                it.version > installed || (left != null && instant(it)?.isAfter(left) == true)
+            }.maxByOrNull { it.version }
+        }
         val newer = if (installedAt != null) {
             offered.filter { r -> instant(r)?.isAfter(installedAt) == true && base(r.version) >= base(installed) && r.version != installed }
         } else {
@@ -115,10 +124,19 @@ object Releases {
         return newer.maxWithOrNull(compareBy<Release>({ instant(it) ?: Instant.EPOCH }, { it.version }))
     }
 
-    /** True when the watch runs an older version than [latest] (or its version is unknown but set). */
-    fun watchBehind(watchVersion: String?, latest: Release?): Boolean {
+    /**
+     * True when the watch should install [latest]: it runs another version that was published
+     * before [latest] (found in [releases]). Every build's versionCode counts up with time, so a
+     * later release always installs over an earlier one, across channels: a watch on
+     * 0.0.2.108-dev.3 is behind a 0.0.2.108-beta.2 published after it. A watch build that isn't a
+     * release (a local build) falls back to version order.
+     */
+    fun watchBehind(watchVersion: String?, latest: Release?, releases: List<Release> = emptyList()): Boolean {
         val watch = watchVersion?.let(AppVersion::parse) ?: return false
-        return latest?.watchApk != null && latest.version > watch
+        if (latest?.watchApk == null || latest.version == watch) return false
+        val watchAt = releases.firstOrNull { it.version == watch }?.let(::instant)
+        val latestAt = instant(latest)
+        return if (watchAt != null && latestAt != null) latestAt.isAfter(watchAt) else latest.version > watch
     }
 
     /** Parses `sha256sum` output: "<hex>  <file>" (or "<hex> *<file>") per line → file name to lowercase hash. */
