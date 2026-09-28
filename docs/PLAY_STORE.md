@@ -62,8 +62,8 @@ allow apps to update themselves). The store texts are in
 
 ## Store listing
 - Short and full description, title: `fastlane/metadata/android/en-US/`.
-- App icon 512 × 512 and feature graphic 1024 × 500: export from the launcher icon
-  (`phone/src/test/.../IconExport.kt`) and design a graphic without medical claims.
+- App icon 512 × 512 and feature graphic 1024 × 500: `docs/brand/heartline-icon-512.png` and
+  `docs/brand/play-feature-graphic.png` ([docs/brand](brand/README.md)).
 - Phone screenshots (at least 2, 16:9 or 9:16): from `docs/screenshots/phone/`.
 - Wear OS screenshots (at least 1, 384 × 384 or larger, round content on a square canvas, no
   device frame): from `docs/screenshots/wear/` (the large-watch images).

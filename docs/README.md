@@ -11,7 +11,7 @@
 - [Blood pressure algorithm](algorithms/BP_ALGORITHM.md)
 - [Watch ↔ phone sync protocol](architecture/PROTOCOL.md)
 - [Samsung Health Sensor SDK integration](SAMSUNG_HEALTH_SENSOR_SDK.md)
-- [Design system](DESIGN.md)
+- [Design system](DESIGN.md) · [App icon and promotional images](brand/README.md)
 
 ## Maintaining
 - [Releasing: channels, release notes and signing](RELEASING.md)

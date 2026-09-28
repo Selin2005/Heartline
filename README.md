@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/brand/heartline-poster.png" alt="Heartline: heart health on your Galaxy Watch" width="100%">
+
 # Heartline
 
 **Heart health on your Galaxy Watch: ECG, blood pressure estimates and rhythm checks, with your history on your phone.**
@@ -11,7 +13,6 @@
 
 <img src="docs/screenshots/phone/home/home_light.png" width="200" alt="Phone home screen">
 <img src="docs/screenshots/phone/ecg/ecg_detail_sinus_dark.png" width="200" alt="ECG recording on the phone">
-<img src="docs/screenshots/wear/ecg/ecg_result_sinus_large.png" width="180" alt="ECG result on the watch">
 <img src="docs/screenshots/wear/tiles/heart_large.png" width="180" alt="Heart rate card on the watch">
 
 </div>

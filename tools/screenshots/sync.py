@@ -12,6 +12,9 @@ Sources:
 
 Every PNG is optimised losslessly with oxipng (pip install -r tools/screenshots/requirements.txt).
 
+The app icon and promotional images in docs/brand (BrandAssetsTest with HEARTLINE_BRAND_ASSETS=1)
+are optimised too.
+
   python3 tools/screenshots/sync.py           update docs/screenshots
   python3 tools/screenshots/sync.py --check   fail if docs/screenshots is out of date (CI)
 """
@@ -26,6 +29,7 @@ import oxipng
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DOCS = ROOT / "docs" / "screenshots"
+BRAND = ROOT / "docs" / "brand"
 GOLDENS = {
     "phone": ROOT / "phone/src/test/snapshots/images",
     "wear": ROOT / "wear/src/test/snapshots/images",
@@ -373,6 +377,8 @@ def build(out: pathlib.Path) -> None:
 def main() -> int:
     if "--check" not in sys.argv:
         build(DOCS)
+        if BRAND.exists():
+            optimise(BRAND)
         print(f"Synced {sum(1 for _ in DOCS.rglob('*.png'))} screenshots to {DOCS.relative_to(ROOT)}")
         return 0
     with tempfile.TemporaryDirectory() as tmp:
