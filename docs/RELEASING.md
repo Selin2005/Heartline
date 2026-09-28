@@ -79,7 +79,8 @@ Who is offered what in the app depends on the user's update channel (Settings �
 | Beta | beta and stable releases |
 | Development | dev, beta and stable releases, by publication time |
 
-All three update channels can be picked by anyone. The channel starts at the kind of build
+The *Update channel* setting is shown only in beta and dev builds; stable builds hide it, and
+their channel works on as set underneath. The channel starts at the kind of build
 installed and is sticky: a dev user who updates to a beta or stable release keeps getting dev
 builds, and a beta user who updates to a stable release keeps getting betas. After switching to
 a channel the installed build doesn't belong to (dev → beta, beta → stable), the app offers that

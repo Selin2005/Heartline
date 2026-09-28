@@ -70,8 +70,9 @@ SHA-256 checksum: **Settings → Updates**.
   | **Development** | every new build: development builds, betas and main releases |
 
   Updating from a development build to a beta or main release keeps you on the development
-  channel (and from a beta to a main release on the beta channel). Change the channel in
-  **Settings → Updates → Update channel**.
+  channel (and from a beta to a main release on the beta channel). Beta and development builds
+  can change it in **Settings → Updates → Update channel**. To join the beta from a main release,
+  install a beta from [Releases](https://github.com/selin2005/heartline/releases) over it.
 - After each update, **What's new** shows the release notes.
 - When the watch app is behind, the phone tells you and links to the watch APK.
 

@@ -222,7 +222,7 @@ class PhoneScreenshotTest(private val theme: String) {
 
     @Test fun updates() = shot("settings_updates") {
         UpdatesScreen(
-            UpdatesUi("1.1.0", enabled = true, prefs = UpdateRepository.Prefs(track = AppVersion.Channel.BETA, watchVersion = "1.1.0"), available = betaRelease),
+            UpdatesUi("1.1.0-beta.1", enabled = true, prefs = UpdateRepository.Prefs(track = AppVersion.Channel.BETA, watchVersion = "1.1.0-beta.1"), available = betaRelease),
             onBack = {},
         )
     }

@@ -133,7 +133,8 @@ attach them to a bug report.
 13. **Body composition:** if the watch can't detect your fingers, try Samsung Health's own body
     composition first. Heartline tells you which key doesn't sense a finger (upper, lower or both).
 14. **Updates:** Settings → Updates → *Check now* finds the newest stable release; with the update
-    channel set to Beta it also offers betas, and on Development every new build. After updating, *What's new* shows the changelog.
+    channel set to Beta it also offers betas, and on Development every new build. The *Update
+    channel* setting is shown only in beta and dev builds. After updating, *What's new* shows the changelog.
 15. **Blood pressure sensors (algorithm 6).** Every session writes a raw log. Capture
     `adb logcat -v time -s Heartline/BP Heartline/BpRaw Heartline/Sensor` and export
     Phone → Blood pressure → Share → **BP raw sessions (zip)**. Then check each item below and

@@ -38,6 +38,12 @@ data class UpdatesUi(
     /** Every published release from the last check (when the watch's version was published). */
     val releases: List<Release> = emptyList(),
 ) {
+    /**
+     * Stable builds don't show the update channel setting; betas and dev builds do. Only the row
+     * is hidden: the chosen channel (sticky, see UpdateRepository) keeps working underneath.
+     */
+    val showsChannel: Boolean get() = AppVersion.parse(installed)?.channel.let { it != null && it != AppVersion.Channel.STABLE }
+
     val watchBehind: Boolean get() = Releases.watchBehind(prefs.watchVersion, available ?: latest, releases)
 }
 

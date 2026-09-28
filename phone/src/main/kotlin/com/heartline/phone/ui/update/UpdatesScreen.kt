@@ -150,15 +150,17 @@ fun UpdatesScreen(
                     subtitle = stringResource(R.string.updates_auto_sub),
                     leading = { IconBadge(Icons.Rounded.Sync, colors.onSurfaceVariant) },
                     trailing = { OneUiSwitch(ui.prefs.autoCheck, onAutoCheck) },
-                    showDivider = true,
+                    showDivider = ui.showsChannel,
                     onClick = { onAutoCheck(!ui.prefs.autoCheck) },
                 )
-                CardRow(
-                    stringResource(R.string.updates_channel),
-                    subtitle = stringResource(ui.prefs.track.description),
-                    leading = { IconBadge(Icons.Rounded.Science, colors.onSurfaceVariant) },
-                    onClick = { choosing = true },
-                )
+                if (ui.showsChannel) {
+                    CardRow(
+                        stringResource(R.string.updates_channel),
+                        subtitle = stringResource(ui.prefs.track.description),
+                        leading = { IconBadge(Icons.Rounded.Science, colors.onSurfaceVariant) },
+                        onClick = { choosing = true },
+                    )
+                }
             }
         }
         item { SectionHeader(stringResource(R.string.updates_watch)) }

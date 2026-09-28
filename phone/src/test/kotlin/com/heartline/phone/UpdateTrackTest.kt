@@ -7,6 +7,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.heartline.phone.update.UpdateRepository
+import com.heartline.phone.update.UpdatesUi
 import com.heartline.shared.update.AppVersion.Channel.BETA
 import com.heartline.shared.update.AppVersion.Channel.DEV
 import com.heartline.shared.update.AppVersion.Channel.STABLE
@@ -43,5 +44,13 @@ class UpdateTrackTest {
             assertEquals(STABLE, it.track)
             assertFalse(it.receivesBetas)
         }
+    }
+
+    @Test
+    fun onlyBetaAndDevBuildsShowTheChannelSetting() {
+        assertFalse(UpdatesUi("1.2.0", enabled = true).showsChannel)
+        assertFalse(UpdatesUi("0.0.2.107", enabled = true, prefs = UpdateRepository.Prefs(track = DEV)).showsChannel)
+        assertTrue(UpdatesUi("1.2.0-beta.1", enabled = true).showsChannel)
+        assertTrue(UpdatesUi("0.0.2.108-dev.4", enabled = true).showsChannel)
     }
 }
