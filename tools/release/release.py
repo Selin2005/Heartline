@@ -8,8 +8,8 @@ Release helpers for the Build workflow.
       Prints the version name for the channel: 1.2.0 (stable), 1.2.0-beta.N (next free N for
       that base), 1.2.0-dev.57 (dev), the previous tag the notes start from and the Android
       versionCode (minutes since 2026, so it counts up with every build of every channel), as
-      GitHub output lines (version=…, previous=…, code=…). A stable or beta version must be
-      higher than every stable and beta release so far.
+      GitHub output lines (version=…, previous=…, code=…). Every build must sort above every
+      stable and beta release so far.
 
   release.py notes --version 1.2.0-beta.3 --out notes.md --changelog CHANGELOG.md [--previous TAG]
       Writes user-facing release notes. With --changelog they cover the commits since the newest
@@ -118,14 +118,14 @@ def cmd_version(a) -> None:
         name = f"{b}-dev.{a.run}"
     current = parse(name)
     # Android installs an update only over a lower versionCode, and the versionCode counts up with
-    # time (version_code), so a stable or beta release must also be the highest version so far:
-    # otherwise the app would offer the older-built, higher version as an update that can't install.
-    if a.channel != "dev":
-        higher = [t for t, v in all_tags if channel_of(v) != "dev" and sort_key(v) > sort_key(current)]
-        if higher:
-            sys.exit(f"::error::{higher[-1]} is already released: a {a.channel} release must be a higher version than {name}")
-    elif any(channel_of(v) != "dev" and tuple(v[:3]) + (int(v[4] or 0),) > tuple(current[:3]) + (int(current[4] or 0),) for _, v in all_tags):
-        print(f"::warning::{name} is older than the newest beta or stable release; beta and stable users won't be offered it", file=sys.stderr)
+    # time (version_code), so every build must also sort above every stable and beta release so far
+    # (the Stable and Beta update channels go by version): otherwise switching channels would offer
+    # the older-built, higher version as an update that can't install. Dev builds sort above the
+    # betas of their version but below its stable release, so after X.Y.Z is released, dev builds
+    # need a higher version.
+    higher = [t for t, v in all_tags if channel_of(v) != "dev" and sort_key(v) > sort_key(current)]
+    if higher:
+        sys.exit(f"::error::{higher[-1]} is already released: a {a.channel} build must be a higher version than {name}")
     # Notes cover everything since the previous release users of this channel had.
     wanted = {"stable": ("stable",), "beta": ("stable", "beta"), "dev": ("stable", "beta", "dev")}[a.channel]
     previous = ""

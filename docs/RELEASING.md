@@ -79,9 +79,13 @@ Who is offered what in the app depends on the user's update channel (Settings �
 | Beta | beta and stable releases |
 | Development | dev, beta and stable releases, by publication time |
 
-The channel starts at the kind of build installed and is sticky: a dev user who updates to a
-beta or stable release keeps getting dev builds, and a beta user who updates to a stable
-release keeps getting betas.
+All three update channels can be picked by anyone. The channel starts at the kind of build
+installed and is sticky: a dev user who updates to a beta or stable release keeps getting dev
+builds, and a beta user who updates to a stable release keeps getting betas. After switching to
+a channel the installed build doesn't belong to (dev → beta, beta → stable), the app offers that
+channel's newest release published after the installed build; if there's none yet, it waits for
+the next one. The phone tells the watch to update when the watch runs a build published before
+the phone's newest release.
 
 The workflow:
 1. works out the version and the previous release of that channel;
@@ -128,17 +132,16 @@ by changing *Settings → Updates → Update channel*, without uninstalling.
 - **`versionCode` = minutes since 2026-01-01 UTC**, from `release.py version`. It counts up with
   every build of every channel, Promote included, so a later build always installs over an
   earlier one (Android refuses a lower `versionCode`).
-- **Versions go up too:** a stable or beta version must be higher than every stable and beta
-  release so far (the workflow stops otherwise). A release built later with a lower version would
-  have a higher `versionCode`, and the higher-versioned, earlier build offered on another channel
-  couldn't install over it.
+- **Versions go up too:** every build must sort above every stable and beta release so far (the
+  workflow stops otherwise). A build made later with a lower version would have a higher
+  `versionCode`, and the higher-versioned, earlier build offered on another channel couldn't
+  install over it. Dev builds sort above the betas of their version but below its stable release:
+  after `X.Y.Z` is released, the next dev builds need a higher version.
 - **R8 only shrinks the libraries.** `proguard-rules.pro` keeps all of Heartline's code whole and
   renames nothing (`-dontobfuscate`), and resource shrinking is off, so resources only the system
   reads (the Wear OS capabilities) stay in.
 - `./gradlew assembleDebug` is for local work and tests only; nothing debuggable is published.
 
-Moving to a channel with an **older** newest release (say from dev to stable) waits for that
-channel's next release: the app offers only versions above the installed one.
 
 ### APK checks
 `tools/ci/check-apks.py` runs on every build before anything is published and fails it when:
