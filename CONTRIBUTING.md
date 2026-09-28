@@ -6,6 +6,7 @@ belong in the official app.** Please send them as pull requests to
 version, so every user benefits.
 
 ## Before you start
+- **Questions and ideas:** talk to us in the [Heartline community on Telegram](https://t.me/HeartlineCamiunity).
 - **Bugs:** open an issue using the *Bug report* form. It asks for the app versions (phone and
   watch), the watch model with its One UI Watch and Health Platform versions, and the phone
   model with its One UI / Android version.

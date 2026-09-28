@@ -10,6 +10,7 @@
 [![Latest beta](https://img.shields.io/github/v/release/selin2005/heartline?include_prereleases&label=beta)](https://github.com/selin2005/heartline/releases)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 [![Wear OS](https://img.shields.io/badge/Wear%20OS-Galaxy%20Watch4%2B-4285F4)](#requirements)
+[![Telegram community](https://img.shields.io/badge/Telegram-community-26A5E4?logo=telegram&logoColor=white)](https://t.me/HeartlineCamiunity)
 
 <img src="docs/screenshots/phone/home/home_light.png" width="200" alt="Phone home screen">
 <img src="docs/screenshots/phone/ecg/ecg_detail_sinus_dark.png" width="200" alt="ECG recording on the phone">
@@ -105,6 +106,12 @@ Documentation: [docs/](docs/README.md). This covers the [ECG](docs/algorithms/EC
 and [blood pressure](docs/algorithms/BP_ALGORITHM.md) algorithms, the
 [sync protocol](docs/architecture/PROTOCOL.md), the [design system](docs/DESIGN.md) and
 [releasing](docs/RELEASING.md).
+
+## Community
+Questions, tips, test builds and news: join the **[Heartline community on Telegram](https://t.me/HeartlineCamiunity)**.
+Bugs and device reports go to [GitHub Issues](https://github.com/selin2005/heartline/issues/new/choose),
+so they can be tracked. Heartline doesn't give medical advice there either: for health questions,
+talk to a doctor.
 
 ## Contributing
 Contributions are welcome! Please send improvements as **pull requests to this repository**, so

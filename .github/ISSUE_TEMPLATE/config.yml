@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Questions and community (Telegram)
+    url: https://t.me/HeartlineCamiunity
+    about: Ask questions, share tips and hear about new versions.
   - name: Security vulnerability
     url: https://github.com/selin2005/heartline/security/advisories/new
     about: Report security problems privately.
