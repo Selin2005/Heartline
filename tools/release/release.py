@@ -118,46 +118,82 @@ def cmd_version(a) -> None:
     print(f"previous={previous}")
 
 
+# Commits that only touch these never reach the release notes: agent and CI setup, workflows,
+# repository tooling, tests and the changelog itself.
+INTERNAL = re.compile(
+    r"^(\.claude/|CLAUDE\.md$|\.github/|tools/(?!.*README\.md$)|[^/]+/src/test/|\.gitignore$|"
+    r"\.editorconfig$|CHANGELOG\.md$)"
+)
+# Documentation, legal texts and store listings: summed up as one line.
+DOCS = re.compile(r"^(docs/|legal/|fastlane/|[^/]+\.md$|LICENSE|tools/[^/]+/README\.md$)")
+DOCS_LINE = "Documentation, terms and policy updates"
+
+
 def commits(previous: str):
+    """Commit messages since [previous] that matter to users, and whether docs changed too."""
     rng = f"{previous}..HEAD" if previous else "HEAD"
-    raw = git("log", "--no-merges", "--format=%s%n%b%x1e", rng)
-    entries = []
+    raw = git("log", "--no-merges", "--format=%x1e%s%n%b%x1f", "--name-only", rng)
+    entries, docs = [], False
     for block in raw.split("\x1e"):
-        lines = [line for line in block.strip().splitlines() if line.strip() and not TRAILER.match(line.strip())]
+        if not block.strip():
+            continue
+        message, _, names = block.partition("\x1f")
+        files = [f for f in names.split("\n") if f.strip()]
+        outside = [f for f in files if not INTERNAL.match(f)]
+        if files and not outside:
+            continue
+        if files and all(DOCS.match(f) for f in outside):
+            docs = True
+            continue
+        lines = [line for line in message.strip().splitlines() if line.strip() and not TRAILER.match(line.strip())]
         if lines:
             entries.append(lines)
-    return entries
+    return entries, docs
+
+
+# GitHub Models, then its older Azure endpoint (plain model names) if the first one doesn't answer.
+MODEL_ENDPOINTS = [
+    (MODELS_URL, lambda m: m),
+    ("https://models.inference.ai.azure.com/chat/completions", lambda m: m.split("/", 1)[-1]),
+]
 
 
 def ask_model(system: str, user: str):
-    """One GitHub Models completion, or None without a token or on any failure."""
+    """One GitHub Models completion, or None without a token or when no endpoint answers."""
     token = os.environ.get("GITHUB_TOKEN")
     if not token:
         return None
-    body = {
-        "model": os.environ.get("CHANGELOG_MODEL") or "openai/gpt-4.1-mini",
-        "temperature": 0.2,
-        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-    }
-    request = urllib.request.Request(
-        MODELS_URL,
-        data=json.dumps(body).encode(),
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "Content-Type": "application/json",
-        },
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=90) as response:
-            return json.load(response)["choices"][0]["message"]["content"].strip()
-    except Exception as e:  # noqa: BLE001 - callers fall back to text without the model
-        print(f"::warning::GitHub Models failed ({e})", file=sys.stderr)
-        return None
+    model = os.environ.get("CHANGELOG_MODEL") or "openai/gpt-4.1-mini"
+    for url, name in MODEL_ENDPOINTS:
+        body = {
+            "model": name(model),
+            "temperature": 0.2,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        }
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(body).encode(),
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "Content-Type": "application/json",
+            },
+        )
+        raw = b""
+        try:
+            with urllib.request.urlopen(request, timeout=90) as response:
+                raw = response.read()
+            return json.loads(raw)["choices"][0]["message"]["content"].strip()
+        except urllib.error.HTTPError as e:
+            reason = f"HTTP {e.code}: {e.read()[:300].decode(errors='replace')}"
+        except Exception as e:  # noqa: BLE001 - try the next endpoint, then fall back to plain text
+            reason = f"{e}; reply: {raw[:300].decode(errors='replace')!r}"
+        print(f"::warning::GitHub Models failed at {url} ({reason})", file=sys.stderr)
+    return None
 
 
-def ai_notes(version: str, entries, stat: str):
+def ai_notes(version: str, entries, docs: bool, stat: str):
     if not entries:
         return None
     log = "\n\n".join("\n".join(e) for e in entries)[:24000]
@@ -170,6 +206,8 @@ def ai_notes(version: str, entries, stat: str):
         "internal work. Never claim medical accuracy or diagnosis. No title, no introduction, no "
         "version number, no closing remarks."
     )
+    if docs:
+        log += f"\n\n(Also: {DOCS_LINE}. Mention this as exactly one bullet under '### Improved'.)"
     text = ask_model(system, f"Version {version}. Changed files: {stat}\n\nCommits:\n{log}")
     if not text:
         return None
@@ -177,10 +215,9 @@ def ai_notes(version: str, entries, stat: str):
     return text if "### " in text or text.startswith("- ") else None
 
 
-def plain_notes(entries) -> str:
-    if not entries:
-        return "- Maintenance release."
-    return "### Changes\n" + "\n".join(f"- {e[0]}" for e in entries[:40])
+def plain_notes(entries, docs: bool = False) -> str:
+    lines = [f"- {e[0]}" for e in entries[:40]] + ([f"- {DOCS_LINE}"] if docs else [])
+    return "### Changes\n" + "\n".join(lines) if lines else "- Maintenance release."
 
 
 def add_to_changelog(path: str, version: str, notes: str) -> None:
@@ -194,9 +231,9 @@ def add_to_changelog(path: str, version: str, notes: str) -> None:
 
 
 def cmd_notes(a) -> None:
-    entries = commits(a.previous)
+    entries, docs = commits(a.previous)
     stat = git("diff", "--shortstat", a.previous, "HEAD") if a.previous else "first release"
-    notes = ai_notes(a.version, entries, stat) or plain_notes(entries)
+    notes = ai_notes(a.version, entries, docs, stat) or plain_notes(entries, docs)
     with open(a.out, "w", encoding="utf-8") as f:
         f.write(notes.strip() + "\n")
     if a.changelog:
@@ -246,7 +283,7 @@ def telegram_message(version: str, channel: str, notes: str, release_url: str, s
         "beta": "On the Beta or Development update channel: Settings → Updates.",
     }.get(channel, "Development update channel only.")
     head = title + ("\n\n" + html.escape(summary_text, quote=False) if summary_text else "")
-    tail = f"\n\n{html.escape(how, quote=False)}\n<i>Heartline is a wellness app, not a medical device.</i>"
+    tail = f"\n\n{html.escape(how, quote=False)}"
     body = notes_html(notes)
     room = TELEGRAM_LIMIT - len(head) - len(tail) - 80
     if len(body) > room:
