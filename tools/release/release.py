@@ -9,10 +9,12 @@ Release helpers for the Build workflow.
       that base), 1.2.0-dev.57 (dev), plus the previous tag the notes start from, as
       GitHub output lines (version=…, previous=…).
 
-  release.py notes --version 1.2.0-beta.3 --previous v1.2.0-beta.2 --out notes.md [--changelog CHANGELOG.md]
-      Writes user-facing release notes for the commits since --previous. With GITHUB_TOKEN it
-      asks GitHub Models (CHANGELOG_MODEL, default openai/gpt-4.1-mini); otherwise, or if that
-      fails, it lists the commit subjects. With --changelog the notes are also added to it.
+  release.py notes --version 1.2.0-beta.3 --out notes.md --changelog CHANGELOG.md [--previous TAG]
+      Writes user-facing release notes. With --changelog they cover the commits since the newest
+      version already in CHANGELOG.md (its tag), or the whole history when it has none yet, and
+      are added to it; --previous is only used without --changelog, or when that version's tag
+      is missing. With GITHUB_TOKEN it asks GitHub Models (CHANGELOG_MODEL, default
+      openai/gpt-4.1-mini); otherwise, or if that fails, it lists the commit subjects.
 
   release.py changelog --version 1.2.0 --notes notes.md --changelog CHANGELOG.md
       Adds already written notes to CHANGELOG.md (replacing that version's section, if any).
@@ -230,7 +232,24 @@ def add_to_changelog(path: str, version: str, notes: str) -> None:
     open(path, "w", encoding="utf-8").write(text)
 
 
+def changelog_base(path: str, version: str):
+    """Tag of the newest version in CHANGELOG.md (other than [version]) that has one, "" if none."""
+    if not os.path.exists(path):
+        return ""
+    text = open(path, encoding="utf-8").read()
+    for listed in re.findall(r"^## (\S+)", text, flags=re.M):
+        if listed != version and git("tag", "--list", f"v{listed}"):
+            return f"v{listed}"
+        if listed != version:
+            print(f"::warning::{listed} is in {path} but has no tag v{listed}; looking further back", file=sys.stderr)
+    return ""
+
+
 def cmd_notes(a) -> None:
+    if a.changelog:
+        # The notes cover everything since the last version users saw in the changelog.
+        a.previous = changelog_base(a.changelog, a.version)
+    print(f"Release notes for {a.version}: commits since {a.previous or 'the first commit'}", file=sys.stderr)
     entries, docs = commits(a.previous)
     stat = git("diff", "--shortstat", a.previous, "HEAD") if a.previous else "first release"
     notes = ai_notes(a.version, entries, docs, stat) or plain_notes(entries, docs)
@@ -279,9 +298,9 @@ def telegram_message(version: str, channel: str, notes: str, release_url: str, s
         "beta": f"🧪 <b>Heartline {html.escape(version)}</b>: new beta",
     }.get(channel, f"🛠 <b>Heartline {html.escape(version)}</b>: development build")
     how = {
-        "stable": "Update in the app: Settings → Updates.",
-        "beta": "On the Beta or Development update channel: Settings → Updates.",
-    }.get(channel, "Development update channel only.")
+        "stable": "📲 Already using Heartline? Get it in the app: Settings → Updates.",
+        "beta": "📲 Get it in the app: Settings → Updates, with the update channel set to Beta or Development.",
+    }.get(channel, "📲 Get it in the app: Settings → Updates, on the Development update channel.")
     head = title + ("\n\n" + html.escape(summary_text, quote=False) if summary_text else "")
     tail = f"\n\n{html.escape(how, quote=False)}"
     body = notes_html(notes)

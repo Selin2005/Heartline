@@ -221,8 +221,9 @@ jobs:
         run: |
           {
             case "$CHANNEL" in
-              beta) echo "> **Beta:** a pre-release for testers. The app offers it on the *Beta* and *Development* update channels (Settings → Updates → Update channel)." ;;
-              dev) echo "> **Development build** (debug, full logging). Offered only on the *Development* update channel." ;;
+              stable) echo "> 📲 **Already using Heartline?** Update from the app: *Settings → Updates*." ;;
+              beta) echo "> **Beta:** a pre-release for testers. 📲 Update from the app: *Settings → Updates*, with the update channel set to *Beta* or *Development*." ;;
+              dev) echo "> **Development build** (debug, full logging). 📲 Update from the app: *Settings → Updates*, on the *Development* update channel." ;;
             esac
             echo
             cat "$RUNNER_TEMP/notes.md"

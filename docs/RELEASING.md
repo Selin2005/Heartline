@@ -83,9 +83,11 @@ release keeps getting betas.
 The workflow:
 1. works out the version and the previous release of that channel;
 2. runs lint, license header check and all tests;
-3. writes the release notes with GitHub Models from the commits since the previous release
-   (falling back to the commit list), and puts them in `CHANGELOG.md` **before** building, so the
-   app shows them in *What's new*;
+3. writes the release notes with GitHub Models from the commits since the newest version already
+   in `CHANGELOG.md` (from the first commit while it lists none), falling back to the commit
+   list, and puts them in `CHANGELOG.md` **before** building, so the app shows them in *What's
+   new*. Commits that only change agent setup, workflows, tools or tests are left out, and
+   documentation and policy changes become one line;
 4. builds the phone and watch APKs (release build, or debug for dev) and `SHA256SUMS`, and for
    stable and beta also the Google Play bundles (`.aab`, run artifacts only);
 5. publishes the GitHub release with the notes, APKs and checksums;
@@ -95,11 +97,12 @@ Want to edit the notes? Edit the release on GitHub, and the section in `CHANGELO
 shows the text that was bundled into the APK).
 
 ### Recommended flow
-1. Release a **beta** (`1.3.0` → `v1.3.0-beta.1`). Testers who opted in get it in the app.
+1. Release a **beta** (`1.3.0` → `v1.3.0-beta.1`). Testers on the Beta or Development update
+   channel get it in the app (Settings → Updates); the release text and the Telegram post say so.
 2. Fix what they find and release more betas (`v1.3.0-beta.2`, …).
 3. When a beta is good, run **Promote beta to stable** with its tag (`v1.3.0-beta.2`). It rebuilds
-   that exact commit as `v1.3.0` with notes covering everything since the previous stable
-   release.
+   that exact commit as `v1.3.0` with notes covering everything since the newest version in
+   `CHANGELOG.md`.
 
 `versionCode` is the workflow run number, so every build installs over the previous one.
 
