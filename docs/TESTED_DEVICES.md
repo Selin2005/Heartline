@@ -1,0 +1,41 @@
+# Tested devices
+
+The watches and phones Heartline has been tested on, and what worked on each. The list grows with
+every report: send yours with the
+[Device report](https://github.com/selin2005/heartline/issues/new?template=device_report.yml) form.
+
+A device that isn't listed hasn't been tried yet. That doesn't mean Heartline doesn't work on it.
+Any **Galaxy Watch4 or newer** should work, but sensors differ between models.
+
+✅ works · ⚠️ works with limits (see notes) · ❌ doesn't work · — not tried yet · n/a the watch has no such sensor
+
+## Watches
+
+| Watch | One UI Watch | Wear OS | Health Sensor Service | Heartline | ECG | BP quick | BP precise | Heart rate / HRV (background) | SpO₂ | Skin temp. | Stress / EDA | Body composition | Tiles / cards | Tested | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Galaxy Watch8 Classic | ? | ? | ? | 0.0.2.102-dev.38 | ✅ | ✅ | ⚠️ | — | — | — | — | — | — | 2026-09 | ECG contact only works with the "no contact = 5" `LEAD_OFF` rule. Precise BP: the PPG inside ECG has a value in only 1 of 5 samples (repaired by `PpgRepair`), so precise mode stays experimental. |
+
+## Phones
+
+| Phone | One UI | Android | Heartline | Install | Sync with watch | Widgets | PDF / CSV export | Log export | In-app update | Tested | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| *(to be added)* | | | | | | | | | | | |
+
+For phones that aren't Samsung, write "—" under One UI.
+
+## Sensor details per watch
+
+The values [DEVICE_TESTING.md](DEVICE_TESTING.md) (checklist item 15) asks you to note. They tune
+the blood pressure algorithm to each model.
+
+| Watch | PPG channels (quick) | Accelerometer rate | PPG inside ECG | Skin temp. | EDA | BIA progress scale | BCG quality at rest |
+|---|---|---|---|---|---|---|---|
+| Galaxy Watch8 Classic | green, IR, red | ~100 Hz | 1 of 5 samples, jumps on gain changes | ? | yes | 0–1 | 0.61–0.68 |
+
+## Adding a device
+- **Testers:** fill in the
+  [Device report](https://github.com/selin2005/heartline/issues/new?template=device_report.yml)
+  form. Don't attach real health data.
+- **Maintainers:** copy the report into the tables above, one row per watch or phone and
+  software version, and close the issue with a link to the commit. When a newer Heartline or
+  One UI version is tested on the same device, update the row.

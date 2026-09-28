@@ -8,6 +8,8 @@ version, so every user benefits.
 ## Before you start
 - **Bugs:** open an issue using the *Bug report* form. Include the app versions (phone and
   watch), the watch model and One UI Watch version.
+- **Tested a new device?** Fill in the *Device report* form; it goes into
+  [docs/TESTED_DEVICES.md](docs/TESTED_DEVICES.md).
 - **Features:** open a *Feature request* issue first, so we can agree on the approach before you
   write code.
 - **Security problems:** don't open an issue. Follow [SECURITY.md](SECURITY.md).

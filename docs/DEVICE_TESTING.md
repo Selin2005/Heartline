@@ -137,3 +137,7 @@ To capture them, enlarge the buffer first: `adb logcat -G 16M && adb logcat -c`,
     - **Bathroom scenario (carefully, sitting):** after standing up quickly, a quick measurement
       shows a number with the note *Fast pulse: weighted towards transit time*, never a much
       higher reading than a cuff taken right after.
+
+    Send what you found with the
+    [Device report](https://github.com/selin2005/heartline/issues/new?template=device_report.yml)
+    form, so your watch gets a row in [TESTED_DEVICES.md](TESTED_DEVICES.md).

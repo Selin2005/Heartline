@@ -42,6 +42,8 @@ Browse every screen, sorted by section: **[Screenshots](docs/screenshots/README.
 - An **Android phone** (Android 8.0 or newer) paired with the watch
 - Heartline on **both** devices
 
+Watches and phones Heartline has been tested on: [Tested devices](docs/TESTED_DEVICES.md).
+
 ### From GitHub Releases
 1. Download `Heartline-phone-<version>.apk` and `Heartline-watch-<version>.apk` from the
    [latest release](https://github.com/selin2005/heartline/releases/latest).

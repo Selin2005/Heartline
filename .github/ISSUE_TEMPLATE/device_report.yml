@@ -1,0 +1,130 @@
+name: Device report
+description: Tell us how Heartline works on your watch and phone (adds them to the tested devices list)
+title: "Device report: "
+labels: [device-report]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing! Your report goes into [docs/TESTED_DEVICES.md](https://github.com/selin2005/heartline/blob/main/docs/TESTED_DEVICES.md).
+        **Don't attach real health data or personal logs.** Something broken? Also open a *Bug report*.
+  - type: input
+    id: watch_model
+    attributes:
+      label: Watch model
+      placeholder: "Galaxy Watch8 Classic"
+    validations:
+      required: true
+  - type: input
+    id: watch_one_ui
+    attributes:
+      label: One UI Watch version
+      description: "On the watch: Settings → About watch → Software information"
+      placeholder: "One UI 8 Watch"
+    validations:
+      required: true
+  - type: input
+    id: wear_os
+    attributes:
+      label: Wear OS version
+      description: "Same screen as One UI Watch"
+      placeholder: "Wear OS 6"
+  - type: input
+    id: health_sensor_service
+    attributes:
+      label: Health Sensor Service version
+      description: "On the watch: Settings → Apps → Health Sensor Service"
+  - type: input
+    id: phone_model
+    attributes:
+      label: Phone model
+      placeholder: "Galaxy S25"
+    validations:
+      required: true
+  - type: input
+    id: phone_one_ui
+    attributes:
+      label: One UI version on the phone
+      description: "Settings → About phone → Software information. Not a Samsung phone? Write —"
+      placeholder: "One UI 8"
+  - type: input
+    id: android
+    attributes:
+      label: Android version on the phone
+      placeholder: "Android 16"
+    validations:
+      required: true
+  - type: input
+    id: heartline_version
+    attributes:
+      label: Heartline version
+      description: "Phone app: Settings → About (and the watch's, if different)"
+    validations:
+      required: true
+  - type: dropdown
+    id: ecg
+    attributes:
+      label: ECG
+      options: [Works, Works with problems, Doesn't work, Not tried, No such sensor]
+    validations:
+      required: true
+  - type: dropdown
+    id: bp_quick
+    attributes:
+      label: Blood pressure, quick mode
+      options: [Works, Works with problems, Doesn't work, Not tried, No such sensor]
+    validations:
+      required: true
+  - type: dropdown
+    id: bp_precise
+    attributes:
+      label: Blood pressure, precise mode (finger on the key)
+      options: [Works, Works with problems, Doesn't work, Not tried, No such sensor]
+  - type: dropdown
+    id: heart_rate
+    attributes:
+      label: Heart rate, HRV and background rhythm checks
+      options: [Works, Works with problems, Doesn't work, Not tried, No such sensor]
+  - type: dropdown
+    id: spo2
+    attributes:
+      label: SpO₂
+      options: [Works, Works with problems, Doesn't work, Not tried, No such sensor]
+  - type: dropdown
+    id: skin_temp
+    attributes:
+      label: Skin temperature
+      options: [Works, Works with problems, Doesn't work, Not tried, No such sensor]
+  - type: dropdown
+    id: stress
+    attributes:
+      label: Stress / EDA
+      options: [Works, Works with problems, Doesn't work, Not tried, No such sensor]
+  - type: dropdown
+    id: body_composition
+    attributes:
+      label: Body composition
+      options: [Works, Works with problems, Doesn't work, Not tried, No such sensor]
+  - type: dropdown
+    id: tiles
+    attributes:
+      label: Watch tiles, cards and complications
+      options: [Works, Works with problems, Doesn't work, Not tried, No such sensor]
+  - type: dropdown
+    id: phone_features
+    attributes:
+      label: Phone app (sync, widgets, exports, updates)
+      options: [Works, Works with problems, Doesn't work, Not tried, No such sensor]
+  - type: textarea
+    id: sensor_details
+    attributes:
+      label: Sensor details from the log (optional)
+      description: |
+        The values from checklist item 15 in docs/DEVICE_TESTING.md: PPG channels, accelerometer
+        rate (`accel=N@RHz`), PPG inside ECG, `skinTemp` / `eda`, BCG quality.
+      render: text
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: What didn't work or worked only partly, and anything else we should know.

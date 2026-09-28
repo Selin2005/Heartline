@@ -2,6 +2,7 @@
 
 ## Using Heartline
 - [Installing and testing on a device](DEVICE_TESTING.md)
+- [Tested devices](TESTED_DEVICES.md)
 - [Screenshots of every screen](screenshots/README.md)
 - [Terms of Use](../legal/TERMS_OF_USE.md) · [Privacy Policy](../legal/PRIVACY_POLICY.md) · [Medical disclaimer](../legal/MEDICAL_DISCLAIMER.md)
 
