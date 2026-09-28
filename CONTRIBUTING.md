@@ -6,8 +6,9 @@ belong in the official app.** Please send them as pull requests to
 version, so every user benefits.
 
 ## Before you start
-- **Bugs:** open an issue using the *Bug report* form. Include the app versions (phone and
-  watch), the watch model and One UI Watch version.
+- **Bugs:** open an issue using the *Bug report* form. It asks for the app versions (phone and
+  watch), the watch model with its One UI Watch and Health Platform versions, and the phone
+  model with its One UI / Android version.
 - **Tested a new device?** Fill in the *Device report* form; it goes into
   [docs/TESTED_DEVICES.md](docs/TESTED_DEVICES.md).
 - **Features:** open a *Feature request* issue first, so we can agree on the approach before you

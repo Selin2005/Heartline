@@ -1,0 +1,25 @@
+name: Labels
+
+# Creates or updates the labels the issue forms use (.github/ISSUE_TEMPLATE). Runs when this file
+# changes on main, or from Actions → Labels → Run workflow.
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/labels.yml]
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  labels:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Create or update labels
+        run: |
+          gh label create bug --force --color d73a4a --description "Something doesn't work"
+          gh label create enhancement --force --color a2eeef --description "New feature or request"
+          gh label create device-report --force --color 0e8a16 --description "How Heartline works on a watch and phone (docs/TESTED_DEVICES.md)"

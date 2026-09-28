@@ -30,11 +30,45 @@ body:
     id: watch_version
     attributes:
       label: Heartline version on the watch
+      description: "Watch app: Settings → About"
+    validations:
+      required: true
   - type: input
-    id: devices
+    id: watch_model
     attributes:
-      label: Devices
-      placeholder: "Galaxy Watch8 (One UI 8 Watch), Galaxy S25 (Android 16)"
+      label: Watch model
+      placeholder: "Galaxy Watch8 Classic"
+    validations:
+      required: true
+  - type: input
+    id: watch_one_ui
+    attributes:
+      label: One UI Watch and Wear OS version
+      description: "On the watch: Settings → About watch → Software information"
+      placeholder: "One UI 8 Watch, Wear OS 6"
+    validations:
+      required: true
+  - type: input
+    id: health_platform
+    attributes:
+      label: Health Platform version
+      description: "On the watch: Settings → Apps → Health Platform (Health Sensor Service on older watches)"
+      placeholder: "1.7.00.05"
+    validations:
+      required: true
+  - type: input
+    id: phone_model
+    attributes:
+      label: Phone model
+      placeholder: "Galaxy S25"
+    validations:
+      required: true
+  - type: input
+    id: phone_system
+    attributes:
+      label: One UI and Android version on the phone
+      description: "Settings → About phone → Software information. Not a Samsung phone? Only the Android version."
+      placeholder: "One UI 8, Android 16"
     validations:
       required: true
   - type: dropdown
