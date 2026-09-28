@@ -7,9 +7,10 @@ run-name: "Build ${{ inputs.version }} · ${{ inputs.channel }} · ${{ inputs.br
 #   stable  release build for everyone: tag vX.Y.Z, the "latest" GitHub release
 #   beta    release build for testers: tag vX.Y.Z-beta.N, a pre-release; offered on the Beta and
 #           Development update channels
-#   dev     debug build with full logs: tag vX.Y.Z-dev.<run>, a pre-release offered only on the
-#           Development channel
-# All three are signed with the same release key, so users can move between channels.
+#   dev     the newest code for early testers: tag vX.Y.Z-dev.<run>, a pre-release offered only on
+#           the Development channel
+# All three are the same release build (only the version differs), signed with the same release
+# key, with a versionCode that counts up with time, so users can move between channels freely.
 on:
   workflow_dispatch:
     inputs:
@@ -23,7 +24,7 @@ on:
         required: true
         type: string
       channel:
-        description: "Release type: stable = main release for everyone · beta = Beta and Development channels · dev = debug build, Development channel only"
+        description: "Release type: stable = main release for everyone · beta = Beta and Development channels · dev = newest code, Development channel only"
         required: true
         default: beta
         type: choice
@@ -109,7 +110,6 @@ jobs:
       url: ${{ steps.release.outputs.url }}
     env:
       CHANNEL: ${{ inputs.channel }}
-      VARIANT: ${{ inputs.channel == 'dev' && 'debug' || 'release' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -141,13 +141,16 @@ jobs:
         id: version
         run: |
           out=$(python3 tools/release/release.py version --base "${{ inputs.version }}" --channel "$CHANNEL" --run "${{ github.run_number }}")
+          # A commit from before the time-based versionCode (Promote builds the beta's commit) prints
+          # no code: the same formula, minutes since 2026-01-01 UTC.
+          grep -q '^code=' <<<"$out" || out+=$'\n'"code=$(( ($(date +%s) - 1767225600) / 60 ))"
           echo "$out" | tee -a "$GITHUB_OUTPUT"
           version=$(echo "$out" | sed -n 's/^version=//p')
           if [ -z "$version" ]; then
             echo "::error::Could not work out the version from '${{ inputs.version }}'"
             exit 1
           fi
-          echo "| Version | \`$version\` (tag \`v$version\`) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Version | \`$version\` (tag \`v$version\`), versionCode $(echo "$out" | sed -n 's/^code=//p') |" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/setup-java@v4
         with:
@@ -202,32 +205,36 @@ jobs:
             --out "$RUNNER_TEMP/notes.md" \
             --changelog CHANGELOG.md
 
-      - name: Assemble APKs (${{ env.VARIANT }})
+      # Every channel is the same release build; only the version name and code differ.
+      - name: Assemble APKs
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          task=assemble${VARIANT^}
-          ./gradlew --console=plain ":phone:$task" ":wear:$task" \
+          ./gradlew --console=plain :phone:assembleRelease :wear:assembleRelease \
             -Pheartline.versionName="$VERSION" \
-            -Pheartline.versionCode="${{ github.run_number }}"
+            -Pheartline.versionCode="${{ steps.version.outputs.code }}"
           mkdir -p dist
-          cp phone/build/outputs/apk/$VARIANT/*.apk "dist/Heartline-phone-$VERSION.apk"
-          cp wear/build/outputs/apk/$VARIANT/*.apk "dist/Heartline-watch-$VERSION.apk"
+          cp phone/build/outputs/apk/release/*.apk "dist/Heartline-phone-$VERSION.apk"
+          cp wear/build/outputs/apk/release/*.apk "dist/Heartline-watch-$VERSION.apk"
           (cd dist && sha256sum *.apk > SHA256SUMS)
           ls -l dist && cat dist/SHA256SUMS
 
-      # The phone and watch find each other by the Wear OS capability resource, which only the
-      # system reads; the release build's shrinker once removed it and the apps couldn't connect.
-      - name: Check the APKs keep the Wear OS capability
+      # Stops the build before anything is published if the APKs wouldn't work together: same app
+      # id, version and release key, the Wear OS capabilities, every manifest component, all of
+      # Heartline's code and the SDKs it needs, assets and resources (tools/ci/check-apks.py).
+      - name: Check the APKs
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          aapt2=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -n1)
-          for apk in dist/*.apk; do
-            if ! "$aapt2" dump resources "$apk" | grep -q "array/android_wear_capabilities"; then
-              echo "::error::$apk has no android_wear_capabilities: phone and watch couldn't find each other (res/raw/keep.xml)"
-              exit 1
-            fi
-          done
-          echo "Both APKs declare their Wear OS capability"
+          # The checks from the default branch also apply to an older commit being built (Promote).
+          git show "origin/$DEFAULT_BRANCH:tools/ci/check-apks.py" > "$RUNNER_TEMP/check-apks.py" 2>/dev/null \
+            || cp tools/ci/check-apks.py "$RUNNER_TEMP/check-apks.py"
+          python3 "$RUNNER_TEMP/check-apks.py" \
+            --phone "dist/Heartline-phone-$VERSION.apk" \
+            --watch "dist/Heartline-watch-$VERSION.apk" \
+            --version-name "$VERSION" \
+            --version-code "${{ steps.version.outputs.code }}"
 
       # Google Play bundles (no GitHub updater inside); uploaded as run artifacts only.
       - name: Google Play bundles
@@ -237,7 +244,7 @@ jobs:
         run: |
           ./gradlew --console=plain :phone:bundlePlay :wear:bundlePlay \
             -Pheartline.versionName="$VERSION" \
-            -Pheartline.versionCode="${{ github.run_number }}"
+            -Pheartline.versionCode="${{ steps.version.outputs.code }}"
           mkdir -p play
           cp phone/build/outputs/bundle/play/*.aab "play/Heartline-phone-$VERSION.aab"
           cp wear/build/outputs/bundle/play/*.aab "play/Heartline-watch-$VERSION.aab"
@@ -266,7 +273,7 @@ jobs:
             case "$CHANNEL" in
               stable) echo "> 📲 **Already using Heartline?** Update from the app: *Settings → Updates*." ;;
               beta) echo "> **Beta:** a pre-release for testers. 📲 Update from the app: *Settings → Updates*, with the update channel set to *Beta* or *Development*." ;;
-              dev) echo "> **Development build** (debug, full logging). 📲 Update from the app: *Settings → Updates*, on the *Development* update channel." ;;
+              dev) echo "> **Development build:** the newest code, for early testers. 📲 Update from the app: *Settings → Updates*, on the *Development* update channel." ;;
             esac
             echo
             echo "<!-- notes -->"

@@ -6,8 +6,10 @@ Release helpers for the Build workflow.
 
   release.py version --base 1.2.0 --channel beta --run 57
       Prints the version name for the channel: 1.2.0 (stable), 1.2.0-beta.N (next free N for
-      that base), 1.2.0-dev.57 (dev), plus the previous tag the notes start from, as
-      GitHub output lines (version=…, previous=…).
+      that base), 1.2.0-dev.57 (dev), the previous tag the notes start from and the Android
+      versionCode (minutes since 2026, so it counts up with every build of every channel), as
+      GitHub output lines (version=…, previous=…, code=…). A stable or beta version must be
+      higher than every stable and beta release so far.
 
   release.py notes --version 1.2.0-beta.3 --out notes.md --changelog CHANGELOG.md [--previous TAG]
       Writes user-facing release notes. With --changelog they cover the commits since the newest
@@ -113,6 +115,15 @@ def cmd_version(a) -> None:
     else:
         name = f"{b}-dev.{a.run}"
     current = parse(name)
+    # Android installs an update only over a lower versionCode, and the versionCode counts up with
+    # time (version_code), so a stable or beta release must also be the highest version so far:
+    # otherwise the app would offer the older-built, higher version as an update that can't install.
+    if a.channel != "dev":
+        higher = [t for t, v in all_tags if channel_of(v) != "dev" and sort_key(v) > sort_key(current)]
+        if higher:
+            sys.exit(f"::error::{higher[-1]} is already released: a {a.channel} release must be a higher version than {name}")
+    elif any(channel_of(v) != "dev" and tuple(v[:3]) + (int(v[4] or 0),) > tuple(current[:3]) + (int(current[4] or 0),) for _, v in all_tags):
+        print(f"::warning::{name} is older than the newest beta or stable release; beta and stable users won't be offered it", file=sys.stderr)
     # Notes cover everything since the previous release users of this channel had.
     wanted = {"stable": ("stable",), "beta": ("stable", "beta"), "dev": ("stable", "beta", "dev")}[a.channel]
     previous = ""
@@ -122,6 +133,18 @@ def cmd_version(a) -> None:
             break
     print(f"version={name}")
     print(f"previous={previous}")
+    print(f"code={version_code()}")
+
+
+# 2026-01-01 00:00 UTC. Every build's versionCode is the minutes since then.
+CODE_EPOCH = 1767225600
+
+
+def version_code(now=None) -> int:
+    """The Android versionCode: minutes since 2026-01-01 UTC. Counts up with every build of every
+    channel (dev, beta, stable and Promote), so any later build installs over any earlier one, and
+    stays below Google Play's 2100000000 for thousands of years."""
+    return int(((time.time() if now is None else now) - CODE_EPOCH) // 60)
 
 
 # Commits that only touch these never reach the release notes: agent and CI setup, workflows,
