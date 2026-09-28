@@ -279,7 +279,8 @@ jobs:
           CHANGELOG_MODEL: ${{ vars.CHANGELOG_MODEL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID || '@HeartlineCamiunity' }}
-          TELEGRAM_THREAD_ID: ${{ vars.TELEGRAM_THREAD_ID }}
+          # Topic 'Announcements & Builds' (t.me/HeartlineCamiunity/5); a variable or secret overrides it.
+          TELEGRAM_THREAD_ID: ${{ vars.TELEGRAM_THREAD_ID || secrets.TELEGRAM_THREAD_ID || '5' }}
         run: |
           python3 tools/release/release.py telegram \
             --version "${{ steps.version.outputs.version }}" \

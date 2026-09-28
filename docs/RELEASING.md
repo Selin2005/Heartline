@@ -45,7 +45,8 @@ buttons to the download and the install guide. Dev builds aren't announced.
    (`https://t.me/HeartlineCamiunity/<topic id>/<message id>`); the first number is the topic ID.
 4. In GitHub → Settings → Secrets and variables → Actions:
    - secret `TELEGRAM_BOT_TOKEN`: the bot token;
-   - variable `TELEGRAM_THREAD_ID`: the topic ID;
+   - variable `TELEGRAM_THREAD_ID`: the topic ID, only if it isn't `5` (*Announcements & Builds*,
+     the default). Set it under **Variables**, not Secrets;
    - variable `TELEGRAM_CHAT_ID`: only if the group isn't `@HeartlineCamiunity` (a private group
      uses its numeric ID, `-100…`).
 

@@ -272,14 +272,18 @@ def cmd_telegram(a) -> None:
             {"text": "📖 How to install", "url": guide},
         ]]},
     }
-    if thread:
-        payload["message_thread_id"] = int(thread)
+    if thread.strip():
+        payload["message_thread_id"] = int(thread.strip())
     if a.dry_run:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return
     if not token or not chat:
         print("::warning::Not announced on Telegram: the TELEGRAM_BOT_TOKEN secret is missing (docs/RELEASING.md)")
         return
+    if "message_thread_id" in payload:
+        print(f"Posting to {chat}, topic {payload['message_thread_id']}")
+    else:
+        print(f"::warning::TELEGRAM_THREAD_ID is empty: posting to the General topic of {chat}")
     request = urllib.request.Request(
         f"https://api.telegram.org/bot{token}/sendMessage",
         data=json.dumps(payload).encode(),
@@ -290,7 +294,11 @@ def cmd_telegram(a) -> None:
     for attempt in range(1, 5):
         try:
             with urllib.request.urlopen(request, timeout=30) as response:
-                json.load(response)
+                sent = json.load(response).get("result", {})
+            # Telegram posts to General without an error when the id isn't one of the group's topics.
+            wanted = payload.get("message_thread_id")
+            if wanted is not None and sent.get("message_thread_id") != wanted:
+                print(f"::warning::Telegram posted outside topic {wanted}; check TELEGRAM_THREAD_ID")
             break
         except urllib.error.HTTPError as e:
             reason = f"{e.code} {e.read().decode(errors='replace')}"
