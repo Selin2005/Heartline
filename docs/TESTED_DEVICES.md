@@ -11,9 +11,12 @@ Any **Galaxy Watch4 or newer** should work, but sensors differ between models.
 
 ## Watches
 
-| Watch | One UI Watch | Wear OS | Health Sensor Service | Heartline | ECG | BP quick | BP precise | Heart rate / HRV (background) | SpO₂ | Skin temp. | Stress / EDA | Body composition | Tiles / cards | Tested | Notes |
+| Watch | One UI Watch | Wear OS | Health Platform | Heartline | ECG | BP quick | BP precise | Heart rate / HRV (background) | SpO₂ | Skin temp. | Stress / EDA | Body composition | Tiles / cards | Tested | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Galaxy Watch8 Classic | One UI 8 Watch | Wear OS 6 | 1.6.5 or newer | 0.0.2.104-dev.39 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 2026-09 | Latest stable software (One UI 9 Watch is still in beta). All features tested and working. ECG contact only works with the "no contact = 5" `LEAD_OFF` rule. Precise BP: the PPG inside ECG has a value in only 1 of 5 samples (repaired by `PpgRepair`). |
+| Galaxy Watch8 Classic | One UI 8 Watch | Wear OS 6 | 1.7.00.05 | 0.0.2.104-dev.39 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 2026-09 | Latest stable software (One UI 9 Watch is still in beta). All features tested and working. ECG contact only works with the "no contact = 5" `LEAD_OFF` rule. Precise BP: the PPG inside ECG has a value in only 1 of 5 samples (repaired by `PpgRepair`). |
+
+*Health Platform* is the name newer watches show for the Health Sensor Service, the Samsung app
+whose developer mode Heartline needs (Settings → Apps).
 
 ## Phones
 

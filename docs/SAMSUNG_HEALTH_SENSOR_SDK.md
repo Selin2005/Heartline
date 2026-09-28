@@ -19,6 +19,8 @@ HealthTrackingService ── bind ──► Health Sensor Service (system app on
   build (`-Pheartline.fakeSensors=true`) replaces the SDK for UI work.
 - The data is for **wellness only**, not for diagnosis. Samsung's license requires this, and so
   does Heartline.
+- Newer watches list the service as **Health Platform** in Settings → Apps (Galaxy Watch8
+  Classic: 1.7.00.05).
 - SDK 1.4.x needs Health Sensor Service 1.6.5 or newer. An older service raises
   `OLD_PLATFORM_VERSION`, which `HealthTrackerException.resolve(activity)` fixes by opening the
   store.

@@ -32,8 +32,8 @@ body:
   - type: input
     id: health_sensor_service
     attributes:
-      label: Health Sensor Service version
-      description: "On the watch: Settings → Apps → Health Sensor Service"
+      label: Health Platform version
+      description: "On the watch: Settings → Apps → Health Platform (Health Sensor Service on older watches)"
   - type: input
     id: phone_model
     attributes:
