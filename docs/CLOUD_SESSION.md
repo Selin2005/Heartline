@@ -29,6 +29,11 @@ p="${HTTPS_PROXY#*://}"; p="${p%/}"
 sdkmanager --proxy=http --proxy_host="${p%:*}" --proxy_port="${p##*:}" "platforms;android-37"
 ```
 
+## Commit identity
+A second SessionStart hook, `tools/cloud/git-identity.sh`, sets `git config user.name` and
+`user.email` to the owner's identity, and [CLAUDE.md](../CLAUDE.md) tells coding agents not to add
+AI attribution lines. `tools/ci/check-commits.py` checks both in CI.
+
 ## Daily loop
 See [CONTRIBUTING.md](../CONTRIBUTING.md#development-setup).
 
