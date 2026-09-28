@@ -40,9 +40,20 @@ interface PpgSource {
     fun stream(): Flow<PpgChunk>
 }
 
-class FakePpgSource(private val heartRateBpm: Double = 68.0, private val stiffness: Double = 0.5, private val chunkDelayMs: Long = 50) : PpgSource {
+/**
+ * Synthetic PPG for the fake-sensor build and tests. Each measurement gets its own noise ([seed],
+ * then seed + 1, …), the same sequence every run, so tests are repeatable.
+ */
+class FakePpgSource(
+    private val heartRateBpm: Double = 68.0,
+    private val stiffness: Double = 0.5,
+    private val chunkDelayMs: Long = 50,
+    private val seed: Int = 1,
+) : PpgSource {
+    private var streams = 0
+
     override fun stream(): Flow<PpgChunk> = flow {
-        val signal = SyntheticPpg.generate(40.0, heartRateBpm, stiffness, seed = System.nanoTime().toInt())
+        val signal = SyntheticPpg.generate(40.0, heartRateBpm, stiffness, seed = seed + streams++)
         var offset = 0
         while (offset + CHUNK <= signal.size) {
             emit(PpgChunk(signal.copyOfRange(offset, offset + CHUNK), contact = true))
