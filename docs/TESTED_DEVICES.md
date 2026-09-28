@@ -13,7 +13,7 @@ Any **Galaxy Watch4 or newer** should work, but sensors differ between models.
 
 | Watch | One UI Watch | Wear OS | Health Sensor Service | Heartline | ECG | BP quick | BP precise | Heart rate / HRV (background) | SpO₂ | Skin temp. | Stress / EDA | Body composition | Tiles / cards | Tested | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Galaxy Watch8 Classic | ? | ? | ? | 0.0.2.102-dev.38 | ✅ | ✅ | ⚠️ | — | — | — | — | — | — | 2026-09 | ECG contact only works with the "no contact = 5" `LEAD_OFF` rule. Precise BP: the PPG inside ECG has a value in only 1 of 5 samples (repaired by `PpgRepair`), so precise mode stays experimental. |
+| Galaxy Watch8 Classic | One UI 8 Watch | Wear OS 6 | 1.6.5 or newer | 0.0.2.104-dev.39 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 2026-09 | Latest stable software (One UI 9 Watch is still in beta). All features tested and working. ECG contact only works with the "no contact = 5" `LEAD_OFF` rule. Precise BP: the PPG inside ECG has a value in only 1 of 5 samples (repaired by `PpgRepair`). |
 
 ## Phones
 
@@ -36,7 +36,7 @@ has a value in only 1 of 5 samples.
 
 | Watch | PPG channels (quick) | Accelerometer rate | PPG inside ECG | Skin temp. | EDA | BIA progress scale | BCG quality at rest |
 |---|---|---|---|---|---|---|---|
-| Galaxy Watch8 Classic | green, IR, red | ~100 Hz | 1 of 5 samples, jumps on gain changes | ? | yes | 0–1 | 0.61–0.68 |
+| Galaxy Watch8 Classic | green, IR, red | ~100 Hz | 1 of 5 samples, jumps on gain changes | yes | yes | 0–1 | 0.61–0.68 |
 
 ## Adding a device
 - **Testers:** fill in the
