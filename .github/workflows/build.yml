@@ -216,6 +216,19 @@ jobs:
           (cd dist && sha256sum *.apk > SHA256SUMS)
           ls -l dist && cat dist/SHA256SUMS
 
+      # The phone and watch find each other by the Wear OS capability resource, which only the
+      # system reads; the release build's shrinker once removed it and the apps couldn't connect.
+      - name: Check the APKs keep the Wear OS capability
+        run: |
+          aapt2=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -n1)
+          for apk in dist/*.apk; do
+            if ! "$aapt2" dump resources "$apk" | grep -q "array/android_wear_capabilities"; then
+              echo "::error::$apk has no android_wear_capabilities: phone and watch couldn't find each other (res/raw/keep.xml)"
+              exit 1
+            fi
+          done
+          echo "Both APKs declare their Wear OS capability"
+
       # Google Play bundles (no GitHub updater inside); uploaded as run artifacts only.
       - name: Google Play bundles
         if: env.CHANNEL != 'dev'

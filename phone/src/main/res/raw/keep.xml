@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Resources only the system reads, which the release build's resource shrinker would otherwise
+  remove: the Wear OS capability the phone and watch find each other by (res/values/wear.xml).
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@array/android_wear_capabilities" />
