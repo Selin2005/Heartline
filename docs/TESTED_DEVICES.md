@@ -25,8 +25,14 @@ For phones that aren't Samsung, write "—" under One UI.
 
 ## Sensor details per watch
 
-The values [DEVICE_TESTING.md](DEVICE_TESTING.md) (checklist item 15) asks you to note. They tune
-the blood pressure algorithm to each model.
+Optional. Heartline doesn't need these values to support a watch: it has no per-model settings and
+detects everything while it runs (which sensors exist, the PPG channels, the accelerometer rate,
+gaps in the PPG, the BIA progress scale). Blood pressure accuracy comes from each user's own cuff
+calibration, and *Accuracy check* shows how close the watch is to that user's cuff.
+
+The table records what [DEVICE_TESTING.md](DEVICE_TESTING.md) (checklist item 15) finds in the logs,
+so a new model's quirks are spotted early, such as the PPG inside ECG on the Watch8 Classic, which
+has a value in only 1 of 5 samples.
 
 | Watch | PPG channels (quick) | Accelerometer rate | PPG inside ECG | Skin temp. | EDA | BIA progress scale | BCG quality at rest |
 |---|---|---|---|---|---|---|---|

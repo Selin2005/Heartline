@@ -122,6 +122,7 @@ body:
       description: |
         The values from checklist item 15 in docs/DEVICE_TESTING.md: PPG channels, accelerometer
         rate (`accel=N@RHz`), PPG inside ECG, `skinTemp` / `eda`, BCG quality.
+        Not needed for your watch to work; it helps us spot a new model's quirks.
       render: text
   - type: textarea
     id: notes
