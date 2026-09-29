@@ -71,7 +71,7 @@ data class MonitorSettings(
     val weeklySummary: Boolean = true,
     /** Keep a diagnostic log file on each device (decided on the phone, see DiagnosticsPolicy). */
     val diagnosticLogs: Boolean = false,
-    /** Raw sensor values also go into the log file until this time (0 = off). */
+    /** Unused: raw sensor values are always in the log now. Kept so older app versions still decode. */
     val detailedLogsUntilMs: Long = 0,
     /** When these settings were last changed (either device); the newer copy wins. */
     val updatedAtMs: Long = 0

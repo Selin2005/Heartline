@@ -279,7 +279,7 @@ class WearScreenshotTest(private val size: String) {
         WatchSettingsScreen(settingsUi, listState = TransformingLazyColumnState(initialAnchorItemIndex = 11))
     }
 
-    @Test fun diagnostics() = shot("diagnostics") { DiagnosticsScreen(settingsUi.copy(diagnosticLogs = true, logKb = 380)) }
+    @Test fun diagnostics() = shot("diagnostics") { DiagnosticsScreen(settingsUi.copy(diagnosticLogs = true, logBytes = 23_700_000)) }
 
     @Test fun devMode() = shot("dev_mode") { DevModeGuideScreen() }
 

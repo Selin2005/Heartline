@@ -376,7 +376,6 @@
     <string name="community_sub">Telegram group. Opens on your phone.</string>
     <string name="diag_logs">Diagnostic logs</string>
     <string name="diag_logs_off">Off</string>
-    <string name="diag_logs_on">On · %1$d KB kept</string>
-    <string name="diag_logs_detailed">On, detailed · %1$d KB kept</string>
+    <string name="diag_logs_on">On · %1$s kept (50 MB at most)</string>
     <string name="diag_logs_hint">Change and export them in Heartline on your phone: Settings → Help &amp; diagnostics.</string>
 </resources>

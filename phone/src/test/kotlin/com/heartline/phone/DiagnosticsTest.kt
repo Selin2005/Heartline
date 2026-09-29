@@ -13,7 +13,10 @@ import com.heartline.phone.diag.PhoneLogExporter
 import com.heartline.phone.update.UpdateRepository
 import com.heartline.shared.diag.Redactor
 import com.heartline.shared.diag.RemoteLogs
+import com.heartline.shared.diag.SegmentedLog
 import com.heartline.shared.hr.MonitorSettings
+import java.io.ByteArrayOutputStream
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -29,30 +32,70 @@ import org.junit.runner.RunWith
 class DiagnosticsTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
 
+    private fun PhoneLogExporter.LogParts.text() = ByteArrayOutputStream().also { writeTo(it) }.toString(Charsets.UTF_8.name())
+
     @Test
-    fun keptLogIsRedactedAndRawOnlyWhenDetailed() = runTest {
-        HLog.init(context)
+    fun keptLogIsRedactedWithRawValuesAndExportsWhole() = runTest {
+        HLog.init(context, HLog.PHONE_BUDGET_BYTES)
         HLog.setRedactor(Redactor(listOf("Sara")))
-        HLog.configure(diagnosticLogs = true, detailedLogsUntilMs = 0)
+        HLog.configure(diagnosticLogs = true)
         HLog.i("Heartline/Test", "hello from Sara")
         HLog.i("Heartline/EcgRaw", "raw batch 1")
-        HLog.configure(diagnosticLogs = true, detailedLogsUntilMs = System.currentTimeMillis() + 60_000)
-        HLog.i("Heartline/EcgRaw", "raw batch 2")
 
+        val work = File(context.cacheDir, "test-export").apply { mkdirs() }
         val exporter = PhoneLogExporter(context, SettingsRepository(context), UpdateRepository(context, "1.0.0"), RemoteLogs(send = { false }))
-        val phone = exporter.phoneLog()
+        val phone = exporter.phoneParts(work).text()
         assertTrue(phone.contains("Heartline phone"))
         assertTrue(phone.contains("hello from <name>"))
         assertFalse(phone.contains("Sara"))
-        assertFalse(phone.contains("raw batch 1"))
-        assertTrue(phone.contains("raw batch 2"))
+        // Raw sensor values are always kept now.
+        assertTrue(phone.contains("raw batch 1"))
+        assertTrue(phone.indexOf("hello from") < phone.indexOf("=== logcat"))
 
-        assertTrue(exporter.watchLog(null).contains("The watch did not answer"))
-        assertEquals("watch file", exporter.watchLog("watch file".encodeToByteArray()))
+        // The watch doesn't answer: its file says so.
+        val watch = exporter.watchParts(work)
+        assertFalse(watch.reached)
+        assertTrue(watch.text().contains("The watch did not answer"))
 
-        HLog.configure(diagnosticLogs = false, detailedLogsUntilMs = 0)
+        HLog.configure(diagnosticLogs = false)
         HLog.flush()
         assertEquals(0L, HLog.sizeBytes())
+    }
+
+    @Test
+    fun aLongLogIsStreamedWholeAndInOrder() {
+        // 20 MB of text in 1 MB segments, written out without holding it in memory.
+        val dir = File(context.cacheDir, "long-log").apply { deleteRecursively() }
+        val log = SegmentedLog(dir, budgetBytes = Long.MAX_VALUE, freeBytes = { Long.MAX_VALUE })
+        val line = "x".repeat(90)
+        for (i in 0 until 200_000) log.append("%06d $line\n".format(i)) // 98 bytes per line
+        log.seal()
+        val logcat = File(dir, "logcat.log.gz").apply { java.util.zip.GZIPOutputStream(outputStream()).use { it.write("logcat line\n".toByteArray()) } }
+        val parts = PhoneLogExporter.LogParts("head\n", log.segments(), logcat)
+        var size = 0L
+        var first = ""
+        var last = ""
+        val sink = object : java.io.OutputStream() {
+            private val current = StringBuilder()
+
+            override fun write(b: Int) {
+                size++
+                if (b == '\n'.code) {
+                    val text = current.toString()
+                    if (text.startsWith("000000")) first = text
+                    if (text.isNotEmpty() && text[0].isDigit()) last = text
+                    current.setLength(0)
+                } else if (current.length < 200) {
+                    current.append(b.toChar())
+                }
+            }
+        }
+        parts.writeTo(sink)
+        assertTrue(size > 19_600_000)
+        assertTrue(first.startsWith("000000 "))
+        assertTrue(last.startsWith("199999 "))
+        assertEquals(0, parts.missing)
+        dir.deleteRecursively()
     }
 
     @Test
@@ -73,9 +116,6 @@ class DiagnosticsTest {
         withContext(Dispatchers.Default) { withTimeout(10_000) { settings.monitor.first { it.diagnosticLogs } } }
         assertTrue(sent.last().diagnosticLogs)
         assertFalse(stable.current().shouldAsk)
-
-        stable.setDetailed(true)
-        assertTrue(settings.current().detailedLogsUntilMs > System.currentTimeMillis())
 
         // A beta build keeps logs without asking, unless the user said no.
         val beta = DiagnosticsRepository(context, settings, UpdateRepository(context, "1.1.0-beta.1"), "1.1.0-beta.1", RemoteLogs(send = { true }), sendSettings = {})

@@ -55,6 +55,7 @@ import com.heartline.wear.ui.LauncherViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.serialization.encodeToString
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import android.content.pm.PackageManager
@@ -115,10 +116,15 @@ val wearModule = module {
             // The phone's Export logs: answer on a channel, off the listener's thread.
             onLogRequest = { request ->
                 get<CoroutineScope>(APP_SCOPE).launch(Dispatchers.IO) {
-                    if (request.delete) {
-                        HLog.clear()
-                    } else {
-                        get<WatchSyncEngine>().sendLogs(request.requestId, get<WatchLogExporter>().build().encodeToByteArray())
+                    val engine = get<WatchSyncEngine>()
+                    val exporter = get<WatchLogExporter>()
+                    val segment = request.segment
+                    when {
+                        request.delete -> HLog.clear()
+                        request.manifest -> engine.sendLogs(request.requestId, Protocol.json.encodeToString(exporter.manifest()).encodeToByteArray())
+                        // A segment that's gone (trimmed since the manifest) goes out empty; the phone marks it missing.
+                        segment != null -> engine.sendLogSegment(request.requestId, exporter.segment(segment)?.inputStream() ?: ByteArray(0).inputStream())
+                        else -> engine.sendLogs(request.requestId, exporter.wholeLog().encodeToByteArray())
                     }
                 }
             },

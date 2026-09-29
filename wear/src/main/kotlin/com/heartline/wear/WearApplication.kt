@@ -23,7 +23,7 @@ import org.koin.core.context.startKoin
 class WearApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        HLog.init(this)
+        HLog.init(this, HLog.WATCH_BUDGET_BYTES)
         startKoin {
             androidContext(this@WearApplication)
             modules(wearModule)
@@ -40,7 +40,7 @@ class WearApplication : Application() {
         get<com.heartline.wear.tile.TileUpdates>().start(get(APP_SCOPE))
         // Diagnostic logging follows the phone's choice (synced settings); names never reach the file.
         val scope = get<CoroutineScope>(APP_SCOPE)
-        get<WatchSettingsStore>().settings.onEach { HLog.configure(it.diagnosticLogs, it.detailedLogsUntilMs) }.launchIn(scope)
+        get<WatchSettingsStore>().settings.onEach { HLog.configure(it.diagnosticLogs) }.launchIn(scope)
         get<WatchProfileStore>().profile.onEach { HLog.setRedactor(Redactor.of(it)) }.launchIn(scope)
         // The hello handshake (status, settings, calibration, profile) runs from the setup gate on every app start.
     }

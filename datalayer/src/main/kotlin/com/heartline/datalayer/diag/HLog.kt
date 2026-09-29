@@ -6,41 +6,40 @@ package com.heartline.datalayer.diag
 import android.content.Context
 import android.os.Process
 import android.util.Log
-import com.heartline.shared.diag.DiagnosticsPolicy
 import com.heartline.shared.diag.LogLine
 import com.heartline.shared.diag.Redactor
-import com.heartline.shared.diag.RollingLog
+import com.heartline.shared.diag.SegmentedLog
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 /**
  * The apps' logger. Every call goes to logcat as before, and, while diagnostic logs are on
- * ([configure]), also to a small rolling file on the device that the user can export from
- * Settings. Raw sensor tags only reach the file in detailed mode. Writing happens on one
- * background thread in batches, so it costs next to nothing on the watch.
+ * ([configure]), also to a compressed, segmented log on the device ([SegmentedLog], raw sensor
+ * values included) that the user can export from Settings. Writing happens on one background
+ * thread in batches, so it costs next to nothing on the watch.
  */
 object HLog {
-    /** Tags with raw sensor values: in the file only while detailed logging is on. */
-    private val RAW_TAGS = setOf("Heartline/EcgRaw", "Heartline/EcgRec", "Heartline/BiaRaw", "Heartline/QuickRaw", "Heartline/BpRaw")
+    /** Log budget on the watch and on the phone (compressed, about ten times as much text). */
+    const val WATCH_BUDGET_BYTES = 50L * 1024 * 1024
+    const val PHONE_BUDGET_BYTES = 150L * 1024 * 1024
+
     private const val FLUSH_MS = 2_000L
     private const val MAX_BUFFER = 32 * 1024
 
     private val writer = Executors.newSingleThreadScheduledExecutor { Thread(it, "HLog").apply { isDaemon = true } }
     private val buffer = StringBuilder()
 
-    @Volatile private var file: RollingLog? = null
+    @Volatile private var file: SegmentedLog? = null
 
     @Volatile private var persistent = false
-
-    @Volatile private var detailedUntilMs = 0L
 
     @Volatile private var redactor: Redactor = Redactor.NONE
 
     /** Called once from Application.onCreate. Logging to logcat works before and without it. */
-    fun init(context: Context) {
+    fun init(context: Context, budgetBytes: Long) {
         if (file != null) return
-        file = RollingLog(File(context.filesDir, "logs"))
+        file = SegmentedLog(File(context.filesDir, "logs"), budgetBytes).also { log -> writer.execute { log.migrate() } }
         writer.scheduleWithFixedDelay(::flushNow, FLUSH_MS, FLUSH_MS, TimeUnit.MILLISECONDS)
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
@@ -50,9 +49,8 @@ object HLog {
         }
     }
 
-    /** From the synced settings: keep a log file at all, and until when to include raw sensor values. */
-    fun configure(diagnosticLogs: Boolean, detailedLogsUntilMs: Long) {
-        detailedUntilMs = detailedLogsUntilMs
+    /** From the synced settings: keep a log on the device at all. */
+    fun configure(diagnosticLogs: Boolean) {
         if (!diagnosticLogs && (persistent || sizeBytes() > 0)) clear() // turning it off frees the space right away
         persistent = diagnosticLogs
     }
@@ -76,9 +74,7 @@ object HLog {
 
     private fun record(level: Char, tag: String, message: String, error: Throwable?) {
         if (!persistent || file == null) return
-        val now = System.currentTimeMillis()
-        if (tag in RAW_TAGS && !DiagnosticsPolicy.detailed(true, detailedUntilMs, now)) return
-        val line = LogLine.format(now, level, tag, message, error)
+        val line = LogLine.format(System.currentTimeMillis(), level, tag, message, error)
         writer.execute {
             buffer.append(redactor.redact(line))
             if (level == 'W' || level == 'E' || buffer.length > MAX_BUFFER) flushNow()
@@ -97,10 +93,22 @@ object HLog {
         runCatching { writer.submit(::flushNow).get(2, TimeUnit.SECONDS) }
     }
 
-    /** The kept log, oldest first. */
-    fun read(): String {
+    /**
+     * Writes out everything logged so far and closes the current segment: the segments then hold
+     * the whole log, oldest first, ready to export one by one.
+     */
+    fun sealedSegments(): List<File> = runCatching {
+        writer.submit<List<File>> {
+            flushNow()
+            file?.seal()
+            file?.segments().orEmpty()
+        }.get(30, TimeUnit.SECONDS)
+    }.getOrDefault(emptyList())
+
+    /** The last [maxBytes] of the log as text, for a phone app from before segmented export. */
+    fun readRecent(maxBytes: Int): String {
         flush()
-        return runCatching { writer.submit<String> { file?.readAll().orEmpty() }.get(10, TimeUnit.SECONDS) }.getOrDefault("")
+        return runCatching { writer.submit<String> { file?.readRecent(maxBytes).orEmpty() }.get(30, TimeUnit.SECONDS) }.getOrDefault("")
     }
 
     fun sizeBytes(): Long = file?.sizeBytes() ?: 0

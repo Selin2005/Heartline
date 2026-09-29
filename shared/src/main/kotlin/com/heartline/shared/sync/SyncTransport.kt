@@ -3,6 +3,7 @@
 
 package com.heartline.shared.sync
 
+import java.io.InputStream
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -23,6 +24,9 @@ interface SyncTransport {
     suspend fun send(path: String, data: ByteArray): Boolean
 
     suspend fun sendLarge(path: String, data: ByteArray): Boolean = send(path, data)
+
+    /** Streams [input] (closed afterwards) without holding it in memory, where the transport can. */
+    suspend fun sendStream(path: String, input: InputStream): Boolean = sendLarge(path, input.use { it.readBytes() })
 }
 
 /** Two connected in-memory endpoints; set [connected] false to simulate the peer being away. */

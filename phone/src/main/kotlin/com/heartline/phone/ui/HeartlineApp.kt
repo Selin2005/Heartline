@@ -414,7 +414,6 @@ fun HeartlineApp(
                         ui,
                         onBack = goBack,
                         onEnabled = { vm.setEnabled(it) },
-                        onDetailed = { vm.setDetailed(it) },
                         onExport = pickFolder,
                         onDelete = { vm.delete() },
                     )

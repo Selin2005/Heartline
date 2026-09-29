@@ -140,6 +140,7 @@ val phoneModule = module {
             // Raw blood-pressure session logs (every sensor), kept for the export.
             onSessionLog = { id, bytes -> get<BpRepository>().saveSession(id, bytes) },
             onLogs = { requestId, text -> get<RemoteLogs>().onLogs(requestId, text) },
+            onLogSegment = { requestId, input -> get<RemoteLogs>().onSegment(requestId, input) },
         )
     }
     single { PhoneStatusPublisher(get(), get(), get(), { get() }) }

@@ -44,7 +44,7 @@ class PhoneApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        HLog.init(this)
+        HLog.init(this, HLog.PHONE_BUDGET_BYTES)
         startKoin {
             androidContext(this@PhoneApplication)
             modules(phoneModule)

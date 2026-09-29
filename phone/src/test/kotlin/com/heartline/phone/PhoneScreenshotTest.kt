@@ -238,15 +238,22 @@ class PhoneScreenshotTest(private val theme: String) {
     }
 
     @Test fun diagnostics() = shot("diagnostics") {
-        DiagnosticsScreen(DiagnosticsUi(enabled = true, keptKb = 412), onBack = {})
+        DiagnosticsScreen(DiagnosticsUi(enabled = true, keptBytes = 31_400_000), onBack = {})
+    }
+
+    @Test fun diagnosticsExporting() = shot("diagnostics_exporting") {
+        DiagnosticsScreen(
+            DiagnosticsUi(enabled = true, keptBytes = 31_400_000, progress = PhoneLogExporter.Progress(PhoneLogExporter.Step.WATCH, 12, 40, 11_800_000)),
+            onBack = {},
+        )
     }
 
     @Test fun diagnosticsSaved() = shot("diagnostics_saved") {
         DiagnosticsScreen(
             DiagnosticsUi(
                 enabled = true,
-                keptKb = 412,
-                saved = PhoneLogExporter.Result("heartline-phone-20260926-141503.log", "heartline-watch-20260926-141503.log", watchReached = true),
+                keptBytes = 31_400_000,
+                saved = PhoneLogExporter.Result("heartline-logs-20260926-141503.zip", watchReached = true),
             ),
             onBack = {},
         )

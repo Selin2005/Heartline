@@ -32,6 +32,11 @@ object Protocol {
 
     fun logsPath(requestId: String) = LOGS_PREFIX + requestId
 
+    /** One log segment, streamed watch → phone (read as a stream, not into memory). */
+    const val LOGS_SEGMENT_PREFIX = "$ROOT/logs/segment/"
+
+    fun logSegmentPath(requestId: String) = LOGS_SEGMENT_PREFIX + requestId
+
     /** Capability name both apps advertise so each can find the other node. */
     const val CAPABILITY_PHONE = "heartline_phone"
     const val CAPABILITY_WATCH = "heartline_watch"

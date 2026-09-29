@@ -36,6 +36,7 @@ import androidx.compose.material.icons.automirrored.rounded.ShowChart
 import androidx.compose.material.icons.rounded.Vibration
 import androidx.wear.compose.material3.SwitchButton
 import com.heartline.wear.ui.theme.WearColors
+import com.heartline.shared.diag.formatLogSize
 
 data class WatchSettingsUi(
     val irregularRhythm: Boolean,
@@ -49,8 +50,8 @@ data class WatchSettingsUi(
     val highBpm: Int = 120,
     val lowBpm: Int = 40,
     val diagnosticLogs: Boolean = false,
-    val detailedLogs: Boolean = false,
-    val logKb: Long = 0,
+    /** The kept log, compressed. */
+    val logBytes: Long = 0,
 )
 
 /** One setting toggled on the watch. */
@@ -156,8 +157,7 @@ fun DiagnosticsScreen(state: WatchSettingsUi) {
                 Centered(
                     when {
                         !state.diagnosticLogs -> stringResource(R.string.diag_logs_off)
-                        state.detailedLogs -> stringResource(R.string.diag_logs_detailed, state.logKb)
-                        else -> stringResource(R.string.diag_logs_on, state.logKb)
+                        else -> stringResource(R.string.diag_logs_on, formatLogSize(state.logBytes))
                     },
                     small = true,
                 )

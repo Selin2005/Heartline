@@ -13,6 +13,7 @@ import com.heartline.shared.sync.Envelope
 import com.heartline.shared.sync.PeerDirectory
 import com.heartline.shared.sync.PeerProbe
 import com.heartline.shared.sync.SyncTransport
+import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
@@ -97,6 +98,51 @@ class DataLayerTransport(context: Context, private val peerCapability: String) :
         }.onSuccess { HLog.i(TAG, "streamed $path (${data.size} B)") }
             .onFailure { HLog.w(TAG, "channel $path failed", it) }
             .isSuccess
+    }
+
+    /** Streams [input] on a channel without holding it in memory (the watch's log segments). */
+    override suspend fun sendStream(path: String, input: InputStream): Boolean {
+        val node = peers().firstOrNull() ?: return false.also {
+            input.close()
+            HLog.w(TAG, "sendStream $path: no peer")
+        }
+        var sent = 0L
+        return runCatching {
+            val channel = channels.openChannel(node.id, path).await()
+            try {
+                withContext(Dispatchers.IO) {
+                    input.use { from ->
+                        channels.getOutputStream(channel).await().use { out ->
+                            val buffer = ByteArray(64 * 1024)
+                            while (true) {
+                                val n = from.read(buffer)
+                                if (n < 0) break
+                                out.write(buffer, 0, n)
+                                sent += n
+                            }
+                        }
+                    }
+                }
+            } finally {
+                channels.close(channel)
+            }
+        }.onSuccess { HLog.i(TAG, "streamed $path ($sent B)") }
+            .onFailure { HLog.w(TAG, "stream $path failed after $sent B", it) }
+            .isSuccess
+    }
+
+    /**
+     * Hands an inbound channel's stream to [read] (called from WearableListenerService
+     * .onChannelOpened for large transfers that shouldn't be held in memory), then closes it.
+     */
+    suspend fun readChannelStream(channel: ChannelClient.Channel, read: suspend (InputStream) -> Unit) {
+        try {
+            val input = channels.getInputStream(channel).await()
+            HLog.i(TAG, "receiving stream ${channel.path}")
+            read(input)
+        } finally {
+            channels.close(channel)
+        }
     }
 
     /** Reads a whole inbound channel (called from WearableListenerService.onChannelOpened). */

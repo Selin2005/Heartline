@@ -8,7 +8,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.heartline.datalayer.diag.HLog
 import com.heartline.phone.data.SettingsRepository
-import com.heartline.shared.diag.DiagnosticsPolicy
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,37 +19,33 @@ import kotlinx.coroutines.launch
 data class DiagnosticsUi(
     val enabled: Boolean = false,
     val shouldAsk: Boolean = false,
-    val detailedUntilMs: Long = 0,
-    val keptKb: Long = 0,
+    /** This phone's kept log, compressed. */
+    val keptBytes: Long = 0,
     val folder: String? = null,
-    val step: PhoneLogExporter.Step? = null,
+    val progress: PhoneLogExporter.Progress? = null,
     val saved: PhoneLogExporter.Result? = null,
     val error: String? = null,
 ) {
-    val exporting: Boolean get() = step != null
+    val exporting: Boolean get() = progress != null
 }
 
 class DiagnosticsViewModel(
     private val repository: DiagnosticsRepository,
     private val exporter: PhoneLogExporter,
     settings: SettingsRepository,
-    private val now: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
     private val export = MutableStateFlow(DiagnosticsUi())
 
-    val ui: StateFlow<DiagnosticsUi> = combine(repository.state, settings.monitor, export) { r, s, e ->
+    val ui: StateFlow<DiagnosticsUi> = combine(repository.state, settings.monitor, export) { r, _, e ->
         e.copy(
             enabled = r.enabled,
             shouldAsk = r.shouldAsk,
-            detailedUntilMs = if (DiagnosticsPolicy.detailed(r.enabled, s.detailedLogsUntilMs, now())) s.detailedLogsUntilMs else 0,
-            keptKb = HLog.sizeBytes() / 1024,
+            keptBytes = HLog.sizeBytes(),
             folder = r.folder,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DiagnosticsUi())
 
     fun setEnabled(on: Boolean) = viewModelScope.launch { repository.setChoice(on) }
-
-    fun setDetailed(on: Boolean) = viewModelScope.launch { repository.setDetailed(on) }
 
     fun delete() = viewModelScope.launch {
         repository.deleteLogs()
@@ -59,9 +54,9 @@ class DiagnosticsViewModel(
 
     fun export(folder: Uri) = viewModelScope.launch {
         repository.rememberFolder(folder.toString())
-        export.update { it.copy(step = PhoneLogExporter.Step.PHONE, saved = null, error = null) }
-        runCatching { exporter.export(folder) { step -> export.update { it.copy(step = step) } } }
-            .onSuccess { result -> export.update { it.copy(step = null, saved = result) } }
-            .onFailure { e -> export.update { it.copy(step = null, error = e.message ?: e.javaClass.simpleName) } }
+        export.update { it.copy(progress = PhoneLogExporter.Progress(PhoneLogExporter.Step.PHONE), saved = null, error = null) }
+        runCatching { exporter.export(folder) { p -> export.update { it.copy(progress = p) } } }
+            .onSuccess { result -> export.update { it.copy(progress = null, saved = result) } }
+            .onFailure { e -> export.update { it.copy(progress = null, error = e.message ?: e.javaClass.simpleName) } }
     }
 }

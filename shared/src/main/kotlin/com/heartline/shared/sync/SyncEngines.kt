@@ -9,6 +9,7 @@ import com.heartline.shared.hr.HrBatch
 import com.heartline.shared.hr.MonitorSettings
 import com.heartline.shared.model.RecordMeta
 import com.heartline.shared.profile.UserProfile
+import java.io.InputStream
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
@@ -64,8 +65,12 @@ class WatchSyncEngine(
     private val onStatus: suspend (PhoneStatus) -> Unit = {},
     private val onLogRequest: suspend (LogRequest) -> Unit = {}
 ) {
-    /** Watch → phone: the diagnostic log the phone asked for with [LogRequest]. */
+    /** Watch → phone: the diagnostic log (or its manifest) the phone asked for with [LogRequest]. */
     suspend fun sendLogs(requestId: String, text: ByteArray): Boolean = transport.sendLarge(Protocol.logsPath(requestId), text)
+
+    /** Watch → phone: one log segment, streamed from its file. */
+    suspend fun sendLogSegment(requestId: String, input: InputStream): Boolean =
+        transport.sendStream(Protocol.logSegmentPath(requestId), input)
 
     /** Watch → phone: settings changed on the watch (the phone keeps the newer copy). */
     suspend fun sendSettings(settings: MonitorSettings): Boolean =
@@ -135,7 +140,9 @@ class PhoneSyncEngine(
     private val onSettings: suspend (MonitorSettings) -> Unit = {},
     /** A raw BP session log arrived (id, encoded bytes); acked after it returns. */
     private val onSessionLog: suspend (String, ByteArray) -> Unit = { _, _ -> },
-    private val onLogs: suspend (requestId: String, text: ByteArray) -> Unit = { _, _ -> }
+    private val onLogs: suspend (requestId: String, text: ByteArray) -> Unit = { _, _ -> },
+    /** A log segment arrived whole (the app reads segment channels as streams, not through here). */
+    private val onLogSegment: suspend (requestId: String, input: InputStream) -> Unit = { _, _ -> }
 ) {
     private val metas = mutableMapOf<String, RecordMeta>()
     private val waves = mutableMapOf<String, FloatArray>()
@@ -181,6 +188,8 @@ class PhoneSyncEngine(
                 ack(result.id)
             }
             envelope.path.startsWith(Protocol.LOGS_PREFIX) -> onLogs(envelope.path.removePrefix(Protocol.LOGS_PREFIX), envelope.data)
+            envelope.path.startsWith(Protocol.LOGS_SEGMENT_PREFIX) ->
+                onLogSegment(envelope.path.removePrefix(Protocol.LOGS_SEGMENT_PREFIX), envelope.data.inputStream())
             envelope.path.startsWith(Protocol.BP_SESSION_PREFIX) -> {
                 val id = envelope.path.removePrefix(Protocol.BP_SESSION_PREFIX)
                 onSessionLog(id, envelope.data)

@@ -16,6 +16,7 @@ Regenerate with `./gradlew recordPaparazziDebug` and `python3 tools/screenshots/
 | [**SpO₂, temperature and stress**](phone/more-measurements/README.md) | [<img src="phone/more-measurements/spo2_light.png" width="120" alt="">](phone/more-measurements/README.md) | 3 |
 | [**Body composition**](phone/body-composition/README.md) | [<img src="phone/body-composition/body_composition_light.png" width="120" alt="">](phone/body-composition/README.md) | 3 |
 | [**Settings, updates and sharing**](phone/settings/README.md) | [<img src="phone/settings/settings_light.png" width="120" alt="">](phone/settings/README.md) | 17 |
+| [**Other**](phone/other/README.md) | [<img src="phone/other/diagnostics_exporting_light.png" width="120" alt="">](phone/other/README.md) | 1 |
 | [**Widgets**](widgets/README.md) | [<img src="widgets/dashboard_2_full_light.png" width="120" alt="">](widgets/README.md) | 38 |
 
 ## Watch

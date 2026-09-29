@@ -17,7 +17,6 @@ import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.ErrorOutline
-import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
@@ -45,14 +44,11 @@ import com.heartline.phone.ui.components.gutter
 import com.heartline.phone.ui.settings.OneUiSwitch
 import com.heartline.phone.ui.theme.HeartlineTheme
 import com.heartline.shared.AppInfo
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
+import com.heartline.shared.diag.formatLogSize
 
-/** Settings → Help & diagnostics: keep logs, detailed mode, export both devices' logs, delete. */
+/** Settings → Help & diagnostics: keep logs, export both devices' logs, delete. */
 
-/** Lets the user pick the folder for the two log files (remembering it for next time), then exports. */
+/** Lets the user pick the folder for the log zip (remembering it for next time), then exports. */
 @Composable
 fun rememberLogFolderPicker(lastFolder: String?, onFolder: (Uri) -> Unit): () -> Unit {
     val context = LocalContext.current
@@ -72,7 +68,6 @@ fun DiagnosticsScreen(
     ui: DiagnosticsUi,
     onBack: (() -> Unit)? = null,
     onEnabled: (Boolean) -> Unit = {},
-    onDetailed: (Boolean) -> Unit = {},
     onExport: () -> Unit = {},
     onDelete: () -> Unit = {},
 ) {
@@ -83,29 +78,40 @@ fun DiagnosticsScreen(
             RoundedCard(Modifier.gutter()) {
                 Text(stringResource(R.string.diag_intro), style = MaterialTheme.typography.bodyMedium, color = colors.onBackground)
                 Spacer(Modifier.height(16.dp))
-                val step = ui.step
+                val progress = ui.progress
                 val saved = ui.saved
                 val error = ui.error
                 when {
-                    step != null -> {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = colors.primary)
+                    progress != null -> {
+                        val parts = progress.parts
+                        if (progress.step == PhoneLogExporter.Step.WATCH && parts > 0) {
+                            LinearProgressIndicator(
+                                progress = { (progress.part - 1).coerceAtLeast(0).toFloat() / parts },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = colors.primary,
+                            )
+                        } else {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = colors.primary)
+                        }
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            stringResource(
-                                when (step) {
-                                    PhoneLogExporter.Step.PHONE -> R.string.diag_step_phone
-                                    PhoneLogExporter.Step.WATCH -> R.string.diag_step_watch
-                                    PhoneLogExporter.Step.SAVING -> R.string.diag_step_saving
-                                },
-                            ),
+                            when {
+                                progress.step == PhoneLogExporter.Step.PHONE -> stringResource(R.string.diag_step_phone)
+                                progress.step == PhoneLogExporter.Step.SAVING -> stringResource(R.string.diag_step_saving)
+                                parts > 0 -> stringResource(R.string.diag_step_watch_part, progress.part, parts, formatLogSize(progress.bytes))
+                                else -> stringResource(R.string.diag_step_watch)
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = colors.onSurfaceVariant,
                         )
                     }
                     else -> {
                         if (saved != null) {
-                            Result(Icons.Rounded.CheckCircle, colors.statusNormal, stringResource(R.string.diag_saved, saved.phoneFile, saved.watchFile))
+                            Result(Icons.Rounded.CheckCircle, colors.statusNormal, stringResource(R.string.diag_saved, saved.file))
                             if (!saved.watchReached) Result(Icons.Rounded.ErrorOutline, colors.statusWarn, stringResource(R.string.diag_watch_unreachable))
+                            if (saved.missingParts > 0) {
+                                Result(Icons.Rounded.ErrorOutline, colors.statusWarn, stringResource(R.string.diag_watch_missing, saved.missingParts))
+                            }
                             Spacer(Modifier.height(12.dp))
                         }
                         if (error != null) {
@@ -126,24 +132,11 @@ fun DiagnosticsScreen(
             RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
                 CardRow(
                     stringResource(R.string.diag_keep),
-                    subtitle = if (ui.enabled) stringResource(R.string.diag_keep_on, ui.keptKb) else stringResource(R.string.diag_keep_off),
+                    subtitle = if (ui.enabled) stringResource(R.string.diag_keep_on, formatLogSize(ui.keptBytes)) else stringResource(R.string.diag_keep_off),
                     leading = { IconBadge(Icons.Rounded.Description, colors.onSurfaceVariant) },
                     trailing = { OneUiSwitch(ui.enabled, onEnabled) },
                     showDivider = true,
                     onClick = { onEnabled(!ui.enabled) },
-                )
-                val detailed = ui.detailedUntilMs > 0
-                CardRow(
-                    stringResource(R.string.diag_detailed),
-                    subtitle = when {
-                        !ui.enabled -> stringResource(R.string.diag_detailed_needs_logs)
-                        detailed -> stringResource(R.string.diag_detailed_until, formatTime(ui.detailedUntilMs))
-                        else -> stringResource(R.string.diag_detailed_sub)
-                    },
-                    leading = { IconBadge(Icons.Rounded.Science, colors.onSurfaceVariant) },
-                    trailing = { OneUiSwitch(detailed) { if (ui.enabled) onDetailed(it) } },
-                    showDivider = true,
-                    onClick = { if (ui.enabled) onDetailed(!detailed) },
                 )
                 CardRow(
                     stringResource(R.string.diag_delete),
@@ -170,9 +163,6 @@ private fun Result(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: 
         Text(text, style = MaterialTheme.typography.bodySmall, color = HeartlineTheme.colors.onBackground)
     }
 }
-
-private fun formatTime(ms: Long): String =
-    DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).format(Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()))
 
 /** Asked once of stable users (beta users keep logs by default). */
 @Composable

@@ -65,9 +65,25 @@ data class SetupRequest(val target: SetupTarget)
 @Serializable
 data class Ack(val id: String, val ok: Boolean)
 
-/** Phone → watch: send your diagnostic log back on [Protocol.logsPath] ([delete]: erase it instead). */
+/**
+ * Phone → watch, about the diagnostic log (answered on [Protocol.logsPath] or, for a segment,
+ * streamed on [Protocol.logSegmentPath]):
+ * - [manifest]: the header and the list of segments ([LogManifest]);
+ * - [segment]: that one segment file, as it is on the watch (gzip);
+ * - [delete]: erase the log;
+ * - none of them: the whole log as one text (phones from before segmented export).
+ * Watches from before segmented export ignore [manifest] and [segment] and send the whole text.
+ */
 @Serializable
-data class LogRequest(val requestId: String, val delete: Boolean = false)
+data class LogRequest(val requestId: String, val delete: Boolean = false, val manifest: Boolean = false, val segment: String? = null)
+
+/** One file of the watch's log: its name and size in bytes (gzip). */
+@Serializable
+data class LogSegment(val name: String, val size: Long)
+
+/** Watch → phone: the log's header and its segments, oldest first (the process logcat last). */
+@Serializable
+data class LogManifest(val header: String, val segments: List<LogSegment>)
 
 @Serializable
 data class DeleteRecord(val id: String)

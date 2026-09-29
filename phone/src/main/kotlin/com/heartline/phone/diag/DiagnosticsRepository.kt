@@ -38,7 +38,6 @@ class DiagnosticsRepository(
     installedVersion: String,
     private val remote: RemoteLogs,
     private val sendSettings: suspend (MonitorSettings) -> Unit,
-    private val now: () -> Long = System::currentTimeMillis,
 ) {
     data class State(val choice: Boolean?, val betaUser: Boolean, val folder: String?) {
         val enabled: Boolean get() = DiagnosticsPolicy.enabled(choice, betaUser)
@@ -63,19 +62,15 @@ class DiagnosticsRepository(
         state.map { it.enabled }.distinctUntilChanged().onEach { enabled ->
             val current = settings.current()
             if (current.diagnosticLogs != enabled) {
-                sendSettings(settings.update { it.copy(diagnosticLogs = enabled, detailedLogsUntilMs = if (enabled) it.detailedLogsUntilMs else 0) })
+                sendSettings(settings.update { it.copy(diagnosticLogs = enabled) })
             }
         }.launchIn(scope)
-        settings.monitor.onEach { HLog.configure(it.diagnosticLogs, it.detailedLogsUntilMs) }.launchIn(scope)
+        settings.monitor.onEach { HLog.configure(it.diagnosticLogs) }.launchIn(scope)
     }
 
     /** The user's answer (Settings switch or the one-time question). */
     suspend fun setChoice(on: Boolean) {
         context.diagnosticsStore.edit { it[Keys.CHOICE] = on }
-    }
-
-    suspend fun setDetailed(on: Boolean) {
-        sendSettings(settings.update { it.copy(detailedLogsUntilMs = if (on) now() + DiagnosticsPolicy.DETAILED_DURATION_MS else 0) })
     }
 
     suspend fun rememberFolder(uri: String) {
