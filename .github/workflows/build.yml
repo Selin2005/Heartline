@@ -219,7 +219,7 @@ jobs:
       # Written before the build so the notes are inside the APK ("What's new" after updating).
       - name: Release notes (OpenCode Go)
         # The model can take several minutes for many commits (streamed, retried once).
-        timeout-minutes: 25
+        timeout-minutes: 35
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           OPENCODE_MODEL: ${{ vars.OPENCODE_MODEL }}

@@ -49,6 +49,7 @@ NOTES_START, NOTES_END = "<!-- notes -->", "<!-- /notes -->"
 TELEGRAM_LIMIT = 4096
 # OpenCode Go: seconds for each streamed piece, and for the whole answer.
 READ_TIMEOUT, ANSWER_LIMIT = 120, 600
+ATTEMPTS = 3
 # Cloudflare (in front of OpenCode) blocks urllib's default "Python-urllib/3.x" (error 1010).
 USER_AGENT = "heartline-release/1.0 (+https://github.com/selin2005/heartline)"
 # OpenCode Go routes by session and rejects requests without one (MissingSessionID): one stable
@@ -197,7 +198,7 @@ def stream_text(response, deadline: float) -> str:
     """The answer text of a streamed (server-sent events) chat completion; a plain JSON answer too."""
     if "text/event-stream" not in (response.headers.get("Content-Type") or ""):
         return json.loads(response.read())["choices"][0]["message"]["content"] or ""
-    parts = []
+    parts, finish = [], None
     for raw_line in response:
         if time.time() > deadline:
             raise TimeoutError("no complete answer within the time limit")
@@ -207,18 +208,25 @@ def stream_text(response, deadline: float) -> str:
         data = line[5:].strip()
         if data == "[DONE]":
             break
-        choices = json.loads(data).get("choices") or [{}]
+        event = json.loads(data)
+        if event.get("error"):
+            raise RuntimeError(f"error in the stream: {json.dumps(event['error'])[:300]}")
+        choice = (event.get("choices") or [{}])[0]
+        finish = choice.get("finish_reason") or finish
         # Only the answer; reasoning models also stream their thinking in other fields.
-        parts.append((choices[0].get("delta") or {}).get("content") or "")
-    return "".join(parts)
+        parts.append((choice.get("delta") or {}).get("content") or (choice.get("message") or {}).get("content") or "")
+    text = "".join(parts)
+    if not text.strip():
+        raise RuntimeError(f"empty answer (finish reason: {finish})")
+    return text
 
 
 def ask_model(system: str, user: str):
     """One OpenCode Go chat completion, or None without OPENCODE_API_KEY or when it fails.
 
     Streamed, so a long answer doesn't hit a read timeout (each piece arrives within READ_TIMEOUT,
-    the whole answer within ANSWER_LIMIT). Network errors, timeouts and server errors (5xx, 429)
-    are tried once more."""
+    the whole answer within ANSWER_LIMIT). Empty answers, network errors, timeouts and server
+    errors (5xx, 429) are tried again, ATTEMPTS times in all."""
     key = os.environ.get("OPENCODE_API_KEY")
     if not key:
         return None
@@ -228,7 +236,7 @@ def ask_model(system: str, user: str):
     names = [model] + ([f"opencode-go/{model}"] if "/" not in model else [])
     reason = "no attempt"
     for name in names:
-        for attempt in (1, 2):
+        for attempt in range(1, ATTEMPTS + 1):
             body = {
                 "model": name,
                 "temperature": 0.2,
@@ -256,6 +264,7 @@ def ask_model(system: str, user: str):
                     print(f"Text by {name} (OpenCode Go)", file=sys.stderr)
                     return text
                 reason = "empty answer"
+                retry = True
             except urllib.error.HTTPError as e:
                 reason = f"HTTP {e.code}: {e.read()[:300].decode(errors='replace')}"
                 if e.code in (400, 404) and name != names[-1]:
@@ -264,7 +273,7 @@ def ask_model(system: str, user: str):
             except Exception as e:  # noqa: BLE001 - fall back to text without the model
                 reason = f"{type(e).__name__}: {e}"
                 retry = True
-            if retry and attempt == 1:
+            if retry and attempt < ATTEMPTS:
                 print(f"OpenCode Go ({name}): {reason}; trying again", file=sys.stderr)
                 time.sleep(5)
                 continue
@@ -295,6 +304,15 @@ def ai_notes(version: str, entries, docs: bool, stat: str):
         return None
     text = re.sub(r"^```(?:markdown)?\s*|\s*```$", "", text).strip()
     return text if "### " in text or text.startswith("- ") else None
+
+
+MENTION = re.compile(r"(?<![\w`/])@[\w.-]+(?::[\w.-]+)?")
+
+
+def no_mentions(text: str) -> str:
+    """Puts "@name" in backticks: GitHub would link it to that user and list them among the
+    release's contributors (a commit about "@param:StringRes" once added a stranger)."""
+    return MENTION.sub(lambda m: f"`{m.group(0)}`", text)
 
 
 def plain_notes(entries, docs: bool = False) -> str:
@@ -332,7 +350,7 @@ def cmd_notes(a) -> None:
     print(f"Release notes for {a.version}: commits since {a.previous or 'the first commit'}", file=sys.stderr)
     entries, docs = commits(a.previous)
     stat = git("diff", "--shortstat", a.previous, "HEAD") if a.previous else "first release"
-    notes = ai_notes(a.version, entries, docs, stat) or plain_notes(entries, docs)
+    notes = no_mentions(ai_notes(a.version, entries, docs, stat) or plain_notes(entries, docs))
     with open(a.out, "w", encoding="utf-8") as f:
         f.write(notes.strip() + "\n")
     if a.changelog:
