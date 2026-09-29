@@ -118,6 +118,12 @@ class BpRepository(
     suspend fun saveCalibration(stored: BpCalibration) {
         // A round the watch read the other way up is read again the calibration's way (algorithm 6.2).
         val calibration = withContext(Dispatchers.Default) { stored.aligned() }
+        HLog.i(
+            TAG,
+            "BP calibration saved: id=${calibration.id.take(8)} rounds=${calibration.points.size} checks=${calibration.extraPoints.size} " +
+                "cuff=[${calibration.timedPoints().joinToString(" ") { (p, _) -> "${p.cuffSystolic}/${p.cuffDiastolic}${if (p.standing) "s" else ""}" }}] " +
+                "polarity=${calibration.polarity(BpChannel.PWA_GREEN)}/${calibration.polarity(BpChannel.PWA_IR)} valid=${calibration.isValid(now())}",
+        )
         dao.insert(BpCalibrationEntity(calibration.id, calibration.createdAtMs, Protocol.json.encodeToString(calibration)))
         sync().sendCalibration(calibration)
     }

@@ -211,8 +211,10 @@ class BpMeasureViewModel(
         val startedAt = now()
         val id = UUID.randomUUID().toString()
         val log = BpSessionRecorder(id, if (capture != null) "calibration" else "measure", startedAt, now)
+        // Set before the job starts, so a second start() arriving at once (the screen's effect and
+        // the phone reopening it; seen in real logs 60–120 ms apart) is refused by the check above.
+        mutable.value = BpState.Preparing
         job = viewModelScope.launch {
-            mutable.value = BpState.Preparing
             log.event("aux.start")
             val temp = aux.skinTemp()
             temp?.let {
@@ -568,6 +570,9 @@ class BpMeasureViewModel(
         val session = log.build(header)
         HLog.i(RAW_TAG, "session ${session.header.id}: ${session.streams.joinToString { "${it.name}=${it.size}@${"%.1f".format(it.rateHz())}Hz" }} values=${session.header.values.size}")
         session.header.values.entries.sortedBy { it.key }.chunked(12).forEach { chunk -> HLog.d(RAW_TAG, chunk.joinToString { "${it.key}=${"%.4g".format(it.value)}" }) }
+        // The words too (state, window, why a calibration can't be used, the calibration's cuff values, the result).
+        session.header.notes.entries.sortedBy { it.key }.forEach { (k, v) -> HLog.d(RAW_TAG, "note $k=$v") }
+        session.header.events.forEach { e -> HLog.d(RAW_TAG, "event +${e.tMs}ms ${e.type}${if (e.detail.isEmpty()) "" else " ${e.detail}"}") }
         runCatching { records.addSession(session) }.onFailure { HLog.w(RAW_TAG, "session not stored", it) }
         sync.schedule()
     }

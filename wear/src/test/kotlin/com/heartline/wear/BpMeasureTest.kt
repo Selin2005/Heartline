@@ -117,6 +117,18 @@ class BpMeasureTest {
     }
 
     @Test
+    fun aSecondStartArrivingAtOnceRecordsNothingMore() = runBlocking {
+        // Real logs: "BP start" twice, 60–120 ms apart (the screen's effect and the phone reopening it).
+        bp.setPendingCapture(CaptureRequest("cap-3", 2))
+        val vm = vm()
+        vm.start(calibrationSession = true)
+        vm.start(calibrationSession = true)
+        withTimeout(BP_TIMEOUT_MS) { vm.state.first { it is BpState.CalibrationRecorded } }
+        assertEquals(1, records.pendingMessages().count { it.path == Protocol.BP_CALIBRATION_CAPTURE })
+        assertEquals(1, records.pendingSessions().size)
+    }
+
+    @Test
     fun anOldCalibrationRequestExpiresAndANewCalibrationEndsIt() {
         bp.setPendingCapture(CaptureRequest("old", 1), atMs = 0)
         assertNull(bp.currentCapture(20 * 60_000L))

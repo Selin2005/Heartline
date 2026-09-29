@@ -289,9 +289,7 @@ object BpPipeline {
             }
         }
         fused.channels.forEach { log?.value("fusion.weight.${it.channel}", it.weight) }
-        channels.filter { c ->
-            fused.channels.none { it.channel == c.channel }
-        }.forEach { log?.note("fusion.excluded.${it.channel}", "contradicts the pulse wave") }
+        log?.value("fusion.chi2", fused.chi2)
         val base = (green as? BpOutcome.Ok)?.estimate
         val systolic = fused.systolic.roundToInt().coerceIn(BpEstimator.SYSTOLIC_LIMITS)
         val diastolic = fused.diastolic.roundToInt().coerceIn(BpEstimator.DIASTOLIC_LIMITS).coerceAtMost(systolic - 15)
@@ -302,7 +300,8 @@ object BpPipeline {
             (transit?.heartRateBpm ?: features.heartRateBpm).roundToInt(),
             fused.sdSys.roundToInt(),
             fused.sdDia.roundToInt(),
-            beyondCalibration = base?.beyondCalibration ?: true,
+            // Channels that disagree more than their noise allows: shown, flagged for a cuff check.
+            beyondCalibration = (base?.beyondCalibration ?: true) || fused.conflict,
             deltaSystolic = fused.systolic - refSys,
             heartRateDominated = base?.heartRateDominated ?: false,
             ectopicBeats = features.ectopicCount,

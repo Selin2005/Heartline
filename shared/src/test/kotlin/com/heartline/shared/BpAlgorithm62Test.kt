@@ -118,17 +118,18 @@ class BpAlgorithm62Test {
     }
 
     @Test
-    fun aChannelThatContradictsTheOthersIsLeftOut() {
+    fun aChannelThatContradictsTheOthersWidensThePlusMinusAndFlagsTheReading() {
+        // 6.2 left such a channel out; 6.3 keeps it (it may be the one that sees a real change),
+        // and the conflict shows: a wide ± and a flag for a cuff check.
         val pwa = ChannelEstimate(BpChannel.PWA_GREEN, 140.0, 80.0, 5.0, 3.5)
         val ir = ChannelEstimate(BpChannel.PWA_IR, 138.0, 79.0, 6.0, 4.2)
         val bcg = ChannelEstimate(BpChannel.BCG_PTT, 80.0, 30.0, 6.0, 4.2)
         val fused = BpFusion.fuse(listOf(pwa, ir, bcg), HemodynamicState.STEADY)!!
-        assertTrue("${fused.systolic}", abs(fused.systolic - 139) <= 2)
-        assertTrue(fused.channels.none { it.channel == BpChannel.BCG_PTT })
-        // A channel that agrees stays in.
+        assertTrue(fused.conflict)
+        assertTrue("${fused.sdSys}", fused.sdSys >= 15)
         val agreeing = bcg.copy(systolic = 145.0, diastolic = 82.0)
-        assertEquals(3, BpFusion.fuse(listOf(pwa, ir, agreeing), HemodynamicState.STEADY)!!.channels.size)
-        // Two channels that disagree have no majority: both stay, and the ± shows the conflict.
-        assertEquals(2, BpFusion.fuse(listOf(pwa, bcg), HemodynamicState.STEADY)!!.channels.size)
+        val calm = BpFusion.fuse(listOf(pwa, ir, agreeing), HemodynamicState.STEADY)!!
+        assertFalse(calm.conflict)
+        assertEquals(5.0, calm.sdSys, 1.0)
     }
 }

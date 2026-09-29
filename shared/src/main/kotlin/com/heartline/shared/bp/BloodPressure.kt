@@ -340,7 +340,7 @@ object BpEstimator {
     val DIASTOLIC_LIMITS = 35..150
 
     /** Cuff repeatability plus model error, and drift per day since the latest cuff point. */
-    private const val BASE_SD = 5.0
+    const val BASE_SD = 5.0
     private const val DRIFT_SD_PER_DAY = 0.15
 
     /**
@@ -504,6 +504,8 @@ object BpEstimator {
                         rawDia,
                         sdSys,
                         sdDia,
+                        scaleSys = extrapolation,
+                        scaleDia = extrapolation * 0.7,
                         parts = mapOf(
                             "base" to BASE_SD,
                             "residual" to model.residualSys,

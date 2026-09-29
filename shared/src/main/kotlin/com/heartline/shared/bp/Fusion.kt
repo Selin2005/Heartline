@@ -37,8 +37,20 @@ data class ChannelEstimate(
     val sdDia: Double,
     val weight: Double = 0.0,
     /** Where the ± comes from (logged): base, residual, drift, extrapolation, doubt. */
-    val parts: Map<String, Double> = emptyMap()
-)
+    val parts: Map<String, Double> = emptyMap(),
+    /**
+     * The part of [sdSys] / [sdDia] that is uncertainty about the size of a change (how sensitive
+     * this user is), not noise: it grows with the change the channel sees. It widens the ± but
+     * never decides the weight, or a channel that sees a change would always lose to one that
+     * sees none (algorithm 6.3).
+     */
+    val scaleSys: Double = 0.0,
+    val scaleDia: Double = 0.0
+) {
+    /** The channel's measurement noise: its ± without the scale part. */
+    val noiseSys: Double get() = sqrt((sdSys * sdSys - scaleSys * scaleSys).coerceAtLeast(1.0))
+    val noiseDia: Double get() = sqrt((sdDia * sdDia - scaleDia * scaleDia).coerceAtLeast(1.0))
+}
 
 /**
  * Combines the channels into one number (algorithm 6): inverse-variance weighting, each channel's
@@ -79,43 +91,84 @@ object BpFusion {
     fun fuse(channels: List<ChannelEstimate>, state: HemodynamicState): Fused? {
         if (channels.isEmpty()) return null
         val factors = stateFactor.getValue(state)
-        val widened = consistent(channels).map { c ->
+        val widened = channels.map { c ->
             val f = factors[c.channel] ?: 1.0
-            c.copy(sdSys = c.sdSys * f, sdDia = c.sdDia * f)
+            c.copy(sdSys = c.sdSys * f, sdDia = c.sdDia * f, scaleSys = c.scaleSys * f, scaleDia = c.scaleDia * f)
         }
-        val (sys, sdSys, wSys) = combine(widened.map { it.systolic }, widened.map { it.sdSys })
-        val (dia, sdDia, _) = combine(widened.map { it.diastolic }, widened.map { it.sdDia })
-        return Fused(sys, dia, sdSys, sdDia, widened.mapIndexed { i, c -> c.copy(weight = wSys[i]) })
+        val (sys, sdSys, wSys) = combine(widened.map { it.systolic }, widened.map { it.noiseSys }, widened.map { it.scaleSys }, COMMON_SD)
+        val (dia, sdDia, _) = combine(
+            widened.map { it.diastolic },
+            widened.map { it.noiseDia },
+            widened.map { it.scaleDia },
+            COMMON_SD * 0.7
+        )
+        return Fused(
+            sys,
+            dia,
+            sdSys,
+            sdDia,
+            widened.mapIndexed { i, c ->
+                c.copy(weight = wSys[i])
+            },
+            chi2(widened.map { it.systolic }, widened.map { it.noiseSys })
+        )
     }
 
     /**
-     * The channels without any that contradicts the others: one farther from the median of all
-     * channels than [MAX_CONFLICT_MMHG] or 3 of its own sd is a failed measurement (a mis-detected
-     * transit time, say), and averaging it in would move the number by tens of mmHg. With fewer
-     * than 3 channels there is no majority, so nothing is left out.
+     * Every channel is anchored to the same cuff calibration, so the reference's error and the
+     * pressure's own beat-to-beat variation are shared: combining channels can't take the ±
+     * below this (algorithm 6.3; a real reading showed ±3 and missed the cuff by 4).
      */
-    fun consistent(channels: List<ChannelEstimate>): List<ChannelEstimate> {
-        if (channels.size < 3) return channels
-        val sorted = channels.map { it.systolic }.sorted()
-        val median = if (sorted.size % 2 == 1) sorted[sorted.size / 2] else (sorted[sorted.size / 2 - 1] + sorted[sorted.size / 2]) / 2
-        return channels.filter { abs(it.systolic - median) <= maxOf(MAX_CONFLICT_MMHG, 3 * it.sdSys) }.ifEmpty { channels }
+    const val COMMON_SD = 5.0
+
+    /**
+     * [chi2]: how much more the channels' systolic values disagree than their noise allows
+     * (1 = as expected). Above [CONFLICT_CHI2] the reading is a conflict: shown with the wider ±
+     * and flagged for a cuff check, never averaged into a confident number.
+     */
+    data class Fused(
+        val systolic: Double,
+        val diastolic: Double,
+        val sdSys: Double,
+        val sdDia: Double,
+        val channels: List<ChannelEstimate>,
+        val chi2: Double = 0.0
+    ) {
+        val conflict: Boolean get() = chi2 > CONFLICT_CHI2
     }
 
-    const val MAX_CONFLICT_MMHG = 20.0
+    const val CONFLICT_CHI2 = 4.0
 
-    data class Fused(val systolic: Double, val diastolic: Double, val sdSys: Double, val sdDia: Double, val channels: List<ChannelEstimate>)
+    /** Reduced chi-square of the values around their noise-weighted mean (0 for a single channel). */
+    internal fun chi2(x: List<Double>, noise: List<Double>): Double {
+        if (x.size < 2) return 0.0
+        val w = noise.map { 1.0 / it.coerceAtLeast(1.0).pow(2) }
+        val mean = x.indices.sumOf { w[it] * x[it] } / w.sum()
+        return x.indices.sumOf { w[it] * (x[it] - mean).pow(2) } / (x.size - 1)
+    }
 
-    /** Inverse-variance mean, its sd (widened by the Birge ratio when > 1) and the normalised weights. */
-    internal fun combine(x: List<Double>, sd: List<Double>): Triple<Double, Double, List<Double>> {
-        val w = sd.map { 1.0 / it.coerceAtLeast(1.0).pow(2) }
+    /**
+     * Mean weighted by each channel's noise; its ± is the combined noise (widened by the Birge
+     * ratio when the channels disagree more than their noise allows), plus the weighted scale
+     * uncertainty, never below [floor]. Returns the mean, the ± and the normalised weights.
+     */
+    internal fun combine(
+        x: List<Double>,
+        noise: List<Double>,
+        scale: List<Double> = List(x.size) { 0.0 },
+        floor: Double = 0.0
+    ): Triple<Double, Double, List<Double>> {
+        val w = noise.map { 1.0 / it.coerceAtLeast(1.0).pow(2) }
         val total = w.sum()
         val mean = x.indices.sumOf { w[it] * x[it] } / total
-        var fusedSd = sqrt(1.0 / total)
+        var noiseSd = sqrt(1.0 / total)
         if (x.size > 1) {
             val chi2 = x.indices.sumOf { w[it] * (x[it] - mean).pow(2) } / (x.size - 1)
-            if (chi2 > 1) fusedSd *= sqrt(chi2)
+            if (chi2 > 1) noiseSd *= sqrt(chi2)
         }
-        return Triple(mean, fusedSd, w.map { it / total })
+        val weights = w.map { it / total }
+        val scaleSd = x.indices.sumOf { weights[it] * scale[it] }
+        return Triple(mean, maxOf(sqrt(noiseSd * noiseSd + scaleSd * scaleSd), floor), weights)
     }
 }
 
@@ -140,6 +193,11 @@ object TransitEstimator {
     const val ARM_FRACTION = 0.5
 
     private const val CUFF_SD = 4.0
+
+    /** The smallest round-to-round transit noise assumed, ms (the accelerometer's 10 ms samples, interpolated). */
+    const val MIN_TRANSIT_NOISE_MS = 5.0
+
+    private fun Double.nonZero() = if (abs(this) < 1e-3) (if (this < 0) -1e-3 else 1e-3) else this
 
     /** A calibration round's transit time this far from the rounds' median is left out, ms. */
     const val MAX_ROUND_SPREAD_MS = 60.0
@@ -213,9 +271,35 @@ object TransitEstimator {
             sqrt(pts.indices.sumOf { i -> w[i] * (pts[i].second.cuffSystolic - sys0 - bSys * (pts[i].first - x0)).pow(2) } / wSum)
         val dx = transitMs - x0
         val days = (nowMs - pts.maxOf { it.third }).coerceAtLeast(0) / BpCalibration.DAY_MS.toDouble()
-        val sdSys = sqrt(prior.baseSd.pow(2) + residual.pow(2) + (sdBSys * dx).pow(2) + (DRIFT_SD_PER_DAY * days).pow(2))
-        val sdDia = sqrt((prior.baseSd * 0.7).pow(2) + (sdBDia * dx).pow(2) + (DRIFT_SD_PER_DAY * days).pow(2))
+        // How much this watch's transit time wanders between rounds at about the same cuff
+        // pressure: its measurement noise, in mmHg through the slope. On a real Galaxy Watch6 the
+        // rounds scattered by about 30 ms, which makes the channel too noisy to lead; a clean
+        // channel with tight rounds is weighed like the pulse-wave channels.
+        val spread = sqrt(
+            pts.indices.sumOf { i -> w[i] * (pts[i].first - x0 - (pts[i].second.cuffSystolic - sys0) / bSys.nonZero()).pow(2) } / wSum
+        )
+            .coerceAtLeast(MIN_TRANSIT_NOISE_MS)
+        val noiseSys = sqrt(prior.baseSd.pow(2) + residual.pow(2) + (bSys * spread).pow(2) + (DRIFT_SD_PER_DAY * days).pow(2))
+        val noiseDia = sqrt((prior.baseSd * 0.7).pow(2) + (bDia * spread).pow(2) + (DRIFT_SD_PER_DAY * days).pow(2))
+        // How sure the slope is: uncertainty about the size of a change, not about its direction.
+        val scaleSys = abs(sdBSys * dx)
+        val scaleDia = abs(sdBDia * dx)
         val local = hydrostaticMmHg * ARM_FRACTION
-        return ChannelEstimate(channel, sys0 + bSys * dx - local, dia0 + bDia * dx - local, sdSys, sdDia)
+        return ChannelEstimate(
+            channel,
+            sys0 + bSys * dx - local,
+            dia0 + bDia * dx - local,
+            sqrt(noiseSys * noiseSys + scaleSys * scaleSys),
+            sqrt(noiseDia * noiseDia + scaleDia * scaleDia),
+            parts = mapOf(
+                "base" to prior.baseSd,
+                "residual" to residual,
+                "transitSpreadMs" to spread,
+                "slope" to bSys,
+                "scale" to scaleSys
+            ),
+            scaleSys = scaleSys,
+            scaleDia = scaleDia
+        )
     }
 }

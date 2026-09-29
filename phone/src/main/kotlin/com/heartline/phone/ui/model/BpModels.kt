@@ -3,6 +3,7 @@
 
 package com.heartline.phone.ui.model
 
+import com.heartline.datalayer.diag.HLog
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.heartline.phone.data.BpRepository
@@ -31,6 +32,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
 import kotlin.math.roundToInt
+
+private const val BP_TAG = "Heartline/BP"
 
 data class BpReadingUi(
     val id: String,
@@ -145,6 +148,11 @@ class BpHomeViewModel(
     fun validateLatest(systolic: Int?, diastolic: Int?): Boolean {
         val latest = state.value.latest ?: return false
         if (systolic == null || diastolic == null || systolic !in 70..250 || diastolic !in 40..150 || systolic <= diastolic + 10) return false
+        HLog.i(
+            BP_TAG,
+            "BP cuff check: watch=${latest.systolic}/${latest.diastolic} ±${latest.uncertainty} cuff=$systolic/$diastolic " +
+                "diff=${"%+d".format(latest.systolic - systolic)}/${"%+d".format(latest.diastolic - diastolic)}",
+        )
         viewModelScope.launch {
             repository.addValidation(BpValidationEntity(newId(), latest.id, now(), latest.systolic, latest.diastolic, systolic, diastolic))
         }
@@ -238,6 +246,7 @@ class CalibrationViewModel(
             return@launch
         }
         val ui = mutable.value
+        HLog.i(BP_TAG, "BP calibration round ${ui.round}: cuff=$systolic/$diastolic pulse=$pulse standing=${ui.standingRound}")
         // With the watch's full capture every channel gets this cuff point (IR, BCG, ECG transit times).
         points += capturedChannels?.let { CalibrationPoint.of(it, systolic, diastolic, pulse, standing = ui.standingRound) }
             ?: CalibrationPoint(features, systolic, diastolic, pulse, capturedPpg, gravity = capturedGravity, standing = ui.standingRound)

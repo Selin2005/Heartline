@@ -142,8 +142,10 @@ attach them to a bug report.
     channel* setting is shown only in beta and dev builds. After updating, *What's new* shows the changelog.
 15. **Blood pressure sensors (algorithm 6).** Every session writes a raw log. Capture
     `adb logcat -v time -s Heartline/BP Heartline/BpRaw Heartline/Sensor` and export
-    Phone → Blood pressure → Share → **BP raw sessions (zip)**. Then check each item below and
-    report what you see, so the algorithm can be tuned on real data:
+    Phone → Blood pressure → Share → **BP raw sessions (zip)**. The diagnostic logs alone show every
+    number of every session and, on the phone, the cuff value of every calibration round and cuff
+    check (`BP calibration round`, `BP cuff check`); the raw sensor waves are only in that zip.
+    Then check each item below and report what you see, so the algorithm can be tuned on real data:
     - **IR and red PPG:** the `Heartline/Sensor` line `PPG channels:` lists GREEN, IR and RED, and
       the `ppg` stream in the log has finite `ir` / `red` values. If only GREEN is listed, the
       watch doesn't offer them to third-party apps.

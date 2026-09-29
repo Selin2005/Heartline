@@ -34,6 +34,50 @@ changes need re-calibration at the change point (Tae et al. 2026). Algorithm 3:
 
 Algorithm 4 is the phone's personal learned model, described below.
 
+## Algorithm 6.3: follow the pressure away from the calibration, with an honest ±
+
+The second user's first reading after a new calibration was 141/80 ±3; the cuff said 137/76. The
+calibration's cuff average was about 139/79, and all three channels (green and infrared pulse
+wave, wrist BCG) agreed on "no change". Two things were wrong:
+
+1. **The ± was too narrow.**
+   - Three channels combined by inverse variance give ±3, as if their errors were independent.
+   - But they are all anchored to the same cuff calibration, so the reference's error and the
+     pressure's own beat-to-beat variation are shared.
+   - Now the fused ± is never below 5 mmHg systolic and 3.5 diastolic (`BpFusion.COMMON_SD`).
+2. **The fusion leaned towards "no change".**
+   - A channel's ± included its uncertainty about the size of a change: slope uncertainty times
+     the change it sees. So a channel that saw a fall (the transit time) got a wide ± and almost
+     no weight, while channels that saw nothing kept their narrow ±.
+   - Calibrated at 139/79 (`BpAlgorithm63Test`), a synthetic fall to 90/60 read about 140. So did a
+     rise to 170/100.
+   - Now:
+     - **Weights:** each channel's weight comes from its measurement noise only.
+       - The transit channel's noise is the scatter of this watch's own calibration rounds,
+         through the slope. On the real Watch6 the rounds scattered by about 30 ms, which keeps
+         that channel from leading.
+       - The scale uncertainty is added back into the ± (`ChannelEstimate.scaleSys`).
+     - **Disagreement:** channels that disagree more than their noise allows (reduced
+       chi-square > 4) widen the ± and flag the reading as beyond calibration (compare with a
+       cuff), instead of being averaged into a confident number.
+     - The 6.2 rule that dropped a disagreeing channel is gone: that channel may be the one that
+       sees a real change.
+   - On the same test, the fall reads 133 (±19, flagged), or 115 (±23, flagged) with constricted
+     wrist vessels, and the rise reads 144.
+
+**What still limits the watch:**
+- The rise is followed only part of the way because the slope for this user is still uncertain.
+- The synthetic pulse-wave shape is not a physiological model of pressure, so these tests check
+  the fusion, not the pulse-wave sensitivity.
+- Cuff checks at other pressures (another time of day, after medication, standing) teach the
+  model this user's own slopes. Only real sessions with cuff values can tune the rest.
+
+**Logs:**
+- **Phone:** the cuff values of every calibration round and every cuff check, and the saved
+  calibration.
+- **Watch:** each session's notes and events (state, window, calibration cuff values, why a
+  calibration can't be used) next to its numbers, and `fusion.chi2`.
+
 ## Algorithm 6.2: one wave polarity per calibration
 
 A second user (Galaxy Watch6 Classic, treated hypertension) had two problems:
@@ -71,8 +115,7 @@ What the code showed:
      next to 132 ms.
    - Calibration rounds far from the others (> 60 ms) and the standing round are left out of the
      transit fit: the hanging hand changes the transit time, not the cuff's pressure.
-   - With 3 or more channels, one farther than max(20 mmHg, 3 sd) from the median of all channels is
-     left out of the fusion (`BpFusion.consistent`).
+   - (6.2 also dropped a channel that contradicted the others; 6.3 replaced that, see below.)
 
 The log now shows why:
 
