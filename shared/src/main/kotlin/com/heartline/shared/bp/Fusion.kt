@@ -79,7 +79,7 @@ object BpFusion {
     fun fuse(channels: List<ChannelEstimate>, state: HemodynamicState): Fused? {
         if (channels.isEmpty()) return null
         val factors = stateFactor.getValue(state)
-        val widened = channels.map { c ->
+        val widened = consistent(channels).map { c ->
             val f = factors[c.channel] ?: 1.0
             c.copy(sdSys = c.sdSys * f, sdDia = c.sdDia * f)
         }
@@ -87,6 +87,21 @@ object BpFusion {
         val (dia, sdDia, _) = combine(widened.map { it.diastolic }, widened.map { it.sdDia })
         return Fused(sys, dia, sdSys, sdDia, widened.mapIndexed { i, c -> c.copy(weight = wSys[i]) })
     }
+
+    /**
+     * The channels without any that contradicts the others: one farther from the median of all
+     * channels than [MAX_CONFLICT_MMHG] or 3 of its own sd is a failed measurement (a mis-detected
+     * transit time, say), and averaging it in would move the number by tens of mmHg. With fewer
+     * than 3 channels there is no majority, so nothing is left out.
+     */
+    fun consistent(channels: List<ChannelEstimate>): List<ChannelEstimate> {
+        if (channels.size < 3) return channels
+        val sorted = channels.map { it.systolic }.sorted()
+        val median = if (sorted.size % 2 == 1) sorted[sorted.size / 2] else (sorted[sorted.size / 2 - 1] + sorted[sorted.size / 2]) / 2
+        return channels.filter { abs(it.systolic - median) <= maxOf(MAX_CONFLICT_MMHG, 3 * it.sdSys) }.ifEmpty { channels }
+    }
+
+    const val MAX_CONFLICT_MMHG = 20.0
 
     data class Fused(val systolic: Double, val diastolic: Double, val sdSys: Double, val sdDia: Double, val channels: List<ChannelEstimate>)
 
@@ -126,6 +141,9 @@ object TransitEstimator {
 
     private const val CUFF_SD = 4.0
 
+    /** A calibration round's transit time this far from the rounds' median is left out, ms. */
+    const val MAX_ROUND_SPREAD_MS = 60.0
+
     /** Prior sd of the slope as a share of it (transit–pressure sensitivity varies about ±50 % between people). */
     private const val PRIOR_REL = 0.5
     private const val HALF_LIFE_DAYS = 14.0
@@ -144,7 +162,14 @@ object TransitEstimator {
         hydrostaticMmHg: Double = 0.0
     ): ChannelEstimate? {
         val prior = priors[channel] ?: return null
-        val pts = calibration.timedPoints().mapNotNull { (p, at) -> p.transit(channel)?.let { Triple(it, p, at) } }
+        // Seated rounds only: standing, the hand hangs far below the heart and the transit time
+        // to the wrist changes with that, not with the pressure the cuff measures. Rounds far from
+        // the others' median are a mis-detection, not a pressure change.
+        val seated = calibration.timedPoints().mapNotNull { (p, at) ->
+            p.transit(channel)?.takeIf { !p.standing }?.let { Triple(it, p, at) }
+        }
+        val median = seated.map { it.first }.sorted().let { if (it.isEmpty()) 0.0 else it[it.size / 2] }
+        val pts = seated.filter { abs(it.first - median) <= MAX_ROUND_SPREAD_MS }
         if (pts.size < 2) return null
         val w = pts.map { (_, _, at) ->
             val age = (nowMs - at).coerceAtLeast(0) / BpCalibration.DAY_MS.toDouble()

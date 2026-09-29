@@ -11,6 +11,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import com.heartline.shared.bp.BpCalibration
+import com.heartline.shared.bp.BpChannel
 import com.heartline.shared.bp.BpDataset
 import com.heartline.shared.bp.BpDatasetEntry
 import com.heartline.shared.bp.BpEstimate
@@ -114,7 +115,9 @@ class BpRepository(
 
     suspend fun requestCapture(request: CaptureRequest) = sync().requestCapture(request)
 
-    suspend fun saveCalibration(calibration: BpCalibration) {
+    suspend fun saveCalibration(stored: BpCalibration) {
+        // A round the watch read the other way up is read again the calibration's way (algorithm 6.2).
+        val calibration = withContext(Dispatchers.Default) { stored.aligned() }
         dao.insert(BpCalibrationEntity(calibration.id, calibration.createdAtMs, Protocol.json.encodeToString(calibration)))
         sync().sendCalibration(calibration)
     }
@@ -136,7 +139,7 @@ class BpRepository(
     }
 
     private suspend fun upgradeIfNeeded(cal: BpCalibration): BpCalibration {
-        val up = withContext(Dispatchers.Default) { cal.upgraded() }
+        val up = withContext(Dispatchers.Default) { cal.upgraded().aligned() }
         if (up != cal) dao.insert(BpCalibrationEntity(up.id, up.createdAtMs, Protocol.json.encodeToString(up)))
         return up
     }
@@ -186,11 +189,12 @@ class BpRepository(
         // With the reading's raw session, the cuff check teaches every channel (IR, BCG, ECG transit times).
         val sessionId = (record.summary as? RecordSummary.BloodPressure)?.sessionId
         val fromSession = sessionId?.let { session(it) }?.let { log ->
-            withContext(Dispatchers.Default) { BpPipeline.capture(BpSessionReplay.input(log)) }
+            withContext(Dispatchers.Default) { BpPipeline.capture(BpSessionReplay.input(log), cal.polarity(BpChannel.PWA_GREEN), cal.polarity(BpChannel.PWA_IR)) }
         }?.let { CalibrationPoint.of(it, validation.cuffSystolic, validation.cuffDiastolic, null, at) }
         val point = fromSession ?: run {
             val wave = records.wave(record) ?: return
-            val features = withContext(Dispatchers.Default) { PpgFeatures.extract(wave, record.entity.sampleRateHz.takeIf { it > 0 } ?: BpCalibration.PPG_FS) } ?: return
+            val features = withContext(Dispatchers.Default) { PpgFeatures.extract(wave, record.entity.sampleRateHz.takeIf { it > 0 } ?: BpCalibration.PPG_FS, cal.polarity(BpChannel.PWA_GREEN)) }
+                ?: return
             CalibrationPoint(features, validation.cuffSystolic, validation.cuffDiastolic, null, null, at)
         }
         saveCalibration(upgradeIfNeeded(cal).withExtraPoint(point))

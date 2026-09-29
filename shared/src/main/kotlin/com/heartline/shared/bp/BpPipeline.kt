@@ -60,18 +60,19 @@ object BpWindowSelector {
 
     data class Window(val range: IntRange, val features: PpgFeatureVector, val steady: Boolean, val irregular: Boolean)
 
-    fun best(raw: FloatArray, fs: Int): Window? {
+    /** [polarity]: read the wave this way up (the calibration's), instead of detecting it. */
+    fun best(raw: FloatArray, fs: Int, polarity: Boolean? = null): Window? {
         val len = WINDOW_SECONDS * fs
-        if (raw.size <= len) return window(raw, fs, raw.indices)
-        val whole = PpgFeatures.rhythm(raw, fs)
+        if (raw.size <= len) return window(raw, fs, raw.indices, polarity)
+        val whole = PpgFeatures.rhythm(raw, fs, polarity)
         val irregular = whole != null && HemodynamicStateClassifier.irregular(whole)
         if (irregular) {
             val n = minOf(raw.size, IRREGULAR_SECONDS * fs)
-            window(raw, fs, raw.size - n until raw.size)?.let { return it.copy(irregular = true) }
+            window(raw, fs, raw.size - n until raw.size, polarity)?.let { return it.copy(irregular = true) }
         }
         val step = STEP_SECONDS * fs
         val candidates = generateSequence(raw.size - len) { (it - step).takeIf { s -> s >= 0 } }
-            .mapNotNull { start -> window(raw, fs, start until start + len) }
+            .mapNotNull { start -> window(raw, fs, start until start + len, polarity) }
             .toList()
         if (candidates.isEmpty()) return null
         return candidates.filter { it.steady && it.features.quality >= BpEstimator.MIN_QUALITY }.maxByOrNull { it.features.quality }
@@ -88,8 +89,8 @@ object BpWindowSelector {
         return latest.steady && latest.features.quality >= BpEstimator.MIN_QUALITY
     }
 
-    private fun window(raw: FloatArray, fs: Int, range: IntRange): Window? {
-        val f = PpgFeatures.extract(raw.copyOfRange(range.first, range.last + 1), fs) ?: return null
+    private fun window(raw: FloatArray, fs: Int, range: IntRange, polarity: Boolean? = null): Window? {
+        val f = PpgFeatures.extract(raw.copyOfRange(range.first, range.last + 1), fs, polarity) ?: return null
         val irregular = HemodynamicStateClassifier.irregular(f)
         val steady = abs(f.hrSlopeBpmPerS) <= HemodynamicStateClassifier.TRANSIENT_HR_SLOPE &&
             abs(f.amplitudeTrend) <= HemodynamicStateClassifier.TRANSIENT_AMPLITUDE &&
@@ -107,7 +108,7 @@ object BpPipeline {
     private const val PP_SYS_SHARE = 2.0 / 3.0
 
     fun run(
-        calibration: BpCalibration?,
+        stored: BpCalibration?,
         input: BpSessionInput,
         nowMs: Long,
         history: List<PpgFeatureVector> = emptyList(),
@@ -116,7 +117,16 @@ object BpPipeline {
         fun done(outcome: BpOutcome, f: PpgFeatureVector? = null) = BpResult(outcome, f, null, null, null, null, null, null).also {
             log?.value("outcome.code", outcomeCode(outcome).toDouble())
         }
-        if (calibration == null || !calibration.isValid(nowMs)) return done(BpOutcome.NeedsCalibration)
+        if (stored == null || !stored.isValid(nowMs)) {
+            log?.note("needsCalibration", stored?.let { needsCalibrationReason(it, nowMs) } ?: "no calibration")
+            return done(BpOutcome.NeedsCalibration)
+        }
+        // Rounds read the other way up are read again with the calibration's polarity (algorithm 6.2).
+        val calibration = stored.aligned()
+        log?.note(
+            "calibration.cuff",
+            calibration.timedPoints().joinToString(" ") { (p, _) -> "${p.cuffSystolic}/${p.cuffDiastolic}${if (p.standing) "s" else ""}" }
+        )
 
         // Quick mode estimates from the steadiest window of the green PPG; precise mode from the
         // heart-level part of its ECG-synchronised PPG.
@@ -140,7 +150,13 @@ object BpPipeline {
         } else {
             Triple(com.heartline.shared.dsp.PpgRepair.repair(input.green) ?: input.green, input.fs, input.greenTimesNs)
         }
-        val window = BpWindowSelector.best(raw, fs)
+        // The measurement is read the same way up as the calibration it is compared with.
+        val greenPolarity = calibration.polarity(BpChannel.PWA_GREEN, fs)
+        val irPolarity = calibration.polarity(BpChannel.PWA_IR, fs)
+        log?.value("polarity.calibration.green", greenPolarity?.let { if (it) 1.0 else 0.0 })
+        log?.value("polarity.calibration.ir", irPolarity?.let { if (it) 1.0 else 0.0 })
+        log?.value("polarity.detected.green", PpgFeatures.extract(raw, fs)?.let { if (it.inverted) 1.0 else 0.0 })
+        val window = BpWindowSelector.best(raw, fs, greenPolarity)
         log?.event("window", window?.let { "${it.range.first}..${it.range.last} steady=${it.steady} irregular=${it.irregular}" } ?: "none")
         val range = window?.range ?: raw.indices
         val features = window?.features
@@ -169,6 +185,7 @@ object BpPipeline {
         val channels = mutableListOf<ChannelEstimate>()
         val green = BpEstimator.estimate(calibration, features, nowMs, history, context, BpChannel.PWA_GREEN, state, hydrostatic, fs)
         (green as? BpOutcome.Ok)?.let { channels += it.estimate.channels }
+        if (green == BpOutcome.NeedsCalibration) log?.note("needsCalibration", needsCalibrationReason(calibration, nowMs))
 
         val irFeatures = input.ir?.takeIf { precise == null }?.let { ir ->
             PpgFeatures.extract(
@@ -176,7 +193,8 @@ object BpPipeline {
                     com.heartline.shared.dsp.PpgRepair.repair(it)
                         ?: it
                 },
-                fs
+                fs,
+                irPolarity
             )
         }
         log?.features("ir", irFeatures)
@@ -188,7 +206,7 @@ object BpPipeline {
         // Wrist ballistocardiogram against the PPG feet.
         val bcgPtt = input.imu.accel?.let { accel ->
             val t = times ?: return@let null
-            val pulses = PpgFeatures.pulses(raw.copyOfRange(range.first, range.last + 1), fs) ?: return@let null
+            val pulses = PpgFeatures.pulses(raw.copyOfRange(range.first, range.last + 1), fs, greenPolarity) ?: return@let null
             val feet = LongArray(pulses.size) { i -> onsetNs(t, range.first, pulses[i].onset) }
             val r = WristBcg.beforePpgFeet(accel, feet)
             r?.let {
@@ -271,6 +289,9 @@ object BpPipeline {
             }
         }
         fused.channels.forEach { log?.value("fusion.weight.${it.channel}", it.weight) }
+        channels.filter { c ->
+            fused.channels.none { it.channel == c.channel }
+        }.forEach { log?.note("fusion.excluded.${it.channel}", "contradicts the pulse wave") }
         val base = (green as? BpOutcome.Ok)?.estimate
         val systolic = fused.systolic.roundToInt().coerceIn(BpEstimator.SYSTOLIC_LIMITS)
         val diastolic = fused.diastolic.roundToInt().coerceIn(BpEstimator.DIASTOLIC_LIMITS).coerceAtMost(systolic - 15)
@@ -297,11 +318,26 @@ object BpPipeline {
         return BpResult(BpOutcome.Ok(estimate), features, irFeatures, state, range, transit, hydro, bcgPtt)
     }
 
+    /** Why [calibration] can't be used now, round by round, for the log. */
+    fun needsCalibrationReason(calibration: BpCalibration, nowMs: Long): String {
+        if (nowMs >= calibration.validUntilMs) return "expired"
+        val polarity = calibration.polarity(BpChannel.PWA_GREEN)
+        return calibration.points.joinToString("; ", prefix = "rounds: ") { p ->
+            when {
+                p.standing -> "standing"
+                p.featureFs != BpCalibration.PPG_FS -> "other source (${p.featureFs} Hz)"
+                p.features.version < PpgFeatureVector.MIN_MODEL_VERSION -> "old features"
+                p.features.inverted != polarity -> if (p.ppg == null) "upside down, no raw wave" else "upside down (read again)"
+                else -> "usable"
+            }
+        }
+    }
+
     /**
      * What a calibration round measured on every channel (the watch sends it with the round; the
      * phone pairs it with the cuff reading via [CalibrationPoint.of]). Null without a usable pulse.
      */
-    fun capture(input: BpSessionInput): ChannelCapture? {
+    fun capture(input: BpSessionInput, greenPolarity: Boolean? = null, irPolarity: Boolean? = null): ChannelCapture? {
         val precise = input.precise?.let { p -> p.copy(ppg = com.heartline.shared.dsp.PpgRepair.repair(p.ppg) ?: return null) }
         val (raw, fs, times) = if (precise != null) {
             val level = levelSegment(precise)
@@ -316,7 +352,7 @@ object BpPipeline {
         } else {
             Triple(com.heartline.shared.dsp.PpgRepair.repair(input.green) ?: input.green, input.fs, input.greenTimesNs)
         }
-        val window = BpWindowSelector.best(raw, fs) ?: return null
+        val window = BpWindowSelector.best(raw, fs, greenPolarity) ?: return null
         val range = window.range
         val ir = input.ir?.takeIf { precise == null }?.copyOfRange(range.first, minOf(range.last + 1, input.ir.size))?.let {
             com.heartline.shared.dsp.PpgRepair.repair(it)
@@ -324,7 +360,7 @@ object BpPipeline {
         }
         val bcg = input.imu.accel?.let { accel ->
             val t = times ?: return@let null
-            val pulses = PpgFeatures.pulses(raw.copyOfRange(range.first, range.last + 1), fs) ?: return@let null
+            val pulses = PpgFeatures.pulses(raw.copyOfRange(range.first, range.last + 1), fs, greenPolarity) ?: return@let null
             WristBcg.transitMs(WristBcg.beforePpgFeet(accel, LongArray(pulses.size) { i -> onsetNs(t, range.first, pulses[i].onset) }))
         }
         val transit = precise?.let { p ->
@@ -343,7 +379,7 @@ object BpPipeline {
             features = window.features,
             ppg = raw.copyOfRange(range.first, range.last + 1).toList(),
             fs = fs,
-            irFeatures = ir?.let { PpgFeatures.extract(it, fs) },
+            irFeatures = ir?.let { PpgFeatures.extract(it, fs, irPolarity) },
             ppgIr = ir?.toList(),
             bcgPttMs = bcg,
             patMs = transit?.patMs,

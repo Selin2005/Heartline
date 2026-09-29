@@ -78,11 +78,11 @@ fun BpFlow(
     val haptics = LocalHapticFeedback.current
     val permissions = PermissionPolicy.permissionsFor(Metric.BLOOD_PRESSURE, Build.VERSION.SDK_INT).toTypedArray()
     var mode by remember { mutableStateOf(BpMode.QUICK) }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { if (it.values.all { ok -> ok }) vm.start(mode) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { if (it.values.all { ok -> ok }) vm.start(mode, calibrationSession) }
     fun start(chosen: BpMode = BpMode.QUICK) {
         mode = chosen
         val missing = permissions.filter { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
-        if (missing.isEmpty()) vm.start(chosen) else launcher.launch(missing.toTypedArray())
+        if (missing.isEmpty()) vm.start(chosen, calibrationSession) else launcher.launch(missing.toTypedArray())
     }
 
     LaunchedEffect(Unit) { if (!calibrationSession) vm.checkReady() }

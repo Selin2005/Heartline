@@ -102,8 +102,13 @@ data class PpgFeatureVector(
  * morphology on that average, which is far less noisy than per-beat values.
  */
 object PpgFeatures {
-    fun extract(raw: FloatArray, fs: Int): PpgFeatureVector? {
-        val detected = detect(raw, fs) ?: return null
+    /**
+     * [polarity]: read the signal this way up (true = upside down) instead of detecting it. A
+     * calibration fixes it once, so a measurement is never compared with a wave read the other
+     * way up (algorithm 6.2).
+     */
+    fun extract(raw: FloatArray, fs: Int, polarity: Boolean? = null): PpgFeatureVector? {
+        val detected = detect(raw, fs, polarity) ?: return null
         val x = detected.x
         val beats = detected.beats
         val rhythm = rhythm(detected, fs)
@@ -177,7 +182,7 @@ object PpgFeatures {
     /** Filtered, upright signal and its plausible beats (foot to next foot, sample indices). */
     private class Detected(val x: FloatArray, val inverted: Boolean, val beats: List<Pair<Int, Int>>)
 
-    private fun detect(raw: FloatArray, fs: Int): Detected? {
+    private fun detect(raw: FloatArray, fs: Int, polarity: Boolean? = null): Detected? {
         if (raw.size < fs * 8) return null
         val filtered = raw.filtFilt(Biquad.highPass(0.5, fs.toDouble()), Biquad.lowPass(8.0, fs.toDouble()))
         if ((filtered.max() - filtered.min()) < 1e-6f) return null
@@ -185,7 +190,7 @@ object PpgFeatures {
         // rises: upside down unless the slopes very clearly say otherwise (a fast pulse can make
         // the two slopes similar; a wrong flip ruined a real calibration round at 106 bpm).
         val lightIntensity = abs(raw.average()) > LIGHT_DC_FACTOR * (filtered.max() - filtered.min())
-        val inverted = if (lightIntensity) !isUpright(filtered) else isInverted(filtered)
+        val inverted = polarity ?: if (lightIntensity) !isUpright(filtered) else isInverted(filtered)
         val x = if (inverted) FloatArray(filtered.size) { -filtered[it] } else filtered
 
         val half = (0.25 * fs).toInt()
@@ -218,8 +223,8 @@ object PpgFeatures {
     data class Pulse(val foot: Int, val nextFoot: Int, val upstroke: Int, val onset: Double, val amplitude: Double)
 
     /** Every plausible pulse of a recording, in order (for beat-to-beat analysis such as the arm-raise maneuver). */
-    fun pulses(raw: FloatArray, fs: Int): List<Pulse>? {
-        val d = detect(raw, fs) ?: return null
+    fun pulses(raw: FloatArray, fs: Int, polarity: Boolean? = null): List<Pulse>? {
+        val d = detect(raw, fs, polarity) ?: return null
         return d.beats.map { (a, b) ->
             val peak = (a..b).maxBy { d.x[it] }
             val up = if (peak > a + 1) (a + 1 until peak).maxBy { d.x[it + 1] - d.x[it - 1] } else a
@@ -240,7 +245,7 @@ object PpgFeatures {
      * (atrial fibrillation smears every beat length), so the app can say "irregular rhythm"
      * instead of "poor signal". Null when no pulse is found at all.
      */
-    fun rhythm(raw: FloatArray, fs: Int): PpgRhythm? = detect(raw, fs)?.let { rhythm(it, fs) }
+    fun rhythm(raw: FloatArray, fs: Int, polarity: Boolean? = null): PpgRhythm? = detect(raw, fs, polarity)?.let { rhythm(it, fs) }
 
     private fun rhythm(detected: Detected, fs: Int): PpgRhythm {
         val beats = detected.beats

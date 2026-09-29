@@ -113,10 +113,52 @@ data class BpCalibration(
 ) {
     val validUntilMs: Long get() = createdAtMs + if (profile.shortValidity) SHORT_VALIDITY_MS else VALIDITY_MS
 
-    /** Needs 3 rounds recorded with a feature set the estimator accepts, and not expired. */
-    fun isValid(nowMs: Long) = points.count { !it.standing && it.featureFs == PPG_FS } >= REQUIRED_POINTS &&
-        nowMs < validUntilMs &&
-        points.all { it.features.version >= PpgFeatureVector.MIN_MODEL_VERSION }
+    /**
+     * Needs 3 seated quick rounds the estimator can use, and not expired. The phone and the watch
+     * both decide with this, and it counts exactly what the estimator counts: a round read the
+     * other way up counts only when its raw wave can be read again the right way up ([aligned]).
+     */
+    fun isValid(nowMs: Long): Boolean {
+        val polarity = polarity(BpChannel.PWA_GREEN)
+        return points.count { !it.standing && it.featureFs == PPG_FS && (it.features.inverted == polarity || it.ppg != null) } >=
+            REQUIRED_POINTS &&
+            nowMs < validUntilMs &&
+            points.all { it.features.version >= PpgFeatureVector.MIN_MODEL_VERSION }
+    }
+
+    /**
+     * Which way up this calibration reads a PWA channel's wave from a [fs] source (true = upside
+     * down): the majority of its seated rounds, null without any. Algorithm 6.2: on some watches
+     * (Galaxy Watch6) the raw green PPG has no clear light-intensity offset, so the automatic
+     * check can flip between recordings; a wave read the other way up has a completely different
+     * shape, so the calibration fixes the polarity and every measurement is read the same way.
+     */
+    fun polarity(channel: BpChannel, fs: Int = PPG_FS): Boolean? {
+        val base = BpEstimator.selector(channel)
+        val votes = timedPoints().map { it.first }.filter { !it.standing && it.featureFs == fs }.mapNotNull { base(it)?.inverted }
+        if (votes.isEmpty()) return null
+        return votes.count { it } * 2 >= votes.size
+    }
+
+    /** Rounds read the other way up than the majority, read again from their raw wave with the majority's polarity. */
+    fun aligned(): BpCalibration {
+        val green = polarity(BpChannel.PWA_GREEN)
+        val ir = polarity(BpChannel.PWA_IR)
+        fun CalibrationPoint.align(): CalibrationPoint {
+            if (featureFs != PPG_FS) return this
+            var p = this
+            if (green != null && features.inverted != green) {
+                ppg?.let { raw -> PpgFeatures.extract(raw.toFloatArray(), ppgFs, green)?.let { p = p.copy(features = it) } }
+            }
+            val irf = irFeatures
+            if (ir != null && irf != null && irf.inverted != ir) {
+                ppgIr?.let { raw -> PpgFeatures.extract(raw.toFloatArray(), ppgFs, ir)?.let { p = p.copy(irFeatures = it) } }
+            }
+            return p
+        }
+        val out = copy(points = points.map { it.align() }, extraPoints = extraPoints.map { it.align() })
+        return if (out == this) this else out
+    }
 
     fun daysLeft(nowMs: Long): Int = ((validUntilMs - nowMs) / DAY_MS).toInt().coerceAtLeast(0)
 

@@ -34,6 +34,57 @@ changes need re-calibration at the change point (Tae et al. 2026). Algorithm 3:
 
 Algorithm 4 is the phone's personal learned model, described below.
 
+## Algorithm 6.2: one wave polarity per calibration
+
+A second user (Galaxy Watch6 Classic, treated hypertension) had two problems:
+
+- **Reading too low:** with the cuff at 140/80, the watch said 110/53.
+- **No reading at all:** later measurements kept ending in "calibrate again" and never showed a
+  number.
+
+A calibration without a standing round then read 135/83 against a cuff of about 135–140/80–85.
+The diagnostic log only started after the first problems, so those sessions were not logged.
+
+What the code showed:
+
+1. **The wave's polarity is not stable on the Watch6.**
+   - The Watch6's raw green PPG has no large light-intensity offset (its level sits around zero and
+     jumps in steps). So which way up the pulse is was decided by a slope heuristic in every
+     recording, and the heuristic can flip.
+   - A pulse read upside down has a completely different shape: rise and width swap, and the area
+     ratio collapses. In `BpAlgorithm62Test`, a calibration at 140/80 read the same pulse, upside
+     down, as about 116/66.
+   - Fixes:
+     - The calibration fixes the polarity: the majority of its seated rounds (`BpCalibration.polarity`).
+     - Every measurement is read that way up (`PpgFeatures.extract(…, polarity)`, `BpWindowSelector.best`).
+     - A round read the other way is read again from its stored raw wave (`BpCalibration.aligned`),
+       instead of being dropped. Dropping it left 2 rounds, so the watch asked for a new calibration
+       while the phone still called the calibration valid.
+   - `isValid` now counts exactly the rounds the estimator can use, so the phone and the watch agree.
+2. **A left-over calibration request turned measurements into calibration rounds.**
+   - The watch kept the phone's round request until a round succeeded. After a round that had to be
+     taken again, every later "measure" recorded a calibration round.
+   - Now only the calibration screen the phone opens records rounds. A request expires after
+     15 minutes, and a new calibration ends it.
+3. **Transit channels are more robust.**
+   - The wrist-BCG transit time only counts between 80 and 300 ms. The Watch6 gave 440 and 396 ms
+     next to 132 ms.
+   - Calibration rounds far from the others (> 60 ms) and the standing round are left out of the
+     transit fit: the hanging hand changes the transit time, not the cuff's pressure.
+   - With 3 or more channels, one farther than max(20 mmHg, 3 sd) from the median of all channels is
+     left out of the fusion (`BpFusion.consistent`).
+
+The log now shows why:
+
+- **Session log:**
+  - `polarity.calibration.*` and `polarity.detected.green`;
+  - `calibration.cuff`;
+  - `needsCalibration` (round by round);
+  - `fusion.excluded.*`.
+- **Watch log:**
+  - "BP start: measure / calibration round N";
+  - why a round is taken again.
+
 ## Algorithm 6.1: lessons from the first real session logs
 
 The first logs from a real watch (Galaxy Watch8 Classic) looked like this:

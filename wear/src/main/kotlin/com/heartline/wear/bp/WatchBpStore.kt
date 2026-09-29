@@ -53,6 +53,7 @@ class WatchBpStore(context: Context) {
     private val prefs = context.getSharedPreferences("bp", Context.MODE_PRIVATE)
     private val calibrationState = MutableStateFlow(read<BpCalibration>(KEY_CAL)?.takeUnless { it.isDemo })
     private val captureState = MutableStateFlow(read<CaptureRequest>(KEY_CAPTURE))
+    private var captureAtMs = prefs.getLong(KEY_CAPTURE_AT, 0L)
 
     private var historyCache: List<PpgFeatureVector> = read<List<PpgFeatureVector>>(KEY_HISTORY).orEmpty()
 
@@ -83,14 +84,29 @@ class WatchBpStore(context: Context) {
         if (value?.id != calibrationState.value?.id) {
             historyCache = emptyList()
             prefs.edit().remove(KEY_HISTORY).remove(KEY_LAST).apply()
+            // A finished calibration ends any round still asked for.
+            if (value != null && captureState.value != null) setPendingCapture(null)
         }
         prefs.edit().putString(KEY_CAL, value?.let { Protocol.json.encodeToString(it) }).apply()
         calibrationState.value = value
     }
 
-    fun setPendingCapture(value: CaptureRequest?) {
-        prefs.edit().putString(KEY_CAPTURE, value?.let { Protocol.json.encodeToString(it) }).apply()
+    fun setPendingCapture(value: CaptureRequest?, atMs: Long = System.currentTimeMillis()) {
+        captureAtMs = if (value != null) atMs else 0L
+        prefs.edit().putString(KEY_CAPTURE, value?.let { Protocol.json.encodeToString(it) }).putLong(KEY_CAPTURE_AT, captureAtMs).apply()
         captureState.value = value
+    }
+
+    /**
+     * The round the phone asked for, while it is current. A request left over from a round that
+     * was not finished (retry, poor signal, calibration abandoned) is dropped after
+     * [CAPTURE_TTL_MS]: before, it turned every later measurement into a calibration round.
+     */
+    fun currentCapture(nowMs: Long): CaptureRequest? {
+        val request = captureState.value ?: return null
+        if (nowMs - captureAtMs in 0..CAPTURE_TTL_MS) return request
+        setPendingCapture(null)
+        return null
     }
 
     private val BpCalibration.isDemo get() = id.startsWith("demo")
@@ -98,6 +114,8 @@ class WatchBpStore(context: Context) {
     private companion object {
         const val KEY_CAL = "calibration"
         const val KEY_CAPTURE = "capture"
+        const val KEY_CAPTURE_AT = "captureAt"
+        const val CAPTURE_TTL_MS = 15 * 60_000L
         const val KEY_HISTORY = "history"
         const val KEY_LAST = "last"
         const val MAX_HISTORY = 30

@@ -43,7 +43,14 @@ object WristBcg {
         analyse(accel, rNs, preMs = 100, postMs = 450, searchFromMs = 30, searchToMs = 250)
 
     /** Transit time from the ballistocardiogram to the PPG foot, ms, when the average is clear enough. */
-    fun transitMs(r: Result?): Double? = r?.takeIf { it.quality >= MIN_QUALITY }?.let { -it.iLagMs }
+    fun transitMs(r: Result?): Double? = r?.takeIf { it.quality >= MIN_QUALITY }?.let { -it.iLagMs }?.takeIf { it in TRANSIT_RANGE_MS }
+
+    /**
+     * Heart-to-wrist transit times a real pulse can have, ms. The I-wave search reaches further
+     * (400 ms) and on a real Galaxy Watch6 it latched onto other deflections (440 and 396 ms in
+     * calibration rounds, next to 132 ms): those are not transit times.
+     */
+    val TRANSIT_RANGE_MS = 80.0..300.0
 
     /** Pre-ejection period from R to the I wave, ms, when clear enough. */
     fun preEjectionMs(r: Result?): Double? = r?.takeIf { it.quality >= MIN_QUALITY }?.iLagMs

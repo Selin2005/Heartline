@@ -77,8 +77,8 @@ class BpMeasureTest {
         bp.setCalibration(BpCalibration("c", System.currentTimeMillis(), List(3) { CalibrationPoint(features, 122, 80, 68) }))
     }
 
-    private suspend fun BpMeasureViewModel.measure(): BpState {
-        start()
+    private suspend fun BpMeasureViewModel.measure(calibrationSession: Boolean = false): BpState {
+        start(calibrationSession = calibrationSession)
         return withTimeout(BP_TIMEOUT_MS) { state.first { it !is BpState.Measuring && it !is BpState.Idle } }
     }
 
@@ -93,7 +93,7 @@ class BpMeasureTest {
     fun calibrationRoundSendsFeaturesToPhone() = runBlocking {
         bp.setPendingCapture(CaptureRequest("cap-1", 2))
         val vm = vm()
-        vm.start()
+        vm.start(calibrationSession = true)
         val done = withTimeout(BP_TIMEOUT_MS) { vm.state.first { it is BpState.CalibrationRecorded } } as BpState.CalibrationRecorded
         assertEquals(2, done.round)
         val message = records.pendingMessages().single()
@@ -103,6 +103,29 @@ class BpMeasureTest {
         assertTrue(scheduled >= 1)
         // The round's raw session log waits for the phone too.
         assertEquals(1, records.pendingSessions().size)
+    }
+
+    @Test
+    fun aRoundLeftOverFromAnUnfinishedCalibrationNeverTurnsAMeasurementIntoARound() = runBlocking {
+        // A real Galaxy Watch6: after a round was taken again, every later "measure" recorded a
+        // calibration round and never showed a number.
+        calibrate()
+        bp.setPendingCapture(CaptureRequest("left-over", 2))
+        val end = vm().measure()
+        assertTrue("$end", end is BpState.Done)
+        assertTrue(records.pendingMessages().none { it.path == Protocol.BP_CALIBRATION_CAPTURE })
+    }
+
+    @Test
+    fun anOldCalibrationRequestExpiresAndANewCalibrationEndsIt() {
+        bp.setPendingCapture(CaptureRequest("old", 1), atMs = 0)
+        assertNull(bp.currentCapture(20 * 60_000L))
+        assertNull(bp.pendingCapture.value)
+        bp.setPendingCapture(CaptureRequest("now", 1), atMs = 1_000)
+        assertEquals("now", bp.currentCapture(2_000)?.captureId)
+        val features = PpgFeatures.extract(SyntheticPpg.generate(20.0, 68.0, 0.5), 100)!!
+        bp.setCalibration(BpCalibration("new", System.currentTimeMillis(), List(3) { CalibrationPoint(features, 122, 80, 68) }))
+        assertNull(bp.pendingCapture.value)
     }
 
     @Test
@@ -188,7 +211,7 @@ class BpMeasureTest {
         bp.setPendingCapture(CaptureRequest("cap-2", 1))
         // The pulse keeps climbing through the whole recording (as in a real round 2 that skewed a calibration).
         val climbing = SyntheticPpg.Scenario(seconds = 25.0, heartRateStart = 66.0, heartRateEnd = 96.0)
-        val end = vm(ScenarioSource(climbing)).measure()
+        val end = vm(ScenarioSource(climbing)).measure(calibrationSession = true)
         assertEquals(BpState.CalibrationRetry(1), end)
         // Nothing was sent; the phone keeps waiting for this round.
         assertTrue(records.pendingMessages().isEmpty())

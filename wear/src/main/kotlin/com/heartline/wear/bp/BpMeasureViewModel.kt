@@ -20,6 +20,7 @@ import com.heartline.shared.bp.BpSessionRecorder
 import com.heartline.shared.bp.BpSessionStreams
 import com.heartline.shared.bp.BpWindowSelector
 import com.heartline.shared.bp.HemodynamicState
+import com.heartline.shared.bp.PpgFeatureVector
 import com.heartline.shared.bp.PpgFeatures
 import com.heartline.shared.bp.PreciseInput
 import com.heartline.shared.bp.PulseRate
@@ -185,16 +186,23 @@ class BpMeasureViewModel(
         get() = ecg != null && (bpStore.calibration.value?.timedPoints()?.count { it.first.patMs != null && it.first.featureFs == CalibrationPoint.PRECISE_FS } ?: 0) >= 2
 
     fun checkReady() {
-        if (bpStore.pendingCapture.value == null && bpStore.calibration.value?.isValid(now()) != true) mutable.value = BpState.NeedsCalibration
+        if (bpStore.calibration.value?.isValid(now()) != true) mutable.value = BpState.NeedsCalibration
     }
 
-    fun start(mode: BpMode = BpMode.QUICK) {
+    /**
+     * [calibrationSession]: this screen was opened for the phone's calibration, so the round the
+     * phone asked for is recorded. Otherwise it is always a measurement: a request left over from
+     * an unfinished round must never turn it into a calibration round.
+     */
+    fun start(mode: BpMode = BpMode.QUICK, calibrationSession: Boolean = false) {
         // Only a session still recording blocks a new one: a finished job may be "active" for a
         // moment after publishing its result, and "Measure again" must not be lost to that.
         val recording = mutable.value is BpState.Preparing || mutable.value is BpState.Measuring
         if (job?.isActive == true && recording) return
-        val capture = bpStore.pendingCapture.value
+        val capture = if (calibrationSession) bpStore.currentCapture(now()) else null
+        HLog.i(TAG, "BP start: ${capture?.let { "calibration round ${it.round}" } ?: "measure"} (calibrationSession=$calibrationSession)")
         if (capture == null && bpStore.calibration.value?.isValid(now()) != true) {
+            bpStore.calibration.value?.let { HLog.i(TAG, "BP needs calibration: ${BpPipeline.needsCalibrationReason(it, now())}") }
             mutable.value = BpState.NeedsCalibration
             return
         }
@@ -438,7 +446,12 @@ class BpMeasureViewModel(
         log.value("precise.patMs", channels?.patMs)
         log.value("precise.pepMs", channels?.pepMs)
         log.value("precise.pttMs", channels?.pttMs)
-        HLog.i(TAG, "BP calibration round ${capture.round}: $channels")
+        // A summary: the raw waves are in the session log (a whole capture made 4 000-character lines).
+        HLog.i(
+            TAG,
+            "BP calibration round ${capture.round}: green=${channels?.features?.let { summary(it) }} ir=${channels?.irFeatures?.let { summary(it) }} " +
+                "bcgPttMs=${channels?.bcgPttMs} patMs=${channels?.patMs} fs=${channels?.fs}",
+        )
         val features = channels?.features
         if (channels == null || features == null || features.quality < BpEstimator.MIN_QUALITY || features.beats < BpEstimator.MIN_BEATS) {
             log.note("result", "poor signal")
@@ -446,6 +459,7 @@ class BpMeasureViewModel(
         }
         // A calibration round is the reference for everything after it: it must be steady and clean.
         if (!calibrationGrade(features)) {
+            HLog.i(TAG, "BP calibration round ${capture.round} taken again: not steady (${summary(features)})")
             log.note("result", "calibration round not steady: quality=${features.quality} beats=${features.beats} hrSlope=${features.hrSlopeBpmPerS} amplitudeTrend=${features.amplitudeTrend}")
             return BpState.CalibrationRetry(capture.round)
         }
@@ -557,6 +571,11 @@ class BpMeasureViewModel(
         runCatching { records.addSession(session) }.onFailure { HLog.w(RAW_TAG, "session not stored", it) }
         sync.schedule()
     }
+
+    private fun summary(f: PpgFeatureVector) =
+        "hr=${"%.1f".format(f.heartRateBpm)} q=${"%.2f".format(f.quality)} beats=${f.beats} inverted=${f.inverted} " +
+            "upstroke=${f.upstrokeMs} width50=${f.width50Ms} area=${"%.2f".format(f.areaRatio)} " +
+            "hrSlope=${"%.2f".format(f.hrSlopeBpmPerS)} ampTrend=${"%.2f".format(f.amplitudeTrend)}"
 
     fun cancel() {
         if (job?.isActive == true) imu.stop()
