@@ -47,6 +47,8 @@ SEMVER = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?(?:-([0-9A-Za-z.-]+))?$"
 OPENCODE_URL = "https://opencode.ai/zen/go/v1/chat/completions"
 NOTES_START, NOTES_END = "<!-- notes -->", "<!-- /notes -->"
 TELEGRAM_LIMIT = 4096
+# OpenCode Go: seconds for each streamed piece, and for the whole answer.
+READ_TIMEOUT, ANSWER_LIMIT = 90, 300
 # Cloudflare (in front of OpenCode) blocks urllib's default "Python-urllib/3.x" (error 1010).
 USER_AGENT = "heartline-release/1.0 (+https://github.com/selin2005/heartline)"
 # OpenCode Go routes by session and rejects requests without one (MissingSessionID): one stable
@@ -191,8 +193,32 @@ def commits(previous: str):
     return entries, docs
 
 
+def stream_text(response, deadline: float) -> str:
+    """The answer text of a streamed (server-sent events) chat completion; a plain JSON answer too."""
+    if "text/event-stream" not in (response.headers.get("Content-Type") or ""):
+        return json.loads(response.read())["choices"][0]["message"]["content"] or ""
+    parts = []
+    for raw_line in response:
+        if time.time() > deadline:
+            raise TimeoutError("no complete answer within the time limit")
+        line = raw_line.decode("utf-8", "replace").strip()
+        if not line.startswith("data:"):
+            continue
+        data = line[5:].strip()
+        if data == "[DONE]":
+            break
+        choices = json.loads(data).get("choices") or [{}]
+        # Only the answer; reasoning models also stream their thinking in other fields.
+        parts.append((choices[0].get("delta") or {}).get("content") or "")
+    return "".join(parts)
+
+
 def ask_model(system: str, user: str):
-    """One OpenCode Go chat completion, or None without OPENCODE_API_KEY or when it fails."""
+    """One OpenCode Go chat completion, or None without OPENCODE_API_KEY or when it fails.
+
+    Streamed, so a long answer doesn't hit a read timeout (each piece arrives within READ_TIMEOUT,
+    the whole answer within ANSWER_LIMIT). Network errors, timeouts and server errors (5xx, 429)
+    are tried once more."""
     key = os.environ.get("OPENCODE_API_KEY")
     if not key:
         return None
@@ -200,49 +226,59 @@ def ask_model(system: str, user: str):
     model = os.environ.get("OPENCODE_MODEL") or "glm-5.3-flash"
     # The API takes the plain id; some clients prefix it with the provider, so try that too.
     names = [model] + ([f"opencode-go/{model}"] if "/" not in model else [])
+    reason = "no attempt"
     for name in names:
-        body = {
-            "model": name,
-            "temperature": 0.2,
-            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-        }
-        request = urllib.request.Request(
-            url,
-            data=json.dumps(body).encode(),
-            headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-                "User-Agent": USER_AGENT,
-                "x-opencode-session": SESSION_ID,
-            },
-        )
-        raw = b""
-        try:
-            with urllib.request.urlopen(request, timeout=120) as response:
-                raw = response.read()
-            text = json.loads(raw)["choices"][0]["message"]["content"] or ""
-            # Reasoning models may put their thinking before the answer.
-            text = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
-            if text:
-                print(f"Text by {name} (OpenCode Go)", file=sys.stderr)
-                return text
-            reason = "empty answer"
-        except urllib.error.HTTPError as e:
-            reason = f"HTTP {e.code}: {e.read()[:300].decode(errors='replace')}"
-            if e.code in (400, 404) and name != names[-1]:
+        for attempt in (1, 2):
+            body = {
+                "model": name,
+                "temperature": 0.2,
+                "stream": True,
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            }
+            request = urllib.request.Request(
+                url,
+                data=json.dumps(body).encode(),
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
+                    "Accept": "text/event-stream, application/json",
+                    "User-Agent": USER_AGENT,
+                    "x-opencode-session": SESSION_ID,
+                },
+            )
+            retry = False
+            try:
+                with urllib.request.urlopen(request, timeout=READ_TIMEOUT) as response:
+                    text = stream_text(response, time.time() + ANSWER_LIMIT)
+                # Reasoning models may put their thinking before the answer.
+                text = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip()
+                if text:
+                    print(f"Text by {name} (OpenCode Go)", file=sys.stderr)
+                    return text
+                reason = "empty answer"
+            except urllib.error.HTTPError as e:
+                reason = f"HTTP {e.code}: {e.read()[:300].decode(errors='replace')}"
+                if e.code in (400, 404) and name != names[-1]:
+                    break  # try the prefixed model id
+                retry = e.code == 429 or e.code >= 500
+            except Exception as e:  # noqa: BLE001 - fall back to text without the model
+                reason = f"{type(e).__name__}: {e}"
+                retry = True
+            if retry and attempt == 1:
+                print(f"OpenCode Go ({name}): {reason}; trying again", file=sys.stderr)
+                time.sleep(5)
                 continue
-        except Exception as e:  # noqa: BLE001 - fall back to text without the model
-            reason = f"{e}; reply: {raw[:300].decode(errors='replace')!r}"
-        print(f"::warning::OpenCode Go ({name}) failed: {reason}", file=sys.stderr)
-        return None
+            print(f"::warning::OpenCode Go ({name}) failed: {reason}", file=sys.stderr)
+            return None
+    print(f"::warning::OpenCode Go failed: {reason}", file=sys.stderr)
     return None
 
 
 def ai_notes(version: str, entries, docs: bool, stat: str):
     if not entries:
         return None
-    log = "\n\n".join("\n".join(e) for e in entries)[:24000]
+    # Subject and the first lines of each body: enough for the model, and a quicker answer.
+    log = "\n\n".join("\n".join(e[:4]) for e in entries)[:16000]
     system = (
         "You write release notes for Heartline, a wellness app for Galaxy Watch and Android phones "
         "(ECG, blood pressure estimates, heart rate, SpO2, stress, body composition). Write for end "
