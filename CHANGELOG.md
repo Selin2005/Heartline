@@ -3,6 +3,15 @@
 All notable changes to Heartline. Each release's notes are written by the Build workflow when the
 release is made, and the app shows them under *What's new* after an update.
 
+## 0.0.2.115-beta.1 — 2026-09-29
+
+### Improved
+- Diagnostic logs are now compressed and stored in segments, so weeks of logs fit on your watch and phone without filling them up — your existing logs are kept.
+- Updated our documentation, terms, and privacy policy.
+
+### Fixed
+- Fixed blood pressure calibration on some watches (like the Galaxy Watch6) where the pulse wave could be read upside down, so you're no longer asked to calibrate again after every measurement.
+
 ## 0.0.2.112-beta.1 — 2026-09-29
 
 ### New
