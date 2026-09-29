@@ -40,14 +40,16 @@ read from or write to Samsung Health, Google Fit or Health Connect.
 
 ## 3. Diagnostic logs
 To help fix problems, the apps can keep a **diagnostic log** on each device: what the app did,
-errors, connection and sensor states, and measurement values (for example ECG quality or blood
-pressure features). Your name and birth date are removed before anything is written.
+errors, connection and sensor states, measurement values (for example ECG quality or blood
+pressure features) and the raw sensor values of each measurement. Your name and birth date are
+removed before anything is written.
 - It is **on by default for beta versions** and **off for stable versions** until you agree when
   the app asks. Change it any time in Settings → Help & diagnostics.
-- It uses at most about 8 MB on the phone and 8 MB on the watch; older entries are removed first.
-- *Detailed logging* adds raw sensor values for 24 hours, then switches itself off.
-- Logs are **never sent automatically**. *Export logs* saves two text files (phone and watch)
-  into a folder you choose; you decide whether to send them to us, for example with a bug report.
+- It is kept compressed and uses at most 150 MB on the phone and 50 MB on the watch (less when
+  the device is low on space); older entries are removed first.
+- Logs are **never sent automatically**. *Export logs* saves one zip file with the phone's and
+  the watch's logs into a folder you choose; you decide whether to send it to us, for example
+  with a bug report.
 - Turning diagnostic logs off, or *Delete logs*, erases them on both devices.
 
 ## 4. Network access

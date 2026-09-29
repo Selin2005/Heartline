@@ -46,10 +46,15 @@ explored without a watch. Remove it with Settings → Delete all data.
 
 ## 3. Collect logs
 **From the app (everyone):** Settings → Help & diagnostics → **Export logs**. Pick a folder and
-the phone saves two files, `heartline-phone-….log` and `heartline-watch-….log` (it fetches the
-watch's log over the connection). Attach both to your bug report. For problems that happened
-earlier, *Keep diagnostic logs* must be on (it is by default in beta versions); *Detailed
-logging* adds raw sensor values for 24 hours.
+the phone saves one file, `heartline-logs-….zip`, with `phone.log` and `watch.log` inside. Attach
+it to your bug report. For problems that happened earlier, *Keep diagnostic logs* must be on (it
+is by default in beta versions).
+
+The logs include raw sensor values and are kept compressed, in 1 MB segments: up to 150 MB on the
+phone and 50 MB on the watch (weeks of use), oldest first out. The phone fetches the watch's log
+one segment at a time over the connection and shows its progress; a segment that stalls is asked
+for again, and one that still doesn't arrive is marked in `watch.log`. A long log can take a few
+minutes: keep the watch near the phone.
 
 **With adb (developers):**
 ```bash
@@ -70,7 +75,7 @@ contain personal and health data.** All app logs use `Heartline/*` tags:
 | `Heartline/Monitor` | Background monitoring (passive heart rate, irregular rhythm windows) |
 | `Heartline/Update` | Update checks and downloads (phone) |
 
-Raw sensor values go to logcat too (and into the exported log only while *Detailed logging* is on):
+Raw sensor values, in logcat and in the exported log:
 
 | Tag | Contents |
 |---|---|
