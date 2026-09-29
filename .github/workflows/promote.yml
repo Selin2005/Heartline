@@ -10,6 +10,12 @@ on:
         description: "Beta tag to promote, e.g. v1.2.0-beta.3"
         required: true
         type: string
+      release:
+        description: "publish = released now and announced · draft = saved as a draft; publishing it on GitHub later announces it"
+        required: false
+        default: publish
+        type: choice
+        options: [publish, draft]
 
 permissions:
   contents: write
@@ -39,4 +45,4 @@ jobs:
       channel: stable
       ref: ${{ inputs.beta }}
       run_tests: true
-      release: true
+      release: ${{ inputs.release }}

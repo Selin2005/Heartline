@@ -30,10 +30,11 @@ on:
         type: choice
         options: [beta, stable, dev]
       release:
-        description: "Publish a GitHub release (off: APKs only as run artifacts)"
+        description: "Release: publish = released now and announced on Telegram · draft = saved as a draft; publishing it on GitHub later announces it · off = APKs only as run artifacts"
         required: false
-        default: true
-        type: boolean
+        default: publish
+        type: choice
+        options: [publish, draft, "off"]
       run_tests:
         description: "Run lint and tests before building"
         required: false
@@ -48,9 +49,10 @@ on:
         required: true
         type: string
       release:
+        description: "publish, draft or off"
         required: false
-        default: true
-        type: boolean
+        default: publish
+        type: string
       run_tests:
         required: false
         default: true
@@ -74,14 +76,16 @@ defaults:
     shell: bash
 
 jobs:
-  # A re-run of a build whose release is already published only announces it again: every
-  # release text carries the run id, so this finds the release this run made, if any.
+  # A re-run of a build whose release is already published only announces it again (a draft:
+  # nothing, it's announced when published): every release text carries the run id, so this
+  # finds the release this run made, if any.
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       tag: ${{ steps.find.outputs.tag }}
       url: ${{ steps.find.outputs.url }}
+      draft: ${{ steps.find.outputs.draft }}
     steps:
       - name: Release already published by this run?
         id: find
@@ -90,12 +94,15 @@ jobs:
           MARKER: "heartline-run: ${{ github.run_id }} "
         run: |
           found=$(gh api "repos/${{ github.repository }}/releases?per_page=50" \
-            --jq '.[] | select((.body // "") | contains(env.MARKER)) | [.tag_name, .html_url] | @tsv' | head -n1)
+            --jq '.[] | select((.body // "") | contains(env.MARKER)) | [.tag_name, .html_url, .draft] | @tsv' | head -n1)
           if [ -n "$found" ]; then
-            tag=$(cut -f1 <<<"$found"); url=$(cut -f2 <<<"$found")
-            echo "Run ${{ github.run_id }} already published $tag: only the Telegram announcement runs again."
-            echo "::notice::Re-run of a published release ($tag): announcing it again, nothing is rebuilt."
-            { echo "tag=$tag"; echo "url=$url"; } >> "$GITHUB_OUTPUT"
+            tag=$(cut -f1 <<<"$found"); url=$(cut -f2 <<<"$found"); draft=$(cut -f3 <<<"$found")
+            if [ "$draft" = true ]; then
+              echo "::notice::Run ${{ github.run_id }} already saved $tag as a draft: nothing is rebuilt. Publish it on GitHub → Releases; that announces it."
+            else
+              echo "::notice::Re-run of a published release ($tag): announcing it again, nothing is rebuilt."
+            fi
+            { echo "tag=$tag"; echo "url=$url"; echo "draft=$draft"; } >> "$GITHUB_OUTPUT"
           else
             echo "No release from run ${{ github.run_id }} yet: full build."
           fi
@@ -137,10 +144,26 @@ jobs:
         id: sha
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+      # The release tools from the default branch also build an older commit (Promote builds the
+      # beta's commit), so every build gets the current version rules, notes and checks.
+      - name: Release tools
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/tools"
+          for f in tools/release/release.py tools/ci/check-apks.py; do
+            git show "origin/$DEFAULT_BRANCH:$f" > "$RUNNER_TEMP/tools/$(basename "$f")" 2>/dev/null || cp "$f" "$RUNNER_TEMP/tools/"
+          done
+          echo "RELEASE_PY=$RUNNER_TEMP/tools/release.py" >> "$GITHUB_ENV"
+
       - name: Work out the version
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          out=$(python3 tools/release/release.py version --base "${{ inputs.version }}" --channel "$CHANNEL" --run "${{ github.run_number }}")
+          # Draft releases have no git tag yet, so their versions come from the releases list.
+          gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate --jq '.[].tag_name' > "$RUNNER_TEMP/release-tags.txt"
+          out=$(python3 "$RELEASE_PY" version --base "${{ inputs.version }}" --channel "$CHANNEL" --run "${{ github.run_number }}" --known-tags "$RUNNER_TEMP/release-tags.txt")
           # A commit from before the time-based versionCode (Promote builds the beta's commit) prints
           # no code: the same formula, minutes since 2026-01-01 UTC.
           grep -q '^code=' <<<"$out" || out+=$'\n'"code=$(( ($(date +%s) - 1767225600) / 60 ))"
@@ -199,7 +222,7 @@ jobs:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           OPENCODE_MODEL: ${{ vars.OPENCODE_MODEL }}
         run: |
-          python3 tools/release/release.py notes \
+          python3 "$RELEASE_PY" notes \
             --version "${{ steps.version.outputs.version }}" \
             --previous "${{ steps.version.outputs.previous }}" \
             --out "$RUNNER_TEMP/notes.md" \
@@ -225,12 +248,8 @@ jobs:
       - name: Check the APKs
         env:
           VERSION: ${{ steps.version.outputs.version }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          # The checks from the default branch also apply to an older commit being built (Promote).
-          git show "origin/$DEFAULT_BRANCH:tools/ci/check-apks.py" > "$RUNNER_TEMP/check-apks.py" 2>/dev/null \
-            || cp tools/ci/check-apks.py "$RUNNER_TEMP/check-apks.py"
-          python3 "$RUNNER_TEMP/check-apks.py" \
+          python3 "$RUNNER_TEMP/tools/check-apks.py" \
             --phone "dist/Heartline-phone-$VERSION.apk" \
             --watch "dist/Heartline-watch-$VERSION.apk" \
             --version-name "$VERSION" \
@@ -265,7 +284,7 @@ jobs:
           if-no-files-found: error
 
       - name: Release body
-        if: inputs.release
+        if: inputs.release != 'off'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
@@ -290,11 +309,14 @@ jobs:
             echo "<!-- heartline-run: ${{ github.run_id }} -->"
           } > "$RUNNER_TEMP/body.md"
 
-      - name: Publish GitHub release
+      # A draft keeps no tag until it's published (on GitHub → Releases); publishing it runs the
+      # "Release published" workflow, which updates CHANGELOG.md and announces it on Telegram.
+      - name: ${{ inputs.release == 'draft' && 'Save the release as a draft' || 'Publish GitHub release' }}
         id: release
-        if: inputs.release
+        if: inputs.release != 'off'
         uses: softprops/action-gh-release@v2
         with:
+          draft: ${{ inputs.release == 'draft' }}
           tag_name: v${{ steps.version.outputs.version }}
           name: Heartline ${{ steps.version.outputs.version }}${{ env.CHANNEL != 'stable' && format(' ({0})', env.CHANNEL) || '' }}
           target_commitish: ${{ steps.sha.outputs.sha }}
@@ -306,9 +328,17 @@ jobs:
             dist/*.apk
             dist/SHA256SUMS
 
+      - name: Draft saved
+        if: inputs.release == 'draft'
+        env:
+          URL: ${{ steps.release.outputs.url }}
+        run: |
+          echo "::notice::Saved as a draft: publish it on GitHub → Releases ($URL). Publishing it updates CHANGELOG.md and announces it on Telegram."
+          echo "| Release | **Draft** ([open]($URL)): publish it on GitHub → Releases to release and announce it |" >> "$GITHUB_STEP_SUMMARY"
+
       # Keeps CHANGELOG.md on the default branch in step with the releases (stable and beta only).
       - name: Commit CHANGELOG.md
-        if: inputs.release && env.CHANNEL != 'dev'
+        if: inputs.release == 'publish' && env.CHANNEL != 'dev'
         continue-on-error: true
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -318,7 +348,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin "$DEFAULT_BRANCH"
           git checkout -B changelog-update "origin/$DEFAULT_BRANCH"
-          python3 tools/release/release.py changelog --version "$VERSION" --notes "$RUNNER_TEMP/notes.md" --changelog CHANGELOG.md
+          python3 "$RELEASE_PY" changelog --version "$VERSION" --notes "$RUNNER_TEMP/notes.md" --changelog CHANGELOG.md
           git add CHANGELOG.md
           git diff --cached --quiet || { git commit -m "Changelog for $VERSION" && git push origin "HEAD:$DEFAULT_BRANCH"; }
 
@@ -339,7 +369,7 @@ jobs:
   announce:
     needs: [check, build]
     if: >-
-      always() && inputs.release && inputs.channel != 'dev' &&
+      always() && inputs.release == 'publish' && inputs.channel != 'dev' && needs.check.outputs.draft != 'true' &&
       (needs.build.result == 'success' || (needs.build.result == 'skipped' && needs.check.outputs.tag != ''))
     runs-on: ubuntu-latest
     timeout-minutes: 10

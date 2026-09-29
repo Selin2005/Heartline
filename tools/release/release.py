@@ -79,13 +79,14 @@ def same_base(a, b) -> bool:
     return a[:3] == b[:3] and int(a[4] or 0) == int(b[4] or 0)
 
 
-def tags():
-    out = []
-    for t in git("tag", "--list", "v*").splitlines():
-        v = parse(t)
+def tags(extra=()):
+    """The version tags, plus [extra] (the tags of draft releases, which have no git tag yet)."""
+    out = {}
+    for t in [*git("tag", "--list", "v*").splitlines(), *extra]:
+        v = parse(t.strip())
         if v:
-            out.append((t, v))
-    return sorted(out, key=lambda tv: sort_key(tv[1]))
+            out[t.strip()] = v
+    return sorted(out.items(), key=lambda tv: sort_key(tv[1]))
 
 
 def is_ancestor(tag: str) -> bool:
@@ -103,12 +104,14 @@ def cmd_version(a) -> None:
     base = parse(a.base)
     if not base or base[3]:
         sys.exit(f"::error::The version must look like 1.2.0 or 0.0.2.102 (no suffix; the channel adds it), got '{a.base}'")
-    all_tags = tags()
+    # Drafts count too: their tag only exists once they're published.
+    known = open(a.known_tags, encoding="utf-8").read().split() if a.known_tags and os.path.exists(a.known_tags) else []
+    all_tags = tags(known)
     b = base_of(base)
     if a.channel == "stable":
         name = b
         if any(t == f"v{b}" for t, _ in all_tags):
-            sys.exit(f"::error::v{b} is already released; pick a higher version")
+            sys.exit(f"::error::v{b} is already released (or saved as a draft); pick a higher version")
     elif a.channel == "beta":
         if any(t == f"v{b}" for t, _ in all_tags):
             sys.exit(f"::error::v{b} is already released as stable; betas must come before it")
@@ -125,12 +128,12 @@ def cmd_version(a) -> None:
     # need a higher version.
     higher = [t for t, v in all_tags if channel_of(v) != "dev" and sort_key(v) > sort_key(current)]
     if higher:
-        sys.exit(f"::error::{higher[-1]} is already released: a {a.channel} build must be a higher version than {name}")
+        sys.exit(f"::error::{higher[-1]} is already released (or saved as a draft): a {a.channel} build must be a higher version than {name}")
     # Notes cover everything since the previous release users of this channel had.
     wanted = {"stable": ("stable",), "beta": ("stable", "beta"), "dev": ("stable", "beta", "dev")}[a.channel]
     previous = ""
     for t, v in reversed(all_tags):
-        if sort_key(v) < sort_key(current) and channel_of(v) in wanted and is_ancestor(t):
+        if sort_key(v) < sort_key(current) and channel_of(v) in wanted and git("tag", "--list", t) and is_ancestor(t):
             previous = t
             break
     print(f"version={name}")
@@ -424,6 +427,49 @@ def cmd_telegram(a) -> None:
     print(f"Announced {a.version} on Telegram")
 
 
+def cmd_ai_check(a) -> None:
+    """Checks every OpenCode Go step of a release for real (no fallback allowed): a short answer,
+    release notes from the commits since [--previous] (the whole history without it) and the
+    Telegram summary. Prints them and the Telegram message it would send; exits 1 on any failure."""
+    problems = []
+    if not os.environ.get("OPENCODE_API_KEY"):
+        sys.exit("::error::OPENCODE_API_KEY is not set (Settings → Secrets and variables → Actions → Secrets)")
+    model = os.environ.get("OPENCODE_MODEL") or "glm-5.3-flash"
+    print(f"Model: {model} at {os.environ.get('OPENCODE_URL') or OPENCODE_URL}")
+
+    started = time.time()
+    pong = ask_model("Answer with one word.", "Say the word ready.")
+    print(f"\n1. Short answer ({time.time() - started:.1f} s): {pong!r}")
+    if not pong:
+        problems.append("the model gave no answer")
+
+    entries, docs = commits(a.previous)
+    stat = git("diff", "--shortstat", a.previous, "HEAD") if a.previous else "first release"
+    started = time.time()
+    notes = ai_notes(a.version, entries, docs, stat)
+    print(f"\n2. Release notes from {len(entries)} commits since {a.previous or 'the first commit'} ({time.time() - started:.1f} s):\n{notes}")
+    if not notes:
+        problems.append("no release notes from the model (a build would fall back to the commit list)")
+
+    started = time.time()
+    short = summary(a.version, notes or plain_notes(entries, docs))
+    print(f"\n3. Telegram summary ({time.time() - started:.1f} s): {short!r}")
+    if not short:
+        problems.append("no Telegram summary from the model")
+
+    message = telegram_message(a.version, "beta", notes or plain_notes(entries, docs), "https://github.com/selin2005/heartline/releases", short)
+    print(f"\n4. Telegram message ({len(message)} of {TELEGRAM_LIMIT} characters):\n{message}")
+    step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if step_summary:
+        with open(step_summary, "a", encoding="utf-8") as f:
+            f.write(f"### OpenCode Go check: {model}\n\n")
+            f.write(f"**Result:** {'❌ ' + '; '.join(problems) if problems else '✅ every step answered by the model'}\n\n")
+            f.write(f"**Summary:** {short or '—'}\n\n**Release notes** ({len(entries)} commits):\n\n{notes or '—'}\n")
+    if problems:
+        sys.exit("::error::OpenCode Go check failed: " + "; ".join(problems))
+    print("\nOpenCode Go works: notes and summary were written by the model.")
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -431,6 +477,7 @@ def main() -> None:
     v.add_argument("--base", required=True)
     v.add_argument("--channel", choices=["stable", "beta", "dev"], required=True)
     v.add_argument("--run", default="0")
+    v.add_argument("--known-tags", help="file with the tags of every GitHub release, drafts included")
     n = sub.add_parser("notes")
     n.add_argument("--version", required=True)
     n.add_argument("--previous", default="")
@@ -450,8 +497,13 @@ def main() -> None:
     tg.add_argument("--release-url", required=True)
     tg.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", "selin2005/heartline"))
     tg.add_argument("--dry-run", action="store_true")
+    ac = sub.add_parser("ai-check")
+    ac.add_argument("--version", default="0.0.0-beta.1")
+    ac.add_argument("--previous", default="")
     a = p.parse_args()
-    if a.cmd == "version":
+    if a.cmd == "ai-check":
+        cmd_ai_check(a)
+    elif a.cmd == "version":
         cmd_version(a)
     elif a.cmd == "notes":
         cmd_notes(a)

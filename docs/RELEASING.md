@@ -59,6 +59,10 @@ wrong topic ID) the run turns red with Telegram's reason, while the release stay
 the setting and post it by hand or re-run the job. Without the token the step only warns. To preview a message:
 `python3 tools/release/release.py telegram --version 1.2.0 --channel stable --notes notes.md --release-url URL --dry-run`.
 
+To check OpenCode Go without building anything, run Actions → **OpenCode Go check**: it asks the
+model for a short answer, the release notes since the newest version in `CHANGELOG.md` and the
+Telegram summary, shows them in the run summary, and fails if any step would fall back.
+
 ## Making a release
 
 GitHub → Actions → **Build** → Run workflow:
@@ -68,7 +72,7 @@ GitHub → Actions → **Build** → Run workflow:
 | Branch | The branch to build (default `main`); a tag or commit SHA works too. Build stable releases from `main`; the workflow warns otherwise. |
 | Version | `X.Y.Z`, without suffix |
 | Channel | **stable**: `vX.Y.Z` (or `vX.Y.Z.W`), the latest release. **beta**: `…-beta.N` (N counts up by itself), a pre-release. **dev**: `…-dev.<run>`, the newest code for early testers. |
-| Publish a GitHub release | Off: the APKs are only kept as run artifacts |
+| Release | **publish**: released right away and announced on Telegram. **draft**: saved as a draft release (APKs, notes and checksums attached, not visible to the app or users); publishing it later on GitHub announces it. **off**: the APKs are only kept as run artifacts |
 | Run lint and tests | Leave on for anything users will get |
 
 Who is offered what in the app depends on the user's update channel (Settings → Updates):
@@ -99,9 +103,24 @@ The workflow:
 4. builds the phone and watch APKs and `SHA256SUMS`, and for stable and beta also the Google Play
    bundles (`.aab`, run artifacts only);
 5. checks the APKs (`tools/ci/check-apks.py`, see below) and stops if anything is wrong;
-6. publishes the GitHub release with the notes, APKs and checksums;
+6. publishes the GitHub release with the notes, APKs and checksums (or saves it as a draft);
 7. commits the new `CHANGELOG.md` section to the default branch;
 8. for stable and beta, announces the release on Telegram (job `announce`).
+
+Steps 7 and 8 wait for a draft to be published.
+
+### Drafts
+With **Release: draft** the run saves the release as a draft and stops there: no tag, nothing
+in `CHANGELOG.md`, no Telegram post, and the app doesn't see it. Check it (and edit the notes if
+you like) under GitHub → Releases, then **Publish release**. That starts the **Release
+published** workflow, which adds the release's notes (as published, edits included) to
+`CHANGELOG.md` and announces stable and beta releases on Telegram. The APKs keep the notes from
+build time for *What's new*. A draft's version counts as taken: the next beta gets the next
+number. Delete a draft you don't want. **Release published** can also be run by hand with a tag
+to announce a published release again.
+
+Releases the Build workflow publishes itself don't start **Release published** (GitHub runs no
+workflows for events made with a workflow's own token), so nothing is announced twice.
 
 **Re-running a run** whose release is already published (*Re-run all jobs*) rebuilds nothing: the
 `check` job finds the release by the run id in its text, and only `announce` runs, reading the
@@ -116,7 +135,7 @@ shows the text that was bundled into the APK).
 1. Release a **beta** (`1.3.0` → `v1.3.0-beta.1`). Testers on the Beta or Development update
    channel get it in the app (Settings → Updates); the release text and the Telegram post say so.
 2. Fix what they find and release more betas (`v1.3.0-beta.2`, …).
-3. When a beta is good, run **Promote beta to stable** with its tag (`v1.3.0-beta.2`). It rebuilds
+3. When a beta is good, run **Promote beta to stable** with its tag (`v1.3.0-beta.2`), published right away or as a draft. It rebuilds
    that exact commit as `v1.3.0` with notes covering everything since the newest version in
    `CHANGELOG.md`.
 

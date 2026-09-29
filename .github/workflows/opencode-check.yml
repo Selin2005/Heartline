@@ -1,0 +1,39 @@
+name: OpenCode Go check
+run-name: "OpenCode Go check · ${{ inputs.model || vars.OPENCODE_MODEL || 'glm-5.3-flash' }}"
+
+# Checks the AI steps of a release for real, without building or publishing anything: a short
+# answer, release notes from the commits since the newest version in CHANGELOG.md (the whole
+# history while it lists none), and the Telegram summary. Fails when any step would fall back.
+# The notes, summary and Telegram message it would send are in the run summary and log.
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Model (empty: the OPENCODE_MODEL variable, else glm-5.3-flash)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Release notes and summary by OpenCode Go
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          OPENCODE_MODEL: ${{ inputs.model || vars.OPENCODE_MODEL }}
+        run: |
+          previous=$(python3 -c 'import sys; sys.path.insert(0, "tools/release"); import release; print(release.changelog_base("CHANGELOG.md", ""))')
+          python3 tools/release/release.py ai-check --version 0.0.0-beta.1 --previous "$previous"
