@@ -48,7 +48,7 @@ OPENCODE_URL = "https://opencode.ai/zen/go/v1/chat/completions"
 NOTES_START, NOTES_END = "<!-- notes -->", "<!-- /notes -->"
 TELEGRAM_LIMIT = 4096
 # OpenCode Go: seconds for each streamed piece, and for the whole answer.
-READ_TIMEOUT, ANSWER_LIMIT = 90, 300
+READ_TIMEOUT, ANSWER_LIMIT = 120, 600
 # Cloudflare (in front of OpenCode) blocks urllib's default "Python-urllib/3.x" (error 1010).
 USER_AGENT = "heartline-release/1.0 (+https://github.com/selin2005/heartline)"
 # OpenCode Go routes by session and rejects requests without one (MissingSessionID): one stable
