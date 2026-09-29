@@ -39,6 +39,7 @@ import re
 import subprocess
 import sys
 import time
+import uuid
 import urllib.error
 import urllib.request
 
@@ -48,6 +49,11 @@ NOTES_START, NOTES_END = "<!-- notes -->", "<!-- /notes -->"
 TELEGRAM_LIMIT = 4096
 # Cloudflare (in front of OpenCode) blocks urllib's default "Python-urllib/3.x" (error 1010).
 USER_AGENT = "heartline-release/1.0 (+https://github.com/selin2005/heartline)"
+# OpenCode Go routes by session and rejects requests without one (MissingSessionID): one stable
+# id per workflow run (all requests of a release belong to one "conversation").
+SESSION_ID = "heartline-" + (
+    f"{os.environ['GITHUB_RUN_ID']}-{os.environ.get('GITHUB_RUN_ATTEMPT', '1')}" if os.environ.get("GITHUB_RUN_ID") else uuid.uuid4().hex
+)
 TRAILER = re.compile(r"^(Co-Authored-By|Signed-off-by|Claude-Session|Change-Id):", re.I)
 
 
@@ -208,6 +214,7 @@ def ask_model(system: str, user: str):
                 "Content-Type": "application/json",
                 "Accept": "application/json",
                 "User-Agent": USER_AGENT,
+                "x-opencode-session": SESSION_ID,
             },
         )
         raw = b""
