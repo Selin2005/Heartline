@@ -46,6 +46,8 @@ import com.heartline.wear.sensor.SensorProblem
 import com.heartline.wear.sensor.SyncScheduler
 import com.heartline.wear.diag.RawCapture
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -186,6 +188,14 @@ class BpMeasureViewModel(
     val preciseAvailable: Boolean
         get() = ecg != null && (bpStore.calibration.value?.timedPoints()?.count { it.first.patMs != null && it.first.featureFs == CalibrationPoint.PRECISE_FS } ?: 0) >= 2
 
+    /** The raw capture session while measuring (see [start]), and the session log (for [cancel]). */
+    private var rawId = ""
+    private var active: ActiveSession? = null
+
+    private class ActiveSession(val id: String, val log: BpSessionRecorder, val header: BpSessionHeader.() -> BpSessionHeader) {
+        @Volatile var finished = false
+    }
+
     fun checkReady() {
         if (bpStore.calibration.value?.isValid(now()) != true) mutable.value = BpState.NeedsCalibration
     }
@@ -195,9 +205,6 @@ class BpMeasureViewModel(
      * phone asked for is recorded. Otherwise it is always a measurement: a request left over from
      * an unfinished round must never turn it into a calibration round.
      */
-    /** The raw capture session while measuring (see [start]). */
-    private var rawId = ""
-
     fun start(mode: BpMode = BpMode.QUICK, calibrationSession: Boolean = false) {
         // Only a session still recording blocks a new one: a finished job may be "active" for a
         // moment after publishing its result, and "Measure again" must not be lost to that.
@@ -215,13 +222,56 @@ class BpMeasureViewModel(
         val startedAt = now()
         val id = UUID.randomUUID().toString()
         val log = BpSessionRecorder(id, if (capture != null) "calibration" else "measure", startedAt, now)
-        // This flow's own log below has every sensor; the live raw session is only to keep its
-        // values out of the background one, and is dropped at the end.
-        rawId = RawCapture.begin("bp")
+        // This flow's own log has every sensor it uses; the raw session next to it keeps every
+        // value of every tracker as the SDK gave it (ECG sequence and thresholds, the heart-rate
+        // tracker's beat intervals, temperature status), linked by the session id.
+        rawId = RawCapture.begin("bp", mapOf("bpSession" to id))
+        val header: BpSessionHeader.() -> BpSessionHeader = {
+            copy(
+                mode = if (effective == BpMode.PRECISE) BpSessionHeader.MODE_PRECISE else BpSessionHeader.MODE_QUICK,
+                device = device,
+                appVersion = appVersion,
+                algorithm = ALGORITHM,
+                calibrationRound = capture?.round
+            )
+        }
+        val session = ActiveSession(id, log, header)
+        active = session
         // Set before the job starts, so a second start() arriving at once (the screen's effect and
         // the phone reopening it; seen in real logs 60–120 ms apart) is refused by the check above.
         mutable.value = BpState.Preparing
         job = viewModelScope.launch {
+            try {
+                record(session, effective, capture, startedAt)
+            } catch (e: CancellationException) {
+                // Left mid-measurement (screen off, back): what was recorded is kept, marked as such.
+                withContext(NonCancellable) { finishUnfinished(session, "cancelled") }
+                throw e
+            } catch (e: Exception) {
+                HLog.e(TAG, "BP session failed", e)
+                finishUnfinished(session, "error: ${e.javaClass.simpleName}: ${e.message}")
+                mutable.value = BpState.Failed(SensorProblem.NOT_SUPPORTED)
+            }
+        }
+    }
+
+    /** Saves a session that didn't reach its own end, with [reason], unless it was saved already. */
+    private suspend fun finishUnfinished(session: ActiveSession, reason: String) {
+        if (session.finished) return
+        HLog.i(TAG, "BP session ${session.id} ended early: $reason")
+        runCatching {
+            imu.stop()
+            imu.streams().all().forEach { session.log.attach(it) }
+        }
+        session.log.note("result", reason)
+        finish(session.log, session.header)
+    }
+
+    private suspend fun record(session: ActiveSession, effective: BpMode, capture: CaptureRequest?, startedAt: Long) {
+        val log = session.log
+        val header = session.header
+        val id = session.id
+        run {
             log.event("aux.start")
             val temp = aux.skinTemp()
             temp?.let {
@@ -241,20 +291,11 @@ class BpMeasureViewModel(
             streams.all().forEach { log.attach(it) }
             log.event("recording.end")
             log.value("motion.sdAll", movement)
-            val header: BpSessionHeader.() -> BpSessionHeader = {
-                copy(
-                    mode = if (effective == BpMode.PRECISE) BpSessionHeader.MODE_PRECISE else BpSessionHeader.MODE_QUICK,
-                    device = device,
-                    appVersion = appVersion,
-                    algorithm = ALGORITHM,
-                    calibrationRound = capture?.round
-                )
-            }
             val input = when (recorded) {
                 is Recorded.Failure -> {
                     finish(log, header)
                     mutable.value = recorded.state
-                    return@launch
+                    return
                 }
                 is Recorded.Session -> recorded.input.copy(
                     imu = streams,
@@ -274,7 +315,7 @@ class BpMeasureViewModel(
                     log.note("result", "moving")
                     finish(log, header)
                     mutable.value = BpState.Moving
-                    return@launch
+                    return
                 }
             }
             mutable.value = if (capture != null) {
@@ -325,10 +366,12 @@ class BpMeasureViewModel(
                 }
                 if (chunk.contact) {
                     val base = times.size
+                    // The samples are the points with a green value: their times, index by index.
+                    val sampled = chunk.points.filter { !it.green.isNaN() }
                     chunk.samples.forEachIndexed { i, v ->
                         green.add(v)
                         ir.add(chunk.ir?.getOrNull(i) ?: Float.NaN)
-                        times.add(chunk.points.getOrNull(i)?.timestampMs?.times(1_000_000L) ?: (startNs + (base + i).toLong() * 1_000_000_000L / fs))
+                        times.add(sampled.getOrNull(i)?.timestampMs?.times(1_000_000L) ?: (startNs + (base + i).toLong() * 1_000_000_000L / fs))
                     }
                 }
                 val seconds = green.size / fs
@@ -581,7 +624,8 @@ class BpMeasureViewModel(
         session.header.notes.entries.sortedBy { it.key }.forEach { (k, v) -> HLog.d(RAW_TAG, "note $k=$v") }
         session.header.events.forEach { e -> HLog.d(RAW_TAG, "event +${e.tMs}ms ${e.type}${if (e.detail.isEmpty()) "" else " ${e.detail}"}") }
         runCatching { records.addSession(session) }.onFailure { HLog.w(RAW_TAG, "session not stored", it) }
-        RawCapture.discard(rawId)
+        active?.takeIf { it.id == session.header.id }?.finished = true
+        RawCapture.end(rawId, notes = mapOf("bpSession" to session.header.id, "result" to (session.header.notes["result"] ?: "")))
         RawCapture.saveBpSession(session)
         sync.schedule()
     }
@@ -594,7 +638,6 @@ class BpMeasureViewModel(
     fun cancel() {
         if (job?.isActive == true) imu.stop()
         job?.cancel()
-        RawCapture.discard(rawId)
         mutable.value = BpState.Idle
     }
 

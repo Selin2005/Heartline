@@ -54,6 +54,7 @@ happened earlier, *Keep diagnostic logs* must be on (it is by default in beta ve
 | `phone.log`, `watch.log` | The whole text log of each app, oldest first, and its process logcat |
 | `sessions/<time>-<kind>-<id>/` | Every sensor value of one measurement (`ecg`, `bp`, `spo2`, `skin_temp`, `bia`, `stress`, `heart_rate`, …), a background window (`irn_window`) or background values (`other`, every 10 minutes): `header.json` (device, versions, events, results, every intermediate value) and one CSV per sensor stream, one row per sample with its timestamp |
 | `records/` | `records.csv` (every saved measurement and its result) and each one's stored wave |
+| `bp/` | `calibrations.json` (every blood-pressure calibration: each round's cuff reading, features and `sessionId`) and `cuff-checks.csv` (each cuff check: watch vs cuff, with the reading's `sessionId`). A `bp` session's `header.json` also carries its own cuff reading (`cuffSystolic` / `cuffDiastolic`), and a session left half-way is kept with `result` = `cancelled` or `error: …` |
 
 In a session, `ECG_ON_DEMAND.csv`, `PPG_ON_DEMAND.csv`, `HEART_RATE_CONTINUOUS.csv`,
 `SPO2_ON_DEMAND.csv`, … hold every value the Samsung tracker gave (all its keys: values, statuses,
@@ -154,9 +155,9 @@ attach them to a bug report.
     channel* setting is shown only in beta and dev builds. After updating, *What's new* shows the changelog.
 15. **Blood pressure sensors (algorithm 6).** Every session writes a raw log. Capture
     `adb logcat -v time -s Heartline/BP Heartline/BpRaw Heartline/Sensor` and export
-    Phone → Blood pressure → Share → **BP raw sessions (zip)**. The diagnostic logs alone show every
-    number of every session and, on the phone, the cuff value of every calibration round and cuff
-    check (`BP calibration round`, `BP cuff check`); the raw sensor waves are only in that zip.
+    Phone → Blood pressure → Share → **BP raw sessions (zip)**, or use Settings → Help & diagnostics →
+    **Export logs**, which has every raw sensor value of every session plus the calibrations and cuff
+    checks (`bp/`).
     Then check each item below and report what you see, so the algorithm can be tuned on real data:
     - **IR and red PPG:** the `Heartline/Sensor` line `PPG channels:` lists GREEN, IR and RED, and
       the `ppg` stream in the log has finite `ir` / `red` values. If only GREEN is listed, the

@@ -117,6 +117,27 @@ class BpMeasureTest {
     }
 
     @Test
+    fun aMeasurementLeftHalfWayIsStillKeptForThePhone() = runBlocking {
+        calibrate()
+        val vm = vm(FakePpgSource(chunkDelayMs = 20))
+        vm.start()
+        withTimeout(BP_TIMEOUT_MS) { vm.state.first { it is BpState.Measuring && it.progress > 0f } }
+        vm.cancel()
+        val (_, bytes) = withTimeout(BP_TIMEOUT_MS) {
+            var s = records.pendingSessions()
+            while (s.isEmpty()) {
+                kotlinx.coroutines.delay(10)
+                s = records.pendingSessions()
+            }
+            s.single()
+        }
+        val log = BpSessionLog.decode(bytes)
+        assertEquals("cancelled", log.header.notes["result"])
+        assertTrue(log.stream(BpSessionStreams.PPG)!!.size > 0)
+        assertTrue(records.pending().isEmpty())
+    }
+
+    @Test
     fun aSecondStartArrivingAtOnceRecordsNothingMore() = runBlocking {
         // Real logs: "BP start" twice, 60–120 ms apart (the screen's effect and the phone reopening it).
         bp.setPendingCapture(CaptureRequest("cap-3", 2))

@@ -13,6 +13,7 @@ import com.heartline.phone.ui.model.CalibrationUi
 import com.heartline.phone.ui.model.CalibrationViewModel
 import com.heartline.shared.bp.BpCalibration
 import com.heartline.shared.bp.BpProfile
+import com.heartline.shared.bp.BpSessionRecorder
 import com.heartline.shared.bp.PpgFeatures
 import com.heartline.shared.sample.SyntheticPpg
 import com.heartline.shared.sync.CaptureRequest
@@ -153,6 +154,61 @@ class CalibrationTest {
         // The profile can be changed later without recalibrating.
         bp.saveProfile(BpProfile(atrialFibrillation = true))
         assertEquals(BpProfile(atrialFibrillation = true), withTimeout(5_000) { bp.calibration.first { it?.profile?.atrialFibrillation == true } }!!.profile)
+        watchJob.cancel()
+    }
+
+    @Test
+    fun everyRoundAndCuffCheckKeepsItsCuffReadingWithItsRawSession() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val (phoneSide, watchSide) = InMemoryTransport.pair()
+        val records = RecordRepository(db.records(), WaveStore(File(context.cacheDir, "cal-sessions")))
+        val dir = File(context.cacheDir, "bp-sessions-test").apply { deleteRecursively() }
+        lateinit var engine: PhoneSyncEngine
+        val bp = BpRepository(db.bp(), records, sessionsDir = dir) { engine }
+        engine = PhoneSyncEngine(phoneSide, records, onCaptureResult = { bp.onCaptureResult(it) })
+        val requests = mutableListOf<CaptureRequest>()
+        val watchJob = watchSide.incoming.onEach { env ->
+            if (env.path == Protocol.BP_CALIBRATION_CAPTURE) requests += Protocol.json.decodeFromString<CaptureRequest>(env.data.decodeToString())
+        }.launchIn(this)
+        yield()
+        fun session(id: String) = BpSessionRecorder(id, "calibration", 0L) { 0L }.build { this }.encode()
+
+        val vm = CalibrationViewModel(bp, now = { 1_000L })
+        val features = PpgFeatures.extract(SyntheticPpg.generate(20.0), 100)!!
+        vm.startRound()
+        for (round in 1..3) {
+            withTimeout(5_000) { while (requests.size < round) delay(5) }
+            val request = requests[round - 1]
+            // Round 1's raw session arrives before its cuff reading, the others after it.
+            if (round == 1) bp.saveSession("s1", session("s1"))
+            val result = CaptureResult("r$round", request.captureId, round, features, sessionId = "s$round")
+            engine.handle(com.heartline.shared.sync.Envelope(Protocol.BP_CALIBRATION_CAPTURE, Protocol.json.encodeToString(CaptureResult.serializer(), result).encodeToByteArray()))
+            withTimeout(5_000) { vm.state.first { it.phase == CalibrationUi.Phase.ENTER_CUFF && it.round == round } }
+            vm.submitCuff(130 + round, 80, 70)
+        }
+        bp.saveSession("s2", session("s2"))
+        bp.saveSession("s3", session("s3"))
+        withTimeout(5_000) { vm.state.first { it.phase == CalibrationUi.Phase.OFFER_STANDING } }
+        vm.finish()
+        val saved = withTimeout(5_000) { bp.calibration.first { it != null } }!!
+        assertEquals(listOf("s1", "s2", "s3"), saved.points.map { it.sessionId })
+        for (round in 1..3) {
+            val header = withTimeout(5_000) {
+                var h = bp.session("s$round")?.header
+                while (h?.cuffSystolic == null) {
+                    delay(5)
+                    h = bp.session("s$round")?.header
+                }
+                h
+            }
+            assertEquals(130 + round, header.cuffSystolic)
+            assertEquals(80, header.cuffDiastolic)
+        }
+        // The diagnostic export has every calibration with its cuff readings and session ids.
+        val files = bp.diagnosticsFiles()
+        val calibrations = files.getValue("bp/calibrations.json").decodeToString()
+        assertTrue(calibrations.contains("\"cuffSystolic\":131") && calibrations.contains("\"sessionId\":\"s3\""))
+        assertTrue(files.getValue("bp/cuff-checks.csv").decodeToString().startsWith("atMs,readingId,sessionId"))
         watchJob.cancel()
     }
 }

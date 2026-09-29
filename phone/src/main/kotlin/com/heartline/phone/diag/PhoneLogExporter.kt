@@ -58,6 +58,8 @@ class PhoneLogExporter(
     private val records: RecordRepository? = null,
     /** The raw blood-pressure sessions the phone keeps for the algorithm (BpRepository). */
     private val bpSessions: File? = null,
+    /** Blood-pressure calibrations and cuff checks (the cuff values every session is compared with). */
+    private val bpData: (suspend () -> Map<String, ByteArray>)? = null,
 ) {
     enum class Step { PHONE, WATCH, SAVING }
 
@@ -96,6 +98,7 @@ class PhoneLogExporter(
         zip.entry("watch.log") { watch.log.writeTo(it) }
         writeSessions(zip, watch.sessions)
         writeRecords(zip)
+        bpData?.invoke()?.forEach { (name, bytes) -> zip.entry(name) { it.write(bytes) } }
     }
 
     /** One device's log file: the header, the segments (gzip files, oldest first; null = missing), the logcat. */
@@ -223,10 +226,21 @@ class PhoneLogExporter(
     /** Every raw session as `sessions/<name>/header.json` and one CSV per stream, and the phone's BP sessions not among them. */
     private suspend fun writeSessions(zip: ZipOutputStream, watchSessions: List<File>) {
         val ids = watchSessions.map { RawSessions.idOf(it.name) }.toSet()
-        val phoneOnly = bpSessions?.listFiles { f -> f.extension == "hlbp" }.orEmpty().filter { it.nameWithoutExtension.filter(Char::isLetterOrDigit).take(8) !in ids }
+        val phoneBp = bpSessions?.listFiles { f -> f.extension == "hlbp" }.orEmpty().associateBy { it.nameWithoutExtension.filter(Char::isLetterOrDigit).take(8) }
+        val phoneOnly = phoneBp.filterKeys { it !in ids }.values
         val all = watchSessions.map { it to null } + phoneOnly.map { it to "bp" }
         for ((file, kind) in all) {
-            val log = withContext(Dispatchers.IO) { runCatching { BpSessionLog.decode(file.readBytes()) }.getOrNull() }
+            val log = withContext(Dispatchers.IO) {
+                runCatching { BpSessionLog.decode(file.readBytes()) }.getOrNull()?.let { log ->
+                    // The watch's copy of a BP session gets the cuff reading the phone added to its own copy.
+                    val phoneHeader = if (kind == null) phoneBp[RawSessions.idOf(file.name)]?.let { runCatching { BpSessionLog.decode(it.readBytes()).header }.getOrNull() } else null
+                    if (phoneHeader?.cuffSystolic != null && log.header.cuffSystolic == null) {
+                        log.copy(header = log.header.copy(cuffSystolic = phoneHeader.cuffSystolic, cuffDiastolic = phoneHeader.cuffDiastolic, cuffPulse = phoneHeader.cuffPulse))
+                    } else {
+                        log
+                    }
+                }
+            }
             if (log == null) {
                 zip.entry("sessions/unreadable-${file.name}") { out -> file.inputStream().use { it.copyTo(out) } }
                 continue

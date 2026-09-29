@@ -68,6 +68,10 @@ interface BpDao {
     @Query("DELETE FROM bp_calibrations")
     suspend fun deleteAll()
 
+    /** Every calibration kept, oldest first (the diagnostic export includes their cuff values). */
+    @Query("SELECT * FROM bp_calibrations ORDER BY createdAtMs")
+    suspend fun all(): List<BpCalibrationEntity>
+
     @Query("DELETE FROM bp_calibrations WHERE id LIKE 'demo%'")
     suspend fun deleteDemo(): Int
 
@@ -152,12 +156,51 @@ class BpRepository(
 
     val validations: Flow<List<BpValidationEntity>> = dao.validations()
 
+    /** Cuff readings for sessions that haven't arrived yet (the log follows its round by a few seconds). */
+    private val pendingCuff = java.util.concurrent.ConcurrentHashMap<String, Triple<Int, Int, Int?>>()
+
     /** Keeps a raw session log from the watch (every sensor of one measurement or calibration round). */
     suspend fun saveSession(id: String, bytes: ByteArray) = withContext(Dispatchers.IO) {
         val dir = sessionsDir ?: return@withContext
         // Only a well-formed log is kept.
-        runCatching { BpSessionLog.decode(bytes) }.onFailure { HLog.w(TAG, "bad session $id", it) }.getOrNull() ?: return@withContext
-        java.io.File(dir.apply { mkdirs() }, "$id.hlbp").writeBytes(bytes)
+        val log = runCatching { BpSessionLog.decode(bytes) }.onFailure { HLog.w(TAG, "bad session $id", it) }.getOrNull() ?: return@withContext
+        val cuff = pendingCuff.remove(id)
+        val out = if (cuff == null) bytes else log.withCuff(cuff).encode()
+        java.io.File(dir.apply { mkdirs() }, "$id.hlbp").writeBytes(out)
+    }
+
+    /**
+     * Writes the cuff reading taken with session [id] (a calibration round or a cuff check) into
+     * its header, so each raw session is complete on its own; kept until the session arrives.
+     */
+    suspend fun annotateSession(id: String, systolic: Int, diastolic: Int, pulse: Int?) = withContext(Dispatchers.IO) {
+        val file = sessionsDir?.let { java.io.File(it, "$id.hlbp") }
+        val log = file?.takeIf { it.exists() }?.let { runCatching { BpSessionLog.decode(it.readBytes()) }.getOrNull() }
+        if (file == null || log == null) {
+            pendingCuff[id] = Triple(systolic, diastolic, pulse)
+            return@withContext
+        }
+        file.writeBytes(log.withCuff(Triple(systolic, diastolic, pulse)).encode())
+    }
+
+    private fun BpSessionLog.withCuff(cuff: Triple<Int, Int, Int?>) =
+        copy(header = header.copy(cuffSystolic = cuff.first, cuffDiastolic = cuff.second, cuffPulse = cuff.third))
+
+    /**
+     * For the diagnostic export: every calibration kept (each round's cuff reading, features and
+     * session id) and every cuff check (watch vs cuff, with the reading's session id).
+     */
+    suspend fun diagnosticsFiles(): Map<String, ByteArray> {
+        val calibrations = dao.all().map { Protocol.json.parseToJsonElement(it.json) }
+        val checks = StringBuilder("atMs,readingId,sessionId,watchSystolic,watchDiastolic,cuffSystolic,cuffDiastolic\n")
+        dao.validations().first().sortedBy { it.atMs }.forEach { v ->
+            val sessionId = (records.get(v.readingId)?.summary as? RecordSummary.BloodPressure)?.sessionId.orEmpty()
+            checks.append("${v.atMs},${v.readingId},$sessionId,${v.watchSystolic},${v.watchDiastolic},${v.cuffSystolic},${v.cuffDiastolic}\n")
+        }
+        return mapOf(
+            "bp/calibrations.json" to Protocol.json.encodeToString(kotlinx.serialization.json.JsonArray(calibrations)).encodeToByteArray(),
+            "bp/cuff-checks.csv" to checks.toString().encodeToByteArray(),
+        )
     }
 
     suspend fun session(id: String): BpSessionLog? = withContext(Dispatchers.IO) {
@@ -190,13 +233,14 @@ class BpRepository(
     suspend fun addValidation(validation: BpValidationEntity) {
         dao.insertValidation(validation)
         val record = records.get(validation.readingId) ?: return
+        val sessionId = (record.summary as? RecordSummary.BloodPressure)?.sessionId
+        sessionId?.let { annotateSession(it, validation.cuffSystolic, validation.cuffDiastolic, null) }
         val cal = calibration.first()?.takeIf { it.isValid(now()) } ?: return
         val at = record.entity.startedAtMs
         // With the reading's raw session, the cuff check teaches every channel (IR, BCG, ECG transit times).
-        val sessionId = (record.summary as? RecordSummary.BloodPressure)?.sessionId
         val fromSession = sessionId?.let { session(it) }?.let { log ->
             withContext(Dispatchers.Default) { BpPipeline.capture(BpSessionReplay.input(log), cal.polarity(BpChannel.PWA_GREEN), cal.polarity(BpChannel.PWA_IR)) }
-        }?.let { CalibrationPoint.of(it, validation.cuffSystolic, validation.cuffDiastolic, null, at) }
+        }?.let { CalibrationPoint.of(it, validation.cuffSystolic, validation.cuffDiastolic, null, at, sessionId = sessionId) }
         val point = fromSession ?: run {
             val wave = records.wave(record) ?: return
             val features = withContext(Dispatchers.Default) { PpgFeatures.extract(wave, record.entity.sampleRateHz.takeIf { it > 0 } ?: BpCalibration.PPG_FS, cal.polarity(BpChannel.PWA_GREEN)) }

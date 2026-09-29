@@ -46,7 +46,9 @@ data class CalibrationPoint(
      * (the ECG tracker's has gaps and gain jumps on real watches), so a calibration from one must
      * never be compared with a measurement from the other.
      */
-    val ppgFs: Int = BpCalibration.PPG_FS
+    val ppgFs: Int = BpCalibration.PPG_FS,
+    /** The round's raw session log (every sensor), so the cuff value can be matched to its data. */
+    val sessionId: String? = null
 ) {
     /**
      * [ppgFs], with precise rounds saved before the field existed recognised by their pulse
@@ -64,7 +66,8 @@ data class CalibrationPoint(
             cuffDiastolic: Int,
             cuffPulse: Int?,
             atMs: Long? = null,
-            standing: Boolean = false
+            standing: Boolean = false,
+            sessionId: String? = null
         ) = CalibrationPoint(
             capture.features,
             cuffSystolic,
@@ -82,7 +85,8 @@ data class CalibrationPoint(
             capture.pttMs,
             capture.skinTempC,
             capture.edaMicroSiemens,
-            capture.fs
+            capture.fs,
+            sessionId
         )
     }
 

@@ -206,6 +206,7 @@ class CalibrationViewModel(
     private var capturedPpg: List<Float>? = null
     private var capturedGravity: List<Double>? = null
     private var capturedChannels: com.heartline.shared.bp.ChannelCapture? = null
+    private var capturedSessionId: String? = null
 
     init {
         // A recalibration keeps the profile the user already entered.
@@ -220,6 +221,7 @@ class CalibrationViewModel(
                     capturedPpg = result.ppg
                     capturedGravity = result.gravity
                     capturedChannels = result.capture
+                    capturedSessionId = result.sessionId
                     mutable.value = ui.copy(phase = CalibrationUi.Phase.ENTER_CUFF)
                 }
             }
@@ -248,12 +250,16 @@ class CalibrationViewModel(
         val ui = mutable.value
         HLog.i(BP_TAG, "BP calibration round ${ui.round}: cuff=$systolic/$diastolic pulse=$pulse standing=${ui.standingRound}")
         // With the watch's full capture every channel gets this cuff point (IR, BCG, ECG transit times).
-        points += capturedChannels?.let { CalibrationPoint.of(it, systolic, diastolic, pulse, standing = ui.standingRound) }
-            ?: CalibrationPoint(features, systolic, diastolic, pulse, capturedPpg, gravity = capturedGravity, standing = ui.standingRound)
+        val sessionId = capturedSessionId
+        points += capturedChannels?.let { CalibrationPoint.of(it, systolic, diastolic, pulse, standing = ui.standingRound, sessionId = sessionId) }
+            ?: CalibrationPoint(features, systolic, diastolic, pulse, capturedPpg, gravity = capturedGravity, standing = ui.standingRound, sessionId = sessionId)
+        // The round's raw session carries its cuff reading too, so it is complete on its own.
+        sessionId?.let { repository.annotateSession(it, systolic, diastolic, pulse) }
         captured = null
         capturedPpg = null
         capturedGravity = null
         capturedChannels = null
+        capturedSessionId = null
         when {
             points.size < BpCalibration.REQUIRED_POINTS -> {
                 mutable.value = ui.copy(round = ui.round + 1, phase = CalibrationUi.Phase.WAITING_FOR_WATCH, completedRounds = points.size, inputError = false)

@@ -110,6 +110,7 @@ val phoneModule = module {
             archive = get(),
             records = get(),
             bpSessions = java.io.File(androidContext().filesDir, BP_SESSIONS),
+            bpData = { get<BpRepository>().diagnosticsFiles() },
         )
     }
     single { get<HeartlineDatabase>().bp() }
