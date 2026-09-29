@@ -286,10 +286,8 @@ def ask_model(system: str, user: str):
 def ai_notes(version: str, entries, docs: bool, stat: str):
     if not entries:
         return None
-    # Subject and the first lines of each body; only subjects for many commits (the first release):
-    # enough for the model, and a much quicker answer.
-    lines = 4 if len(entries) <= 20 else 1
-    log = "\n\n".join("\n".join(e[:lines]) for e in entries)[:16000]
+    # Subject and the first lines of each body: enough for the model, and a quicker answer.
+    log = "\n\n".join("\n".join(e[:4]) for e in entries)[:16000]
     system = (
         "You write release notes for Heartline, a wellness app for Galaxy Watch and Android phones "
         "(ECG, blood pressure estimates, heart rate, SpO2, stress, body composition). Write for end "
