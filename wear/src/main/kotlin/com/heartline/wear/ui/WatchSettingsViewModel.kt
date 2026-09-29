@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.heartline.shared.hr.MonitorSettings
 import com.heartline.wear.BuildConfig
+import com.heartline.wear.diag.RawCapture
 import com.heartline.wear.monitor.WatchSettingsStore
 import com.heartline.wear.sensor.GatewayState
 import com.heartline.wear.sensor.SensorGateway
@@ -38,7 +39,7 @@ class WatchSettingsViewModel(
             highBpm = s.highBpm,
             lowBpm = s.lowBpm,
             diagnosticLogs = s.diagnosticLogs,
-            logBytes = HLog.sizeBytes(),
+            logBytes = HLog.sizeBytes() + RawCapture.sizeBytes(),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WatchSettingsUi(true, true, null, emptyList(), BuildConfig.VERSION_NAME))
 

@@ -13,7 +13,10 @@ import kotlinx.coroutines.launch
 import com.heartline.wear.monitor.WatchSettingsStore
 import org.koin.android.ext.android.get
 import com.heartline.wear.sync.SyncWorker
+import com.heartline.shared.diag.LogOffload
 import com.heartline.shared.diag.Redactor
+import com.heartline.wear.diag.RawCapture
+import kotlinx.coroutines.Dispatchers
 import com.heartline.wear.quick.WatchProfileStore
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -23,7 +26,9 @@ import org.koin.core.context.startKoin
 class WearApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        HLog.init(this, HLog.WATCH_BUDGET_BYTES)
+        // Each finished log segment and raw sensor session moves to the phone, keeping room here.
+        HLog.init(this, HLog.WATCH_BUDGET_BYTES) { offloadSoon() }
+        RawCapture.init(this, BuildConfig.VERSION_NAME) { offloadSoon() }
         startKoin {
             androidContext(this@WearApplication)
             modules(wearModule)
@@ -40,8 +45,15 @@ class WearApplication : Application() {
         get<com.heartline.wear.tile.TileUpdates>().start(get(APP_SCOPE))
         // Diagnostic logging follows the phone's choice (synced settings); names never reach the file.
         val scope = get<CoroutineScope>(APP_SCOPE)
-        get<WatchSettingsStore>().settings.onEach { HLog.configure(it.diagnosticLogs) }.launchIn(scope)
+        get<WatchSettingsStore>().settings.onEach {
+            HLog.configure(it.diagnosticLogs)
+            RawCapture.setEnabled(it.diagnosticLogs)
+        }.launchIn(scope)
         get<WatchProfileStore>().profile.onEach { HLog.setRedactor(Redactor.of(it)) }.launchIn(scope)
         // The hello handshake (status, settings, calibration, profile) runs from the setup gate on every app start.
+    }
+
+    private fun offloadSoon() {
+        runCatching { get<CoroutineScope>(APP_SCOPE).launch(Dispatchers.IO) { get<LogOffload>().run() } }
     }
 }

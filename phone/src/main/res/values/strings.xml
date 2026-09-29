@@ -721,12 +721,12 @@
     <string name="diag_off_hint">Diagnostic logs are off, so the export only covers the last few minutes. Turn them on to capture problems that happened earlier.</string>
     <string name="diag_settings">Log settings</string>
     <string name="diag_keep">Keep diagnostic logs</string>
-    <string name="diag_keep_on">On phone and watch · %1$s on this phone (150 MB at most)</string>
+    <string name="diag_keep_on">On phone and watch · %1$s kept on this phone</string>
     <string name="diag_keep_off">Off: nothing is written to storage</string>
     <string name="diag_delete">Delete logs</string>
     <string name="diag_report_sub">Open a bug report on GitHub and attach the zip file</string>
     <string name="diag_ask_title">Help us fix problems?</string>
-    <string name="diag_ask_body">Heartline can keep a diagnostic log on this phone and your watch (compressed, up to 150 MB on the phone and 50 MB on the watch). It\'s never sent anywhere unless you export it, and you can turn it off any time in Settings → Help &amp; diagnostics.</string>
+    <string name="diag_ask_body">Heartline can keep a diagnostic log on this phone and your watch (compressed, with the sensor values of each measurement: up to 150 MB on the phone, 50 MB on the watch, and what the watch moves to the phone up to 300 MB). It\'s never sent anywhere unless you export it, and you can turn it off any time in Settings → Help &amp; diagnostics.</string>
     <string name="diag_ask_yes">Keep logs</string>
     <string name="diag_ask_no">No thanks</string>
 </resources>

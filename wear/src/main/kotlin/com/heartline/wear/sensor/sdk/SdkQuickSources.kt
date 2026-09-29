@@ -16,6 +16,7 @@ import com.heartline.wear.sensor.QuickHint
 import com.heartline.wear.sensor.QuickSource
 import com.heartline.wear.sensor.SensorException
 import com.heartline.wear.sensor.SensorProblem
+import com.heartline.wear.diag.RawCapture
 import com.samsung.android.service.health.tracking.HealthTracker
 import com.samsung.android.service.health.tracking.data.DataPoint
 import com.samsung.android.service.health.tracking.data.TrackerUserProfile
@@ -85,6 +86,7 @@ abstract class SdkQuickSource(
         healthTracker.setEventListener(
             object : HealthTracker.TrackerEventListener {
                 override fun onDataReceived(points: List<DataPoint>) {
+                    RawCapture.sdk(tracker.name, points)
                     if (points.isNotEmpty() && onData(points)) {
                         ticker.cancel()
                         close()
@@ -311,6 +313,7 @@ suspend fun SdkSensorGateway.readSkinConductance(seconds: Int = 10): Float? {
                 tracker.setEventListener(
                     object : HealthTracker.TrackerEventListener {
                         override fun onDataReceived(points: List<DataPoint>) {
+                            RawCapture.sdk(TrackerKind.EDA_CONTINUOUS.name, points)
                             points.filter { it.getValue(ValueKey.EdaSet.STATUS) == 0 }
                                 .mapNotNull { it.getValue(ValueKey.EdaSet.SKIN_CONDUCTANCE) }
                                 .forEach { trySendBlocking(it) }

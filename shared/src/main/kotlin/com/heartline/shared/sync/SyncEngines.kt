@@ -63,10 +63,16 @@ class WatchSyncEngine(
     private val onProfile: suspend (UserProfile) -> Unit = {},
     private val onOpen: suspend (String) -> Unit = {},
     private val onStatus: suspend (PhoneStatus) -> Unit = {},
-    private val onLogRequest: suspend (LogRequest) -> Unit = {}
+    private val onLogRequest: suspend (LogRequest) -> Unit = {},
+    /** The phone stored a log file this watch sent to it ([sendArchive]). */
+    private val onArchiveAck: suspend (ArchiveAck) -> Unit = {}
 ) {
     /** Watch → phone: the diagnostic log (or its manifest) the phone asked for with [LogRequest]. */
     suspend fun sendLogs(requestId: String, text: ByteArray): Boolean = transport.sendLarge(Protocol.logsPath(requestId), text)
+
+    /** Watch → phone: a finished log segment or raw session, streamed from its file into the phone's archive. */
+    suspend fun sendArchive(type: String, name: String, input: InputStream): Boolean =
+        transport.sendStream(Protocol.logArchivePath(type, name), input)
 
     /** Watch → phone: one log segment, streamed from its file. */
     suspend fun sendLogSegment(requestId: String, input: InputStream): Boolean =
@@ -122,6 +128,7 @@ class WatchSyncEngine(
                 Protocol.json.decodeFromString<CaptureRequest>(envelope.data.decodeToString())
             )
             Protocol.LOGS_REQUEST -> onLogRequest(Protocol.json.decodeFromString<LogRequest>(envelope.data.decodeToString()))
+            Protocol.LOGS_ARCHIVE_ACK -> onArchiveAck(Protocol.json.decodeFromString<ArchiveAck>(envelope.data.decodeToString()))
         }
     }
 }
@@ -142,7 +149,9 @@ class PhoneSyncEngine(
     private val onSessionLog: suspend (String, ByteArray) -> Unit = { _, _ -> },
     private val onLogs: suspend (requestId: String, text: ByteArray) -> Unit = { _, _ -> },
     /** A log segment arrived whole (the app reads segment channels as streams, not through here). */
-    private val onLogSegment: suspend (requestId: String, input: InputStream) -> Unit = { _, _ -> }
+    private val onLogSegment: suspend (requestId: String, input: InputStream) -> Unit = { _, _ -> },
+    /** A log file the watch moved here (read as a stream in the app); [ackArchive] once stored. */
+    private val onArchive: suspend (type: String, name: String, input: InputStream) -> Unit = { _, _, _ -> }
 ) {
     private val metas = mutableMapOf<String, RecordMeta>()
     private val waves = mutableMapOf<String, FloatArray>()
@@ -188,6 +197,13 @@ class PhoneSyncEngine(
                 ack(result.id)
             }
             envelope.path.startsWith(Protocol.LOGS_PREFIX) -> onLogs(envelope.path.removePrefix(Protocol.LOGS_PREFIX), envelope.data)
+            envelope.path.startsWith(Protocol.LOGS_ARCHIVE_PREFIX) -> {
+                val (type, name) = envelope.path.removePrefix(Protocol.LOGS_ARCHIVE_PREFIX).split('/', limit = 2).let {
+                    it[0] to
+                        it.getOrElse(1) { "" }
+                }
+                onArchive(type, name, envelope.data.inputStream())
+            }
             envelope.path.startsWith(Protocol.LOGS_SEGMENT_PREFIX) ->
                 onLogSegment(envelope.path.removePrefix(Protocol.LOGS_SEGMENT_PREFIX), envelope.data.inputStream())
             envelope.path.startsWith(Protocol.BP_SESSION_PREFIX) -> {
@@ -215,6 +231,10 @@ class PhoneSyncEngine(
 
     suspend fun sendProfile(profile: UserProfile): Boolean =
         transport.send(Protocol.PROFILE, Protocol.json.encodeToString(profile).encodeToByteArray())
+
+    /** Phone → watch: a moved log file is stored here; the watch may delete it. */
+    suspend fun ackArchive(ack: ArchiveAck): Boolean =
+        transport.send(Protocol.LOGS_ARCHIVE_ACK, Protocol.json.encodeToString(ack).encodeToByteArray())
 
     /** Phone → watch: send back (or erase) your diagnostic log. */
     suspend fun requestLogs(request: LogRequest): Boolean =

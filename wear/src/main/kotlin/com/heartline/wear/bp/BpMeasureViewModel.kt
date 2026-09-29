@@ -44,6 +44,7 @@ import com.heartline.wear.sensor.PpgSource
 import com.heartline.wear.sensor.SensorException
 import com.heartline.wear.sensor.SensorProblem
 import com.heartline.wear.sensor.SyncScheduler
+import com.heartline.wear.diag.RawCapture
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -194,6 +195,9 @@ class BpMeasureViewModel(
      * phone asked for is recorded. Otherwise it is always a measurement: a request left over from
      * an unfinished round must never turn it into a calibration round.
      */
+    /** The raw capture session while measuring (see [start]). */
+    private var rawId = ""
+
     fun start(mode: BpMode = BpMode.QUICK, calibrationSession: Boolean = false) {
         // Only a session still recording blocks a new one: a finished job may be "active" for a
         // moment after publishing its result, and "Measure again" must not be lost to that.
@@ -211,6 +215,9 @@ class BpMeasureViewModel(
         val startedAt = now()
         val id = UUID.randomUUID().toString()
         val log = BpSessionRecorder(id, if (capture != null) "calibration" else "measure", startedAt, now)
+        // This flow's own log below has every sensor; the live raw session is only to keep its
+        // values out of the background one, and is dropped at the end.
+        rawId = RawCapture.begin("bp")
         // Set before the job starts, so a second start() arriving at once (the screen's effect and
         // the phone reopening it; seen in real logs 60–120 ms apart) is refused by the check above.
         mutable.value = BpState.Preparing
@@ -574,6 +581,8 @@ class BpMeasureViewModel(
         session.header.notes.entries.sortedBy { it.key }.forEach { (k, v) -> HLog.d(RAW_TAG, "note $k=$v") }
         session.header.events.forEach { e -> HLog.d(RAW_TAG, "event +${e.tMs}ms ${e.type}${if (e.detail.isEmpty()) "" else " ${e.detail}"}") }
         runCatching { records.addSession(session) }.onFailure { HLog.w(RAW_TAG, "session not stored", it) }
+        RawCapture.discard(rawId)
+        RawCapture.saveBpSession(session)
         sync.schedule()
     }
 
@@ -585,6 +594,7 @@ class BpMeasureViewModel(
     fun cancel() {
         if (job?.isActive == true) imu.stop()
         job?.cancel()
+        RawCapture.discard(rawId)
         mutable.value = BpState.Idle
     }
 

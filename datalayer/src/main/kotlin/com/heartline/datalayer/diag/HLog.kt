@@ -20,8 +20,11 @@ import java.util.concurrent.TimeUnit
  * thread in batches, so it costs next to nothing on the watch.
  */
 object HLog {
-    /** Log budget on the watch and on the phone (compressed, about ten times as much text). */
-    const val WATCH_BUDGET_BYTES = 50L * 1024 * 1024
+    /**
+     * Log budget on the watch and on the phone (compressed, about ten times as much text). The
+     * watch's raw sensor sessions have 30 MB more, and both move to the phone as they're done.
+     */
+    const val WATCH_BUDGET_BYTES = 20L * 1024 * 1024
     const val PHONE_BUDGET_BYTES = 150L * 1024 * 1024
 
     private const val FLUSH_MS = 2_000L
@@ -36,10 +39,13 @@ object HLog {
 
     @Volatile private var redactor: Redactor = Redactor.NONE
 
-    /** Called once from Application.onCreate. Logging to logcat works before and without it. */
-    fun init(context: Context, budgetBytes: Long) {
+    /**
+     * Called once from Application.onCreate. Logging to logcat works before and without it.
+     * [onSegment] gets each closed segment (on the logging thread; it must only hand it on).
+     */
+    fun init(context: Context, budgetBytes: Long, onSegment: (File) -> Unit = {}) {
         if (file != null) return
-        file = SegmentedLog(File(context.filesDir, "logs"), budgetBytes).also { log -> writer.execute { log.migrate() } }
+        file = SegmentedLog(File(context.filesDir, "logs"), budgetBytes, onSealed = onSegment).also { log -> writer.execute { log.migrate() } }
         writer.scheduleWithFixedDelay(::flushNow, FLUSH_MS, FLUSH_MS, TimeUnit.MILLISECONDS)
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
@@ -104,6 +110,9 @@ object HLog {
             file?.segments().orEmpty()
         }.get(30, TimeUnit.SECONDS)
     }.getOrDefault(emptyList())
+
+    /** The closed segments now on disk, oldest first (the current one stays open). */
+    fun segmentFiles(): List<File> = file?.segments().orEmpty()
 
     /** The last [maxBytes] of the log as text, for a phone app from before segmented export. */
     fun readRecent(maxBytes: Int): String {

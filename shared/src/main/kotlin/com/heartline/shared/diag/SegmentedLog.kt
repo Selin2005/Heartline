@@ -22,7 +22,9 @@ class SegmentedLog(
     private val budgetBytes: Long,
     private val segmentBytes: Long = 1024L * 1024,
     private val minFreeBytes: Long = 500L * 1024 * 1024,
-    private val freeBytes: () -> Long = { dir.usableSpace }
+    private val freeBytes: () -> Long = { dir.usableSpace },
+    /** Called with each new segment (the watch sends them to the phone). */
+    private val onSealed: (File) -> Unit = {}
 ) {
     private val current = File(dir, CURRENT)
 
@@ -44,9 +46,11 @@ class SegmentedLog(
     /** Closes `current.log` into a segment (before an export, so the segments hold everything). */
     fun seal() {
         if (!current.exists() || current.length() == 0L) return
-        compress(current, nextSegment())
+        val segment = nextSegment()
+        compress(current, segment)
         current.delete()
         trim()
+        if (segment.exists()) onSealed(segment)
     }
 
     /** The segments, oldest first. */
@@ -85,7 +89,17 @@ class SegmentedLog(
         current.delete()
     }
 
-    private fun nextSegment(): File = File(dir, "seg-%08d.log.gz".format((segments().lastOrNull()?.let(::number) ?: 0) + 1))
+    /**
+     * The next segment number, never used before: segments that were moved to the phone and
+     * deleted here must not be overwritten there, so the last number is kept in `seq`.
+     */
+    private fun nextSegment(): File {
+        val seq = File(dir, SEQ)
+        val last = maxOf(segments().lastOrNull()?.let(::number) ?: 0, seq.takeIf { it.exists() }?.readText()?.trim()?.toLongOrNull() ?: 0)
+        dir.mkdirs()
+        seq.writeText((last + 1).toString())
+        return File(dir, "seg-%08d.log.gz".format(last + 1))
+    }
 
     private fun compress(from: File, to: File) {
         dir.mkdirs()
@@ -106,12 +120,16 @@ class SegmentedLog(
 
     companion object {
         const val CURRENT = "current.log"
+        private const val SEQ = "seq"
         private val SEGMENT = Regex("seg-(\\d+)\\.log\\.gz")
 
         private fun number(f: File) = SEGMENT.matchEntire(f.name)?.groupValues?.get(1)?.toLong() ?: 0
 
         /** Whether [name] is a segment file name (the watch sends only those). */
         fun isSegment(name: String) = SEGMENT.matches(name)
+
+        /** A segment's number (its order in the log), 0 for other names. */
+        fun number(name: String): Long = SEGMENT.matchEntire(name)?.groupValues?.get(1)?.toLong() ?: 0
 
         fun open(segment: File): InputStream = GZIPInputStream(segment.inputStream().buffered())
     }

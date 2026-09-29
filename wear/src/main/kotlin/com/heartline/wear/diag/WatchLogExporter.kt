@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import com.heartline.datalayer.diag.HLog
 import com.heartline.shared.diag.LogBundle
+import com.heartline.shared.diag.RawSessions
 import com.heartline.shared.diag.SegmentedLog
 import com.heartline.shared.diag.formatLogSize
 import com.heartline.shared.sync.LogManifest
@@ -29,6 +30,7 @@ import java.util.zip.GZIPOutputStream
  */
 class WatchLogExporter(private val context: Context, private val gateway: SensorGateway, private val settings: WatchSettingsStore) {
     private val logs = File(context.filesDir, "logs")
+    private val raw = File(context.filesDir, "raw")
     private val logcat = File(context.cacheDir, LOGCAT)
 
     private fun header(): LinkedHashMap<String, String> {
@@ -48,18 +50,29 @@ class WatchLogExporter(private val context: Context, private val gateway: Sensor
             },
             "Monitoring" to "irregularRhythm=${s.irregularRhythmEnabled} hrAlerts=${s.heartRateAlertsEnabled} (${s.lowBpm}-${s.highBpm}) " +
                 "backgroundHr=${s.backgroundHeartRate} interval=${s.irnIntervalMinutes}min",
-            "Diagnostic logs" to "on=${s.diagnosticLogs} kept=${formatLogSize(HLog.sizeBytes())}",
+            "Diagnostic logs" to "on=${s.diagnosticLogs} kept=${formatLogSize(HLog.sizeBytes())} raw=${formatLogSize(RawCapture.sizeBytes())}",
         )
     }
 
-    /** Closes the current segment and lists them all, oldest first, with this process's logcat last. */
+    /**
+     * Closes the current segment and raw session and lists what's still here (the rest is already
+     * on the phone): the log segments, oldest first, the raw sessions as `raw/<name>`, and this
+     * process's logcat last.
+     */
     fun manifest(): LogManifest {
         val segments = HLog.sealedSegments()
+        RawCapture.flush()
+        val raw = RawCapture.files()
         GZIPOutputStream(logcat.outputStream().buffered()).use { it.write(HLog.processLogcat().toByteArray(Charsets.UTF_8)) }
-        val head = header().apply { put("Log segments", "${segments.size}, ${formatLogSize(segments.sumOf { it.length() })} compressed") }
+        val head = header().apply {
+            put("Log segments", "${segments.size} on the watch, ${formatLogSize(segments.sumOf { it.length() })} compressed")
+            put("Raw sessions", "${raw.size} on the watch, ${formatLogSize(raw.sumOf { it.length() })} (the rest moved to the phone)")
+        }
         return LogManifest(
             header = LogBundle.head(head),
-            segments = (segments + logcat).map { LogSegment(it.name, it.length()) },
+            segments = segments.map { LogSegment(it.name, it.length()) } +
+                raw.map { LogSegment(RAW_PREFIX + it.name, it.length()) } +
+                LogSegment(logcat.name, logcat.length()),
         )
     }
 
@@ -67,6 +80,7 @@ class WatchLogExporter(private val context: Context, private val gateway: Sensor
     fun segment(name: String): File? = when {
         name == LOGCAT -> logcat
         SegmentedLog.isSegment(name) -> File(logs, name)
+        name.startsWith(RAW_PREFIX) && RawSessions.isSession(name.removePrefix(RAW_PREFIX)) -> File(raw, name.removePrefix(RAW_PREFIX))
         else -> null
     }?.takeIf { it.isFile }
 
@@ -76,5 +90,8 @@ class WatchLogExporter(private val context: Context, private val gateway: Sensor
     companion object {
         /** The process logcat's segment name (always the last one). */
         const val LOGCAT = "logcat.log.gz"
+
+        /** Manifest names of raw sensor sessions. */
+        const val RAW_PREFIX = "raw/"
     }
 }

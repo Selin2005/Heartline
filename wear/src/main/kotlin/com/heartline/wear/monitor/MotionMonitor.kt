@@ -8,6 +8,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import com.heartline.wear.diag.RawCapture
 
 /** Tracks recent steps so rhythm checks only use windows where the wearer is still. */
 fun interface MotionMonitor {
@@ -30,6 +31,7 @@ class StepMotionMonitor(context: Context, private val now: () -> Long = System::
     fun stop() = manager?.unregisterListener(this)
 
     override fun onSensorChanged(event: SensorEvent) {
+        RawCapture.android(event)
         lastStepMs = now()
     }
 

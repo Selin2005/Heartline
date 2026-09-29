@@ -12,6 +12,7 @@ import com.heartline.wear.sensor.GatewayState
 import com.heartline.wear.sensor.SensorException
 import com.heartline.wear.sensor.SensorProblem
 import com.heartline.wear.sensor.batchContact
+import com.heartline.wear.diag.RawCapture
 import com.samsung.android.service.health.tracking.HealthTracker
 import com.samsung.android.service.health.tracking.data.DataPoint
 import com.samsung.android.service.health.tracking.data.ValueKey
@@ -38,6 +39,7 @@ class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
             object : HealthTracker.TrackerEventListener {
                 override fun onDataReceived(points: List<DataPoint>) {
                     if (points.isEmpty()) return
+                    RawCapture.sdk(TrackerKind.ECG_ON_DEMAND.name, points)
                     // A point without a value is skipped: a substituted 0 mV would be a spike after filtering.
                     val values = points.mapNotNull { it.getValue(ValueKey.EcgSet.ECG_MV)?.takeIf { v -> v.isFinite() } }
                     if (values.size < points.size) missing += points.size - values.size

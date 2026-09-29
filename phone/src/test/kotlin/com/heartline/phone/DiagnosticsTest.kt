@@ -11,6 +11,9 @@ import com.heartline.phone.data.SettingsRepository
 import com.heartline.phone.diag.DiagnosticsRepository
 import com.heartline.phone.diag.PhoneLogExporter
 import com.heartline.phone.update.UpdateRepository
+import com.heartline.shared.bp.BpSessionLog
+import com.heartline.shared.bp.BpSessionRecorder
+import com.heartline.shared.diag.RawSessions
 import com.heartline.shared.diag.Redactor
 import com.heartline.shared.diag.RemoteLogs
 import com.heartline.shared.diag.SegmentedLog
@@ -54,8 +57,8 @@ class DiagnosticsTest {
 
         // The watch doesn't answer: its file says so.
         val watch = exporter.watchParts(work)
-        assertFalse(watch.reached)
-        assertTrue(watch.text().contains("The watch did not answer"))
+        assertFalse(watch.log.reached)
+        assertTrue(watch.log.text().contains("The watch did not answer"))
 
         HLog.configure(diagnosticLogs = false)
         HLog.flush()
@@ -98,10 +101,62 @@ class DiagnosticsTest {
         dir.deleteRecursively()
     }
 
+    private fun session(kind: String, id: String, startedAtMs: Long): BpSessionLog {
+        val r = BpSessionRecorder(id, kind, startedAtMs) { startedAtMs }
+        r.stream("PPG_ON_DEMAND", "PPG_GREEN", "PPG_IR").apply {
+            append(startedAtMs * 1_000_000, 1200f, 800f)
+            append(startedAtMs * 1_000_000 + 10_000_000, 1210f, Float.NaN)
+        }
+        return r.build()
+    }
+
+    @Test
+    fun theZipHasEverySessionAsCsvOnce() = runTest {
+        val root = File(context.cacheDir, "zip-test").apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        val t = 1_790_000_000_000
+        // On the watch side (moved to the phone): an ECG and the copy of blood-pressure session A.
+        val watchSessions = listOf(session("ecg", "ecg00001-x", t), session("bp", "aaaaaaaa-1111", t + 60_000)).map { log ->
+            File(root, RawSessions.fileName(log.header.startedAtMs, log.header.kind, log.header.id)).apply { writeBytes(log.encode()) }
+        }
+        // The phone's own BP sessions: A again (same id) and B, which only the phone has.
+        val bp = File(root, "bp").apply { mkdirs() }
+        File(bp, "aaaaaaaa-1111.hlbp").writeBytes(session("measure", "aaaaaaaa-1111", t + 60_000).encode())
+        File(bp, "bbbbbbbb-2222.hlbp").writeBytes(session("measure", "bbbbbbbb-2222", t + 120_000).encode())
+
+        val exporter = PhoneLogExporter(context, SettingsRepository(context), UpdateRepository(context, "1.0.0"), RemoteLogs(send = { false }), bpSessions = bp)
+        val bytes = ByteArrayOutputStream()
+        java.util.zip.ZipOutputStream(bytes).use { zip ->
+            exporter.writeAll(
+                zip,
+                PhoneLogExporter.LogParts("phone head\n", emptyList(), null),
+                PhoneLogExporter.WatchParts(PhoneLogExporter.LogParts("watch head\n", emptyList(), null), watchSessions),
+            )
+        }
+        val entries = linkedMapOf<String, String>()
+        java.util.zip.ZipInputStream(bytes.toByteArray().inputStream()).use { zip ->
+            generateSequence { zip.nextEntry }.forEach { entries[it.name] = zip.readBytes().decodeToString() }
+        }
+        assertTrue(entries.getValue("phone.log").startsWith("phone head"))
+        assertTrue(entries.getValue("watch.log").startsWith("watch head"))
+        val folders = entries.keys.filter { it.startsWith("sessions/") }.map { it.split('/')[1] }.distinct()
+        // ECG, BP session A once, and B from the phone.
+        assertEquals(3, folders.size)
+        assertEquals(1, folders.count { it.endsWith("-aaaaaaaa") })
+        assertTrue(folders.any { it.endsWith("-bbbbbbbb") && it.contains("-bp-") })
+        val csv = entries.getValue("sessions/${folders.first { it.contains("-ecg-") }}/PPG_ON_DEMAND.csv").trim().lines()
+        assertEquals("timestampNs,time,PPG_GREEN,PPG_IR", csv[0])
+        assertEquals(3, csv.size)
+        assertTrue(csv[2].endsWith(",1210,"))
+        assertTrue(entries.getValue("sessions/${folders.first()}/header.json").contains("\"startedAtMs\""))
+    }
+
     @Test
     fun betaOnByDefaultStableAskedAndSettingsFollow() = runTest {
         val settings = SettingsRepository(context)
-        val sent = mutableListOf<MonitorSettings>()
+        val sent = java.util.concurrent.CopyOnWriteArrayList<MonitorSettings>()
         val stable = DiagnosticsRepository(context, settings, UpdateRepository(context, "1.0.0"), "1.0.0", RemoteLogs(send = { true }), sendSettings = { sent += it })
         stable.current().let {
             assertFalse(it.enabled)
@@ -112,8 +167,14 @@ class DiagnosticsTest {
         assertFalse(settings.current().diagnosticLogs)
 
         stable.setChoice(true)
-        // DataStore writes on a real thread: wait (in real time) for the synced settings to follow.
-        withContext(Dispatchers.Default) { withTimeout(10_000) { settings.monitor.first { it.diagnosticLogs } } }
+        // DataStore writes on a real thread: wait (in real time) for the synced settings to follow,
+        // and for them to be sent to the watch (that comes a moment after the write).
+        withContext(Dispatchers.Default) {
+            withTimeout(10_000) {
+                settings.monitor.first { it.diagnosticLogs }
+                while (sent.none { it.diagnosticLogs }) kotlinx.coroutines.delay(10)
+            }
+        }
         assertTrue(sent.last().diagnosticLogs)
         assertFalse(stable.current().shouldAsk)
 

@@ -87,5 +87,8 @@ class RecordRepository(
 
     suspend fun all(): List<RecordEntity> = dao.all()
 
+    /** The stored waveform of [entity] as the watch sent it (unfiltered), or null. */
+    suspend fun wave(entity: RecordEntity): FloatArray? = entity.wavePath?.let { path -> withContext(Dispatchers.IO) { waves.read(path) } }
+
     private fun RecordEntity.decode() = StoredRecord(this, Protocol.json.decodeFromString<RecordSummary>(summaryJson))
 }

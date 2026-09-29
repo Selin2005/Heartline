@@ -59,6 +59,14 @@ CRITICAL = {
         "com.samsung.android.service.health.tracking.HealthTrackingService",
         "com.samsung.android.service.health.tracking.ConnectionListener",
         "com.samsung.android.service.health.tracking.data.HealthTrackerType",
+        # The raw sensor recorder finds every value by these sets' fields (RawCapture, SdkKeys).
+        "com.samsung.android.service.health.tracking.data.ValueKey$EcgSet",
+        "com.samsung.android.service.health.tracking.data.ValueKey$PpgSet",
+        "com.samsung.android.service.health.tracking.data.ValueKey$HeartRateSet",
+        "com.samsung.android.service.health.tracking.data.ValueKey$SpO2Set",
+        "com.samsung.android.service.health.tracking.data.ValueKey$BiaSet",
+        "com.samsung.android.service.health.tracking.data.ValueKey$SkinTemperatureSet",
+        "com.samsung.android.service.health.tracking.data.ValueKey$EdaSet",
         *DATA_LAYER,
     ],
 }

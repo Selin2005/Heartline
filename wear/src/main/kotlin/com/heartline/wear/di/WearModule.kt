@@ -6,6 +6,9 @@ package com.heartline.wear.di
 import com.heartline.datalayer.diag.HLog
 import kotlinx.coroutines.launch
 import com.heartline.wear.diag.WatchLogExporter
+import com.heartline.wear.diag.RawCapture
+import com.heartline.shared.diag.LogFiles
+import com.heartline.shared.diag.LogOffload
 import com.heartline.datalayer.DataLayerTransport
 import com.heartline.shared.sync.Protocol
 import com.heartline.shared.sync.SyncTransport
@@ -120,7 +123,10 @@ val wearModule = module {
                     val exporter = get<WatchLogExporter>()
                     val segment = request.segment
                     when {
-                        request.delete -> HLog.clear()
+                        request.delete -> {
+                            HLog.clear()
+                            RawCapture.clear()
+                        }
                         request.manifest -> engine.sendLogs(request.requestId, Protocol.json.encodeToString(exporter.manifest()).encodeToByteArray())
                         // A segment that's gone (trimmed since the manifest) goes out empty; the phone marks it missing.
                         segment != null -> engine.sendLogSegment(request.requestId, exporter.segment(segment)?.inputStream() ?: ByteArray(0).inputStream())
@@ -128,9 +134,20 @@ val wearModule = module {
                     }
                 }
             },
+            onArchiveAck = { get<LogOffload>().onAck(it) },
         )
     }
     single { WatchLogExporter(androidContext(), get(), get()) }
+    // Finished log segments and raw sessions go to the phone, oldest first, and are deleted once it confirms.
+    single {
+        LogOffload(
+            pending = {
+                (HLog.segmentFiles().map { LogFiles.LOG to it } + RawCapture.files().map { LogFiles.RAW to it })
+                    .sortedBy { it.second.lastModified() }
+            },
+            send = { type, file -> file.exists() && get<WatchSyncEngine>().sendArchive(type, file.name, file.inputStream()) },
+        )
+    }
     single { WatchLinkStore(androidContext()) }
     single { WatchCommandBus() }
     single { RemoteOpener(androidContext(), get()) }

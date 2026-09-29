@@ -21,6 +21,7 @@ class PhoneSyncService : WearableListenerService() {
     private val engine: PhoneSyncEngine by inject()
     private val transport: DataLayerTransport by inject()
     private val remoteLogs: RemoteLogs by inject()
+    private val inbox: WatchLogInbox by inject()
     // App-wide scope: a save must not be cancelled when this short-lived service is destroyed.
     private val scope: CoroutineScope by inject(APP_SCOPE)
 
@@ -38,6 +39,10 @@ class PhoneSyncService : WearableListenerService() {
                 // A segment of the watch's log: streamed into a file, not read into memory.
                 val requestId = channel.path.removePrefix(Protocol.LOGS_SEGMENT_PREFIX)
                 transport.readChannelStream(channel) { remoteLogs.onSegment(requestId, it) }
+            } else if (channel.path.startsWith(Protocol.LOGS_ARCHIVE_PREFIX)) {
+                // A finished log segment or raw session the watch moves here: into the archive, then acked.
+                val (type, name) = channel.path.removePrefix(Protocol.LOGS_ARCHIVE_PREFIX).split('/', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+                transport.readChannelStream(channel) { inbox.receive(type, name, it) }
             } else {
                 engine.handle(Envelope(channel.path, transport.readChannel(channel)))
             }

@@ -37,6 +37,15 @@ object Protocol {
 
     fun logSegmentPath(requestId: String) = LOGS_SEGMENT_PREFIX + requestId
 
+    /**
+     * Watch → phone, in the background: a finished log segment or raw sensor session, streamed on
+     * `<prefix><type>/<name>` and acknowledged with [LOGS_ARCHIVE_ACK] ([ArchiveAck]) once stored.
+     */
+    const val LOGS_ARCHIVE_PREFIX = "$ROOT/logs/archive/"
+    const val LOGS_ARCHIVE_ACK = "$ROOT/logs/archive-ack"
+
+    fun logArchivePath(type: String, name: String) = "$LOGS_ARCHIVE_PREFIX$type/$name"
+
     /** Capability name both apps advertise so each can find the other node. */
     const val CAPABILITY_PHONE = "heartline_phone"
     const val CAPABILITY_WATCH = "heartline_watch"

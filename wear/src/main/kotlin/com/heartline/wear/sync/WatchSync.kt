@@ -14,6 +14,7 @@ import com.google.android.gms.wearable.ChannelClient
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
 import com.heartline.datalayer.DataLayerTransport
+import com.heartline.shared.diag.LogOffload
 import com.heartline.shared.sync.Envelope
 import com.heartline.shared.sync.WatchSyncEngine
 import com.heartline.wear.data.WatchRecordStore
@@ -31,10 +32,13 @@ class SyncWorker(context: Context, params: WorkerParameters) :
     KoinComponent {
     private val engine: WatchSyncEngine by inject()
     private val store: WatchRecordStore by inject()
+    private val logs: LogOffload by inject()
 
     override suspend fun doWork(): Result {
         engine.flush()
-        return if (store.pending().isEmpty()) Result.success() else Result.retry()
+        // Log segments and raw sensor sessions that haven't reached the phone yet.
+        logs.run()
+        return if (store.pending().isEmpty() && !logs.stalled) Result.success() else Result.retry()
     }
 
     companion object {

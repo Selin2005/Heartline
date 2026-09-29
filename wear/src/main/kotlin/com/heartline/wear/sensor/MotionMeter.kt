@@ -9,6 +9,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import kotlin.math.sqrt
+import com.heartline.wear.diag.RawCapture
 
 /**
  * Arm movement during a measurement. Movement changes the PPG shape much more than blood
@@ -66,6 +67,7 @@ class AndroidMotionMeter(context: Context) : MotionMeter, SensorEventListener {
     override fun gravity(): List<Double>? = synchronized(this) { if (n < 20) null else axes.map { it / n } }
 
     override fun onSensorChanged(event: SensorEvent) {
+        RawCapture.android(event)
         val (x, y, z) = Triple(event.values[0].toDouble(), event.values[1].toDouble(), event.values[2].toDouble())
         val magnitude = sqrt(x * x + y * y + z * z)
         synchronized(this) {

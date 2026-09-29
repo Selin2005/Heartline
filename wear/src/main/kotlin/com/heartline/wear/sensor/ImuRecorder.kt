@@ -11,6 +11,7 @@ import android.hardware.SensorManager
 import android.os.SystemClock
 import com.heartline.shared.bp.BpSessionRecorder
 import com.heartline.shared.bp.ImuStreams
+import com.heartline.wear.diag.RawCapture
 import kotlin.math.sqrt
 
 /**
@@ -78,6 +79,7 @@ class AndroidImuRecorder(context: Context) : ImuRecorder, SensorEventListener {
     )
 
     override fun onSensorChanged(event: SensorEvent) {
+        RawCapture.android(event)
         val t = event.timestamp + offsetNs
         val v = event.values
         synchronized(this) {

@@ -18,6 +18,7 @@ import com.heartline.wear.sensor.QuickSource
 import com.heartline.wear.sensor.SensorException
 import com.heartline.wear.sensor.SensorProblem
 import com.heartline.wear.sensor.SyncScheduler
+import com.heartline.wear.diag.RawCapture
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -113,7 +114,19 @@ class QuickMeasureViewModel(
     private fun measure(profile: UserProfile?) {
         val startedAt = now()
         mutable.value = QuickState.Measuring(0f, source.seconds, null)
+        val raw = RawCapture.begin(source.kind.name.lowercase(), mapOf("metric" to source.metric.name))
         job = viewModelScope.launch {
+            try {
+                collect(profile, startedAt)
+            } finally {
+                // Every value of every sensor in this measurement, whatever the outcome.
+                RawCapture.end(raw, notes = mapOf("result" to mutable.value.toString().take(4000)))
+            }
+        }
+    }
+
+    private suspend fun collect(profile: UserProfile?, startedAt: Long) {
+        run {
             source.measure(profile)
                 .catch { e -> emit(QuickEvent.Failed((e as? SensorException)?.problem ?: SensorProblem.NOT_SUPPORTED)) }
                 .collect { event ->

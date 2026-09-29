@@ -43,6 +43,7 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.time.Instant
 import java.util.concurrent.TimeUnit
+import com.heartline.wear.diag.RawCapture
 
 /**
  * Background heart monitoring without a permanent notification:
@@ -141,6 +142,7 @@ class PassiveHeartRateService :
             HrSample(tsMs = point.getTimeInstant(boot).toEpochMilli(), bpm = bpm, ibiMs = emptyList(), onBody = true)
         }
         HLog.i("Heartline/Monitor", "passive HR: ${samples.size} samples")
+        RawCapture.values("healthServices.HEART_RATE_BPM", listOf("bpm"), samples.map { it.tsMs to floatArrayOf(it.bpm.toFloat()) })
         if (samples.isNotEmpty()) runBlocking { heart.onPassive(samples) }
     }
 }
@@ -165,6 +167,8 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
         val motion = StepMotionMonitor(applicationContext).also { it.start() }
         heart.irn.resetWindow()
         var count = 0
+        // A background session of its own, unless a measurement is running (then it records there).
+        val raw = RawCapture.begin("irn_window", background = true)
         try {
             withTimeoutOrNull(WINDOW_MS) {
                 source.stream()
@@ -176,6 +180,7 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
             }
         } finally {
             motion.stop()
+            RawCapture.end(raw, mapOf("samples" to count.toDouble()))
         }
         HLog.i(TAG, "IRN window done: $count samples")
         return Result.success()

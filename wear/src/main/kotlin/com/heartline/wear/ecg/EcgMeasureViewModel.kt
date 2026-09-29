@@ -23,6 +23,7 @@ import com.heartline.wear.sensor.EcgSource
 import com.heartline.wear.sensor.SensorException
 import com.heartline.wear.sensor.SensorProblem
 import com.heartline.wear.sensor.SyncScheduler
+import com.heartline.wear.diag.RawCapture
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -88,15 +89,28 @@ class EcgMeasureViewModel(
         val live = LiveStrip(fs)
         val rate = RateMeter()
         val startedAt = now()
+        val paired = PairedPpg(fs * recorder.targetSeconds)
+        HLog.i(REC_TAG, "start: phase=${recorder.phase} target=${recorder.targetSeconds}s fs=$fs")
+        mutable.value = EcgMeasureState.Measuring(0f, recorder.secondsLeft, FloatArray(0), leadOff = true, waitingForTouch = true)
+        val raw = RawCapture.begin("ecg", mapOf("fs" to "$fs", "targetSeconds" to "${recorder.targetSeconds}"))
+        job = viewModelScope.launch {
+            try {
+                measure(recorder, live, rate, paired, startedAt)
+            } finally {
+                // Every sample of every sensor in this ECG, whatever the outcome (cancelled too).
+                RawCapture.end(raw, notes = mapOf("result" to mutable.value.toString().take(4000)))
+            }
+        }
+    }
+
+    private suspend fun measure(recorder: EcgRecorder, live: LiveStrip, rate: RateMeter, paired: PairedPpg, startedAt: Long) {
+        val fs = source.sampleRateHz
         var lastUi = 0L
         var lastBpmAt = 0L
         var bpm: Int? = null
-        val paired = PairedPpg(fs * recorder.targetSeconds)
         var lastPhase = recorder.phase
         var lastCheckLog = 0L
-        HLog.i(REC_TAG, "start: phase=${recorder.phase} target=${recorder.targetSeconds}s fs=$fs")
-        mutable.value = EcgMeasureState.Measuring(0f, recorder.secondsLeft, FloatArray(0), leadOff = true, waitingForTouch = true)
-        job = viewModelScope.launch {
+        run {
             var failure: SensorProblem? = null
             source.stream()
                 .catch { e -> failure = (e as? SensorException)?.problem ?: SensorProblem.NOT_SUPPORTED }
@@ -133,8 +147,9 @@ class EcgMeasureViewModel(
                 }
             failure?.let {
                 HLog.w(TAG, "ECG failed: $it")
+                RawCapture.event("failed", it.name)
                 mutable.value = EcgMeasureState.Failed(it)
-                return@launch
+                return
             }
             mutable.value = EcgMeasureState.Analyzing
             mutable.value = finish(recorder, startedAt, rate.hz(), paired)

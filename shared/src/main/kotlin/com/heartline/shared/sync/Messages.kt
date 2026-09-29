@@ -77,6 +77,13 @@ data class Ack(val id: String, val ok: Boolean)
 @Serializable
 data class LogRequest(val requestId: String, val delete: Boolean = false, val manifest: Boolean = false, val segment: String? = null)
 
+/**
+ * Phone → watch: file [name] of [type] ("log" segment or "raw" session) arrived whole, [size]
+ * bytes, and is kept on the phone; the watch may delete its copy.
+ */
+@Serializable
+data class ArchiveAck(val type: String, val name: String, val size: Long)
+
 /** One file of the watch's log: its name and size in bytes (gzip). */
 @Serializable
 data class LogSegment(val name: String, val size: Long)

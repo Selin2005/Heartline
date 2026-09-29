@@ -13,6 +13,9 @@ import com.heartline.phone.data.SettingsRepository
 import com.heartline.phone.update.UpdateRepository
 import com.heartline.shared.diag.DiagnosticsPolicy
 import com.heartline.shared.diag.RemoteLogs
+import com.heartline.shared.diag.WatchLogArchive
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.heartline.shared.hr.MonitorSettings
 import com.heartline.shared.update.AppVersion
 import kotlinx.coroutines.CoroutineScope
@@ -38,6 +41,8 @@ class DiagnosticsRepository(
     installedVersion: String,
     private val remote: RemoteLogs,
     private val sendSettings: suspend (MonitorSettings) -> Unit,
+    /** The watch's logs kept here; erased with the rest. */
+    private val archive: WatchLogArchive? = null,
 ) {
     data class State(val choice: Boolean?, val betaUser: Boolean, val folder: String?) {
         val enabled: Boolean get() = DiagnosticsPolicy.enabled(choice, betaUser)
@@ -65,7 +70,11 @@ class DiagnosticsRepository(
                 sendSettings(settings.update { it.copy(diagnosticLogs = enabled) })
             }
         }.launchIn(scope)
-        settings.monitor.onEach { HLog.configure(it.diagnosticLogs) }.launchIn(scope)
+        settings.monitor.onEach {
+            HLog.configure(it.diagnosticLogs)
+            // Turning logs off frees the space the watch's logs take here too.
+            if (!it.diagnosticLogs) withContext(Dispatchers.IO) { archive?.clear() }
+        }.launchIn(scope)
     }
 
     /** The user's answer (Settings switch or the one-time question). */
@@ -80,6 +89,7 @@ class DiagnosticsRepository(
     /** Erases the kept logs on both devices (logging continues if it's on). */
     suspend fun deleteLogs() {
         HLog.clear()
+        withContext(Dispatchers.IO) { archive?.clear() }
         remote.delete()
     }
 }

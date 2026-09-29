@@ -6,6 +6,7 @@ package com.heartline.wear.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.heartline.wear.sensor.HrSource
+import com.heartline.wear.diag.RawCapture
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -16,6 +17,13 @@ data class HeartRateState(val bpm: Int? = null, val recent: List<Int> = emptyLis
 
 /** Live heart rate while the screen is open; the tracker stops when nobody is subscribed. */
 class HeartRateViewModel(source: HrSource) : ViewModel() {
+    /** Every heart-rate value (and IBI) while the screen is open. */
+    private val raw = RawCapture.begin("heart_rate")
+
+    override fun onCleared() {
+        RawCapture.end(raw, notes = mapOf("last" to state.value.toString()))
+    }
+
     val state: StateFlow<HeartRateState> = source.stream()
         .catch { }
         .runningFold(HeartRateState()) { acc, sample ->

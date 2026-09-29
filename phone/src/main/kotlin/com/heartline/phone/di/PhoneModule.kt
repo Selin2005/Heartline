@@ -10,6 +10,8 @@ import com.heartline.phone.diag.DiagnosticsRepository
 import com.heartline.phone.diag.DiagnosticsViewModel
 import com.heartline.phone.diag.PhoneLogExporter
 import com.heartline.shared.diag.RemoteLogs
+import com.heartline.shared.diag.WatchLogArchive
+import com.heartline.phone.sync.WatchLogInbox
 import com.heartline.phone.update.UpdateRepository
 import com.heartline.phone.update.Updater
 import com.heartline.phone.update.UpdatesViewModel
@@ -63,6 +65,12 @@ import org.koin.dsl.module
 
 val APP_SCOPE = named("appScope")
 
+/** The phone keeps up to this much of the watch's moved log segments and raw sessions. */
+private const val WATCH_ARCHIVE_BYTES = 300L * 1024 * 1024
+
+/** Raw blood-pressure session logs (filesDir). */
+private const val BP_SESSIONS = "bp-sessions"
+
 val phoneModule = module {
     single(APP_SCOPE) { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
     single { HeartlineDatabase.create(androidContext()) }
@@ -79,6 +87,9 @@ val phoneModule = module {
     single { ReleaseSource("Heartline/${BuildConfig.VERSION_NAME} (Android)") }
     single { Updater(androidContext(), get(), get(), BuildConfig.VERSION_NAME, enabled = BuildConfig.UPDATER) }
     single { RemoteLogs(send = { get<PhoneSyncEngine>().requestLogs(it) }) }
+    // The watch's finished log segments and raw sensor sessions, moved here as they're done.
+    single { WatchLogArchive(java.io.File(androidContext().filesDir, "watch-logs"), WATCH_ARCHIVE_BYTES) }
+    single { WatchLogInbox(get()) { ack -> get<PhoneSyncEngine>().ackArchive(ack) } }
     single {
         DiagnosticsRepository(
             androidContext(),
@@ -87,9 +98,20 @@ val phoneModule = module {
             BuildConfig.VERSION_NAME,
             get(),
             sendSettings = { settings -> get<PhoneSyncEngine>().sendSettings(settings) },
+            archive = get(),
         )
     }
-    single { PhoneLogExporter(androidContext(), get(), get(), get()) }
+    single {
+        PhoneLogExporter(
+            androidContext(),
+            get(),
+            get(),
+            get(),
+            archive = get(),
+            records = get(),
+            bpSessions = java.io.File(androidContext().filesDir, BP_SESSIONS),
+        )
+    }
     single { get<HeartlineDatabase>().bp() }
     single {
         // PaPaGei is loaded on first use (only once there are enough cuff checks to train on).
@@ -99,7 +121,7 @@ val phoneModule = module {
             get(),
             onSafety = { get<PhoneNotifier>().bpSafety(it) },
             embedders = { listOfNotNull(MorphologyEmbedder, papagei) },
-            sessionsDir = java.io.File(androidContext().filesDir, "bp-sessions"),
+            sessionsDir = java.io.File(androidContext().filesDir, BP_SESSIONS),
         ) { get() }
     }
     single { ProfileRepository(androidContext()) { get() } }
@@ -141,6 +163,7 @@ val phoneModule = module {
             onSessionLog = { id, bytes -> get<BpRepository>().saveSession(id, bytes) },
             onLogs = { requestId, text -> get<RemoteLogs>().onLogs(requestId, text) },
             onLogSegment = { requestId, input -> get<RemoteLogs>().onSegment(requestId, input) },
+            onArchive = { type, name, input -> get<WatchLogInbox>().receive(type, name, input) },
         )
     }
     single { PhoneStatusPublisher(get(), get(), get(), { get() }) }
