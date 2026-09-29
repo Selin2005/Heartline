@@ -46,15 +46,27 @@ explored without a watch. Remove it with Settings → Delete all data.
 
 ## 3. Collect logs
 **From the app (everyone):** Settings → Help & diagnostics → **Export logs**. Pick a folder and
-the phone saves one file, `heartline-logs-….zip`, with `phone.log` and `watch.log` inside. Attach
-it to your bug report. For problems that happened earlier, *Keep diagnostic logs* must be on (it
-is by default in beta versions).
+the phone saves one file, `heartline-logs-….zip`. Attach it to your bug report. For problems that
+happened earlier, *Keep diagnostic logs* must be on (it is by default in beta versions).
 
-The logs include raw sensor values and are kept compressed, in 1 MB segments: up to 150 MB on the
-phone and 50 MB on the watch (weeks of use), oldest first out. The phone fetches the watch's log
-one segment at a time over the connection and shows its progress; a segment that stalls is asked
-for again, and one that still doesn't arrive is marked in `watch.log`. A long log can take a few
-minutes: keep the watch near the phone.
+| In the zip | Contents |
+|---|---|
+| `phone.log`, `watch.log` | The whole text log of each app, oldest first, and its process logcat |
+| `sessions/<time>-<kind>-<id>/` | Every sensor value of one measurement (`ecg`, `bp`, `spo2`, `skin_temp`, `bia`, `stress`, `heart_rate`, …), a background window (`irn_window`) or background values (`other`, every 10 minutes): `header.json` (device, versions, events, results, every intermediate value) and one CSV per sensor stream, one row per sample with its timestamp |
+| `records/` | `records.csv` (every saved measurement and its result) and each one's stored wave |
+
+In a session, `ECG_ON_DEMAND.csv`, `PPG_ON_DEMAND.csv`, `HEART_RATE_CONTINUOUS.csv`,
+`SPO2_ON_DEMAND.csv`, … hold every value the Samsung tracker gave (all its keys: values, statuses,
+LEAD_OFF, sequence, …); `HEART_RATE_CONTINUOUS.IBI_LIST.csv` the beat-to-beat intervals;
+`android.*.csv` the Android sensors (accelerometer, gyroscope, rotation); `healthServices.*.csv`
+the background heart rate. Blood-pressure sessions come from the BP flow's own complete log.
+
+**Storage:** the text log is kept compressed in 1 MB segments (20 MB on the watch, 150 MB on the
+phone) and the watch's raw sessions take up to 30 MB. The watch moves every finished segment and
+session to the phone in the background and deletes it once the phone confirms it has it, so the
+watch keeps room; the phone keeps up to 300 MB of them. When the phone is away the files wait on
+the watch. *Export logs* then only fetches what's still on the watch, one piece at a time with
+progress; a piece that stalls is asked for again, and one that still doesn't arrive is marked.
 
 **With adb (developers):**
 ```bash

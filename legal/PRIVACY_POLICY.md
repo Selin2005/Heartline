@@ -46,10 +46,12 @@ removed before anything is written.
 - It is **on by default for beta versions** and **off for stable versions** until you agree when
   the app asks. Change it any time in Settings → Help & diagnostics.
 - It is kept compressed and uses at most 150 MB on the phone and 50 MB on the watch (less when
-  the device is low on space); older entries are removed first.
-- Logs are **never sent automatically**. *Export logs* saves one zip file with the phone's and
-  the watch's logs into a folder you choose; you decide whether to send it to us, for example
-  with a bug report.
+  the device is low on space); older entries are removed first. The watch moves its finished
+  parts to your phone over the watch connection, where they take up to 300 MB more; they never
+  leave your two devices this way.
+- Logs are **never sent automatically** to anyone. *Export logs* saves one zip file with both
+  devices' logs, the raw sensor values of each measurement and your saved measurements into a
+  folder you choose; you decide whether to send it to us, for example with a bug report.
 - Turning diagnostic logs off, or *Delete logs*, erases them on both devices.
 
 ## 4. Network access
