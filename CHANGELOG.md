@@ -3,6 +3,15 @@
 All notable changes to Heartline. Each release's notes are written by the Build workflow when the
 release is made, and the app shows them under *What's new* after an update.
 
+## 0.0.2.115-beta.2 — 2026-09-30
+
+### Improved
+- Blood pressure estimates now follow changes away from your last calibration and show a more honest ± range.
+- Updated documentation, terms, and policy.
+
+### Fixed
+- Measurements stopped early or ended by an error no longer lose their data — everything recorded up to that point is saved and sent to your phone, with cuff readings kept alongside their sessions.
+
 ## 0.0.2.115-beta.1 — 2026-09-29
 
 ### Improved
