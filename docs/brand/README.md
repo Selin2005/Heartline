@@ -7,6 +7,7 @@
 | [heartline-icon-rounded.png](heartline-icon-rounded.png) | 512 × 512 | Icon with rounded corners and a transparent background, as on a phone |
 | [heartline-poster.png](heartline-poster.png) | 1280 × 640 | README header and GitHub social preview (Settings → General → Social preview) |
 | [play-feature-graphic.png](play-feature-graphic.png) | 1024 × 500 | Google Play feature graphic |
+| [ecg-on-watch.gif](ecg-on-watch.gif) | 454 × 454 | ECG recording on the watch, for README and posts (`python3 tools/screenshots/ecg_gif.py`) |
 
 <img src="heartline-icon-rounded.png" width="96" alt="Heartline icon">
 

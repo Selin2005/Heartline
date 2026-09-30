@@ -38,7 +38,7 @@ commit subjects (the run shows a warning with the reason).
 
 ### 3. Telegram announcements (optional)
 Releases are announced in the *Announcements & Builds* topic of the
-[community group](https://t.me/HeartlineCamiunity) when the Build form's **Telegram** box is ticked
+[community group](https://t.me/HeartlineCommunity) when the Build form's **Telegram** box is ticked
 (the default), for any channel, dev builds too: title, a short summary, the release notes and
 buttons to the download and the install guide.
 
@@ -46,12 +46,12 @@ buttons to the download and the install guide.
 2. Add the bot to the group as an **admin** that can post messages (and manage topics, if the
    group asks for it).
 3. Find the topic's ID: open the *Announcements & Builds* topic, copy a message link
-   (`https://t.me/HeartlineCamiunity/<topic id>/<message id>`); the first number is the topic ID.
+   (`https://t.me/HeartlineCommunity/<topic id>/<message id>`); the first number is the topic ID.
 4. In GitHub → Settings → Secrets and variables → Actions:
    - secret `TELEGRAM_BOT_TOKEN`: the bot token;
    - variable `TELEGRAM_THREAD_ID`: the topic ID, only if it isn't `5` (*Announcements & Builds*,
      the default). Set it under **Variables**, not Secrets;
-   - variable `TELEGRAM_CHAT_ID`: only if the group isn't `@HeartlineCamiunity` (a private group
+   - variable `TELEGRAM_CHAT_ID`: only if the group isn't `@HeartlineCommunity` (a private group
      uses its numeric ID, `-100…`).
 
 The message is sent only after the whole build succeeded and the release is published. Network

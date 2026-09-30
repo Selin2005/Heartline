@@ -94,8 +94,8 @@ jobs:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           OPENCODE_MODEL: ${{ vars.OPENCODE_MODEL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID || '@HeartlineCamiunity' }}
-          # Topic 'Announcements & Builds' (t.me/HeartlineCamiunity/5); a variable or secret overrides it.
+          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID || '@HeartlineCommunity' }}
+          # Topic 'Announcements & Builds' (t.me/HeartlineCommunity/5); a variable or secret overrides it.
           TELEGRAM_THREAD_ID: ${{ vars.TELEGRAM_THREAD_ID || secrets.TELEGRAM_THREAD_ID || '5' }}
         run: |
           python3 tools/release/release.py telegram \

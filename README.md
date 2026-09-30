@@ -10,10 +10,11 @@
 [![Latest beta](https://img.shields.io/github/v/release/selin2005/heartline?include_prereleases&label=beta)](https://github.com/selin2005/heartline/releases)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 [![Wear OS](https://img.shields.io/badge/Wear%20OS-Galaxy%20Watch4%2B-4285F4)](#requirements)
-[![Telegram community](https://img.shields.io/badge/Telegram-community-26A5E4?logo=telegram&logoColor=white)](https://t.me/HeartlineCamiunity)
+[![Telegram community](https://img.shields.io/badge/Telegram-community-26A5E4?logo=telegram&logoColor=white)](https://t.me/HeartlineCommunity)
 
 <img src="docs/screenshots/phone/home/home_light.png" width="200" alt="Phone home screen">
 <img src="docs/screenshots/phone/ecg/ecg_detail_sinus_dark.png" width="200" alt="ECG recording on the phone">
+<img src="docs/brand/ecg-on-watch.gif" width="180" alt="Recording an ECG on the watch">
 <img src="docs/screenshots/wear/tiles/heart_large.png" width="180" alt="Heart rate card on the watch">
 
 </div>
@@ -23,6 +24,10 @@
 > or prevent any condition, and it cannot detect a heart attack, stroke or other emergency.
 > Blood pressure values are estimates. If you think you are having a medical emergency, call your
 > local emergency number. See the [medical disclaimer](legal/MEDICAL_DISCLAIMER.md).
+
+Heartline is an independent open-source project, **not affiliated with, endorsed by or sponsored by
+Samsung**. Samsung, Galaxy, Galaxy Watch, Samsung Health and Samsung Health Monitor are trademarks
+of Samsung Electronics Co., Ltd.; Wear OS is a trademark of Google LLC.
 
 ## Features
 
@@ -109,7 +114,7 @@ and [blood pressure](docs/algorithms/BP_ALGORITHM.md) algorithms, the
 [releasing](docs/RELEASING.md).
 
 ## Community
-Questions, tips, test builds and news: join the **[Heartline community on Telegram](https://t.me/HeartlineCamiunity)**.
+Questions, tips, test builds and news: join the **[Heartline community on Telegram](https://t.me/HeartlineCommunity)**.
 Bugs and device reports go to [GitHub Issues](https://github.com/selin2005/heartline/issues/new/choose),
 so they can be tracked. Heartline doesn't give medical advice there either: for health questions,
 talk to a doctor.
