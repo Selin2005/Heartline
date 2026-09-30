@@ -98,7 +98,8 @@ The workflow:
 1. works out the version and the previous release of that channel;
 2. runs lint, license header check and all tests;
 3. writes the release notes with GLM (OpenCode Go) from the commits since the newest version already
-   in `CHANGELOG.md` (from the first commit while it lists none), falling back to the commit
+   in `CHANGELOG.md` (for a stable release, the newest stable one, so its notes sum up all its
+   betas; from the first commit while there's none), falling back to the commit
    list, and puts them in `CHANGELOG.md` **before** building, so the app shows them in *What's
    new*. Commits that only change agent setup, workflows, tools or tests are left out, and
    documentation and policy changes become one line;
@@ -140,8 +141,8 @@ shows the text that was bundled into the APK).
    channel get it in the app (Settings → Updates); the release text and the Telegram post say so.
 2. Fix what they find and release more betas (`v1.3.0-beta.2`, …).
 3. When a beta is good, run **Promote beta to stable** with its tag (`v1.3.0-beta.2`), published right away or as a draft. It rebuilds
-   that exact commit as `v1.3.0` with notes covering everything since the newest version in
-   `CHANGELOG.md`.
+   that exact commit as `v1.3.0` with notes covering everything since the previous stable release
+   in `CHANGELOG.md` (all the betas together; the whole history before the first stable release).
 
 Promote accepts three- and four-part beta tags (`v1.3.0-beta.2`, `v0.0.2.106-beta.1`).
 

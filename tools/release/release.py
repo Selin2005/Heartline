@@ -13,7 +13,8 @@ Release helpers for the Build workflow.
 
   release.py notes --version 1.2.0-beta.3 --out notes.md --changelog CHANGELOG.md [--previous TAG]
       Writes user-facing release notes. With --changelog they cover the commits since the newest
-      version already in CHANGELOG.md (its tag), or the whole history when it has none yet, and
+      version already in CHANGELOG.md (its tag; for a stable release the newest stable one, so it
+      sums up all its betas), or the whole history when it has none yet, and
       are added to it; --previous is only used without --changelog, or when that version's tag
       is missing. With OPENCODE_API_KEY it asks OpenCode Go (OPENCODE_MODEL, default
       glm-5.3-flash); otherwise, or if that fails, it lists the commit subjects.
@@ -331,11 +332,20 @@ def add_to_changelog(path: str, version: str, notes: str) -> None:
 
 
 def changelog_base(path: str, version: str):
-    """Tag of the newest version in CHANGELOG.md (other than [version]) that has one, "" if none."""
+    """
+    Tag of the newest version in CHANGELOG.md (other than [version]) that has one, "" if none.
+    For a stable [version] only stable versions count: its notes cover every beta since the last
+    stable release (a promoted beta is the same commit, so "since the last beta" would say nothing).
+    """
     if not os.path.exists(path):
         return ""
+    current = parse(version)
+    stable_only = current is not None and channel_of(current) == "stable"
     text = open(path, encoding="utf-8").read()
     for listed in re.findall(r"^## (\S+)", text, flags=re.M):
+        v = parse(listed)
+        if stable_only and (v is None or channel_of(v) != "stable"):
+            continue
         if listed != version and git("tag", "--list", f"v{listed}"):
             return f"v{listed}"
         if listed != version:
