@@ -37,9 +37,10 @@ OpenCode console). The repository variable `OPENCODE_MODEL` picks another model 
 commit subjects (the run shows a warning with the reason).
 
 ### 3. Telegram announcements (optional)
-Stable and beta releases are announced in the *Announcements & Builds* topic of the
-[community group](https://t.me/HeartlineCamiunity): title, a short summary, the release notes and
-buttons to the download and the install guide. Dev builds aren't announced.
+Releases are announced in the *Announcements & Builds* topic of the
+[community group](https://t.me/HeartlineCamiunity) when the Build form's **Telegram** box is ticked
+(the default), for any channel, dev builds too: title, a short summary, the release notes and
+buttons to the download and the install guide.
 
 1. In Telegram, open [@BotFather](https://t.me/BotFather), send `/newbot` and copy the token.
 2. Add the bot to the group as an **admin** that can post messages (and manage topics, if the
@@ -72,7 +73,8 @@ GitHub → Actions → **Build** → Run workflow:
 | Branch | The branch to build (default `main`); a tag or commit SHA works too. Build stable releases from `main`; the workflow warns otherwise. |
 | Version | `X.Y.Z`, without suffix |
 | Channel | **stable**: `vX.Y.Z` (or `vX.Y.Z.W`), the latest release. **beta**: `…-beta.N` (N counts up by itself), a pre-release. **dev**: `…-dev.<run>`, the newest code for early testers. |
-| Release | **publish**: released right away and announced on Telegram. **draft**: saved as a draft release (APKs, notes and checksums attached, not visible to the app or users); publishing it later on GitHub announces it. **off**: the APKs are only kept as run artifacts |
+| Release | **publish**: released right away. **draft**: saved as a draft release (APKs, notes and checksums attached, not visible to the app or users), published later on GitHub. **off**: the APKs are only kept as run artifacts |
+| Telegram | Ticked (the default): the release is announced in the Telegram topic, for any channel, dev builds too; for a draft, when it's published. Unticked: no post. Promote has the same box. |
 | Run lint and tests | Leave on for anything users will get |
 
 Who is offered what in the app depends on the user's update channel (Settings → Updates):
@@ -105,7 +107,8 @@ The workflow:
 5. checks the APKs (`tools/ci/check-apks.py`, see below) and stops if anything is wrong;
 6. publishes the GitHub release with the notes, APKs and checksums (or saves it as a draft);
 7. commits the new `CHANGELOG.md` section to the default branch;
-8. for stable and beta, announces the release on Telegram (job `announce`).
+8. with the Telegram box ticked, announces the release on Telegram (job `announce`), dev builds
+   too. Dev builds never go into `CHANGELOG.md`.
 
 Steps 7 and 8 wait for a draft to be published.
 
@@ -114,7 +117,8 @@ With **Release: draft** the run saves the release as a draft and stops there: no
 in `CHANGELOG.md`, no Telegram post, and the app doesn't see it. Check it (and edit the notes if
 you like) under GitHub → Releases, then **Publish release**. That starts the **Release
 published** workflow, which adds the release's notes (as published, edits included) to
-`CHANGELOG.md` and announces stable and beta releases on Telegram. The APKs keep the notes from
+`CHANGELOG.md` (stable and beta only) and announces it on Telegram if the Build form's Telegram box
+was ticked. The APKs keep the notes from
 build time for *What's new*. A draft's version counts as taken: the next beta gets the next
 number. Delete a draft you don't want. **Release published** can also be run by hand with a tag
 to announce a published release again.

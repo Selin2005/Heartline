@@ -16,6 +16,11 @@ on:
         default: publish
         type: choice
         options: [publish, draft]
+      telegram:
+        description: "Announce the stable release in the Telegram group (for a draft, when it's published)"
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -46,3 +51,4 @@ jobs:
       ref: ${{ inputs.beta }}
       run_tests: true
       release: ${{ inputs.release }}
+      telegram: ${{ inputs.telegram }}

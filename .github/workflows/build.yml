@@ -30,11 +30,16 @@ on:
         type: choice
         options: [beta, stable, dev]
       release:
-        description: "Release: publish = released now and announced on Telegram · draft = saved as a draft; publishing it on GitHub later announces it · off = APKs only as run artifacts"
+        description: "Release: publish = released now · draft = saved as a draft, published later on GitHub · off = APKs only as run artifacts"
         required: false
         default: publish
         type: choice
         options: [publish, draft, "off"]
+      telegram:
+        description: "Announce the release in the Telegram group (any channel, dev too; for a draft, when it's published)"
+        required: false
+        default: true
+        type: boolean
       run_tests:
         description: "Run lint and tests before building"
         required: false
@@ -53,6 +58,10 @@ on:
         required: false
         default: publish
         type: string
+      telegram:
+        required: false
+        default: true
+        type: boolean
       run_tests:
         required: false
         default: true
@@ -309,6 +318,8 @@ jobs:
             echo "SHA-256 checksums: \`SHA256SUMS\`."
             # Lets a re-run of this workflow find its release (job 'check').
             echo "<!-- heartline-run: ${{ github.run_id }} -->"
+            # Whether publishing this draft later announces it (the Release published workflow).
+            echo "<!-- heartline-telegram: ${{ inputs.telegram && 'yes' || 'no' }} -->"
           } > "$RUNNER_TEMP/body.md"
 
       # A draft keeps no tag until it's published (on GitHub → Releases); publishing it runs the
@@ -364,14 +375,15 @@ jobs:
             **/build/paparazzi/failures/
           if-no-files-found: ignore
 
-  # Announces stable and beta releases in the community's Telegram topic (Announcements & Builds)
-  # after a successful build, or again when a run whose release is already published is re-run.
+  # Announces the release in the community's Telegram topic (Announcements & Builds) when the form's
+  # Telegram box is ticked (any channel, dev too), after a successful build, or again when a run
+  # whose release is already published is re-run.
   # The notes come from the published release, the summary is written anew. Network errors are
   # retried; a message that still can't be sent turns the run red (the release stays published).
   announce:
     needs: [check, build]
     if: >-
-      always() && inputs.release == 'publish' && inputs.channel != 'dev' && needs.check.outputs.draft != 'true' &&
+      always() && inputs.telegram && inputs.release == 'publish' && needs.check.outputs.draft != 'true' &&
       (needs.build.result == 'success' || (needs.build.result == 'skipped' && needs.check.outputs.tag != ''))
     runs-on: ubuntu-latest
     timeout-minutes: 10
