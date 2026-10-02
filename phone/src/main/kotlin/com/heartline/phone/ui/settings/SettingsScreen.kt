@@ -36,6 +36,8 @@ import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material3.OutlinedTextField
 import com.heartline.phone.data.SettingsRepository
 import androidx.compose.material.icons.rounded.MonitorHeart
+import androidx.compose.material.icons.rounded.Thermostat
+import androidx.compose.material.icons.rounded.WaterDrop
 import androidx.compose.material.icons.automirrored.rounded.ShowChart
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Vibration
@@ -87,6 +89,7 @@ import com.heartline.phone.ui.components.gutter
 import com.heartline.phone.ui.theme.HeartlineTheme
 import com.heartline.shared.hr.AlertSensitivity
 import com.heartline.shared.hr.HeartLimits
+import com.heartline.shared.vitals.VitalsLimits
 import com.heartline.shared.hr.MonitorSettings
 
 /** Everything the settings screen can change; each maps to one field of [MonitorSettings]. */
@@ -97,6 +100,11 @@ sealed interface SettingChange {
 
     /** Background heart-rate recording, independent of monitoring (which needs it). */
     data class AllDayHeartRate(val on: Boolean) : SettingChange
+
+    /** The parts of health monitoring, under the master switch. */
+    data class HeartPart(val on: Boolean) : SettingChange
+    data class Spo2Part(val on: Boolean) : SettingChange
+    data class TempPart(val on: Boolean) : SettingChange
     data class CalibrationReminder(val on: Boolean) : SettingChange
     data class DailyReminder(val on: Boolean) : SettingChange
     data class DailyReminderTime(val minuteOfDay: Int) : SettingChange
@@ -114,6 +122,9 @@ sealed interface SettingChange {
         is HeartMonitoring -> s.withMonitoring(on)
         is Sensitivity -> s.copy(alertSensitivity = level)
         is AllDayHeartRate -> s.withAllDayHeartRate(on)
+        is HeartPart -> s.withHeartAlerts(on)
+        is Spo2Part -> s.copy(spo2Monitoring = on)
+        is TempPart -> s.copy(skinTempMonitoring = on)
         is CalibrationReminder -> s.copy(calibrationReminder = on)
         is DailyReminder -> s.copy(dailyReminder = on)
         is DailyReminderTime -> s.copy(dailyReminderMinute = minuteOfDay)
@@ -169,10 +180,13 @@ fun SettingsScreen(
     initialOffStep: Int = 0,
     /** The confirmation is for turning all-day heart rate off (which stops monitoring too). */
     initialOffAllDay: Boolean = false,
+    /** Blood-oxygen and temperature normals and limits from the watch (null until sent). */
+    vitalsLimits: VitalsLimits? = null,
 ) {
     var editingPrompt by remember { mutableStateOf(false) }
     var offStep by remember { mutableIntStateOf(initialOffStep) }
     var offAllDay by remember { mutableStateOf(initialOffAllDay) }
+    var heartOff by remember { mutableStateOf(false) }
     val colors = HeartlineTheme.colors
     val uri = LocalUriHandler.current
     var picker by remember { mutableStateOf<Picker?>(null) }
@@ -215,7 +229,7 @@ fun SettingsScreen(
                         OneUiSwitch(monitor.backgroundHeartRate) {
                             when {
                                 it -> onChange(SettingChange.AllDayHeartRate(true))
-                                monitor.heartMonitoring -> {
+                                monitor.heartActive -> {
                                     offAllDay = true
                                     offStep = 1
                                 }
@@ -243,6 +257,28 @@ fun SettingsScreen(
                     showDivider = monitor.heartMonitoring,
                 )
                 if (monitor.heartMonitoring) {
+                    // Each part on its own, under the master switch.
+                    CardRow(
+                        stringResource(R.string.settings_part_heart),
+                        subtitle = stringResource(R.string.settings_part_heart_summary),
+                        leading = { IconBadge(Icons.Rounded.MonitorHeart, colors.heartRate) },
+                        trailing = { OneUiSwitch(monitor.heartAlerts) { if (it) onChange(SettingChange.HeartPart(true)) else heartOff = true } },
+                        showDivider = true,
+                    )
+                    CardRow(
+                        stringResource(R.string.settings_part_spo2),
+                        subtitle = stringResource(R.string.settings_part_spo2_summary),
+                        leading = { IconBadge(Icons.Rounded.WaterDrop, colors.spo2) },
+                        trailing = { OneUiSwitch(monitor.spo2Monitoring) { onChange(SettingChange.Spo2Part(it)) } },
+                        showDivider = true,
+                    )
+                    CardRow(
+                        stringResource(R.string.settings_part_temp),
+                        subtitle = stringResource(R.string.settings_part_temp_summary),
+                        leading = { IconBadge(Icons.Rounded.Thermostat, colors.temp) },
+                        trailing = { OneUiSwitch(monitor.skinTempMonitoring) { onChange(SettingChange.TempPart(it)) } },
+                        showDivider = true,
+                    )
                     CardRow(
                         stringResource(R.string.settings_sensitivity),
                         subtitle = stringResource(monitor.alertSensitivity.label),
@@ -252,12 +288,18 @@ fun SettingsScreen(
                     )
                     CardRow(
                         stringResource(R.string.settings_your_limits),
-                        subtitle = when {
-                            heartLimits == null -> stringResource(R.string.settings_limits_waiting)
-                            heartLimits.learning -> stringResource(R.string.settings_limits_learning, heartLimits.high, heartLimits.low)
-                            else -> stringResource(R.string.settings_limits_summary, heartLimits.restNormal, heartLimits.high, heartLimits.low, heartLimits.sleepLow, heartLimits.exerciseMax)
-                        },
+                        subtitle = listOfNotNull(
+                            when {
+                                !monitor.heartAlerts -> null
+                                heartLimits == null -> stringResource(R.string.settings_limits_waiting)
+                                heartLimits.learning -> stringResource(R.string.settings_limits_learning, heartLimits.high, heartLimits.low)
+                                else -> stringResource(R.string.settings_limits_summary, heartLimits.restNormal, heartLimits.high, heartLimits.low, heartLimits.sleepLow, heartLimits.exerciseMax)
+                            },
+                            vitalsLimits?.takeIf { monitor.spo2Monitoring }?.let { stringResource(R.string.settings_limits_spo2, it.spo2Low, it.spo2NightNormal) },
+                            vitalsLimits?.takeIf { monitor.skinTempMonitoring }?.let { stringResource(R.string.settings_limits_temp, "%.1f".format(it.tempRise)) },
+                        ).joinToString("\n"),
                         leading = { Spacer(Modifier.size(40.dp)) },
+                        subtitleMaxLines = 8,
                     )
                 }
             }
@@ -483,6 +525,20 @@ fun SettingsScreen(
                 }) { Text(stringResource(R.string.action_save)) }
             },
             dismissButton = { TextButton(onClick = { editingPrompt = false }) { Text(stringResource(R.string.action_cancel)) } },
+        )
+    }
+    if (heartOff) {
+        AlertDialog(
+            onDismissRequest = { heartOff = false },
+            title = { Text(stringResource(R.string.heart_part_off_title)) },
+            text = { Text(stringResource(R.string.heart_part_off_text)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    heartOff = false
+                    onChange(SettingChange.HeartPart(false))
+                }) { Text(stringResource(R.string.action_turn_off), color = colors.statusAlert) }
+            },
+            dismissButton = { TextButton(onClick = { heartOff = false }) { Text(stringResource(R.string.action_keep_on)) } },
         )
     }
     if (offStep > 0) {

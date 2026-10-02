@@ -67,6 +67,7 @@ fun CardRow(
     showDivider: Boolean = false,
     dividerStart: Dp = if (leading != null) 76.dp else 20.dp,
     onClick: (() -> Unit)? = null,
+    subtitleMaxLines: Int = 2,
 ) {
     val colors = HeartlineTheme.colors
     Column(modifier.then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)) {
@@ -88,7 +89,7 @@ fun CardRow(
                         subtitle,
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.onSurfaceVariant,
-                        maxLines = 2,
+                        maxLines = subtitleMaxLines,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }

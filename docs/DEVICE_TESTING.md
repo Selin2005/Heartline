@@ -162,11 +162,22 @@ attach them to a bug report.
     - **Your normal:** after about a day of wearing, Phone → Heart rate → *Your normal* and
       Settings → *Your limits* show your own resting rate and limits (no longer "learning"); the
       watch's Settings shows the same numbers.
-    - **Switches:** turning *Heart monitoring* off asks twice (the list of what stops, then "Are
+    - **Switches:** turning *Health monitoring* off asks twice (the list of what stops, then "Are
       you sure?") on the phone and on the watch; afterwards the log shows `monitoring=false`, no
-      heart notifications come, but `passive HR` lines keep arriving (all-day heart rate still
-      records). Turning *All-day heart rate* off as well stops the `passive HR` lines. Turning
-      monitoring on again turns all-day heart rate on and asks nothing.
+      health notifications come, but `passive HR` lines keep arriving (all-day heart rate still
+      records). Turning the *Heart* part off asks once; *Blood oxygen* and *Skin temperature* ask
+      nothing. Turning *All-day heart rate* off as well stops the `passive HR` lines. Turning the
+      heart part on again turns all-day heart rate on and asks nothing.
+    - **Blood oxygen and skin temperature** ([VITALS_MONITORING.md](algorithms/VITALS_MONITORING.md)).
+      Capture `adb logcat -v time -s Heartline/Vitals` over a day and a night:
+      - `vitals:` lines show an SpO2 reading about every hour, awake and asleep, and a temperature
+        reading every 30 minutes asleep (hourly by day); `SpO2 put off: moving` while walking,
+        and `vitals skipped: not worn` with the watch on a table;
+      - battery: note the battery used over 24 hours with both parts on, and again with both off;
+      - light: note whether the red light wakes you or a partner at night;
+      - the phone's Blood oxygen and Skin temperature screens show *Measured by your watch*,
+        and after 3 nights the temperature change replaces *Learning*;
+      - with *Blood oxygen* off, no SpO2 readings come and the heart part still works.
     - **Watch not worn:** leave the watch on a table or charger for two hours. The log shows
       `IRN window skipped` (no background heart rate, or off the wrist), never an irregular rhythm
       notification.

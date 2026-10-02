@@ -43,8 +43,45 @@ data class AlertEntity(
     val trend: HeartTrend? = null,
 )
 
+/** A background blood-oxygen reading from the watch (v7). */
+@Entity(tableName = "spo2_samples")
+data class Spo2SampleEntity(
+    @PrimaryKey val tsMs: Long,
+    val percent: Int,
+    val context: HrContext,
+    val confirmation: Boolean,
+)
+
+/** A background skin-temperature reading from the watch (v7); [counted] belongs to the night's value. */
+@Entity(tableName = "skin_temp_samples")
+data class TempSampleEntity(
+    @PrimaryKey val tsMs: Long,
+    val skinC: Float,
+    val ambientC: Float?,
+    val context: HrContext,
+    val counted: Boolean,
+)
+
 @Dao
 interface HeartDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSpo2(samples: List<Spo2SampleEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTemps(samples: List<TempSampleEntity>)
+
+    @Query("SELECT * FROM spo2_samples WHERE tsMs >= :fromMs ORDER BY tsMs")
+    fun spo2Since(fromMs: Long): Flow<List<Spo2SampleEntity>>
+
+    @Query("SELECT * FROM skin_temp_samples WHERE tsMs >= :fromMs ORDER BY tsMs")
+    fun tempsSince(fromMs: Long): Flow<List<TempSampleEntity>>
+
+    @Query("DELETE FROM spo2_samples")
+    suspend fun deleteSpo2()
+
+    @Query("DELETE FROM skin_temp_samples")
+    suspend fun deleteTemps()
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMinutes(minutes: List<HrMinuteEntity>)
 

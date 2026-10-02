@@ -240,6 +240,23 @@ object HeartBaseline {
         return RestingTrend(above.size, latest.second.roundToInt(), mean.roundToInt(), threshold.roundToInt(), above.map { it.first.day })
     }
 
+    /**
+     * Whether the night ending on [day] had a raised heart rate in sleep: more than 2 standard
+     * deviations (at least 6 bpm) above the wearer's own average of the 28 nights before (the
+     * same rise as [restingTrend], for one night). Used with skin temperature.
+     */
+    fun nightRaised(history: HeartHistory, day: Long): Boolean {
+        val nights = history.days.mapNotNull { d ->
+            Histogram(d.sleep).takeIf { it.count >= MIN_NIGHT_READINGS }?.let { d to it.median()!! }
+        }
+        val tonight = nights.firstOrNull { it.first.day == day }?.second ?: return false
+        val baseline = nights.filter { (d, _) -> d.day in (day - WINDOW_DAYS)..(day - 1) && !d.unusual }.map { it.second }
+        if (baseline.size < MIN_BASELINE_NIGHTS) return false
+        val mean = baseline.average()
+        val sd = sqrt(baseline.sumOf { (it - mean) * (it - mean) } / (baseline.size - 1).coerceAtLeast(1))
+        return tonight > mean + maxOf(2 * sd, MIN_TREND_RISE)
+    }
+
     /** The usual resting heart rate itself has been high for a week (only once well learnt). */
     fun highNormal(history: HeartHistory, today: Long, limits: HeartLimits): Boolean {
         val days = history.days.count { it.day > today - 7 && Histogram(it.rest).count >= 20 }

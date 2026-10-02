@@ -260,6 +260,7 @@ fun HeartlineApp(
                     val exporter: DataExporter = koinInject()
                     val monitor by vm.monitor.collectAsStateWithLifecycle()
                     val heartLimits by vm.heartLimits.collectAsStateWithLifecycle()
+                    val vitalsLimits by vm.vitalsLimits.collectAsStateWithLifecycle()
                     val sharingPrefs by vm.sharing.collectAsStateWithLifecycle()
                     val linkVm: WatchLinkViewModel = koinViewModel()
                     val link by linkVm.link.collectAsStateWithLifecycle()
@@ -298,6 +299,7 @@ fun HeartlineApp(
                         quickTileMetric = quickTileMetric,
                         onQuickTileMetric = { m -> scope.launch { QuickTilePrefs.setMetric(context, m) } },
                         heartLimits = heartLimits,
+                        vitalsLimits = vitalsLimits,
                         onAddQuickTiles = {
                             val asked = addQuickTiles(context, HeartlineQsTile.ALL) { added ->
                                 if (added) scope.launch { snackbar.showSnackbar(context.getString(R.string.settings_quick_tiles_added)) }

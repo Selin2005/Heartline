@@ -332,6 +332,9 @@ private fun AppNavHost(nav: NavHostController, gate: SetupGateViewModel) {
                         when (toggle) {
                             WatchToggle.ALL_DAY_HEART_RATE -> s.withAllDayHeartRate(on)
                             WatchToggle.HEART_MONITORING -> s.withMonitoring(on)
+                            WatchToggle.HEART_PART -> s.withHeartAlerts(on)
+                            WatchToggle.SPO2_PART -> s.copy(spo2Monitoring = on)
+                            WatchToggle.TEMP_PART -> s.copy(skinTempMonitoring = on)
                             WatchToggle.HAPTICS -> s.copy(haptics = on)
                             WatchToggle.LIVE_WAVE -> s.copy(liveWave = on)
                         }

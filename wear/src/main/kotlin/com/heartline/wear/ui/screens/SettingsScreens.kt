@@ -12,6 +12,8 @@ import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.DeveloperMode
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MonitorHeart
+import androidx.compose.material.icons.rounded.Thermostat
+import androidx.compose.material.icons.rounded.WaterDrop
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -53,8 +55,12 @@ data class WatchSettingsUi(
     val appVersion: String,
     val haptics: Boolean = true,
     val liveWave: Boolean = true,
-    /** All-day heart rate recording (its own switch; monitoring needs it). */
+    /** All-day heart rate recording (its own switch; the heart part needs it). */
     val allDayHeartRate: Boolean = true,
+    /** The parts of health monitoring, under the master switch ([heartMonitoring]). */
+    val heartPart: Boolean = true,
+    val spo2Part: Boolean = true,
+    val tempPart: Boolean = true,
     /** The personal limits in use (null before the first background minute). */
     val limits: HeartLimits? = null,
     val diagnosticLogs: Boolean = false,
@@ -63,7 +69,10 @@ data class WatchSettingsUi(
 )
 
 /** One setting toggled on the watch. */
-enum class WatchToggle { ALL_DAY_HEART_RATE, HEART_MONITORING, HAPTICS, LIVE_WAVE }
+enum class WatchToggle { ALL_DAY_HEART_RATE, HEART_MONITORING, HEART_PART, SPO2_PART, TEMP_PART, HAPTICS, LIVE_WAVE }
+
+/** What a turn-off confirmation is for: the master and all-day ask twice, the heart part once. */
+enum class OffTarget { MASTER, ALL_DAY, HEART }
 
 @Composable
 private fun Row(icon: ImageVector, label: String, secondary: String?, onClick: () -> Unit = {}) {
@@ -119,17 +128,22 @@ fun WatchSettingsScreen(
     initialConfirmAllDay: Boolean = false,
 ) {
     var confirm by rememberSaveable { mutableIntStateOf(initialConfirmStep) }
-    var allDay by rememberSaveable { mutableStateOf(initialConfirmAllDay) }
+    var target by rememberSaveable { mutableStateOf(if (initialConfirmAllDay) OffTarget.ALL_DAY else OffTarget.MASTER) }
     if (confirm > 0) {
         MonitoringOffConfirm(
             step = confirm,
-            allDay = allDay,
+            target = target,
             onNext = {
                 if (confirm == 1) {
                     confirm = 2
                 } else {
                     confirm = 0
-                    onToggle(if (allDay) WatchToggle.ALL_DAY_HEART_RATE else WatchToggle.HEART_MONITORING, false)
+                    val toggle = when (target) {
+                        OffTarget.MASTER -> WatchToggle.HEART_MONITORING
+                        OffTarget.ALL_DAY -> WatchToggle.ALL_DAY_HEART_RATE
+                        OffTarget.HEART -> WatchToggle.HEART_PART
+                    }
+                    onToggle(toggle, false)
                 }
             },
             onCancel = { confirm = 0 },
@@ -144,8 +158,8 @@ fun WatchSettingsScreen(
                 Toggle(Icons.Rounded.MonitorHeart, stringResource(R.string.settings_background_hr), state.allDayHeartRate) { on ->
                     when {
                         on -> onToggle(WatchToggle.ALL_DAY_HEART_RATE, true)
-                        state.heartMonitoring -> {
-                            allDay = true
+                        state.heartMonitoring && state.heartPart -> {
+                            target = OffTarget.ALL_DAY
                             confirm = 1
                         }
                         else -> onToggle(WatchToggle.ALL_DAY_HEART_RATE, false)
@@ -166,12 +180,25 @@ fun WatchSettingsScreen(
                     if (on) {
                         onToggle(WatchToggle.HEART_MONITORING, true)
                     } else {
-                        allDay = false
+                        target = OffTarget.MASTER
                         confirm = 1
                     }
                 }
             }
             if (state.heartMonitoring) {
+                item {
+                    Toggle(Icons.Rounded.MonitorHeart, stringResource(R.string.settings_part_heart), state.heartPart) { on ->
+                        if (on) {
+                            onToggle(WatchToggle.HEART_PART, true)
+                        } else {
+                            // One confirmation: the heart part's notifications matter most.
+                            target = OffTarget.HEART
+                            confirm = 2
+                        }
+                    }
+                }
+                item { Toggle(Icons.Rounded.WaterDrop, stringResource(R.string.settings_part_spo2), state.spo2Part) { onToggle(WatchToggle.SPO2_PART, it) } }
+                item { Toggle(Icons.Rounded.Thermostat, stringResource(R.string.settings_part_temp), state.tempPart) { onToggle(WatchToggle.TEMP_PART, it) } }
                 item {
                     Row(Icons.Rounded.NotificationsActive, stringResource(R.string.settings_sensitivity), stringResource(state.sensitivity.label)) {
                         val all = AlertSensitivity.entries
@@ -208,7 +235,8 @@ private val AlertSensitivity.label: Int get() = when (this) {
 
 /** The two confirmations before heart monitoring goes off: what stops, then "are you sure?". */
 @Composable
-fun MonitoringOffConfirm(step: Int, onNext: () -> Unit, onCancel: () -> Unit, allDay: Boolean = false) {
+fun MonitoringOffConfirm(step: Int, onNext: () -> Unit, onCancel: () -> Unit, target: OffTarget = OffTarget.MASTER) {
+    val allDay = target == OffTarget.ALL_DAY
     val list = rememberTransformingLazyColumnState()
     ScreenScaffold(scrollState = list) { padding ->
         TransformingLazyColumn(state = list, contentPadding = padding) {
@@ -217,6 +245,7 @@ fun MonitoringOffConfirm(step: Int, onNext: () -> Unit, onCancel: () -> Unit, al
                     Text(
                         stringResource(
                             when {
+                                target == OffTarget.HEART -> R.string.heart_part_off_title
                                 step == 2 -> R.string.monitoring_off_sure_title
                                 allDay -> R.string.all_day_off_title
                                 else -> R.string.monitoring_off_title
@@ -230,6 +259,7 @@ fun MonitoringOffConfirm(step: Int, onNext: () -> Unit, onCancel: () -> Unit, al
                 Centered(
                     stringResource(
                         when {
+                            target == OffTarget.HEART -> R.string.heart_part_off_text
                             step == 1 && allDay -> R.string.all_day_off_list
                             step == 1 -> R.string.monitoring_off_list
                             allDay -> R.string.all_day_off_sure_text

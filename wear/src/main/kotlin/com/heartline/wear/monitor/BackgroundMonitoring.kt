@@ -65,6 +65,8 @@ object BackgroundMonitoring {
     private const val TAG = "Heartline/Monitor"
     private const val IRN_WORK = "heartline-irn-window"
     private const val IRN_FOLLOW_UP = "heartline-irn-follow-up"
+    private const val VITALS_WORK = "heartline-vitals"
+    private const val VITALS_RETRY = "heartline-vitals-retry"
     /** Halfway to the next regular check: an irregular window is confirmed or not sooner. */
     private const val FOLLOW_UP_MINUTES = 7L
 
@@ -89,6 +91,15 @@ object BackgroundMonitoring {
             IRN_FOLLOW_UP,
             ExistingWorkPolicy.KEEP,
             OneTimeWorkRequestBuilder<IrnWindowWorker>().setInitialDelay(FOLLOW_UP_MINUTES, TimeUnit.MINUTES).build(),
+        )
+    }
+
+    /** One more SpO2 try 15 minutes later, when the wearer was moving at the hour. */
+    fun scheduleVitalsRetry(context: Context) {
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            VITALS_RETRY,
+            ExistingWorkPolicy.KEEP,
+            OneTimeWorkRequestBuilder<VitalsWorker>().setInitialDelay(15, TimeUnit.MINUTES).build(),
         )
     }
 
@@ -123,7 +134,7 @@ object BackgroundMonitoring {
         }.onFailure { HLog.w(TAG, "passive listener update failed", it) }
 
         val work = WorkManager.getInstance(context)
-        if (allowed && settings.heartMonitoring) {
+        if (allowed && settings.heartActive) {
             val minutes = MonitorSettings.IRN_INTERVAL_MINUTES.toLong()
             work.enqueueUniquePeriodicWork(
                 IRN_WORK,
@@ -134,7 +145,14 @@ object BackgroundMonitoring {
             work.cancelUniqueWork(IRN_WORK)
             work.cancelUniqueWork(IRN_FOLLOW_UP)
         }
-        HLog.i(TAG, "sync allowed=$allowed monitoring=${settings.heartMonitoring} sensitivity=${settings.alertSensitivity} background=${hasBackgroundPermission(context)}")
+        // Blood oxygen and skin temperature: their own worker, every 30 minutes (they check their own permissions).
+        if (settings.spo2Active || settings.skinTempActive) {
+            work.enqueueUniquePeriodicWork(VITALS_WORK, ExistingPeriodicWorkPolicy.UPDATE, PeriodicWorkRequestBuilder<VitalsWorker>(30, TimeUnit.MINUTES).build())
+        } else {
+            work.cancelUniqueWork(VITALS_WORK)
+            work.cancelUniqueWork(VITALS_RETRY)
+        }
+        HLog.i(TAG, "sync allowed=$allowed monitoring=${settings.heartMonitoring} spo2=${settings.spo2Active} temp=${settings.skinTempActive} sensitivity=${settings.alertSensitivity} background=${hasBackgroundPermission(context)}")
     }
 }
 
@@ -241,7 +259,7 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
     override suspend fun doWork(): Result {
         if (!BackgroundMonitoring.canRun(applicationContext)) return Result.success()
         val settings = store.settings.value
-        if (!settings.heartMonitoring) return Result.success()
+        if (!settings.heartActive) return Result.success()
         // No recent background heart rate means the watch is very likely not being worn: don't listen
         // to a sensor on a table or charger, whose noise looks like an irregular rhythm.
         val lastWorn = store.lastPassiveHeartRateMs
@@ -260,6 +278,11 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
         if (!BackgroundMonitoring.hasBackgroundPermission(applicationContext)) {
             runCatching { setForeground(foregroundInfo()) }.onFailure { HLog.w(TAG, "foreground window refused", it) }
         }
+        // One background measurement at a time (blood oxygen and temperature use the sensors too).
+        return BackgroundSensors.lock.withLock { window(settings, wrist) }
+    }
+
+    private suspend fun window(settings: com.heartline.shared.hr.MonitorSettings, wrist: WristState): Result {
         val motion = StepMotionMonitor(applicationContext).also { it.start() }
         heart.irn.resetWindow()
         var count = 0

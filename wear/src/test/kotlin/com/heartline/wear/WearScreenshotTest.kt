@@ -282,6 +282,10 @@ class WearScreenshotTest(private val size: String) {
         WatchSettingsScreen(settingsUi.copy(heartMonitoring = false), listState = TransformingLazyColumnState(initialAnchorItemIndex = 3))
     }
 
+    @Test fun settingsParts() = shot("settings_parts") {
+        WatchSettingsScreen(settingsUi.copy(spo2Part = false), listState = TransformingLazyColumnState(initialAnchorItemIndex = 3))
+    }
+
     @Test fun settingsMonitoringOffConfirm() = shot("settings_monitoring_off_confirm") { WatchSettingsScreen(settingsUi, initialConfirmStep = 1) }
 
     @Test fun settingsMonitoringOffSure() = shot("settings_monitoring_off_sure") { WatchSettingsScreen(settingsUi, initialConfirmStep = 2) }

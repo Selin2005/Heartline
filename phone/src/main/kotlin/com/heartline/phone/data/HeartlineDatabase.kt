@@ -11,8 +11,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [RecordEntity::class, HrMinuteEntity::class, AlertEntity::class, BpCalibrationEntity::class, BpValidationEntity::class],
-    version = 6,
+    entities = [RecordEntity::class, HrMinuteEntity::class, AlertEntity::class, Spo2SampleEntity::class, TempSampleEntity::class, BpCalibrationEntity::class, BpValidationEntity::class],
+    version = 7,
     exportSchema = true,
 )
 abstract class HeartlineDatabase : RoomDatabase() {
@@ -77,9 +77,23 @@ abstract class HeartlineDatabase : RoomDatabase() {
             }
         }
 
+        /** v7: background blood oxygen and skin temperature. */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `spo2_samples` (`tsMs` INTEGER NOT NULL, `percent` INTEGER NOT NULL, `context` TEXT NOT NULL, " +
+                        "`confirmation` INTEGER NOT NULL, PRIMARY KEY(`tsMs`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `skin_temp_samples` (`tsMs` INTEGER NOT NULL, `skinC` REAL NOT NULL, `ambientC` REAL, " +
+                        "`context` TEXT NOT NULL, `counted` INTEGER NOT NULL, PRIMARY KEY(`tsMs`))",
+                )
+            }
+        }
+
         fun create(context: Context): HeartlineDatabase =
             Room.databaseBuilder(context, HeartlineDatabase::class.java, "heartline.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .build()
 
         fun inMemory(context: Context): HeartlineDatabase =

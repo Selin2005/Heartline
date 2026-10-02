@@ -5,6 +5,7 @@ package com.heartline.phone.data
 
 import com.heartline.shared.hr.HealthAlert
 import com.heartline.shared.hr.HeartLimits
+import com.heartline.shared.vitals.VitalsLimits
 import com.heartline.shared.hr.HrBatch
 import com.heartline.shared.hr.HrContext
 import com.heartline.shared.sync.HeartDataSink
@@ -15,7 +16,13 @@ class HeartRepository(
     private val dao: HeartDao,
     private val onAlert: suspend (HealthAlert) -> Unit = {},
     private val onLimits: suspend (HeartLimits) -> Unit = {},
+    private val onVitalsLimits: suspend (VitalsLimits) -> Unit = {},
 ) : HeartDataSink {
+    /** Background blood oxygen and skin temperature since [fromMs]. */
+    fun spo2Since(fromMs: Long): Flow<List<Spo2SampleEntity>> = dao.spo2Since(fromMs)
+
+    fun tempsSince(fromMs: Long): Flow<List<TempSampleEntity>> = dao.tempsSince(fromMs)
+
     fun minutes(fromMs: Long, toMs: Long): Flow<List<HrMinuteEntity>> = dao.minutes(fromMs, toMs)
 
     val latestMinute: Flow<HrMinuteEntity?> = dao.latestMinute()
@@ -31,6 +38,9 @@ class HeartRepository(
         val existing = dao.minutesAt(incoming.map { it.minuteStartMs }).associateBy { it.minuteStartMs }
         dao.insertMinutes(incoming.map { m -> existing[m.minuteStartMs]?.let { merge(it, m) } ?: m })
         batch.limits?.let { onLimits(it) }
+        if (batch.spo2.isNotEmpty()) dao.insertSpo2(batch.spo2.map { Spo2SampleEntity(it.tsMs, it.percent, it.context, it.confirmation) })
+        if (batch.skinTemp.isNotEmpty()) dao.insertTemps(batch.skinTemp.map { TempSampleEntity(it.tsMs, it.skinC, it.ambientC, it.context, it.counted) })
+        batch.vitals?.let { onVitalsLimits(it) }
     }
 
     override suspend fun saveAlert(alert: HealthAlert) {
@@ -54,6 +64,8 @@ class HeartRepository(
     }
 
     suspend fun deleteAll() {
+        dao.deleteSpo2()
+        dao.deleteTemps()
         dao.deleteMinutes()
         dao.deleteAlerts()
     }

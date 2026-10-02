@@ -128,8 +128,10 @@ class HeartRateAlertRulesTest {
         assertTrue(off.backgroundHeartRate && off.passiveHeartRate)
         val noRecording = off.withAllDayHeartRate(false)
         assertFalse(noRecording.passiveHeartRate)
-        // Monitoring needs the recording: turning it on turns recording on, turning recording off turns it off.
-        assertTrue(noRecording.withMonitoring(true).passiveHeartRate)
-        assertFalse(MonitorSettings().withAllDayHeartRate(false).heartMonitoring)
+        // The heart part needs the recording: turning recording off turns the heart part off
+        // (the master and the other parts stay); turning the heart part on turns recording on.
+        val allDayOff = MonitorSettings().withAllDayHeartRate(false)
+        assertTrue(allDayOff.heartMonitoring && !allDayOff.heartAlerts && !allDayOff.heartActive)
+        assertTrue(allDayOff.withHeartAlerts(true).passiveHeartRate)
     }
 }

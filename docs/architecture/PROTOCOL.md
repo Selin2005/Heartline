@@ -16,7 +16,7 @@ ID and the same signing key**, so the phone and watch apps are always built and 
 | `/hl/v1/record/meta` | W→P | Message | `RecordMeta{id, kind, startedAtMs, durationMs, sampleRateHz, sampleCount, summary}` | `record/ack` once stored |
 | `/hl/v1/record/wave/<id>` | W→P | Channel | Binary `HLW1`: 16-byte header (magic, kind, rate, count) + Float32LE samples | Merged with the meta |
 | `/hl/v1/record/ack` | P→W | Message | `Ack{id, ok}` | Watch removes it from its outbox |
-| `/hl/v1/hr/batch` | W→P | Message | `HrBatch{id, minutes[HrMinute]}` (every 15 minutes) | `ack` |
+| `/hl/v1/hr/batch` | W→P | Message | `HrBatch{id, minutes[HrMinute], limits?, spo2[Spo2Sample], skinTemp[TempSample], vitals?}` (heart minutes every 15 minutes; background SpO2 and skin temperature after each vitals run) | `ack` |
 | `/hl/v1/alert` | W→P | Message | `HealthAlert{id, kind(IRREGULAR_RHYTHM/HIGH/LOW), atMs, bpm, windowStartsMs}` | `ack` |
 | `/hl/v1/bp/calib-capture` | P→W | Message | `CaptureRequest{captureId, round}` | Watch opens the calibration round |
 | `/hl/v1/bp/calib-capture` | W→P | Message | `CaptureResult{id, captureId, round, features}` | `ack` |

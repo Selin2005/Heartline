@@ -19,6 +19,9 @@ import com.heartline.shared.hr.HrBatch
 import com.heartline.shared.hr.HrContext
 import com.heartline.shared.hr.HrMinute
 import com.heartline.shared.model.EcgResult
+import com.heartline.shared.vitals.Spo2Sample
+import com.heartline.shared.vitals.TempSample
+import com.heartline.shared.vitals.VitalsLimits
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -118,6 +121,26 @@ class HeartRepositoryTest {
         val limits = HeartLimits(60, 52, high = 92, low = 41, sleepLow = 36, exerciseMax = 186)
         withLimits.saveBatch(HrBatch("b", listOf(HrMinute(0, 60, 58, 62)), limits))
         assertEquals(limits, kept)
+    }
+
+    @Test
+    fun watchVitalsAreStoredOnceAndDeleted() = runBlocking {
+        var kept: VitalsLimits? = null
+        val withVitals = HeartRepository(db.heart(), onVitalsLimits = { kept = it })
+        val limits = VitalsLimits(spo2Low = 90, spo2DayNormal = 97, spo2NightNormal = 95, spo2NightDrop = 3, tempRise = 1.0f)
+        val batch = HrBatch(
+            "v", emptyList(),
+            spo2 = listOf(Spo2Sample(1_000L, 96, HrContext.SLEEP), Spo2Sample(121_000L, 89, HrContext.SLEEP, confirmation = true)),
+            skinTemp = listOf(TempSample(2_000L, 34.1f, 22f, HrContext.SLEEP, counted = true)),
+            vitals = limits,
+        )
+        withVitals.saveBatch(batch)
+        withVitals.saveBatch(batch)
+        assertEquals(listOf(96, 89), withVitals.spo2Since(0).first().map { it.percent })
+        assertEquals(1, withVitals.tempsSince(0).first().size)
+        assertEquals(limits, kept)
+        withVitals.deleteAll()
+        assertTrue(withVitals.spo2Since(0).first().isEmpty() && withVitals.tempsSince(0).first().isEmpty())
     }
 
     @Test

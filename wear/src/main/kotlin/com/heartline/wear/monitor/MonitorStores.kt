@@ -20,11 +20,14 @@ import com.heartline.shared.hr.ActivityChange
 import com.heartline.shared.hr.ActivityTimeline
 import com.heartline.shared.hr.HeartLimits
 import com.heartline.shared.hr.HeartTrend
+import com.heartline.shared.hr.VitalAlert
 import com.heartline.shared.hr.HrContext
 import com.heartline.shared.hr.MonitorSettings
 import com.heartline.shared.hr.MonitorState
 import com.heartline.shared.hr.StepSpan
+import com.heartline.shared.hr.WatchActivity
 import com.heartline.shared.irn.IrnState
+import com.heartline.shared.vitals.VitalsHistory
 import com.heartline.shared.model.EcgResult
 import com.heartline.shared.sync.Protocol
 import com.heartline.wear.MainActivity
@@ -132,6 +135,30 @@ class WatchSettingsStore(context: Context, private val now: () -> Long = System:
     /** What the wearer was doing in a minute, if the watch knows. */
     fun activityAt(minuteStartMs: Long): HrContext? = activity.contextAt(minuteStartMs)
 
+    /** Blood-oxygen and skin-temperature history (daily values, notices). */
+    var vitals: VitalsHistory
+        get() = prefs.getString(KEY_VITALS, null)?.let { runCatching { Protocol.json.decodeFromString<VitalsHistory>(it) }.getOrNull() } ?: VitalsHistory()
+        set(value) = prefs.edit().putString(KEY_VITALS, Protocol.json.encodeToString(value)).apply()
+
+    /** The latest background SpO2 and temperature readings, and the air temperature then. */
+    var lastSpo2Ms: Long
+        get() = prefs.getLong(KEY_LAST_SPO2, 0)
+        set(value) = prefs.edit().putLong(KEY_LAST_SPO2, value).apply()
+    var lastTempMs: Long
+        get() = prefs.getLong(KEY_LAST_TEMP, 0)
+        set(value) = prefs.edit().putLong(KEY_LAST_TEMP, value).apply()
+    var lastAmbientC: Float?
+        get() = prefs.getFloat(KEY_LAST_AMBIENT, Float.NaN).takeIf { !it.isNaN() }
+        set(value) = prefs.edit().putFloat(KEY_LAST_AMBIENT, value ?: Float.NaN).apply()
+
+    /** SpO2 tries put off this hour because the wearer was moving. */
+    var spo2Retries: Int
+        get() = prefs.getInt(KEY_SPO2_RETRIES, 0)
+        set(value) = prefs.edit().putInt(KEY_SPO2_RETRIES, value).apply()
+
+    /** Since when the wearer has been asleep (null when not asleep). */
+    fun asleepSince(nowMs: Long): Long? = activity.changes.lastOrNull { it.atMs <= nowMs }?.takeIf { it.activity == WatchActivity.ASLEEP }?.atMs
+
     /** Time of the latest background heart rate (the watch was worn then). */
     var lastPassiveHeartRateMs: Long?
         get() = prefs.getLong(KEY_LAST_PASSIVE, -1).takeIf { it > 0 }
@@ -151,6 +178,11 @@ class WatchSettingsStore(context: Context, private val now: () -> Long = System:
         const val KEY_MONITOR = "monitor_state"
         const val KEY_ACTIVITY = "activity"
         const val KEY_LIMITS = "limits"
+        const val KEY_VITALS = "vitals"
+        const val KEY_LAST_SPO2 = "last_spo2"
+        const val KEY_LAST_TEMP = "last_temp"
+        const val KEY_LAST_AMBIENT = "last_ambient"
+        const val KEY_SPO2_RETRIES = "spo2_retries"
         const val KEY_LAST_PASSIVE = "last_passive_hr"
         const val KEY_HR = "latest_hr"
         const val KEY_HR_DAY = "hr_day"
@@ -327,7 +359,12 @@ object AlertText {
         val bpm = alert.bpm ?: 0
         val limit = alert.threshold
         val normal = alert.normal
+        val change = alert.value?.let { "%.1f".format(it) } ?: ""
         return when {
+            alert.vital == VitalAlert.SPO2_LOW -> string(R.string.alert_spo2_low_title) to string(R.string.alert_spo2_low_text).format(bpm)
+            alert.vital == VitalAlert.SPO2_NIGHTS -> string(R.string.alert_spo2_nights_title) to string(R.string.alert_spo2_nights_text)
+            alert.vital == VitalAlert.TEMPERATURE -> string(R.string.alert_temp_title) to string(R.string.alert_temp_text).format(change)
+            alert.vital == VitalAlert.COMBINED -> string(R.string.alert_combined_title) to string(R.string.alert_combined_text).format(change)
             alert.trend == HeartTrend.ELEVATED_RESTING ->
                 string(R.string.alert_trend_title) to string(R.string.alert_trend_text).format(bpm, normal ?: 0)
             alert.trend == HeartTrend.HIGH_NORMAL ->

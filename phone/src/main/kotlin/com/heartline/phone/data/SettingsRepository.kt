@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.heartline.shared.AppInfo
 import com.heartline.shared.hr.HeartLimits
+import com.heartline.shared.vitals.VitalsLimits
 import com.heartline.shared.hr.MonitorSettings
 import com.heartline.shared.sync.Protocol
 import kotlinx.serialization.encodeToString
@@ -38,6 +39,7 @@ class SettingsRepository(private val context: Context, private val now: () -> Lo
         val REPORT_NAME = stringPreferencesKey("report_name")
         val TERMS_VERSION = intPreferencesKey("accepted_terms_version")
         val HEART_LIMITS = stringPreferencesKey("heart_limits")
+        val VITALS_LIMITS = stringPreferencesKey("vitals_limits")
     }
 
     /**
@@ -133,6 +135,15 @@ class SettingsRepository(private val context: Context, private val now: () -> Lo
     /** The personal heart-rate limits the watch uses now (sent with its heart-rate batches). */
     val heartLimits: Flow<HeartLimits?> = context.settingsStore.data.map { p ->
         p[Keys.HEART_LIMITS]?.let { runCatching { Protocol.json.decodeFromString<HeartLimits>(it) }.getOrNull() }
+    }
+
+    /** Blood-oxygen and temperature normals and limits from the watch. */
+    val vitalsLimits: Flow<VitalsLimits?> = context.settingsStore.data.map { p ->
+        p[Keys.VITALS_LIMITS]?.let { runCatching { Protocol.json.decodeFromString<VitalsLimits>(it) }.getOrNull() }
+    }
+
+    suspend fun saveVitalsLimits(limits: VitalsLimits) {
+        context.settingsStore.edit { it[Keys.VITALS_LIMITS] = Protocol.json.encodeToString(limits) }
     }
 
     suspend fun saveHeartLimits(limits: HeartLimits) {

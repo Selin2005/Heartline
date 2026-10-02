@@ -46,9 +46,19 @@ data class HrMinute(
     val activity: HrContext = if (resting) HrContext.REST else HrContext.ACTIVE
 )
 
-/** [limits]: the personal limits the watch uses now, so the phone can show them. */
+/**
+ * [limits]: the personal limits the watch uses now, so the phone can show them. [spo2] and
+ * [skinTemp]: background readings; [vitals]: their normals and limits (older phones ignore these).
+ */
 @Serializable
-data class HrBatch(val id: String, val minutes: List<HrMinute>, val limits: HeartLimits? = null)
+data class HrBatch(
+    val id: String,
+    val minutes: List<HrMinute>,
+    val limits: HeartLimits? = null,
+    val spo2: List<com.heartline.shared.vitals.Spo2Sample> = emptyList(),
+    val skinTemp: List<com.heartline.shared.vitals.TempSample> = emptyList(),
+    val vitals: com.heartline.shared.vitals.VitalsLimits? = null
+)
 
 @Serializable
 enum class AlertKind { IRREGULAR_RHYTHM, HIGH_HEART_RATE, LOW_HEART_RATE }
@@ -69,8 +79,30 @@ data class HealthAlert(
     /** The wearer's usual heart rate in that context when the alert fired (personal limits). */
     val normal: Int? = null,
     /** A notice about the resting heart rate over several days, not a single episode. Sent as a high heart rate to older phones. */
-    val trend: HeartTrend? = null
+    val trend: HeartTrend? = null,
+    /**
+     * A blood-oxygen, skin-temperature or combined notice. Older phones don't know these, so they
+     * travel as a low (oxygen) or high (temperature) heart-rate alert with this field set.
+     */
+    val vital: VitalAlert? = null,
+    /** The value behind a vital notice: SpO2 in %, or the temperature change in °C. */
+    val value: Float? = null
 )
+
+@Serializable
+enum class VitalAlert {
+    /** Two readings in a row (the second a re-check) at or below the oxygen limit. */
+    SPO2_LOW,
+
+    /** Oxygen in sleep lower than the wearer's usual over several nights. */
+    SPO2_NIGHTS,
+
+    /** Skin temperature in sleep well above the wearer's usual, two nights in a row. */
+    TEMPERATURE,
+
+    /** A warmer night together with a raised heart rate in sleep. */
+    COMBINED
+}
 
 @Serializable
 enum class HeartTrend {
@@ -112,6 +144,15 @@ data class MonitorSettings(
     val heartMonitoring: Boolean = heartRateAlertsEnabled || irregularRhythmEnabled,
     /** How far from the wearer's normal a heart rate must be to notify (see HeartBaseline). */
     val alertSensitivity: AlertSensitivity = AlertSensitivity.STANDARD,
+    /**
+     * The parts of health monitoring, each with its own switch under [heartMonitoring] (the master):
+     * heart (high/low, irregular rhythm, resting trend), blood oxygen (hourly SpO2 and its
+     * notifications) and skin temperature (readings in sleep and by day, and its notification).
+     * They keep their state while the master is off.
+     */
+    val heartAlerts: Boolean = true,
+    val spo2Monitoring: Boolean = true,
+    val skinTempMonitoring: Boolean = true,
     /** Remind 3 days before the BP calibration expires. */
     val calibrationReminder: Boolean = true,
     /** Daily reminder to take a measurement, at [dailyReminderMinute] (minutes after midnight). */
@@ -154,19 +195,30 @@ data class MonitorSettings(
     }
 
     /**
-     * Heart monitoring on or off, with its parts (older app versions read the parts). Turning it on
-     * also turns all-day heart rate on, which it needs; turning it off leaves recording as it is.
+     * Health monitoring (the master switch) on or off. The heart part's old switches follow it, so
+     * older app versions do too. Turning it on with the heart part on also turns all-day heart rate
+     * on, which that part needs; turning it off leaves recording as it is.
      */
     fun withMonitoring(on: Boolean) = copy(
         heartMonitoring = on,
-        heartRateAlertsEnabled = on,
-        irregularRhythmEnabled = on,
-        backgroundHeartRate = backgroundHeartRate || on
+        heartRateAlertsEnabled = on && heartAlerts,
+        irregularRhythmEnabled = on && heartAlerts,
+        backgroundHeartRate = backgroundHeartRate || (on && heartAlerts)
     )
 
-    /** All-day heart rate on or off. Without it there is nothing to monitor, so off turns monitoring off too. */
+    /** The heart part on or off (under the master switch). */
+    fun withHeartAlerts(on: Boolean) = copy(heartAlerts = on).withMonitoring(heartMonitoring)
+
+    /** All-day heart rate on or off. The heart part needs it, so off turns the heart part off too. */
     fun withAllDayHeartRate(on: Boolean) =
-        if (on) copy(backgroundHeartRate = true) else withMonitoring(false).copy(backgroundHeartRate = false)
+        if (on) copy(backgroundHeartRate = true) else withHeartAlerts(false).copy(backgroundHeartRate = false)
+
+    /** Heart notifications and checks are running: the master and the heart part are on. */
+    val heartActive: Boolean get() = heartMonitoring && heartAlerts
+
+    val spo2Active: Boolean get() = heartMonitoring && spo2Monitoring
+
+    val skinTempActive: Boolean get() = heartMonitoring && skinTempMonitoring
 
     /** The parts follow the switches, whatever older versions left in them. */
     fun normalized() = withMonitoring(heartMonitoring)

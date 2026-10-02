@@ -228,33 +228,55 @@ The reason a window was skipped is logged (`IRN window done: … skipped=…`).
 The day chart can be filtered by activity. The notification list shows each alert's limit,
 activity and the usual rate, trend notices, and the ECG follow-up for rhythm notifications.
 
-## 7. Settings: two switches (`MonitorSettings`)
+## 7. Settings: a recording switch, a monitoring switch and its parts (`MonitorSettings`)
+
+```
+All-day heart rate          [on]   recording only; keeps going with monitoring off
+Health monitoring           [on]   master switch; turning it off asks twice
+   ├─ Heart                 [on]   high/low heart rate, irregular rhythm, resting trend
+   ├─ Blood oxygen          [on]   hourly SpO2 and its notices (VITALS_MONITORING.md)
+   ├─ Skin temperature      [on]   temperature in sleep and by day, and its notices
+   ├─ Alert sensitivity  Standard  for all three parts
+   └─ Your limits                  the limits in use (read only)
+```
 
 - **All-day heart rate** (`backgroundHeartRate`) records heart rate in the background. That feeds
   trends, sleep and exercise, and the personal normal, with no notification. It has its own
-  switch and keeps recording when heart monitoring is off.
-- **Heart monitoring** (`heartMonitoring`) turns every notification and check on or off
-  together:
+  switch and keeps recording when monitoring is off.
+- **Health monitoring** (`heartMonitoring`, the JSON name kept from older versions) is the master
+  switch. With it off, every notification and every background SpO2 and temperature
+  measurement stops. The parts keep their own state, so turning it back on restores them.
+- **Heart** (`heartAlerts`) turns these on or off together:
   - high and low heart rate;
   - irregular rhythm checks;
   - the resting trend.
-- **How the two work together:**
-  - Monitoring needs the recording. Turning monitoring on also turns all-day heart rate on.
-  - Turning all-day heart rate off turns monitoring off too. While monitoring is on, that asks
-    first.
+- **Blood oxygen** (`spo2Monitoring`) and **Skin temperature** (`skinTempMonitoring`) are
+  described in [VITALS_MONITORING.md](VITALS_MONITORING.md). Each part is active only while the
+  master is on (`heartActive`, `spo2Active`, `skinTempActive`).
+- **How they work together:**
+  - The heart part needs the recording. Turning it on (with the master on) also turns all-day
+    heart rate on.
+  - Turning all-day heart rate off turns the heart part off. Oxygen and temperature go on
+    without sleep detection. While the heart part is active, that asks first.
   - With monitoring off, the watch keeps learning the normal from the recording, so the limits
-    are ready when monitoring is turned back on.
-- **Turning off asks twice,** on the phone and on the watch: the first step lists what stops, the
-  second asks "Are you sure?". This applies to turning monitoring off, and to turning all-day
-  heart rate off while monitoring is on. Turning on asks nothing.
+    are ready when it is turned back on.
+  - The combined temperature and heart notice needs both the heart and temperature parts.
+- **Turning off asks,** on the phone and on the watch:
+  - the master asks twice: the first step lists what stops, the second asks "Are you sure?";
+  - all-day heart rate while the heart part is active asks twice the same way;
+  - the heart part asks once;
+  - oxygen and temperature ask nothing, and turning anything on asks nothing.
 - **Alert sensitivity** (Low, Standard, High) is shown only while monitoring is on. It sets the
-  ratios above. High also uses the looser irregular-rhythm rule.
-- **Your limits** (read only) shows the normal and the limits in use, or "learning".
+  ratios above and the oxygen and temperature limits. High also uses the looser
+  irregular-rhythm rule.
+- **Your limits** (read only) shows the normal and the limits in use, or "learning", for each
+  active part.
 
 Older versions:
 - `heartMonitoring` defaults to on unless both old notification parts (high/low alerts, rhythm)
-  were off. Recording stays as it was.
-- `withMonitoring` also writes the old part switches, so an older watch follows the switches.
+  were off. The new parts default to on. Recording stays as it was.
+- `withMonitoring` and `withHeartAlerts` also write the old part switches, so an older watch
+  follows the heart part. An older watch ignores the oxygen and temperature parts.
 - Fields that are no longer used stay in the JSON format.
 
 ## 8. Tests

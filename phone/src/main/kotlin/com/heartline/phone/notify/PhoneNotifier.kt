@@ -23,6 +23,7 @@ import com.heartline.shared.bp.BpSafety
 import com.heartline.shared.hr.AlertKind
 import com.heartline.shared.hr.HealthAlert
 import com.heartline.shared.hr.HeartTrend
+import com.heartline.shared.hr.VitalAlert
 import com.heartline.shared.hr.HrContext
 import com.heartline.shared.model.RecordSummary
 
@@ -147,7 +148,15 @@ class PhoneNotifier(private val context: Context) {
     }
 
     companion object {
-        fun alertTitle(alert: HealthAlert) = when (alert.trend) {
+        fun alertTitle(alert: HealthAlert) = when (alert.vital) {
+            VitalAlert.SPO2_LOW -> R.string.alert_spo2_low_title
+            VitalAlert.SPO2_NIGHTS -> R.string.alert_spo2_nights_title
+            VitalAlert.TEMPERATURE -> R.string.alert_temp_title
+            VitalAlert.COMBINED -> R.string.alert_combined_title
+            null -> trendTitle(alert)
+        }
+
+        private fun trendTitle(alert: HealthAlert) = when (alert.trend) {
             HeartTrend.ELEVATED_RESTING -> R.string.alert_trend_title
             HeartTrend.HIGH_NORMAL -> R.string.alert_high_normal_title
             null -> alertTitle(alert.kind)
@@ -165,6 +174,14 @@ class PhoneNotifier(private val context: Context) {
             val limit = alert.threshold
             val normal = alert.normal
             fun percent(n: Int) = if (n <= 0) 0 else kotlin.math.abs(bpm - n) * 100 / n
+            val change = alert.value?.let { "%.1f".format(it) } ?: ""
+            when (alert.vital) {
+                VitalAlert.SPO2_LOW -> return context.getString(R.string.alert_spo2_low_text, bpm)
+                VitalAlert.SPO2_NIGHTS -> return context.getString(R.string.alert_spo2_nights_text)
+                VitalAlert.TEMPERATURE -> return context.getString(R.string.alert_temp_text, change)
+                VitalAlert.COMBINED -> return context.getString(R.string.alert_combined_text, change)
+                null -> Unit
+            }
             when (alert.trend) {
                 HeartTrend.ELEVATED_RESTING -> return context.getString(R.string.alert_trend_text, bpm, normal ?: 0)
                 HeartTrend.HIGH_NORMAL -> return context.getString(R.string.alert_high_normal_text, bpm)

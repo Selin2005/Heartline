@@ -197,6 +197,7 @@ class PhoneScreenshotTest(private val theme: String) {
             watchConnected = true,
             listState = rememberLazyListState(initialFirstVisibleItemIndex = 3),
             heartLimits = SampleData.heartLimits,
+            vitalsLimits = SampleData.vitalsLimits,
         )
     }
 

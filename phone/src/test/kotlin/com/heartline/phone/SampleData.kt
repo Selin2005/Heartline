@@ -9,6 +9,7 @@ import com.heartline.phone.ui.model.BodyEntryUi
 import com.heartline.shared.body.BodyComposition
 import com.heartline.shared.profile.Sex
 import com.heartline.phone.ui.model.BpHomeUi
+import com.heartline.phone.ui.model.BackgroundVitalsUi
 import com.heartline.phone.ui.model.MetricDetailUi
 import com.heartline.phone.ui.model.MetricReadingUi
 import com.heartline.phone.ui.model.BpReadingUi
@@ -156,8 +157,40 @@ object SampleData {
                 else -> MetricReadingUi("x$i", date, "7:1$i AM", "${32 + i * 4}", null, 32f + i * 4, listOf(R.string.detail_level to "Low", R.string.detail_hrv to "38 ms"))
             }
         }
-        return MetricDetailUi(metric, rows)
+        val background = when (metric) {
+            Metric.SPO2 -> BackgroundVitalsUi(
+                usualDay = 97f,
+                usualNight = 96f,
+                lastNight = 95f,
+                lastNightLow = 92f,
+                learning = false,
+                nights = (0 until 28).map { if (it == 9) null else (95 + it * 7 % 3).toFloat() },
+                recent = listOf("2:05 PM" to "97 %", "1:04 PM" to "98 %", "12:05 PM" to "96 %"),
+            )
+            Metric.SKIN_TEMPERATURE -> BackgroundVitalsUi(
+                usualNight = 34.1f,
+                lastNight = 0.3f,
+                learning = false,
+                nights = (0 until 28).map { 34.1f + listOf(-0.2f, 0f, 0.1f, 0.2f, -0.1f, 0.3f, 0f)[it % 7] },
+                recent = listOf("6:30 AM" to "34.4 °C", "6:00 AM" to "34.3 °C", "5:30 AM" to "34.4 °C"),
+            )
+            else -> null
+        }
+        return MetricDetailUi(metric, rows, background)
     }
+
+    val vitalsLimits = com.heartline.shared.vitals.VitalsLimits(
+        spo2Low = 90,
+        spo2DayNormal = 97,
+        spo2NightNormal = 96,
+        spo2Confidence = 1.0,
+        spo2NightDrop = 3,
+        tempBaseline = 34.1f,
+        tempSd = 0.2f,
+        tempNights = 21,
+        tempRise = 1.0f,
+        lastNightDeviation = 0.3f,
+    )
 
     /** Eight results over three months, newest first. */
     val body: BodyDetailUi = run {

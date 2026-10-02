@@ -87,6 +87,19 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate6To7AddsOxygenAndTemperatureTables() {
+        helper.createDatabase(DB, 6).close()
+        helper.runMigrationsAndValidate(DB, 7, true, HeartlineDatabase.MIGRATION_6_7).use { db ->
+            db.execSQL("INSERT INTO spo2_samples (tsMs, percent, context, confirmation) VALUES (1, 96, 'SLEEP', 0)")
+            db.execSQL("INSERT INTO skin_temp_samples (tsMs, skinC, ambientC, context, counted) VALUES (1, 34.1, NULL, 'SLEEP', 1)")
+            db.query("SELECT COUNT(*) FROM spo2_samples").use { c ->
+                c.moveToFirst()
+                assertEquals(1, c.getInt(0))
+            }
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

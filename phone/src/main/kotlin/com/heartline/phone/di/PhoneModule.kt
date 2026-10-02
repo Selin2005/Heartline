@@ -89,6 +89,7 @@ val phoneModule = module {
             get(),
             onAlert = { alert -> get<PhoneNotifier>().alert(alert) },
             onLimits = { limits -> get<SettingsRepository>().saveHeartLimits(limits) },
+            onVitalsLimits = { limits -> get<SettingsRepository>().saveVitalsLimits(limits) },
         )
     }
     single { SettingsRepository(androidContext()) }
@@ -206,7 +207,7 @@ val phoneModule = module {
     viewModel { DiagnosticsViewModel(get(), get(), get()) }
     viewModel { BpHomeViewModel(get(), get()) }
     viewModel { CalibrationViewModel(get(), openOnWatch = { get<WatchOpener>().open(it) }) }
-    viewModel { params -> MetricDetailViewModel(params.get(), get(), get()) }
+    viewModel { params -> MetricDetailViewModel(params.get(), get(), get(), get(), get<SettingsRepository>().vitalsLimits) }
     viewModel { BodyCompositionViewModel(get(), get(), get()) }
     viewModel { ProfileViewModel(get()) }
     viewModel { OpenOnWatchViewModel(get()) }

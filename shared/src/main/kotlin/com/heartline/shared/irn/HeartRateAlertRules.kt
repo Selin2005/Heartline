@@ -44,7 +44,7 @@ class HeartRateAlertRules(
         lastAlerts: Map<String, Long>,
         idFactory: () -> String
     ): List<HealthAlert> {
-        if (!settings.heartMonitoring || !settings.heartRateAlertsEnabled || minutes.isEmpty()) return emptyList()
+        if (!settings.heartActive || !settings.heartRateAlertsEnabled || minutes.isEmpty()) return emptyList()
         val sorted = minutes.sortedBy { it.minuteStartMs }
         val now = sorted.last().minuteStartMs + MINUTE
         fun ready(kind: AlertKind, context: HrContext) = lastAlerts[key(kind, context)]?.let { now - it >= cooldownMs } ?: true

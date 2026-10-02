@@ -31,6 +31,9 @@ class WatchSettingsViewModel(
         WatchSettingsUi(
             heartMonitoring = s.heartMonitoring,
             allDayHeartRate = s.passiveHeartRate,
+            heartPart = s.heartAlerts,
+            spo2Part = s.spo2Monitoring,
+            tempPart = s.skinTempMonitoring,
             sensitivity = s.alertSensitivity,
             serviceVersion = connected?.serviceVersion,
             trackers = connected?.trackers?.map { it.name }?.sorted().orEmpty(),
