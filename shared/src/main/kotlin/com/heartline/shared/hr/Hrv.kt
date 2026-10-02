@@ -4,6 +4,7 @@
 package com.heartline.shared.hr
 
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 data class HrvMetrics(val rmssdMs: Double, val sdnnMs: Double, val pnn50: Double, val count: Int)
@@ -36,22 +37,43 @@ object Hrv {
     }
 }
 
-/** Groups 1 Hz samples into per-minute summaries (on-body samples only). */
+/** Groups 1 Hz samples into per-minute summaries (reliable on-body samples only). */
 object MinuteAggregator {
     private const val MINUTE = 60_000L
 
-    fun aggregate(samples: List<HrSample>): List<HrMinute> = samples
-        .filter { it.onBody && it.bpm > 0 }
+    /**
+     * [activity]: what the wearer was doing in the minute starting at the given time, if known
+     * (sleep or exercise from the watch). Otherwise, and when that says rest, a minute with
+     * movement counts as active.
+     */
+    fun aggregate(samples: List<HrSample>, activity: (minuteStartMs: Long) -> HrContext? = { null }): List<HrMinute> = samples
+        .filter { it.onBody && it.reliable && it.bpm > 0 }
         .groupBy { it.tsMs / MINUTE * MINUTE }
         .toSortedMap()
         .map { (start, group) ->
+            val moving = group.any { it.moving }
+            val context = when (val known = activity(start)) {
+                null, HrContext.REST -> if (moving) HrContext.ACTIVE else HrContext.REST
+                else -> known
+            }
             HrMinute(
                 minuteStartMs = start,
-                avgBpm = group.map { it.bpm }.average().toInt(),
+                avgBpm = group.map { it.bpm }.average().roundToInt(),
                 minBpm = group.minOf { it.bpm },
                 maxBpm = group.maxOf { it.bpm },
                 rmssdMs = Hrv.compute(group.flatMap { it.ibiMs })?.rmssdMs,
-                resting = group.none { it.moving }
+                resting = context == HrContext.REST,
+                activity = context
             )
         }
+
+    /** Combines two summaries of the same minute (e.g. one closed early, then more samples). */
+    fun merge(a: HrMinute, b: HrMinute): HrMinute = a.copy(
+        avgBpm = (a.avgBpm + b.avgBpm) / 2,
+        minBpm = minOf(a.minBpm, b.minBpm),
+        maxBpm = maxOf(a.maxBpm, b.maxBpm),
+        rmssdMs = a.rmssdMs ?: b.rmssdMs,
+        resting = a.resting && b.resting,
+        activity = if (a.activity == HrContext.REST) b.activity else a.activity
+    )
 }

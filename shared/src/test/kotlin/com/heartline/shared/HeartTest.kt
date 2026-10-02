@@ -116,23 +116,24 @@ class HeartTest {
 
     @Test
     fun sustainedHighRateAlertsOnce() {
-        val rules = HeartRateAlertRules(sustainMinutes = 10)
+        val rules = HeartRateAlertRules()
         val minutes = List(10) { HrMinute(it * 60_000L, 131, 125, 140) }
-        val first = rules.evaluate(minutes, MonitorSettings(), emptyMap(), id)
+        val first = rules.evaluate(minutes, MonitorSettings(), null, emptyMap(), id)
         assertEquals(listOf(AlertKind.HIGH_HEART_RATE), first.map { it.kind })
-        val again = rules.evaluate(minutes, MonitorSettings(), mapOf(AlertKind.HIGH_HEART_RATE to 600_000L), id)
+        assertEquals(120, first.single().threshold)
+        val again = rules.evaluate(minutes, MonitorSettings(), null, mapOf(HeartRateAlertRules.key(first.single()) to 600_000L), id)
         assertTrue(again.isEmpty())
-        val disabled = rules.evaluate(minutes, MonitorSettings(heartRateAlertsEnabled = false), emptyMap(), id)
+        val disabled = rules.evaluate(minutes, MonitorSettings(heartRateAlertsEnabled = false), null, emptyMap(), id)
         assertTrue(disabled.isEmpty())
     }
 
     @Test
     fun gapOrActivityPreventsHeartRateAlert() {
-        val rules = HeartRateAlertRules(sustainMinutes = 10)
-        val withGap = List(10) { HrMinute((if (it < 5) it else it + 3) * 60_000L, 35, 33, 38) }
-        assertTrue(rules.evaluate(withGap, MonitorSettings(), emptyMap(), id).isEmpty())
-        val active = List(10) { HrMinute(it * 60_000L, 150, 140, 160, resting = it != 4) }
-        assertTrue(rules.evaluate(active, MonitorSettings(), emptyMap(), id).isEmpty())
+        val rules = HeartRateAlertRules()
+        val withGap = List(10) { HrMinute((if (it < 5) it else it + 12) * 60_000L, 35, 33, 38) }
+        assertTrue(rules.evaluate(withGap, MonitorSettings(), null, emptyMap(), id).isEmpty())
+        val active = List(10) { HrMinute(it * 60_000L, 150, 140, 160, resting = it != 9) }
+        assertTrue(rules.evaluate(active, MonitorSettings(), null, emptyMap(), id).isEmpty())
     }
 
     @Test

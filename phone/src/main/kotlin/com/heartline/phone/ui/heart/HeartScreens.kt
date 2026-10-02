@@ -44,6 +44,15 @@ import com.heartline.phone.ui.model.AlertUi
 import com.heartline.phone.ui.model.HeartRateUi
 import com.heartline.phone.ui.theme.HeartlineTheme
 import com.heartline.shared.hr.AlertKind
+import com.heartline.shared.hr.HrContext
+import com.heartline.shared.hr.MaxHr
+
+private val HrContext.label: Int get() = when (this) {
+    HrContext.REST -> R.string.hr_context_rest
+    HrContext.ACTIVE -> R.string.hr_context_active
+    HrContext.EXERCISE -> R.string.hr_context_exercise
+    HrContext.SLEEP -> R.string.hr_context_sleep
+}
 
 enum class HrPeriod(val label: Int) { DAY(R.string.period_day), WEEK(R.string.period_week), MONTH(R.string.period_month) }
 
@@ -75,13 +84,24 @@ fun HeartRateScreen(
                     MetricValue("${state.latestBpm}", stringResource(R.string.unit_bpm), large = true)
                     Spacer(Modifier.height(12.dp))
                     var period by rememberSaveable { mutableStateOf(HrPeriod.DAY) }
+                    var filter by rememberSaveable { mutableStateOf<HrContext?>(null) }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         HrPeriod.entries.forEach { p -> Chip(stringResource(p.label), period == p) { period = p } }
+                    }
+                    if (period == HrPeriod.DAY && state.dayByActivity.size > 1) {
+                        Spacer(Modifier.height(8.dp))
+                        // Today's chart for one kind of minute: resting, asleep, moving or exercise.
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Chip(stringResource(R.string.hr_filter_all), filter == null) { filter = null }
+                            HrContext.entries.filter { it in state.dayByActivity }.forEach { c ->
+                                Chip(stringResource(c.label), filter == c) { filter = c }
+                            }
+                        }
                     }
                     Spacer(Modifier.height(12.dp))
                     when (period) {
                         HrPeriod.DAY -> RangeBarChart(
-                            state.day,
+                            filter?.let { state.dayByActivity[it] } ?: state.day,
                             slots = 48,
                             color = colors.heartRate,
                             xLabels = listOf("00", "06", "12", "18", "24"),
@@ -111,6 +131,51 @@ fun HeartRateScreen(
                         StatColumn(stringResource(R.string.hr_resting), state.restingBpm?.let { "$it" } ?: "–", Modifier.weight(1f))
                         StatColumn(stringResource(R.string.hr_min), state.minBpm?.let { "$it" } ?: "–", Modifier.weight(1f))
                         StatColumn(stringResource(R.string.hr_max), state.maxBpm?.let { "$it" } ?: "–", Modifier.weight(1f))
+                    }
+                }
+            }
+            item {
+                RoundedCard(Modifier.gutter()) {
+                    CardTitle(stringResource(R.string.hr_activity_title))
+                    Spacer(Modifier.height(12.dp))
+                    Row {
+                        StatColumn(
+                            stringResource(R.string.hr_sleep),
+                            state.sleepAvgBpm?.let { stringResource(R.string.hr_sleep_value, it, state.sleepMinBpm ?: it) } ?: "–",
+                            Modifier.weight(1f),
+                        )
+                        StatColumn(
+                            stringResource(R.string.hr_exercise),
+                            if (state.exerciseMinutes > 0) stringResource(R.string.hr_exercise_value, state.exerciseMinutes, state.exercisePeakBpm ?: 0) else "–",
+                            Modifier.weight(1f),
+                        )
+                    }
+                    if (state.restingWeek.any { it != null }) {
+                        Spacer(Modifier.height(16.dp))
+                        Text(stringResource(R.string.hr_resting_week), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                        Spacer(Modifier.height(8.dp))
+                        WeekBars(state.restingWeek, state.weekLabels, colors.heartRate, contentDescription = stringResource(R.string.hr_resting_week))
+                    }
+                }
+            }
+            if (state.zoneMinutes.any { it > 0 }) {
+                item {
+                    RoundedCard(Modifier.gutter()) {
+                        CardTitle(stringResource(R.string.hr_zones_title))
+                        Text(stringResource(R.string.hr_zones_caption, state.maxHr), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                        Spacer(Modifier.height(8.dp))
+                        WeekBars(
+                            state.zoneMinutes.map { it.toFloat() },
+                            MaxHr.zones(state.maxHr).map { "$it+" },
+                            colors.heartRate,
+                            contentDescription = stringResource(R.string.hr_zones_title),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row {
+                            state.zoneMinutes.forEachIndexed { i, m ->
+                                StatColumn(stringResource(R.string.hr_zone, i + 1), stringResource(R.string.hr_minutes_short, m), Modifier.weight(1f))
+                            }
+                        }
                     }
                 }
             }
@@ -161,8 +226,24 @@ fun AlertsScreen(alerts: List<AlertUi>, onBack: (() -> Unit)? = null) {
                         AlertKind.LOW_HEART_RATE -> Triple(R.string.alert_low_title, Icons.Rounded.SouthEast, colors.statusWarn)
                     }
                     val detail = when (alert.kind) {
-                        AlertKind.IRREGULAR_RHYTHM -> stringResource(R.string.alert_irn_detail, alert.windows)
-                        else -> alert.bpm?.let { stringResource(R.string.ecg_bpm_value, it) }.orEmpty()
+                        AlertKind.IRREGULAR_RHYTHM -> listOfNotNull(
+                            stringResource(R.string.alert_irn_detail, alert.windows),
+                            when (alert.ecgRegular) {
+                                true -> stringResource(R.string.alert_ecg_regular)
+                                false -> stringResource(R.string.alert_ecg_other)
+                                null -> null
+                            },
+                        ).joinToString(" · ")
+                        else -> listOfNotNull(
+                            alert.bpm?.let { stringResource(R.string.ecg_bpm_value, it) },
+                            alert.threshold?.let {
+                                stringResource(
+                                    if (alert.kind == AlertKind.HIGH_HEART_RATE) R.string.alert_limit_above else R.string.alert_limit_below,
+                                    it,
+                                )
+                            },
+                            alert.context?.let { stringResource(it.label) },
+                        ).joinToString(" · ")
                     }
                     CardRow(
                         stringResource(title),

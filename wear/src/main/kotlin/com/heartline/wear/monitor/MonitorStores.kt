@@ -16,8 +16,14 @@ import androidx.core.app.NotificationCompat
 import com.heartline.shared.hr.AlertKind
 import com.heartline.shared.hr.HealthAlert
 import com.heartline.shared.hr.HrBatch
+import com.heartline.shared.hr.ActivityChange
+import com.heartline.shared.hr.ActivityTimeline
+import com.heartline.shared.hr.HrContext
 import com.heartline.shared.hr.MonitorSettings
+import com.heartline.shared.hr.MonitorState
+import com.heartline.shared.hr.StepSpan
 import com.heartline.shared.irn.IrnState
+import com.heartline.shared.model.EcgResult
 import com.heartline.shared.sync.Protocol
 import com.heartline.wear.MainActivity
 import com.heartline.wear.R
@@ -96,9 +102,48 @@ class WatchSettingsStore(context: Context, private val now: () -> Long = System:
         get() = prefs.getString(KEY_IRN, null)?.let { runCatching { Protocol.json.decodeFromString<IrnState>(it) }.getOrNull() } ?: IrnState()
         set(value) = prefs.edit().putString(KEY_IRN, Protocol.json.encodeToString(value)).apply()
 
+    /** Recent minutes and alert times of the background monitor (survives a new process). */
+    var monitorState: MonitorState
+        get() = prefs.getString(KEY_MONITOR, null)?.let { runCatching { Protocol.json.decodeFromString<MonitorState>(it) }.getOrNull() } ?: MonitorState()
+        set(value) = prefs.edit().putString(KEY_MONITOR, Protocol.json.encodeToString(value)).apply()
+
+    /** Sleep, workouts and steps as the watch recognised them. */
+    var activity: ActivityTimeline
+        get() = prefs.getString(KEY_ACTIVITY, null)?.let { runCatching { Protocol.json.decodeFromString<ActivityTimeline>(it) }.getOrNull() } ?: ActivityTimeline()
+        private set(value) = prefs.edit().putString(KEY_ACTIVITY, Protocol.json.encodeToString(value)).apply()
+
+    @Synchronized
+    fun recordActivity(change: ActivityChange) {
+        activity = activity.withChange(change, now())
+    }
+
+    @Synchronized
+    fun recordSteps(spans: List<StepSpan>) {
+        activity = activity.withSteps(spans, now())
+    }
+
+    /** What the wearer was doing in a minute, if the watch knows and activity recognition is on. */
+    fun activityAt(minuteStartMs: Long): HrContext? = if (settings.value.activityRecognition) activity.contextAt(minuteStartMs) else null
+
+    /** Time of the latest background heart rate (the watch was worn then). */
+    var lastPassiveHeartRateMs: Long?
+        get() = prefs.getLong(KEY_LAST_PASSIVE, -1).takeIf { it > 0 }
+        set(value) = prefs.edit().putLong(KEY_LAST_PASSIVE, value ?: -1).apply()
+
+    /** An ECG result: a regular one soon after a rhythm notification makes the next one more cautious. */
+    @Synchronized
+    fun noteEcg(result: EcgResult, atMs: Long) {
+        val state = irnState
+        val next = state.withEcg(result == EcgResult.SINUS_RHYTHM, atMs)
+        if (next != state) irnState = next
+    }
+
     private companion object {
         const val KEY = "settings"
         const val KEY_IRN = "irn_state"
+        const val KEY_MONITOR = "monitor_state"
+        const val KEY_ACTIVITY = "activity"
+        const val KEY_LAST_PASSIVE = "last_passive_hr"
         const val KEY_HR = "latest_hr"
         const val KEY_HR_DAY = "hr_day"
         const val KEY_HR_MIN = "hr_min"
@@ -159,24 +204,21 @@ class WatchNotifier(private val context: Context) {
         .build()
 
     fun alert(alert: HealthAlert) {
-        val (title, text) = when (alert.kind) {
-            AlertKind.IRREGULAR_RHYTHM -> R.string.alert_irn_title to context.getString(R.string.alert_irn_text)
-            AlertKind.HIGH_HEART_RATE -> R.string.alert_high_title to context.getString(R.string.alert_high_text, alert.bpm ?: 0)
-            AlertKind.LOW_HEART_RATE -> R.string.alert_low_title to context.getString(R.string.alert_low_text, alert.bpm ?: 0)
+        val (title, text) = AlertText.of(alert, context::getString)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ALERTS)
+            .setSmallIcon(R.drawable.ic_heart)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(openApp())
+        if (alert.kind == AlertKind.IRREGULAR_RHYTHM) {
+            // Checking with an ECG right away is the most useful next step.
+            builder.addAction(R.drawable.ic_heart, context.getString(R.string.alert_take_ecg), deepLink(5, MainActivity.ROUTE_ECG))
         }
-        manager.notify(
-            alert.id.hashCode(),
-            NotificationCompat.Builder(context, CHANNEL_ALERTS)
-                .setSmallIcon(R.drawable.ic_heart)
-                .setContentTitle(context.getString(title))
-                .setContentText(text)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-                .setCategory(NotificationCompat.CATEGORY_STATUS)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setAutoCancel(true)
-                .setContentIntent(openApp())
-                .build(),
-        )
+        manager.notify(alert.id.hashCode(), builder.build())
     }
 
     /** Opens [route] in the app (heartline://watch/<route>), not just the home screen. */
@@ -257,9 +299,45 @@ class WatchMonitorOutput(
         sync.schedule()
     }
 
-    override fun notify(alert: HealthAlert) = notifier.alert(alert)
+    override suspend fun loadMonitorState() = settings.monitorState
+
+    override suspend fun saveMonitorState(state: MonitorState) {
+        settings.monitorState = state
+    }
+
+    override fun notify(alert: HealthAlert) {
+        if (settings.settings.value.alertOnWatch) notifier.alert(alert)
+    }
 
     override fun latestMinute(bpm: Int) {
         settings.recordHeartRate(bpm)
+    }
+}
+
+/** Title and text of a heart alert, naming the limit and what the wearer was doing (watch strings). */
+object AlertText {
+    fun of(alert: HealthAlert, string: (Int) -> String): Pair<String, String> {
+        val bpm = alert.bpm ?: 0
+        val limit = alert.threshold
+        return when (alert.kind) {
+            AlertKind.IRREGULAR_RHYTHM -> string(R.string.alert_irn_title) to string(R.string.alert_irn_text)
+            AlertKind.HIGH_HEART_RATE -> {
+                val text = when {
+                    limit == null -> string(R.string.alert_high_text).format(bpm)
+                    alert.context == HrContext.EXERCISE || alert.context == HrContext.ACTIVE -> string(R.string.alert_high_exercise_text).format(limit, bpm)
+                    alert.context == HrContext.SLEEP -> string(R.string.alert_high_sleep_text).format(limit, bpm)
+                    else -> string(R.string.alert_high_rest_text).format(limit, bpm)
+                }
+                string(R.string.alert_high_title) to text
+            }
+            AlertKind.LOW_HEART_RATE -> {
+                val text = when {
+                    limit == null -> string(R.string.alert_low_text).format(bpm)
+                    alert.context == HrContext.SLEEP -> string(R.string.alert_low_sleep_text).format(limit, bpm)
+                    else -> string(R.string.alert_low_rest_text).format(limit, bpm)
+                }
+                string(R.string.alert_low_title) to text
+            }
+        }
     }
 }

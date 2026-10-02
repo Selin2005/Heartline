@@ -22,6 +22,7 @@ import com.heartline.phone.R
 import com.heartline.shared.bp.BpSafety
 import com.heartline.shared.hr.AlertKind
 import com.heartline.shared.hr.HealthAlert
+import com.heartline.shared.hr.HrContext
 import com.heartline.shared.model.RecordSummary
 
 /** Mirrors watch heart alerts as phone notifications. */
@@ -39,11 +40,7 @@ class PhoneNotifier(private val context: Context) {
 
     fun alert(alert: HealthAlert) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
-        val (title, text) = when (alert.kind) {
-            AlertKind.IRREGULAR_RHYTHM -> context.getString(R.string.alert_irn_title) to context.getString(R.string.alert_irn_text)
-            AlertKind.HIGH_HEART_RATE -> context.getString(R.string.alert_high_title) to context.getString(R.string.alert_high_text, alert.bpm ?: 0)
-            AlertKind.LOW_HEART_RATE -> context.getString(R.string.alert_low_title) to context.getString(R.string.alert_low_text, alert.bpm ?: 0)
-        }
+        val (title, text) = context.getString(alertTitle(alert.kind)) to alertText(context, alert)
         val open = PendingIntent.getActivity(
             context,
             0,
@@ -149,6 +146,32 @@ class PhoneNotifier(private val context: Context) {
     }
 
     companion object {
+        fun alertTitle(kind: AlertKind) = when (kind) {
+            AlertKind.IRREGULAR_RHYTHM -> R.string.alert_irn_title
+            AlertKind.HIGH_HEART_RATE -> R.string.alert_high_title
+            AlertKind.LOW_HEART_RATE -> R.string.alert_low_title
+        }
+
+        /** The alert's text, naming the limit crossed and what the wearer was doing when known. */
+        fun alertText(context: Context, alert: HealthAlert): String {
+            val bpm = alert.bpm ?: 0
+            val limit = alert.threshold
+            return when (alert.kind) {
+                AlertKind.IRREGULAR_RHYTHM -> context.getString(R.string.alert_irn_text)
+                AlertKind.HIGH_HEART_RATE -> when {
+                    limit == null -> context.getString(R.string.alert_high_text, bpm)
+                    alert.context == HrContext.EXERCISE || alert.context == HrContext.ACTIVE -> context.getString(R.string.alert_high_exercise_text, limit, bpm)
+                    alert.context == HrContext.SLEEP -> context.getString(R.string.alert_high_sleep_text, limit, bpm)
+                    else -> context.getString(R.string.alert_high_rest_text, limit, bpm)
+                }
+                AlertKind.LOW_HEART_RATE -> when {
+                    limit == null -> context.getString(R.string.alert_low_text, bpm)
+                    alert.context == HrContext.SLEEP -> context.getString(R.string.alert_low_sleep_text, limit, bpm)
+                    else -> context.getString(R.string.alert_low_rest_text, limit, bpm)
+                }
+            }
+        }
+
         const val CALIBRATION_ID = 7_002
         const val DAILY_ID = 7_003
         const val BP_SAFETY_ID = 7_004

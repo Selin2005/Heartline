@@ -84,6 +84,7 @@ import com.heartline.phone.ui.components.RoundedCard
 import com.heartline.phone.ui.components.SectionHeader
 import com.heartline.phone.ui.components.gutter
 import com.heartline.phone.ui.theme.HeartlineTheme
+import com.heartline.shared.hr.IrnSensitivity
 import com.heartline.shared.hr.MonitorSettings
 
 /** Everything the settings screen can change; each maps to one field of [MonitorSettings]. */
@@ -94,6 +95,15 @@ sealed interface SettingChange {
     data class LowBpm(val bpm: Int) : SettingChange
     data class BackgroundHeartRate(val on: Boolean) : SettingChange
     data class IrnInterval(val minutes: Int) : SettingChange
+    data class IrnSensitivityLevel(val level: IrnSensitivity) : SettingChange
+    data class HighAlert(val on: Boolean) : SettingChange
+    data class LowAlert(val on: Boolean) : SettingChange
+    data class ExerciseAlert(val on: Boolean) : SettingChange
+    data class ExerciseMax(val bpm: Int?) : SettingChange
+    data class SleepLow(val bpm: Int?) : SettingChange
+    data class ActivityRecognition(val on: Boolean) : SettingChange
+    data class AlertOnWatch(val on: Boolean) : SettingChange
+    data class AlertOnPhone(val on: Boolean) : SettingChange
     data class CalibrationReminder(val on: Boolean) : SettingChange
     data class DailyReminder(val on: Boolean) : SettingChange
     data class DailyReminderTime(val minuteOfDay: Int) : SettingChange
@@ -114,6 +124,15 @@ sealed interface SettingChange {
         is LowBpm -> s.copy(lowBpm = bpm)
         is BackgroundHeartRate -> s.copy(backgroundHeartRate = on)
         is IrnInterval -> s.copy(irnIntervalMinutes = minutes)
+        is IrnSensitivityLevel -> s.copy(irnSensitivity = level)
+        is HighAlert -> s.copy(highAlertEnabled = on)
+        is LowAlert -> s.copy(lowAlertEnabled = on)
+        is ExerciseAlert -> s.copy(exerciseAlertEnabled = on)
+        is ExerciseMax -> s.copy(exerciseMaxBpm = bpm)
+        is SleepLow -> s.copy(sleepLowBpm = bpm)
+        is ActivityRecognition -> s.copy(activityRecognition = on)
+        is AlertOnWatch -> s.copy(alertOnWatch = on)
+        is AlertOnPhone -> s.copy(alertOnPhone = on)
         is CalibrationReminder -> s.copy(calibrationReminder = on)
         is DailyReminder -> s.copy(dailyReminder = on)
         is DailyReminderTime -> s.copy(dailyReminderMinute = minuteOfDay)
@@ -131,6 +150,9 @@ sealed interface SettingChange {
 
 private sealed interface Picker {
     data object Interval : Picker
+    data object Sensitivity : Picker
+    data object ExerciseLimit : Picker
+    data object SleepLimit : Picker
     data object High : Picker
     data object Low : Picker
     data object Time : Picker
@@ -208,6 +230,13 @@ fun SettingsScreen(
                     showDivider = true,
                 )
                 CardRow(
+                    stringResource(R.string.settings_activity_recognition),
+                    subtitle = stringResource(R.string.settings_activity_recognition_summary),
+                    leading = { IconBadge(Icons.Rounded.MonitorHeart, colors.heartRate) },
+                    trailing = { OneUiSwitch(monitor.activityRecognition) { onChange(SettingChange.ActivityRecognition(it)) } },
+                    showDivider = true,
+                )
+                CardRow(
                     stringResource(R.string.settings_irn),
                     subtitle = stringResource(R.string.settings_irn_summary),
                     leading = { IconBadge(Icons.Rounded.NotificationsActive, colors.ecg) },
@@ -223,6 +252,14 @@ fun SettingsScreen(
                         showDivider = true,
                         onClick = { picker = Picker.Interval },
                     )
+                    CardRow(
+                        stringResource(R.string.settings_irn_sensitivity),
+                        subtitle = stringResource(monitor.irnSensitivity.label),
+                        dividerStart = 76.dp,
+                        leading = { Spacer(Modifier.size(40.dp)) },
+                        showDivider = true,
+                        onClick = { picker = Picker.Sensitivity },
+                    )
                 }
                 CardRow(
                     stringResource(R.string.settings_hr_alerts),
@@ -234,18 +271,62 @@ fun SettingsScreen(
                 if (monitor.heartRateAlertsEnabled) {
                     CardRow(
                         stringResource(R.string.settings_high_threshold),
-                        subtitle = stringResource(R.string.settings_bpm, monitor.highBpm),
+                        subtitle = if (monitor.highAlertEnabled) stringResource(R.string.settings_bpm, monitor.highBpm) else stringResource(R.string.settings_off),
                         leading = { Spacer(Modifier.size(40.dp)) },
+                        trailing = { OneUiSwitch(monitor.highAlertEnabled) { onChange(SettingChange.HighAlert(it)) } },
                         showDivider = true,
                         onClick = { picker = Picker.High },
                     )
                     CardRow(
                         stringResource(R.string.settings_low_threshold),
-                        subtitle = stringResource(R.string.settings_bpm, monitor.lowBpm),
+                        subtitle = if (monitor.lowAlertEnabled) {
+                            stringResource(R.string.settings_low_summary, monitor.lowBpm, monitor.sleepLowLimit)
+                        } else {
+                            stringResource(R.string.settings_off)
+                        },
                         leading = { Spacer(Modifier.size(40.dp)) },
+                        trailing = { OneUiSwitch(monitor.lowAlertEnabled) { onChange(SettingChange.LowAlert(it)) } },
+                        showDivider = true,
                         onClick = { picker = Picker.Low },
                     )
+                    if (monitor.lowAlertEnabled) {
+                        CardRow(
+                            stringResource(R.string.settings_sleep_low_threshold),
+                            subtitle = stringResource(R.string.settings_bpm, monitor.sleepLowLimit),
+                            leading = { Spacer(Modifier.size(40.dp)) },
+                            showDivider = true,
+                            onClick = { picker = Picker.SleepLimit },
+                        )
+                    }
+                    CardRow(
+                        stringResource(R.string.settings_exercise_alert),
+                        subtitle = monitor.exerciseMaxBpm.let { limit ->
+                            when {
+                                !monitor.exerciseAlertEnabled -> stringResource(R.string.settings_off)
+                                limit == null -> stringResource(R.string.settings_exercise_age_based)
+                                else -> stringResource(R.string.settings_exercise_above, limit)
+                            }
+                        },
+                        leading = { Spacer(Modifier.size(40.dp)) },
+                        trailing = { OneUiSwitch(monitor.exerciseAlertEnabled) { onChange(SettingChange.ExerciseAlert(it)) } },
+                        onClick = { picker = Picker.ExerciseLimit },
+                    )
                 }
+            }
+        }
+        item {
+            RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
+                CardRow(
+                    stringResource(R.string.settings_alert_on_watch),
+                    leading = { IconBadge(Icons.Rounded.NotificationsActive, colors.ecg) },
+                    trailing = { OneUiSwitch(monitor.alertOnWatch) { onChange(SettingChange.AlertOnWatch(it)) } },
+                    showDivider = true,
+                )
+                CardRow(
+                    stringResource(R.string.settings_alert_on_phone),
+                    leading = { IconBadge(Icons.Rounded.NotificationsActive, colors.heartRate) },
+                    trailing = { OneUiSwitch(monitor.alertOnPhone) { onChange(SettingChange.AlertOnPhone(it)) } },
+                )
             }
         }
         item {
@@ -478,6 +559,25 @@ fun SettingsScreen(
             monitor.irnIntervalMinutes,
             onDismiss = { picker = null },
         ) { onChange(SettingChange.IrnInterval(it)) }
+        Picker.Sensitivity -> ChoiceDialog(
+            stringResource(R.string.settings_irn_sensitivity),
+            IrnSensitivity.entries.map { stringResource(it.label) to it },
+            monitor.irnSensitivity,
+            onDismiss = { picker = null },
+        ) { onChange(SettingChange.IrnSensitivityLevel(it)) }
+        Picker.ExerciseLimit -> ChoiceDialog(
+            stringResource(R.string.settings_exercise_alert),
+            listOf(stringResource(R.string.settings_exercise_age_based) to null) +
+                MonitorSettings.EXERCISE_MAX_RANGE.step(5).map { stringResource(R.string.settings_bpm, it) to it },
+            monitor.exerciseMaxBpm,
+            onDismiss = { picker = null },
+        ) { onChange(SettingChange.ExerciseMax(it)) }
+        Picker.SleepLimit -> ChoiceDialog(
+            stringResource(R.string.settings_sleep_low_threshold),
+            MonitorSettings.SLEEP_LOW_BPM_RANGE.step(5).map { stringResource(R.string.settings_bpm, it) to it },
+            monitor.sleepLowLimit,
+            onDismiss = { picker = null },
+        ) { onChange(SettingChange.SleepLow(it)) }
         Picker.High -> ChoiceDialog(
             stringResource(R.string.settings_high_threshold),
             MonitorSettings.HIGH_BPM_RANGE.step(5).map { stringResource(R.string.settings_bpm, it) to it },
@@ -543,6 +643,11 @@ private fun buildLabel(versionName: String): String {
         AppVersion.Channel.BETA -> "$version · ${stringResource(R.string.build_beta)}"
         else -> version
     }
+}
+
+private val IrnSensitivity.label: Int get() = when (this) {
+    IrnSensitivity.STANDARD -> R.string.settings_irn_sensitivity_standard
+    IrnSensitivity.HIGH -> R.string.settings_irn_sensitivity_high
 }
 
 private val ReportName.label: Int get() = when (this) {

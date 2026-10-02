@@ -83,6 +83,17 @@ object SampleData {
             hrvWeek = listOf(31f, 36f, 29f, null, 40f, 33f, 34f),
             weekLabels = listOf("T", "F", "S", "S", "M", "T", "W"),
             unreadAlerts = 1,
+            sleepAvgBpm = 53,
+            sleepMinBpm = 47,
+            exerciseMinutes = 42,
+            exercisePeakBpm = 164,
+            maxHr = 185,
+            zoneMinutes = listOf(18, 9, 14, 12, 3),
+            restingWeek = listOf(57f, 56f, 58f, null, 55f, 56f, 56f),
+            dayByActivity = mapOf(
+                com.heartline.shared.hr.HrContext.REST to day,
+                com.heartline.shared.hr.HrContext.SLEEP to day.filter { it.index < 12 },
+            ),
         )
     }
 
@@ -144,9 +155,9 @@ object SampleData {
     }
 
     val alerts = listOf(
-        AlertUi("a1", AlertKind.IRREGULAR_RHYTHM, "Sep 21", "3:12 AM", 94, 5, read = false),
-        AlertUi("a2", AlertKind.HIGH_HEART_RATE, "Sep 14", "11:40 PM", 128, 0, read = true),
-        AlertUi("a3", AlertKind.LOW_HEART_RATE, "Aug 30", "4:05 AM", 38, 0, read = true),
+        AlertUi("a1", AlertKind.IRREGULAR_RHYTHM, "Sep 21", "3:12 AM", 94, 5, read = false, ecgRegular = true),
+        AlertUi("a2", AlertKind.HIGH_HEART_RATE, "Sep 14", "11:40 PM", 128, 0, read = true, threshold = 120, context = com.heartline.shared.hr.HrContext.REST),
+        AlertUi("a3", AlertKind.LOW_HEART_RATE, "Aug 30", "4:05 AM", 33, 0, read = true, threshold = 35, context = com.heartline.shared.hr.HrContext.SLEEP),
     )
 
     val home get() = HomeState(

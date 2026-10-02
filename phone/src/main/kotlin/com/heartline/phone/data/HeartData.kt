@@ -3,6 +3,7 @@
 
 package com.heartline.phone.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Entity
 import androidx.room.Insert
@@ -10,6 +11,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import com.heartline.shared.hr.AlertKind
+import com.heartline.shared.hr.HrContext
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "hr_minutes")
@@ -20,6 +22,8 @@ data class HrMinuteEntity(
     val maxBpm: Int,
     val rmssdMs: Double?,
     val resting: Boolean,
+    /** Rest, moving about, exercise or sleep (rest for minutes from older watch versions). */
+    @ColumnInfo(defaultValue = "REST") val activity: HrContext = if (resting) HrContext.REST else HrContext.ACTIVE,
 )
 
 @Entity(tableName = "alerts")
@@ -30,6 +34,9 @@ data class AlertEntity(
     val bpm: Int?,
     val windowCount: Int,
     val read: Boolean = false,
+    /** The limit that was crossed, and what the wearer was doing (high/low alerts from newer watches). */
+    val threshold: Int? = null,
+    val context: HrContext? = null,
 )
 
 @Dao
@@ -39,6 +46,9 @@ interface HeartDao {
 
     @Query("SELECT * FROM hr_minutes WHERE minuteStartMs >= :fromMs AND minuteStartMs < :toMs ORDER BY minuteStartMs")
     fun minutes(fromMs: Long, toMs: Long): Flow<List<HrMinuteEntity>>
+
+    @Query("SELECT * FROM hr_minutes WHERE minuteStartMs IN (:starts)")
+    suspend fun minutesAt(starts: List<Long>): List<HrMinuteEntity>
 
     @Query("SELECT * FROM hr_minutes ORDER BY minuteStartMs DESC LIMIT 1")
     fun latestMinute(): Flow<HrMinuteEntity?>

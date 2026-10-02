@@ -6,6 +6,7 @@ package com.heartline.phone.data
 import com.heartline.shared.hr.AlertKind
 import com.heartline.shared.hr.HealthAlert
 import com.heartline.shared.hr.HrBatch
+import com.heartline.shared.hr.HrContext
 import com.heartline.shared.hr.HrMinute
 import com.heartline.shared.model.EcgResult
 import com.heartline.shared.model.RecordKind
@@ -61,9 +62,30 @@ object DemoData {
         while (t <= now) {
             val hourOfDay = ((t / 3_600_000) % 24).toInt()
             val asleep = hourOfDay < 6
-            val base = if (asleep) 54.0 else 68.0 + 10 * sin((hourOfDay - 6) / 16.0 * PI)
+            // An evening workout most days.
+            val exercise = hourOfDay == 18 && (t / DAY) % 7 != 3L
+            val active = !asleep && !exercise && random.nextDouble() < 0.2
+            val base = when {
+                asleep -> 54.0
+                exercise -> 138.0
+                else -> 68.0 + 10 * sin((hourOfDay - 6) / 16.0 * PI)
+            }
             val avg = (base + random.nextDouble(-4.0, 4.0)).toInt()
-            minutes += HrMinute(t, avg, avg - random.nextInt(2, 7), avg + random.nextInt(2, 9), 28.0 + random.nextDouble(-8.0, 12.0), resting = asleep || random.nextDouble() > 0.2)
+            val activity = when {
+                asleep -> HrContext.SLEEP
+                exercise -> HrContext.EXERCISE
+                active -> HrContext.ACTIVE
+                else -> HrContext.REST
+            }
+            minutes += HrMinute(
+                t,
+                avg,
+                avg - random.nextInt(2, 7),
+                avg + random.nextInt(2, 9),
+                (28.0 + random.nextDouble(-8.0, 12.0)).takeIf { activity == HrContext.REST || activity == HrContext.SLEEP },
+                resting = activity == HrContext.REST,
+                activity = activity,
+            )
             t += 5 * 60_000L
         }
         return HrBatch("demo-hr", minutes)

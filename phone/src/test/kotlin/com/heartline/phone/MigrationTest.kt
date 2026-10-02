@@ -52,6 +52,27 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate4To5LabelsHeartMinutes() {
+        helper.createDatabase(DB, 4).use { db ->
+            db.execSQL("INSERT INTO hr_minutes (minuteStartMs, avgBpm, minBpm, maxBpm, rmssdMs, resting) VALUES (0, 60, 58, 62, NULL, 1)")
+            db.execSQL("INSERT INTO hr_minutes (minuteStartMs, avgBpm, minBpm, maxBpm, rmssdMs, resting) VALUES (60000, 110, 100, 120, NULL, 0)")
+            db.execSQL("INSERT INTO alerts (id, kind, atMs, bpm, windowCount, read) VALUES ('a', 'HIGH_HEART_RATE', 1, 130, 0, 0)")
+        }
+        helper.runMigrationsAndValidate(DB, 5, true, HeartlineDatabase.MIGRATION_4_5).use { db ->
+            db.query("SELECT activity FROM hr_minutes ORDER BY minuteStartMs").use { c ->
+                c.moveToFirst()
+                assertEquals("REST", c.getString(0))
+                c.moveToNext()
+                assertEquals("ACTIVE", c.getString(0))
+            }
+            db.query("SELECT threshold, context FROM alerts").use { c ->
+                c.moveToFirst()
+                assertEquals(true, c.isNull(0) && c.isNull(1))
+            }
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

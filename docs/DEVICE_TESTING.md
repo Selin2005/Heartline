@@ -153,7 +153,19 @@ attach them to a bug report.
 14. **Updates:** Settings → Updates → *Check now* finds the newest stable release; with the update
     channel set to Beta it also offers betas, and on Development every new build. The *Update
     channel* setting is shown only in beta and dev builds. After updating, *What's new* shows the changelog.
-15. **Blood pressure sensors (algorithm 6).** Every session writes a raw log. Capture
+15. **Heart notifications and activity.** Capture `adb logcat -v time -s Heartline/Monitor`.
+    - **Activity recognition:** start a workout in Samsung Health; within a few minutes the log
+      shows `activity: EXERCISE`, and on the phone the heart-rate chart offers an *Exercise*
+      filter. After a night's sleep it shows `activity: ASLEEP` and *Today by activity* shows sleep.
+    - **No alerts during normal exercise:** a workout at a high but normal rate gives no high heart
+      rate notification. Settings → *Very high heart rate during exercise* set to a low limit (for
+      example 140 bpm) gives one after about 3 minutes above it.
+    - **Watch not worn:** leave the watch on a table or charger for two hours. The log shows
+      `IRN window skipped` (no background heart rate, or off the wrist), never an irregular rhythm
+      notification.
+    - **Rhythm windows:** while wearing it and sitting still, `IRN window done` lines show
+      `irregular=false` (or a `skipped=` reason for moving or weak signal).
+16. **Blood pressure sensors (algorithm 6).** Every session writes a raw log. Capture
     `adb logcat -v time -s Heartline/BP Heartline/BpRaw Heartline/Sensor` and export
     Phone → Blood pressure → Share → **BP raw sessions (zip)**, or use Settings → Help & diagnostics →
     **Export logs**, which has every raw sensor value of every session plus the calibrations and cuff

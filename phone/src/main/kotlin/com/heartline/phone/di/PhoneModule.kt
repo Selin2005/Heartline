@@ -57,6 +57,10 @@ import com.heartline.shared.sync.SyncTransport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
+import com.heartline.shared.model.RecordSummary
+import com.heartline.shared.model.RecordKind
+import kotlinx.coroutines.flow.map
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
@@ -81,7 +85,7 @@ val phoneModule = module {
     single { PhoneNotifier(androidContext()) }
     single { EcgSecondOpinion.fromAssets(androidContext()) }
     single { get<HeartlineDatabase>().heart() }
-    single { HeartRepository(get()) { alert -> get<PhoneNotifier>().alert(alert) } }
+    single { HeartRepository(get()) { alert -> if (get<SettingsRepository>().monitor.first().alertOnPhone) get<PhoneNotifier>().alert(alert) } }
     single { SettingsRepository(androidContext()) }
     single { UpdateRepository(androidContext(), BuildConfig.VERSION_NAME) }
     single { ReleaseSource("Heartline/${BuildConfig.VERSION_NAME} (Android)") }
@@ -184,7 +188,14 @@ val phoneModule = module {
     single { EcgReportBuilder(androidContext()) }
     viewModel { params -> EcgDetailViewModel(params.get(), get(), get(), get()) }
     viewModel { SettingsViewModel(get(), get(), get(), get(), get()) { Reminders.sync(androidContext(), it) } }
-    viewModel { HeartRateViewModel(get(), get()) }
+    viewModel {
+        HeartRateViewModel(
+            get(),
+            get(),
+            age = get<ProfileRepository>().profile.map { it?.age() },
+            settings = get<SettingsRepository>().monitor,
+        )
+    }
     viewModel { UpdatesViewModel(get(), get(), BuildConfig.VERSION_NAME) }
     viewModel { DiagnosticsViewModel(get(), get(), get()) }
     viewModel { BpHomeViewModel(get(), get()) }
@@ -199,5 +210,13 @@ val phoneModule = module {
     single { DataExporter(androidContext()) }
     single { com.heartline.phone.widget.WidgetDataSource(get(), get(), get(), { get() }, profiles = get(), settings = get()) }
     single { com.heartline.phone.widget.WidgetUpdater(androidContext(), get(), get(), get(), get(), get()) }
-    viewModel { AlertsViewModel(get(), get()) }
+    viewModel {
+        AlertsViewModel(
+            get(),
+            get(),
+            get<RecordRepository>().observe(RecordKind.ECG).map { list ->
+                list.mapNotNull { r -> (r.summary as? RecordSummary.Ecg)?.result?.let { r.entity.startedAtMs to it } }
+            },
+        )
+    }
 }

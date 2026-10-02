@@ -89,7 +89,11 @@ val wearModule = module {
     single { WatchSettingsStore(androidContext()) }
     single { WatchNotifier(androidContext()) }
     single { WatchMonitorOutput(get(), get(), get(), get()) }
-    single { BackgroundHeart(get<WatchMonitorOutput>()) { get<WatchSettingsStore>().settings.value } }
+    single {
+        val store = get<WatchSettingsStore>()
+        val profile = get<WatchProfileStore>()
+        BackgroundHeart(get<WatchMonitorOutput>(), store::activityAt, { profile.profile.value?.age() }) { store.settings.value }
+    }
     single<HrSource> {
         if (BuildConfig.USE_FAKE_SENSORS) FakeHrSource() else SdkHrSource(get<SensorGateway>() as SdkSensorGateway)
     }
@@ -217,5 +221,5 @@ val wearModule = module {
         )
     }
     viewModel { params -> QuickMeasureViewModel(get<QuickSources>()[params.get<Metric>()]!!, get(), get(), get()) }
-    viewModel { EcgMeasureViewModel(get(), get(), get()) }
+    viewModel { EcgMeasureViewModel(get(), get(), get(), onResult = get<WatchSettingsStore>()::noteEcg) }
 }

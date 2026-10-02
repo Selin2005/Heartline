@@ -77,6 +77,8 @@ class EcgMeasureViewModel(
     private val sync: SyncScheduler,
     private val now: () -> Long = System::currentTimeMillis,
     private val uiIntervalMs: Long = 40,
+    /** Every finished recording's result and time (the rhythm notifications learn from it). */
+    private val onResult: (EcgResult, Long) -> Unit = { _, _ -> },
 ) : ViewModel() {
     private val mutable = MutableStateFlow<EcgMeasureState>(EcgMeasureState.Idle)
     val state: StateFlow<EcgMeasureState> = mutable.asStateFlow()
@@ -223,6 +225,7 @@ class EcgMeasureViewModel(
             store.add(meta, recording)
             sync.schedule()
         }
+        onResult(analysis.result, now())
         return EcgMeasureState.Done(id, analysis.result, analysis.averageBpm, m)
     }
 

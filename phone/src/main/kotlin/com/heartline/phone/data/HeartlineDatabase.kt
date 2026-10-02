@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [RecordEntity::class, HrMinuteEntity::class, AlertEntity::class, BpCalibrationEntity::class, BpValidationEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class HeartlineDatabase : RoomDatabase() {
@@ -59,9 +59,19 @@ abstract class HeartlineDatabase : RoomDatabase() {
             }
         }
 
+        /** v5: what the wearer was doing in each heart-rate minute; an alert's limit and context. */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `hr_minutes` ADD COLUMN `activity` TEXT NOT NULL DEFAULT 'REST'")
+                db.execSQL("UPDATE `hr_minutes` SET `activity` = 'ACTIVE' WHERE `resting` = 0")
+                db.execSQL("ALTER TABLE `alerts` ADD COLUMN `threshold` INTEGER")
+                db.execSQL("ALTER TABLE `alerts` ADD COLUMN `context` TEXT")
+            }
+        }
+
         fun create(context: Context): HeartlineDatabase =
             Room.databaseBuilder(context, HeartlineDatabase::class.java, "heartline.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
 
         fun inMemory(context: Context): HeartlineDatabase =
