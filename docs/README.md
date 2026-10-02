@@ -9,6 +9,7 @@
 ## How it works
 - [ECG algorithm](algorithms/ECG_ALGORITHM.md)
 - [Blood pressure algorithm](algorithms/BP_ALGORITHM.md)
+- [Background heart monitoring and heart notifications](algorithms/HEART_MONITORING.md)
 - [Watch ↔ phone sync protocol](architecture/PROTOCOL.md)
 - [Samsung Health Sensor SDK integration](SAMSUNG_HEALTH_SENSOR_SDK.md)
 - [Design system](DESIGN.md) · [App icon and promotional images](brand/README.md)
