@@ -68,6 +68,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -84,26 +85,15 @@ import com.heartline.phone.ui.components.RoundedCard
 import com.heartline.phone.ui.components.SectionHeader
 import com.heartline.phone.ui.components.gutter
 import com.heartline.phone.ui.theme.HeartlineTheme
-import com.heartline.shared.hr.IrnSensitivity
+import com.heartline.shared.hr.AlertSensitivity
+import com.heartline.shared.hr.HeartLimits
 import com.heartline.shared.hr.MonitorSettings
 
 /** Everything the settings screen can change; each maps to one field of [MonitorSettings]. */
 sealed interface SettingChange {
-    data class IrregularRhythm(val on: Boolean) : SettingChange
-    data class HeartRateAlerts(val on: Boolean) : SettingChange
-    data class HighBpm(val bpm: Int) : SettingChange
-    data class LowBpm(val bpm: Int) : SettingChange
-    data class BackgroundHeartRate(val on: Boolean) : SettingChange
-    data class IrnInterval(val minutes: Int) : SettingChange
-    data class IrnSensitivityLevel(val level: IrnSensitivity) : SettingChange
-    data class HighAlert(val on: Boolean) : SettingChange
-    data class LowAlert(val on: Boolean) : SettingChange
-    data class ExerciseAlert(val on: Boolean) : SettingChange
-    data class ExerciseMax(val bpm: Int?) : SettingChange
-    data class SleepLow(val bpm: Int?) : SettingChange
-    data class ActivityRecognition(val on: Boolean) : SettingChange
-    data class AlertOnWatch(val on: Boolean) : SettingChange
-    data class AlertOnPhone(val on: Boolean) : SettingChange
+    /** The one switch for every part of heart monitoring. */
+    data class HeartMonitoring(val on: Boolean) : SettingChange
+    data class Sensitivity(val level: AlertSensitivity) : SettingChange
     data class CalibrationReminder(val on: Boolean) : SettingChange
     data class DailyReminder(val on: Boolean) : SettingChange
     data class DailyReminderTime(val minuteOfDay: Int) : SettingChange
@@ -118,21 +108,8 @@ sealed interface SettingChange {
     data class WeeklySummary(val on: Boolean) : SettingChange
 
     fun applyTo(s: MonitorSettings): MonitorSettings = when (this) {
-        is IrregularRhythm -> s.copy(irregularRhythmEnabled = on)
-        is HeartRateAlerts -> s.copy(heartRateAlertsEnabled = on)
-        is HighBpm -> s.copy(highBpm = bpm)
-        is LowBpm -> s.copy(lowBpm = bpm)
-        is BackgroundHeartRate -> s.copy(backgroundHeartRate = on)
-        is IrnInterval -> s.copy(irnIntervalMinutes = minutes)
-        is IrnSensitivityLevel -> s.copy(irnSensitivity = level)
-        is HighAlert -> s.copy(highAlertEnabled = on)
-        is LowAlert -> s.copy(lowAlertEnabled = on)
-        is ExerciseAlert -> s.copy(exerciseAlertEnabled = on)
-        is ExerciseMax -> s.copy(exerciseMaxBpm = bpm)
-        is SleepLow -> s.copy(sleepLowBpm = bpm)
-        is ActivityRecognition -> s.copy(activityRecognition = on)
-        is AlertOnWatch -> s.copy(alertOnWatch = on)
-        is AlertOnPhone -> s.copy(alertOnPhone = on)
+        is HeartMonitoring -> s.withMonitoring(on)
+        is Sensitivity -> s.copy(alertSensitivity = level)
         is CalibrationReminder -> s.copy(calibrationReminder = on)
         is DailyReminder -> s.copy(dailyReminder = on)
         is DailyReminderTime -> s.copy(dailyReminderMinute = minuteOfDay)
@@ -149,12 +126,7 @@ sealed interface SettingChange {
 }
 
 private sealed interface Picker {
-    data object Interval : Picker
     data object Sensitivity : Picker
-    data object ExerciseLimit : Picker
-    data object SleepLimit : Picker
-    data object High : Picker
-    data object Low : Picker
     data object Time : Picker
     data object Temperature : Picker
     data object Name : Picker
@@ -187,8 +159,13 @@ fun SettingsScreen(
     quickTileMetric: Metric = Metric.SPO2,
     onQuickTileMetric: (Metric) -> Unit = {},
     onAddQuickTiles: () -> Unit = {},
+    /** The personal limits the watch uses now (null until it has sent them). */
+    heartLimits: HeartLimits? = null,
+    /** 1 or 2: the confirmation step shown for turning heart monitoring off (screenshots). */
+    initialOffStep: Int = 0,
 ) {
     var editingPrompt by remember { mutableStateOf(false) }
+    var offStep by remember { mutableIntStateOf(initialOffStep) }
     val colors = HeartlineTheme.colors
     val uri = LocalUriHandler.current
     var picker by remember { mutableStateOf<Picker?>(null) }
@@ -223,110 +200,31 @@ fun SettingsScreen(
         item {
             RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
                 CardRow(
-                    stringResource(R.string.settings_background_hr),
-                    subtitle = stringResource(R.string.settings_background_hr_summary),
+                    stringResource(R.string.settings_heart_monitoring),
+                    subtitle = stringResource(if (monitor.heartMonitoring) R.string.settings_heart_monitoring_summary else R.string.settings_heart_monitoring_off),
                     leading = { IconBadge(Icons.Rounded.MonitorHeart, colors.heartRate) },
-                    trailing = { OneUiSwitch(monitor.backgroundHeartRate) { onChange(SettingChange.BackgroundHeartRate(it)) } },
-                    showDivider = true,
+                    // Turning it off asks twice (what stops, then "are you sure?"); turning it on doesn't.
+                    trailing = { OneUiSwitch(monitor.heartMonitoring) { if (it) onChange(SettingChange.HeartMonitoring(true)) else offStep = 1 } },
+                    showDivider = monitor.heartMonitoring,
                 )
-                CardRow(
-                    stringResource(R.string.settings_activity_recognition),
-                    subtitle = stringResource(R.string.settings_activity_recognition_summary),
-                    leading = { IconBadge(Icons.Rounded.MonitorHeart, colors.heartRate) },
-                    trailing = { OneUiSwitch(monitor.activityRecognition) { onChange(SettingChange.ActivityRecognition(it)) } },
-                    showDivider = true,
-                )
-                CardRow(
-                    stringResource(R.string.settings_irn),
-                    subtitle = stringResource(R.string.settings_irn_summary),
-                    leading = { IconBadge(Icons.Rounded.NotificationsActive, colors.ecg) },
-                    trailing = { OneUiSwitch(monitor.irregularRhythmEnabled) { onChange(SettingChange.IrregularRhythm(it)) } },
-                    showDivider = true,
-                )
-                if (monitor.irregularRhythmEnabled) {
+                if (monitor.heartMonitoring) {
                     CardRow(
-                        stringResource(R.string.settings_irn_interval),
-                        subtitle = stringResource(R.string.settings_every_minutes, monitor.irnIntervalMinutes),
-                        dividerStart = 76.dp,
-                        leading = { Spacer(Modifier.size(40.dp)) },
-                        showDivider = true,
-                        onClick = { picker = Picker.Interval },
-                    )
-                    CardRow(
-                        stringResource(R.string.settings_irn_sensitivity),
-                        subtitle = stringResource(monitor.irnSensitivity.label),
-                        dividerStart = 76.dp,
-                        leading = { Spacer(Modifier.size(40.dp)) },
+                        stringResource(R.string.settings_sensitivity),
+                        subtitle = stringResource(monitor.alertSensitivity.label),
+                        leading = { IconBadge(Icons.Rounded.NotificationsActive, colors.ecg) },
                         showDivider = true,
                         onClick = { picker = Picker.Sensitivity },
                     )
-                }
-                CardRow(
-                    stringResource(R.string.settings_hr_alerts),
-                    subtitle = stringResource(R.string.settings_hr_alerts_summary, monitor.highBpm, monitor.lowBpm),
-                    leading = { IconBadge(Icons.Rounded.NotificationsActive, colors.heartRate) },
-                    trailing = { OneUiSwitch(monitor.heartRateAlertsEnabled) { onChange(SettingChange.HeartRateAlerts(it)) } },
-                    showDivider = monitor.heartRateAlertsEnabled,
-                )
-                if (monitor.heartRateAlertsEnabled) {
                     CardRow(
-                        stringResource(R.string.settings_high_threshold),
-                        subtitle = if (monitor.highAlertEnabled) stringResource(R.string.settings_bpm, monitor.highBpm) else stringResource(R.string.settings_off),
-                        leading = { Spacer(Modifier.size(40.dp)) },
-                        trailing = { OneUiSwitch(monitor.highAlertEnabled) { onChange(SettingChange.HighAlert(it)) } },
-                        showDivider = true,
-                        onClick = { picker = Picker.High },
-                    )
-                    CardRow(
-                        stringResource(R.string.settings_low_threshold),
-                        subtitle = if (monitor.lowAlertEnabled) {
-                            stringResource(R.string.settings_low_summary, monitor.lowBpm, monitor.sleepLowLimit)
-                        } else {
-                            stringResource(R.string.settings_off)
+                        stringResource(R.string.settings_your_limits),
+                        subtitle = when {
+                            heartLimits == null -> stringResource(R.string.settings_limits_waiting)
+                            heartLimits.learning -> stringResource(R.string.settings_limits_learning, heartLimits.high, heartLimits.low)
+                            else -> stringResource(R.string.settings_limits_summary, heartLimits.restNormal, heartLimits.high, heartLimits.low, heartLimits.sleepLow, heartLimits.exerciseMax)
                         },
                         leading = { Spacer(Modifier.size(40.dp)) },
-                        trailing = { OneUiSwitch(monitor.lowAlertEnabled) { onChange(SettingChange.LowAlert(it)) } },
-                        showDivider = true,
-                        onClick = { picker = Picker.Low },
-                    )
-                    if (monitor.lowAlertEnabled) {
-                        CardRow(
-                            stringResource(R.string.settings_sleep_low_threshold),
-                            subtitle = stringResource(R.string.settings_bpm, monitor.sleepLowLimit),
-                            leading = { Spacer(Modifier.size(40.dp)) },
-                            showDivider = true,
-                            onClick = { picker = Picker.SleepLimit },
-                        )
-                    }
-                    CardRow(
-                        stringResource(R.string.settings_exercise_alert),
-                        subtitle = monitor.exerciseMaxBpm.let { limit ->
-                            when {
-                                !monitor.exerciseAlertEnabled -> stringResource(R.string.settings_off)
-                                limit == null -> stringResource(R.string.settings_exercise_age_based)
-                                else -> stringResource(R.string.settings_exercise_above, limit)
-                            }
-                        },
-                        leading = { Spacer(Modifier.size(40.dp)) },
-                        trailing = { OneUiSwitch(monitor.exerciseAlertEnabled) { onChange(SettingChange.ExerciseAlert(it)) } },
-                        onClick = { picker = Picker.ExerciseLimit },
                     )
                 }
-            }
-        }
-        item {
-            RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
-                CardRow(
-                    stringResource(R.string.settings_alert_on_watch),
-                    leading = { IconBadge(Icons.Rounded.NotificationsActive, colors.ecg) },
-                    trailing = { OneUiSwitch(monitor.alertOnWatch) { onChange(SettingChange.AlertOnWatch(it)) } },
-                    showDivider = true,
-                )
-                CardRow(
-                    stringResource(R.string.settings_alert_on_phone),
-                    leading = { IconBadge(Icons.Rounded.NotificationsActive, colors.heartRate) },
-                    trailing = { OneUiSwitch(monitor.alertOnPhone) { onChange(SettingChange.AlertOnPhone(it)) } },
-                )
             }
         }
         item {
@@ -552,44 +450,36 @@ fun SettingsScreen(
             dismissButton = { TextButton(onClick = { editingPrompt = false }) { Text(stringResource(R.string.action_cancel)) } },
         )
     }
+    if (offStep > 0) {
+        val first = offStep == 1
+        AlertDialog(
+            onDismissRequest = { offStep = 0 },
+            title = { Text(stringResource(if (first) R.string.monitoring_off_title else R.string.monitoring_off_sure_title)) },
+            text = { Text(stringResource(if (first) R.string.monitoring_off_list else R.string.monitoring_off_sure_text)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (first) {
+                        offStep = 2
+                    } else {
+                        offStep = 0
+                        onChange(SettingChange.HeartMonitoring(false))
+                    }
+                }) {
+                    Text(stringResource(if (first) R.string.action_continue else R.string.action_turn_off), color = if (first) colors.primary else colors.statusAlert)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { offStep = 0 }) { Text(stringResource(if (first) R.string.action_cancel else R.string.action_keep_on)) }
+            },
+        )
+    }
     when (picker) {
-        Picker.Interval -> ChoiceDialog(
-            stringResource(R.string.settings_irn_interval),
-            MonitorSettings.IRN_INTERVALS.map { stringResource(R.string.settings_every_minutes, it) to it },
-            monitor.irnIntervalMinutes,
-            onDismiss = { picker = null },
-        ) { onChange(SettingChange.IrnInterval(it)) }
         Picker.Sensitivity -> ChoiceDialog(
-            stringResource(R.string.settings_irn_sensitivity),
-            IrnSensitivity.entries.map { stringResource(it.label) to it },
-            monitor.irnSensitivity,
+            stringResource(R.string.settings_sensitivity),
+            AlertSensitivity.entries.map { stringResource(it.label) to it },
+            monitor.alertSensitivity,
             onDismiss = { picker = null },
-        ) { onChange(SettingChange.IrnSensitivityLevel(it)) }
-        Picker.ExerciseLimit -> ChoiceDialog(
-            stringResource(R.string.settings_exercise_alert),
-            listOf(stringResource(R.string.settings_exercise_age_based) to null) +
-                MonitorSettings.EXERCISE_MAX_RANGE.step(5).map { stringResource(R.string.settings_bpm, it) to it },
-            monitor.exerciseMaxBpm,
-            onDismiss = { picker = null },
-        ) { onChange(SettingChange.ExerciseMax(it)) }
-        Picker.SleepLimit -> ChoiceDialog(
-            stringResource(R.string.settings_sleep_low_threshold),
-            MonitorSettings.SLEEP_LOW_BPM_RANGE.step(5).map { stringResource(R.string.settings_bpm, it) to it },
-            monitor.sleepLowLimit,
-            onDismiss = { picker = null },
-        ) { onChange(SettingChange.SleepLow(it)) }
-        Picker.High -> ChoiceDialog(
-            stringResource(R.string.settings_high_threshold),
-            MonitorSettings.HIGH_BPM_RANGE.step(5).map { stringResource(R.string.settings_bpm, it) to it },
-            monitor.highBpm,
-            onDismiss = { picker = null },
-        ) { onChange(SettingChange.HighBpm(it)) }
-        Picker.Low -> ChoiceDialog(
-            stringResource(R.string.settings_low_threshold),
-            MonitorSettings.LOW_BPM_RANGE.step(5).map { stringResource(R.string.settings_bpm, it) to it },
-            monitor.lowBpm,
-            onDismiss = { picker = null },
-        ) { onChange(SettingChange.LowBpm(it)) }
+        ) { onChange(SettingChange.Sensitivity(it)) }
         Picker.Temperature -> ChoiceDialog(
             stringResource(R.string.settings_temperature_unit),
             listOf(stringResource(R.string.unit_celsius) to false, stringResource(R.string.unit_fahrenheit) to true),
@@ -645,9 +535,10 @@ private fun buildLabel(versionName: String): String {
     }
 }
 
-private val IrnSensitivity.label: Int get() = when (this) {
-    IrnSensitivity.STANDARD -> R.string.settings_irn_sensitivity_standard
-    IrnSensitivity.HIGH -> R.string.settings_irn_sensitivity_high
+private val AlertSensitivity.label: Int get() = when (this) {
+    AlertSensitivity.LOW -> R.string.sensitivity_low
+    AlertSensitivity.STANDARD -> R.string.sensitivity_standard
+    AlertSensitivity.HIGH -> R.string.sensitivity_high
 }
 
 private val ReportName.label: Int get() = when (this) {

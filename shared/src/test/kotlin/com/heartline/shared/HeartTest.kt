@@ -37,6 +37,7 @@ import org.junit.Test
 class HeartTest {
     private var ids = 0
     private val id = { "id-${ids++}" }
+    private val fixed = com.heartline.shared.hr.HeartLimits(65, 57, high = 120, low = 40, sleepLow = 35, exerciseMax = 190)
 
     @Test
     fun hrvMatchesHandComputedValues() {
@@ -118,12 +119,12 @@ class HeartTest {
     fun sustainedHighRateAlertsOnce() {
         val rules = HeartRateAlertRules()
         val minutes = List(10) { HrMinute(it * 60_000L, 131, 125, 140) }
-        val first = rules.evaluate(minutes, MonitorSettings(), null, emptyMap(), id)
+        val first = rules.evaluate(minutes, MonitorSettings(), fixed, emptyMap(), id)
         assertEquals(listOf(AlertKind.HIGH_HEART_RATE), first.map { it.kind })
         assertEquals(120, first.single().threshold)
-        val again = rules.evaluate(minutes, MonitorSettings(), null, mapOf(HeartRateAlertRules.key(first.single()) to 600_000L), id)
+        val again = rules.evaluate(minutes, MonitorSettings(), fixed, mapOf(HeartRateAlertRules.key(first.single()) to 600_000L), id)
         assertTrue(again.isEmpty())
-        val disabled = rules.evaluate(minutes, MonitorSettings(heartRateAlertsEnabled = false), null, emptyMap(), id)
+        val disabled = rules.evaluate(minutes, MonitorSettings().withMonitoring(false), fixed, emptyMap(), id)
         assertTrue(disabled.isEmpty())
     }
 
@@ -131,9 +132,9 @@ class HeartTest {
     fun gapOrActivityPreventsHeartRateAlert() {
         val rules = HeartRateAlertRules()
         val withGap = List(10) { HrMinute((if (it < 5) it else it + 12) * 60_000L, 35, 33, 38) }
-        assertTrue(rules.evaluate(withGap, MonitorSettings(), null, emptyMap(), id).isEmpty())
+        assertTrue(rules.evaluate(withGap, MonitorSettings(), fixed, emptyMap(), id).isEmpty())
         val active = List(10) { HrMinute(it * 60_000L, 150, 140, 160, resting = it != 9) }
-        assertTrue(rules.evaluate(active, MonitorSettings(), null, emptyMap(), id).isEmpty())
+        assertTrue(rules.evaluate(active, MonitorSettings(), fixed, emptyMap(), id).isEmpty())
     }
 
     @Test

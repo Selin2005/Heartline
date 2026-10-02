@@ -159,6 +159,8 @@ class SettingsViewModel(
 ) : ViewModel() {
     val monitor: StateFlow<MonitorSettings> = settings.monitor.stateIn(viewModelScope, WHILE_SUBSCRIBED, MonitorSettings())
 
+    val heartLimits: StateFlow<com.heartline.shared.hr.HeartLimits?> = settings.heartLimits.stateIn(viewModelScope, WHILE_SUBSCRIBED, null)
+
     val sharing: StateFlow<SettingsRepository.SharingPrefs> = settings.sharing.stateIn(viewModelScope, WHILE_SUBSCRIBED, SettingsRepository.SharingPrefs())
 
     fun setAiPrompt(prompt: String?) = viewModelScope.launch { settings.setAiPrompt(prompt) }

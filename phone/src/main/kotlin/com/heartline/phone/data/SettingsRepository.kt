@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.heartline.shared.AppInfo
+import com.heartline.shared.hr.HeartLimits
 import com.heartline.shared.hr.MonitorSettings
 import com.heartline.shared.sync.Protocol
 import kotlinx.serialization.encodeToString
@@ -36,6 +37,7 @@ class SettingsRepository(private val context: Context, private val now: () -> Lo
         val AI_ATTACH_PDF = booleanPreferencesKey("ai_attach_pdf")
         val REPORT_NAME = stringPreferencesKey("report_name")
         val TERMS_VERSION = intPreferencesKey("accepted_terms_version")
+        val HEART_LIMITS = stringPreferencesKey("heart_limits")
     }
 
     /**
@@ -127,6 +129,15 @@ class SettingsRepository(private val context: Context, private val now: () -> Lo
     }
 
     suspend fun current() = monitor.first()
+
+    /** The personal heart-rate limits the watch uses now (sent with its heart-rate batches). */
+    val heartLimits: Flow<HeartLimits?> = context.settingsStore.data.map { p ->
+        p[Keys.HEART_LIMITS]?.let { runCatching { Protocol.json.decodeFromString<HeartLimits>(it) }.getOrNull() }
+    }
+
+    suspend fun saveHeartLimits(limits: HeartLimits) {
+        context.settingsStore.edit { it[Keys.HEART_LIMITS] = Protocol.json.encodeToString(limits) }
+    }
 
     /** A change made on this phone: stamped now, so it wins over older copies on the watch. */
     suspend fun update(transform: (MonitorSettings) -> MonitorSettings): MonitorSettings {

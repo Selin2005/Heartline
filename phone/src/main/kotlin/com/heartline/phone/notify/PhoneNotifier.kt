@@ -22,6 +22,7 @@ import com.heartline.phone.R
 import com.heartline.shared.bp.BpSafety
 import com.heartline.shared.hr.AlertKind
 import com.heartline.shared.hr.HealthAlert
+import com.heartline.shared.hr.HeartTrend
 import com.heartline.shared.hr.HrContext
 import com.heartline.shared.model.RecordSummary
 
@@ -40,7 +41,7 @@ class PhoneNotifier(private val context: Context) {
 
     fun alert(alert: HealthAlert) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
-        val (title, text) = context.getString(alertTitle(alert.kind)) to alertText(context, alert)
+        val (title, text) = context.getString(alertTitle(alert)) to alertText(context, alert)
         val open = PendingIntent.getActivity(
             context,
             0,
@@ -146,6 +147,12 @@ class PhoneNotifier(private val context: Context) {
     }
 
     companion object {
+        fun alertTitle(alert: HealthAlert) = when (alert.trend) {
+            HeartTrend.ELEVATED_RESTING -> R.string.alert_trend_title
+            HeartTrend.HIGH_NORMAL -> R.string.alert_high_normal_title
+            null -> alertTitle(alert.kind)
+        }
+
         fun alertTitle(kind: AlertKind) = when (kind) {
             AlertKind.IRREGULAR_RHYTHM -> R.string.alert_irn_title
             AlertKind.HIGH_HEART_RATE -> R.string.alert_high_title
@@ -156,16 +163,27 @@ class PhoneNotifier(private val context: Context) {
         fun alertText(context: Context, alert: HealthAlert): String {
             val bpm = alert.bpm ?: 0
             val limit = alert.threshold
+            val normal = alert.normal
+            fun percent(n: Int) = if (n <= 0) 0 else kotlin.math.abs(bpm - n) * 100 / n
+            when (alert.trend) {
+                HeartTrend.ELEVATED_RESTING -> return context.getString(R.string.alert_trend_text, bpm, normal ?: 0)
+                HeartTrend.HIGH_NORMAL -> return context.getString(R.string.alert_high_normal_text, bpm)
+                null -> Unit
+            }
             return when (alert.kind) {
                 AlertKind.IRREGULAR_RHYTHM -> context.getString(R.string.alert_irn_text)
                 AlertKind.HIGH_HEART_RATE -> when {
                     limit == null -> context.getString(R.string.alert_high_text, bpm)
                     alert.context == HrContext.EXERCISE || alert.context == HrContext.ACTIVE -> context.getString(R.string.alert_high_exercise_text, limit, bpm)
+                    normal != null && alert.context == HrContext.SLEEP -> context.getString(R.string.alert_high_sleep_normal_text, bpm, percent(normal), normal)
+                    normal != null -> context.getString(R.string.alert_high_rest_normal_text, bpm, percent(normal), normal)
                     alert.context == HrContext.SLEEP -> context.getString(R.string.alert_high_sleep_text, limit, bpm)
                     else -> context.getString(R.string.alert_high_rest_text, limit, bpm)
                 }
                 AlertKind.LOW_HEART_RATE -> when {
                     limit == null -> context.getString(R.string.alert_low_text, bpm)
+                    normal != null && alert.context == HrContext.SLEEP -> context.getString(R.string.alert_low_sleep_normal_text, bpm, percent(normal), normal)
+                    normal != null -> context.getString(R.string.alert_low_rest_normal_text, bpm, percent(normal), normal)
                     alert.context == HrContext.SLEEP -> context.getString(R.string.alert_low_sleep_text, limit, bpm)
                     else -> context.getString(R.string.alert_low_rest_text, limit, bpm)
                 }

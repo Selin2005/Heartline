@@ -44,8 +44,8 @@ import com.heartline.phone.ui.model.AlertUi
 import com.heartline.phone.ui.model.HeartRateUi
 import com.heartline.phone.ui.theme.HeartlineTheme
 import com.heartline.shared.hr.AlertKind
+import com.heartline.shared.hr.HeartTrend
 import com.heartline.shared.hr.HrContext
-import com.heartline.shared.hr.MaxHr
 
 private val HrContext.label: Int get() = when (this) {
     HrContext.REST -> R.string.hr_context_rest
@@ -134,6 +134,45 @@ fun HeartRateScreen(
                     }
                 }
             }
+            state.limits?.let { limits ->
+                item {
+                    RoundedCard(Modifier.gutter()) {
+                        CardTitle(stringResource(R.string.hr_normal_title))
+                        Text(
+                            stringResource(if (limits.learning) R.string.hr_normal_learning else R.string.hr_normal_caption),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Row {
+                            StatColumn(
+                                stringResource(R.string.hr_resting),
+                                limits.restLow?.let { lo -> limits.restHigh?.let { hi -> stringResource(R.string.hr_normal_range, limits.restNormal, lo, hi) } }
+                                    ?: "${limits.restNormal}",
+                                Modifier.weight(1f),
+                            )
+                            StatColumn(stringResource(R.string.hr_sleep), "${limits.sleepNormal}", Modifier.weight(1f))
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            stringResource(R.string.hr_normal_limits, limits.high, limits.low, limits.sleepLow, limits.exerciseMax),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.onSurfaceVariant,
+                        )
+                        if (state.nights.any { it != null }) {
+                            Spacer(Modifier.height(16.dp))
+                            Text(stringResource(R.string.hr_nights_title), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                            Spacer(Modifier.height(8.dp))
+                            WeekBars(
+                                state.nights,
+                                state.nights.indices.map { i -> if ((27 - i) % 7 == 0) "−${27 - i}" else "" },
+                                colors.heartRate,
+                                contentDescription = stringResource(R.string.hr_nights_title),
+                            )
+                        }
+                    }
+                }
+            }
             item {
                 RoundedCard(Modifier.gutter()) {
                     CardTitle(stringResource(R.string.hr_activity_title))
@@ -166,7 +205,7 @@ fun HeartRateScreen(
                         Spacer(Modifier.height(8.dp))
                         WeekBars(
                             state.zoneMinutes.map { it.toFloat() },
-                            MaxHr.zones(state.maxHr).map { "$it+" },
+                            state.zoneBounds.map { "$it+" },
                             colors.heartRate,
                             contentDescription = stringResource(R.string.hr_zones_title),
                         )
@@ -220,7 +259,9 @@ fun AlertsScreen(alerts: List<AlertUi>, onBack: (() -> Unit)? = null) {
         item {
             RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
                 alerts.forEachIndexed { i, alert ->
-                    val (title, icon, tint) = when (alert.kind) {
+                    val (title, icon, tint) = if (alert.trend != null) {
+                        Triple(if (alert.trend == HeartTrend.HIGH_NORMAL) R.string.alert_high_normal_title else R.string.alert_trend_title, Icons.Rounded.NorthEast, colors.statusWarn)
+                    } else when (alert.kind) {
                         AlertKind.IRREGULAR_RHYTHM -> Triple(R.string.alert_irn_title, Icons.Rounded.MonitorHeart, colors.statusAlert)
                         AlertKind.HIGH_HEART_RATE -> Triple(R.string.alert_high_title, Icons.Rounded.NorthEast, colors.statusWarn)
                         AlertKind.LOW_HEART_RATE -> Triple(R.string.alert_low_title, Icons.Rounded.SouthEast, colors.statusWarn)
@@ -236,6 +277,7 @@ fun AlertsScreen(alerts: List<AlertUi>, onBack: (() -> Unit)? = null) {
                         ).joinToString(" · ")
                         else -> listOfNotNull(
                             alert.bpm?.let { stringResource(R.string.ecg_bpm_value, it) },
+                            alert.normal?.let { stringResource(R.string.alert_usual, it) },
                             alert.threshold?.let {
                                 stringResource(
                                     if (alert.kind == AlertKind.HIGH_HEART_RATE) R.string.alert_limit_above else R.string.alert_limit_below,

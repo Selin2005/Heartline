@@ -5,6 +5,7 @@ package com.heartline.wear.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.heartline.shared.hr.AlertSensitivity
 import com.heartline.shared.hr.MonitorSettings
 import com.heartline.wear.BuildConfig
 import com.heartline.wear.diag.RawCapture
@@ -28,20 +29,18 @@ class WatchSettingsViewModel(
     val state: StateFlow<WatchSettingsUi> = combine(gateway.state, settings.settings) { g, s ->
         val connected = g as? GatewayState.Connected
         WatchSettingsUi(
-            irregularRhythm = s.irregularRhythmEnabled,
-            heartRateAlerts = s.heartRateAlertsEnabled,
+            heartMonitoring = s.heartMonitoring,
+            sensitivity = s.alertSensitivity,
             serviceVersion = connected?.serviceVersion,
             trackers = connected?.trackers?.map { it.name }?.sorted().orEmpty(),
             appVersion = BuildConfig.VERSION_NAME,
-            backgroundHeartRate = s.backgroundHeartRate,
             haptics = s.haptics,
             liveWave = s.liveWave,
-            highBpm = s.highBpm,
-            lowBpm = s.lowBpm,
+            limits = settings.limits,
             diagnosticLogs = s.diagnosticLogs,
             logBytes = HLog.sizeBytes() + RawCapture.sizeBytes(),
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WatchSettingsUi(true, true, null, emptyList(), BuildConfig.VERSION_NAME))
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WatchSettingsUi(true, AlertSensitivity.STANDARD, null, emptyList(), BuildConfig.VERSION_NAME))
 
     fun change(transform: (MonitorSettings) -> MonitorSettings) {
         val next = settings.change(transform)

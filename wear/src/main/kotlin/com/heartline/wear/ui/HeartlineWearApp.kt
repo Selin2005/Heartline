@@ -330,14 +330,13 @@ private fun AppNavHost(nav: NavHostController, gate: SetupGateViewModel) {
                 onToggle = { toggle, on ->
                     vm.change { s ->
                         when (toggle) {
-                            WatchToggle.IRREGULAR_RHYTHM -> s.copy(irregularRhythmEnabled = on)
-                            WatchToggle.HEART_RATE_ALERTS -> s.copy(heartRateAlertsEnabled = on)
-                            WatchToggle.BACKGROUND_HR -> s.copy(backgroundHeartRate = on)
+                            WatchToggle.HEART_MONITORING -> s.withMonitoring(on)
                             WatchToggle.HAPTICS -> s.copy(haptics = on)
                             WatchToggle.LIVE_WAVE -> s.copy(liveWave = on)
                         }
                     }
                 },
+                onSensitivity = { level -> vm.change { it.copy(alertSensitivity = level) } },
                 onDevMode = { nav.navigate(Routes.DEV_MODE) },
                 onDiagnostics = { nav.navigate(Routes.DIAGNOSTICS) },
                 onSourceCode = { scope.launch { remote.open(AppInfo.REPO_URL) } },

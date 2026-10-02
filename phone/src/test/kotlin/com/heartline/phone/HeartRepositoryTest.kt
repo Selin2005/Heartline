@@ -13,6 +13,8 @@ import com.heartline.phone.ui.model.HeartSummaries
 import com.heartline.phone.data.AlertEntity
 import com.heartline.shared.hr.AlertKind
 import com.heartline.shared.hr.HealthAlert
+import com.heartline.shared.hr.HeartBaseline
+import com.heartline.shared.hr.HeartLimits
 import com.heartline.shared.hr.HrBatch
 import com.heartline.shared.hr.HrContext
 import com.heartline.shared.hr.HrMinute
@@ -36,7 +38,7 @@ class HeartRepositoryTest {
     @Before
     fun setUp() {
         db = HeartlineDatabase.inMemory(ApplicationProvider.getApplicationContext())
-        repo = HeartRepository(db.heart()) { notified += it }
+        repo = HeartRepository(db.heart(), onAlert = { notified += it })
     }
 
     @After
@@ -92,8 +94,8 @@ class HeartRepositoryTest {
         val all = rest + sleep + workout
         assertEquals(64, HeartSummaries.resting(all))
         assertEquals(48 to 45, HeartSummaries.sleep(all))
-        // Zones for a maximum of 190: 95+, 114+, 133+, 152+, 171+.
-        assertEquals(listOf(0, 0, 30, 0, 0), HeartSummaries.zones(all, 190))
+        // Karvonen zones from a resting 64 to a maximum of 184: 124+, 136+, 148+, 160+, 172+.
+        assertEquals(listOf(0, 0, 30, 0, 0), HeartSummaries.zones(all, HeartBaseline.zones(184, 64)))
     }
 
     @Test
@@ -107,5 +109,24 @@ class HeartRepositoryTest {
         // Too late (over two hours after) or before the notification: not a follow-up.
         assertNull(HeartSummaries.ecgFollowUp(alert, listOf(1_000_000L + 3 * 3_600_000L to EcgResult.SINUS_RHYTHM)))
         assertNull(HeartSummaries.ecgFollowUp(alert, listOf(500_000L to EcgResult.SINUS_RHYTHM)))
+    }
+
+    @Test
+    fun watchLimitsAreKept() = runBlocking {
+        var kept: HeartLimits? = null
+        val withLimits = HeartRepository(db.heart(), onLimits = { kept = it })
+        val limits = HeartLimits(60, 52, high = 92, low = 41, sleepLow = 36, exerciseMax = 186)
+        withLimits.saveBatch(HrBatch("b", listOf(HrMinute(0, 60, 58, 62)), limits))
+        assertEquals(limits, kept)
+    }
+
+    @Test
+    fun phoneComputesTheSameBaselineFromItsMinutes() {
+        val zone = java.time.ZoneOffset.UTC
+        val minutes = (0 until 600).map { HrMinuteEntity(it * 120_000L, 62 + it % 5, 58, 70, null, resting = true, activity = HrContext.REST) }
+        val history = HeartSummaries.history(minutes, zone)
+        val limits = HeartBaseline.limits(history, history.days.last().day, com.heartline.shared.hr.AlertSensitivity.STANDARD, 40, null)
+        assertEquals(64, limits.restNormal)
+        assertTrue(limits.high in 97..100)
     }
 }

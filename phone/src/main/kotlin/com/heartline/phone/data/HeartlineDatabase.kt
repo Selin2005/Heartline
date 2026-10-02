@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [RecordEntity::class, HrMinuteEntity::class, AlertEntity::class, BpCalibrationEntity::class, BpValidationEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class HeartlineDatabase : RoomDatabase() {
@@ -69,9 +69,17 @@ abstract class HeartlineDatabase : RoomDatabase() {
             }
         }
 
+        /** v6: an alert's personal normal, and trend notices. */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `alerts` ADD COLUMN `normal` INTEGER")
+                db.execSQL("ALTER TABLE `alerts` ADD COLUMN `trend` TEXT")
+            }
+        }
+
         fun create(context: Context): HeartlineDatabase =
             Room.databaseBuilder(context, HeartlineDatabase::class.java, "heartline.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
 
         fun inMemory(context: Context): HeartlineDatabase =

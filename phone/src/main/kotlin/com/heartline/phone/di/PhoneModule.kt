@@ -57,7 +57,6 @@ import com.heartline.shared.sync.SyncTransport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.first
 import com.heartline.shared.model.RecordSummary
 import com.heartline.shared.model.RecordKind
 import kotlinx.coroutines.flow.map
@@ -85,7 +84,13 @@ val phoneModule = module {
     single { PhoneNotifier(androidContext()) }
     single { EcgSecondOpinion.fromAssets(androidContext()) }
     single { get<HeartlineDatabase>().heart() }
-    single { HeartRepository(get()) { alert -> if (get<SettingsRepository>().monitor.first().alertOnPhone) get<PhoneNotifier>().alert(alert) } }
+    single {
+        HeartRepository(
+            get(),
+            onAlert = { alert -> get<PhoneNotifier>().alert(alert) },
+            onLimits = { limits -> get<SettingsRepository>().saveHeartLimits(limits) },
+        )
+    }
     single { SettingsRepository(androidContext()) }
     single { UpdateRepository(androidContext(), BuildConfig.VERSION_NAME) }
     single { ReleaseSource("Heartline/${BuildConfig.VERSION_NAME} (Android)") }
@@ -192,8 +197,9 @@ val phoneModule = module {
         HeartRateViewModel(
             get(),
             get(),
-            age = get<ProfileRepository>().profile.map { it?.age() },
+            profile = get<ProfileRepository>().profile.map { it?.age() to it?.calcSex },
             settings = get<SettingsRepository>().monitor,
+            watchLimits = get<SettingsRepository>().heartLimits,
         )
     }
     viewModel { UpdatesViewModel(get(), get(), BuildConfig.VERSION_NAME) }

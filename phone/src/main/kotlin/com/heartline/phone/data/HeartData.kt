@@ -11,6 +11,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import com.heartline.shared.hr.AlertKind
+import com.heartline.shared.hr.HeartTrend
 import com.heartline.shared.hr.HrContext
 import kotlinx.coroutines.flow.Flow
 
@@ -37,6 +38,9 @@ data class AlertEntity(
     /** The limit that was crossed, and what the wearer was doing (high/low alerts from newer watches). */
     val threshold: Int? = null,
     val context: HrContext? = null,
+    /** The wearer's usual heart rate then, and whether this is a several-day trend notice (v6). */
+    val normal: Int? = null,
+    val trend: HeartTrend? = null,
 )
 
 @Dao

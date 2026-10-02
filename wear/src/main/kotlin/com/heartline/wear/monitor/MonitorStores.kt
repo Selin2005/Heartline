@@ -18,6 +18,8 @@ import com.heartline.shared.hr.HealthAlert
 import com.heartline.shared.hr.HrBatch
 import com.heartline.shared.hr.ActivityChange
 import com.heartline.shared.hr.ActivityTimeline
+import com.heartline.shared.hr.HeartLimits
+import com.heartline.shared.hr.HeartTrend
 import com.heartline.shared.hr.HrContext
 import com.heartline.shared.hr.MonitorSettings
 import com.heartline.shared.hr.MonitorState
@@ -107,6 +109,11 @@ class WatchSettingsStore(context: Context, private val now: () -> Long = System:
         get() = prefs.getString(KEY_MONITOR, null)?.let { runCatching { Protocol.json.decodeFromString<MonitorState>(it) }.getOrNull() } ?: MonitorState()
         set(value) = prefs.edit().putString(KEY_MONITOR, Protocol.json.encodeToString(value)).apply()
 
+    /** The personal limits in use (from the latest batch), for the settings screen. */
+    var limits: HeartLimits?
+        get() = prefs.getString(KEY_LIMITS, null)?.let { runCatching { Protocol.json.decodeFromString<HeartLimits>(it) }.getOrNull() }
+        set(value) = prefs.edit().putString(KEY_LIMITS, value?.let { Protocol.json.encodeToString(it) }).apply()
+
     /** Sleep, workouts and steps as the watch recognised them. */
     var activity: ActivityTimeline
         get() = prefs.getString(KEY_ACTIVITY, null)?.let { runCatching { Protocol.json.decodeFromString<ActivityTimeline>(it) }.getOrNull() } ?: ActivityTimeline()
@@ -122,8 +129,8 @@ class WatchSettingsStore(context: Context, private val now: () -> Long = System:
         activity = activity.withSteps(spans, now())
     }
 
-    /** What the wearer was doing in a minute, if the watch knows and activity recognition is on. */
-    fun activityAt(minuteStartMs: Long): HrContext? = if (settings.value.activityRecognition) activity.contextAt(minuteStartMs) else null
+    /** What the wearer was doing in a minute, if the watch knows. */
+    fun activityAt(minuteStartMs: Long): HrContext? = activity.contextAt(minuteStartMs)
 
     /** Time of the latest background heart rate (the watch was worn then). */
     var lastPassiveHeartRateMs: Long?
@@ -143,6 +150,7 @@ class WatchSettingsStore(context: Context, private val now: () -> Long = System:
         const val KEY_IRN = "irn_state"
         const val KEY_MONITOR = "monitor_state"
         const val KEY_ACTIVITY = "activity"
+        const val KEY_LIMITS = "limits"
         const val KEY_LAST_PASSIVE = "last_passive_hr"
         const val KEY_HR = "latest_hr"
         const val KEY_HR_DAY = "hr_day"
@@ -290,6 +298,7 @@ class WatchMonitorOutput(
     }
 
     override suspend fun enqueueBatch(batch: HrBatch) {
+        batch.limits?.let { settings.limits = it }
         store.enqueueMessage(batch.id, Protocol.HR_BATCH, Protocol.json.encodeToString(batch).encodeToByteArray())
         sync.schedule()
     }
@@ -305,39 +314,43 @@ class WatchMonitorOutput(
         settings.monitorState = state
     }
 
-    override fun notify(alert: HealthAlert) {
-        if (settings.settings.value.alertOnWatch) notifier.alert(alert)
-    }
+    override fun notify(alert: HealthAlert) = notifier.alert(alert)
 
     override fun latestMinute(bpm: Int) {
         settings.recordHeartRate(bpm)
     }
 }
 
-/** Title and text of a heart alert, naming the limit and what the wearer was doing (watch strings). */
+/** Title and text of a heart alert, naming the limit, the wearer's normal and what they were doing (watch strings). */
 object AlertText {
     fun of(alert: HealthAlert, string: (Int) -> String): Pair<String, String> {
         val bpm = alert.bpm ?: 0
         val limit = alert.threshold
-        return when (alert.kind) {
-            AlertKind.IRREGULAR_RHYTHM -> string(R.string.alert_irn_title) to string(R.string.alert_irn_text)
-            AlertKind.HIGH_HEART_RATE -> {
-                val text = when {
-                    limit == null -> string(R.string.alert_high_text).format(bpm)
-                    alert.context == HrContext.EXERCISE || alert.context == HrContext.ACTIVE -> string(R.string.alert_high_exercise_text).format(limit, bpm)
-                    alert.context == HrContext.SLEEP -> string(R.string.alert_high_sleep_text).format(limit, bpm)
-                    else -> string(R.string.alert_high_rest_text).format(limit, bpm)
-                }
-                string(R.string.alert_high_title) to text
+        val normal = alert.normal
+        return when {
+            alert.trend == HeartTrend.ELEVATED_RESTING ->
+                string(R.string.alert_trend_title) to string(R.string.alert_trend_text).format(bpm, normal ?: 0)
+            alert.trend == HeartTrend.HIGH_NORMAL ->
+                string(R.string.alert_high_normal_title) to string(R.string.alert_high_normal_text).format(bpm)
+            alert.kind == AlertKind.IRREGULAR_RHYTHM -> string(R.string.alert_irn_title) to string(R.string.alert_irn_text)
+            alert.kind == AlertKind.HIGH_HEART_RATE -> string(R.string.alert_high_title) to when {
+                limit == null -> string(R.string.alert_high_text).format(bpm)
+                alert.context == HrContext.EXERCISE || alert.context == HrContext.ACTIVE -> string(R.string.alert_high_exercise_text).format(limit, bpm)
+                normal != null -> string(if (alert.context == HrContext.SLEEP) R.string.alert_high_sleep_normal_text else R.string.alert_high_rest_normal_text)
+                    .format(bpm, percentFrom(bpm, normal), normal)
+                alert.context == HrContext.SLEEP -> string(R.string.alert_high_sleep_text).format(limit, bpm)
+                else -> string(R.string.alert_high_rest_text).format(limit, bpm)
             }
-            AlertKind.LOW_HEART_RATE -> {
-                val text = when {
-                    limit == null -> string(R.string.alert_low_text).format(bpm)
-                    alert.context == HrContext.SLEEP -> string(R.string.alert_low_sleep_text).format(limit, bpm)
-                    else -> string(R.string.alert_low_rest_text).format(limit, bpm)
-                }
-                string(R.string.alert_low_title) to text
+            else -> string(R.string.alert_low_title) to when {
+                limit == null -> string(R.string.alert_low_text).format(bpm)
+                normal != null -> string(if (alert.context == HrContext.SLEEP) R.string.alert_low_sleep_normal_text else R.string.alert_low_rest_normal_text)
+                    .format(bpm, percentFrom(bpm, normal), normal)
+                alert.context == HrContext.SLEEP -> string(R.string.alert_low_sleep_text).format(limit, bpm)
+                else -> string(R.string.alert_low_rest_text).format(limit, bpm)
             }
         }
     }
+
+    /** How far [bpm] is from [normal], in percent (always positive). */
+    fun percentFrom(bpm: Int, normal: Int): Int = if (normal <= 0) 0 else kotlin.math.abs(bpm - normal) * 100 / normal
 }

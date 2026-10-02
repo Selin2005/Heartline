@@ -12,7 +12,13 @@ import com.heartline.shared.hr.HrBuckets
 import com.heartline.shared.hr.RangeBucket
 import com.heartline.shared.hr.AlertKind
 import com.heartline.shared.hr.HrContext
-import com.heartline.shared.hr.MaxHr
+import com.heartline.shared.hr.HeartBaseline
+import com.heartline.shared.hr.HeartHistory
+import com.heartline.shared.hr.HeartLimits
+import com.heartline.shared.hr.HeartTrend
+import com.heartline.shared.hr.Histogram
+import com.heartline.shared.hr.HrMinute
+import com.heartline.shared.profile.Sex
 import com.heartline.shared.hr.MonitorSettings
 import com.heartline.shared.irn.IrregularRhythmDetector
 import com.heartline.shared.model.EcgResult
@@ -54,9 +60,15 @@ data class HeartRateUi(
     val sleepMinBpm: Int? = null,
     val exerciseMinutes: Int = 0,
     val exercisePeakBpm: Int? = null,
-    /** Maximum heart rate the zones are based on (age-based, or the exercise limit chosen in settings). */
+    /** Maximum heart rate the zones are based on (age-based, raised to the wearer's own hardest workouts). */
     val maxHr: Int = 190,
-    /** Minutes today in each heart-rate zone (50–60, 60–70, 70–80, 80–90, 90+ % of [maxHr]). */
+    /** Lower bound of each zone (Karvonen: 50, 60, 70, 80, 90 % of the reserve above the resting rate). */
+    val zoneBounds: List<Int> = emptyList(),
+    /** The personal limits and the normal they come from. */
+    val limits: HeartLimits? = null,
+    /** Heart rate in sleep for each of the last 28 nights (oldest first), to see the trend. */
+    val nights: List<Float?> = emptyList(),
+    /** Minutes today in each heart-rate zone ([zoneBounds]). */
     val zoneMinutes: List<Int> = emptyList(),
     /** Resting heart rate for each of the last 7 days (oldest first). */
     val restingWeek: List<Float?> = emptyList(),
@@ -76,6 +88,8 @@ data class AlertUi(
     val context: HrContext? = null,
     /** An ECG taken within two hours after a rhythm notification: true when it looked regular. Null without one. */
     val ecgRegular: Boolean? = null,
+    val normal: Int? = null,
+    val trend: HeartTrend? = null,
 )
 
 /** Pure summaries so they can be unit tested. */
@@ -110,9 +124,17 @@ object HeartSummaries {
         return result == EcgResult.SINUS_RHYTHM
     }
 
-    /** Minutes in each zone; minutes below 50 % are not counted. */
-    fun zones(minutes: List<HrMinuteEntity>, maxHr: Int): List<Int> {
-        val bounds = MaxHr.zones(maxHr)
+    /** The phone's minutes as daily histograms (the watch's baseline input), for older watches that send no limits. */
+    fun history(minutes: List<HrMinuteEntity>, zone: ZoneId): HeartHistory = minutes.fold(HeartHistory()) { h, m ->
+        h.record(HrMinute(m.minuteStartMs, m.avgBpm, m.minBpm, m.maxBpm, m.rmssdMs, m.resting, m.activity), zone)
+    }
+
+    /** Median heart rate in sleep of the night ending on [day], if there are enough readings. */
+    fun night(history: HeartHistory, day: Long): Int? = history.days.firstOrNull { it.day == day }
+        ?.let { Histogram(it.sleep) }?.takeIf { it.count >= HeartBaseline.MIN_NIGHT_READINGS }?.median()?.roundToInt()
+
+    /** Minutes in each zone given its lower [bounds]; minutes below the first are not counted. */
+    fun zones(minutes: List<HrMinuteEntity>, bounds: List<Int>): List<Int> {
         return bounds.indices.map { i ->
             val lo = bounds[i]
             val hi = bounds.getOrNull(i + 1) ?: Int.MAX_VALUE
@@ -124,9 +146,10 @@ object HeartSummaries {
 class HeartRateViewModel(
     repository: HeartRepository,
     private val formatter: RecordFormatter,
-    /** The wearer's age and their exercise limit, for the zones. */
-    age: Flow<Int?> = flowOf(null),
+    /** The wearer's age and sex, the settings (sensitivity) and the limits the watch sent, for the personal limits. */
+    profile: Flow<Pair<Int?, Sex?>> = flowOf(null to null),
     settings: Flow<MonitorSettings> = flowOf(MonitorSettings()),
+    watchLimits: Flow<HeartLimits?> = flowOf(null),
     private val zone: ZoneId = ZoneId.systemDefault(),
     private val locale: Locale = Locale.getDefault(),
     today: LocalDate = LocalDate.now(zone),
@@ -136,12 +159,15 @@ class HeartRateViewModel(
     private val monthStart = today.minusDays(29).atStartOfDay(zone).toInstant().toEpochMilli()
     private val dayEnd = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
 
+    private val todayKey = today.toEpochDay()
+
     val state: StateFlow<HeartRateUi> = combine(
         repository.minutes(monthStart, dayEnd),
         repository.alerts,
-        age,
+        profile,
         settings,
-    ) { month, alerts, years, monitor ->
+        watchLimits,
+    ) { month, alerts, (years, sex), monitor, sent ->
         val week = month.filter { it.minuteStartMs >= weekStart }
         val todays = week.filter { it.minuteStartMs >= dayStart }
         val latest = week.lastOrNull()
@@ -163,7 +189,10 @@ class HeartRateViewModel(
             30,
         )
         fun dayRange(day: LocalDate) = day.atStartOfDay(zone).toInstant().toEpochMilli() until day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        val maxHr = monitor.exerciseLimit(years)
+        // The watch's own limits when it sent them; otherwise the same calculation on this phone's data.
+        val history = HeartSummaries.history(month, zone)
+        val limits = sent ?: HeartBaseline.limits(history, todayKey, monitor.alertSensitivity, years, sex)
+        val maxHr = limits.exerciseMax
         val sleep = HeartSummaries.sleep(todays)
         val exercise = todays.filter { it.activity == HrContext.EXERCISE }
         HeartRateUi(
@@ -186,7 +215,10 @@ class HeartRateViewModel(
             exerciseMinutes = exercise.size,
             exercisePeakBpm = exercise.maxOfOrNull { it.maxBpm },
             maxHr = maxHr,
-            zoneMinutes = HeartSummaries.zones(todays, maxHr),
+            zoneBounds = HeartBaseline.zones(maxHr, limits.restNormal),
+            zoneMinutes = HeartSummaries.zones(todays, HeartBaseline.zones(maxHr, limits.restNormal)),
+            limits = limits,
+            nights = (0 until 28).map { i -> HeartSummaries.night(history, todayKey - 27 + i)?.toFloat() },
             restingWeek = days.map { day -> HeartSummaries.resting(week.filter { it.minuteStartMs in dayRange(day) })?.toFloat() },
             dayByActivity = todays.groupBy { it.activity }.mapValues { (_, list) -> dayBuckets(list) },
         )
@@ -206,5 +238,5 @@ class AlertsViewModel(
     fun markRead() = viewModelScope.launch { repository.markAlertsRead() }
 
     private fun AlertEntity.toUi(ecgRegular: Boolean?) =
-        AlertUi(id, kind, formatter.date(atMs), formatter.time(atMs), bpm, windowCount, read, threshold, context, ecgRegular)
+        AlertUi(id, kind, formatter.date(atMs), formatter.time(atMs), bpm, windowCount, read, threshold, context, ecgRegular, normal, trend)
 }

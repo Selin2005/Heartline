@@ -60,6 +60,19 @@ object SampleData {
 
     val ecgList get() = EcgListState(ecgRecords, loading = false)
 
+    val heartLimits = com.heartline.shared.hr.HeartLimits(
+        restNormal = 58,
+        sleepNormal = 51,
+        restLow = 53,
+        restHigh = 66,
+        high = 90,
+        low = 40,
+        sleepLow = 36,
+        exerciseMax = 185,
+        restConfidence = 0.98,
+        sleepConfidence = 0.95,
+    )
+
     val heartRate: HeartRateUi by lazy {
         val random = kotlin.random.Random(4)
         val minutes = (0 until 9 * 60 + 41).map { m ->
@@ -88,7 +101,10 @@ object SampleData {
             exerciseMinutes = 42,
             exercisePeakBpm = 164,
             maxHr = 185,
+            zoneBounds = com.heartline.shared.hr.HeartBaseline.zones(185, 56),
             zoneMinutes = listOf(18, 9, 14, 12, 3),
+            limits = heartLimits,
+            nights = (0 until 28).map { i -> if (i == 9) null else (49 + (i * 7) % 5 + if (i >= 25) 6 else 0).toFloat() },
             restingWeek = listOf(57f, 56f, 58f, null, 55f, 56f, 56f),
             dayByActivity = mapOf(
                 com.heartline.shared.hr.HrContext.REST to day,
@@ -156,7 +172,8 @@ object SampleData {
 
     val alerts = listOf(
         AlertUi("a1", AlertKind.IRREGULAR_RHYTHM, "Sep 21", "3:12 AM", 94, 5, read = false, ecgRegular = true),
-        AlertUi("a2", AlertKind.HIGH_HEART_RATE, "Sep 14", "11:40 PM", 128, 0, read = true, threshold = 120, context = com.heartline.shared.hr.HrContext.REST),
+        AlertUi("a0", AlertKind.HIGH_HEART_RATE, "Sep 23", "10:00 AM", 62, 0, read = false, threshold = 57, context = com.heartline.shared.hr.HrContext.SLEEP, normal = 51, trend = com.heartline.shared.hr.HeartTrend.ELEVATED_RESTING),
+        AlertUi("a2", AlertKind.HIGH_HEART_RATE, "Sep 14", "11:40 PM", 104, 0, read = true, threshold = 90, context = com.heartline.shared.hr.HrContext.REST, normal = 58),
         AlertUi("a3", AlertKind.LOW_HEART_RATE, "Aug 30", "4:05 AM", 33, 0, read = true, threshold = 35, context = com.heartline.shared.hr.HrContext.SLEEP),
     )
 

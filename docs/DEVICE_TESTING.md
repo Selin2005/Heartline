@@ -158,8 +158,13 @@ attach them to a bug report.
       shows `activity: EXERCISE`, and on the phone the heart-rate chart offers an *Exercise*
       filter. After a night's sleep it shows `activity: ASLEEP` and *Today by activity* shows sleep.
     - **No alerts during normal exercise:** a workout at a high but normal rate gives no high heart
-      rate notification. Settings → *Very high heart rate during exercise* set to a low limit (for
-      example 140 bpm) gives one after about 3 minutes above it.
+      rate notification.
+    - **Your normal:** after about a day of wearing, Phone → Heart rate → *Your normal* and
+      Settings → *Your limits* show your own resting rate and limits (no longer "learning"); the
+      watch's Settings shows the same numbers.
+    - **One switch:** turning *Heart monitoring* off asks twice (the list of what stops, then "Are
+      you sure?") on the phone and on the watch; afterwards the log shows `monitoring=false` and no
+      `passive HR` lines arrive. Turning it on again asks nothing.
     - **Watch not worn:** leave the watch on a table or charger for two hours. The log shows
       `IRN window skipped` (no background heart rate, or off the wrist), never an irregular rhythm
       notification.

@@ -19,8 +19,8 @@ unit tested), `phone/.../data/HeartRepository.kt` and `phone/.../ui/model/HeartM
 | Samsung `HEART_RATE_CONTINUOUS` (`SdkHrSource`), ~75 s windows (`IrnWindowWorker`) | 1 Hz heart rate with beat-to-beat intervals (IBI) and their status | Irregular rhythm check, HRV |
 | Android step detector, accelerometer, off-body sensor (`StepMotionMonitor`, `WristState`) | Steps, arm movement, watch on/off the wrist | Rejecting rhythm windows |
 
-Activity info and steps are requested only when the *Sleep and exercise awareness* setting is on
-and `ACTIVITY_RECOGNITION` is granted. If Health Services refuses the registration with activity
+Activity info and steps are requested while heart monitoring is on and `ACTIVITY_RECOGNITION` is
+granted. If Health Services refuses the registration with activity
 info, it is registered again for heart rate only, so heart rate is never lost.
 
 **Samsung tracker status.** `HEART_RATE_STATUS` 1 is a good reading. Other values mean the tracker
@@ -58,43 +58,124 @@ older watch, which has no `activity`, decodes as `REST` or `ACTIVE` from that fl
   start time). `HeartRepository.saveBatch` combines the two copies: it keeps the RMSSD, the wider
   range, and the more specific activity.
 
-## 4. High and low heart rate (`HeartRateAlertRules`)
+## 4. Personal limits (`HeartBaseline`)
 
+### Why personal
+The normal resting heart rate differs between people by up to 70 bpm (40–109 bpm). Within one
+person it is very steady: the day-to-day standard deviation is about 3 bpm (Quer 2020, 92,457
+adults). One fixed limit for everyone, such as 120 and 40, is therefore too loose for some and
+too tight for others. The simulation (section 9) shows both.
+
+### The normal
+- `HeartHistory`, kept on the watch, holds one `DayStats` per day. Each has histograms of minute
+  averages:
+  - `rest`: awake and still;
+  - `sleep`: the night that ends on that day (18:00–18:00);
+  - `exercise`.
+
+  It keeps 90 days, of which rest and sleep use the last 28 (the window of Mishra 2020 and
+  Alavi 2022). Moving-about minutes are not learnt from.
+- **Learning starts at once.** The normal begins as a population guess: 65 bpm, women +3 (Quer
+  2020). It moves to the wearer's own median by weight n / (n + 24), where n is the number of
+  readings (24 readings is about 4 hours of passive heart rate). After about a day it is the
+  wearer's own (`learning` ends at 80 %). The sleep normal comes from the first night.
+- **Not learnt from:**
+  - minutes outside the current limits (an episode never becomes the normal);
+  - "still" minutes in the 15 minutes after moving or a workout (still recovering);
+  - nights marked unusual by the trend notice.
+
+  Statistics are robust: median and percentiles from the histograms.
+
+### From the normal to the limits
+Every clinical number is defined for an average adult whose resting heart rate is 65. A limit
+is that number's ratio to 65, applied to the wearer's own median (57 asleep: the median sleep
+dip is 12.7 %).
+
+| Sensitivity | High, at rest or asleep | Low, awake | Low, asleep |
+|---|---|---|---|
+| Low | × 120/65 = +85 %: Apple Watch / Fitbit default | × 40/65 = −38 %: Apple Watch default | × 35/57 = −39 % |
+| **Standard** (default) | **× 100/65 = +54 %: tachycardia at rest** | **× 45/65 = −31 %: middle of the lowest 2nd percentile of adults, 40–55 (ACC/AHA/HRS 2018)** | **× 40/57 = −30 %** |
+| High | × 95/65 = +46 %: 95th percentile of real-world heart rate over 60 (Avram 2019) | × 50/65 = −23 %: sinus bradycardia (ACC/AHA/HRS 2018) | × 45/57 = −21 % |
+
+Then:
+1. **Outside the wearer's own range.** With ≥ 60 readings, high is at least the wearer's 99th
+   percentile + 5, and low at most their 1st percentile − 5.
+2. **Safety bounds.** High stays within 90–130, low awake within 35–50, and low asleep within
+   30–45. An abnormal "normal" can't hide a problem: at rest, above 130 always notifies (the 95th
+   percentile of real-world heart rate is at most 110 at any age, Avram 2019).
+   - Exception: when the wearer's own nights go below 30 (common in athletes), their own 1st
+     percentile − 5 is used, down to 28. Readings under 25 are dropped as implausible, so the
+     limit stays above that.
+3. **While learning,** the limits are mixed with safe defaults by the same weight: 120 high,
+   and 35 / 30 low (the safety floors). The earlier 40 / 35 gave an athlete false low alerts
+   on the first night in the simulation.
+4. **Exercise maximum:**
+   - the age formula 208 − 0.7 × age (Tanaka 2001; 190 without an age);
+   - raised to the wearer's own hardest workouts (99th percentile over 90 days, with ≥ 30
+     minutes of exercise on ≥ 3 days). Only earlier days count: today's peak, such as an
+     overexertion happening now, never raises today's limit;
+   - at most 15 bpm above the formula (its spread is about ±10).
+
+Examples (Standard):
+
+| Wearer | Normal | High | Low awake | Low asleep |
+|---|---|---|---|---|
+| Typical | 65 (asleep 56) | 100 | 45 | 39 |
+| High normal | 85 | 130 (bound) | 50 (bound) | — |
+| Athlete | 48 (asleep 38) | 90 (bound) | 35 (bound) | 28–30 |
+
+### Notifications (`HeartRateAlertRules`)
 Each minute is judged by the limits of what the wearer was doing:
 
-| Activity | High notification | Low notification |
+| Activity | High | Low |
 |---|---|---|
-| Rest | above `highBpm` (default 120) | below `lowBpm` (default 40) |
-| Sleep | above `highBpm` | below `sleepLowLimit` (default `lowBpm` − 5) |
-| Exercise / moving | above the exercise limit: `exerciseMaxBpm`, or the age-based maximum 208 − 0.7 × age (Tanaka 2001; 190 without an age) | never |
+| Rest | above the high limit | below the low limit |
+| Sleep | above the high limit | below the sleep low limit |
+| Exercise / moving | above the exercise maximum | never |
 
 - **"Held"** means every reading over a span is beyond the limit:
-  - Rest and sleep: ≥ 10 minutes covered, ≥ 3 readings, no gap over 10 minutes.
+  - Rest and sleep: ≥ 10 minutes covered (as Apple, Fitbit and Google do), ≥ 3 readings, no gap
+    over 10 minutes.
   - Exercise: ≥ 3 minutes, gaps ≤ 2 minutes.
 
-  This is time covered, not a count of back-to-back minutes. Passive heart rate at rest comes
-  every few minutes, so "10 back-to-back minutes" in practice only happened during workouts. The
-  old rule therefore alerted mostly during exercise, the opposite of its intent.
+  This is time covered, not back-to-back minutes. Passive heart rate at rest comes every few
+  minutes, so the old "10 back-to-back minutes" rule only ever fired during workouts.
 - **Recovery.** Minutes within 15 minutes after exercise, or within 5 minutes after moving, are
   not judged by the rest limits.
-- **Cooldown.** One notification per kind every 3 hours. Exercise notifications have their own
-  cooldown key (`HIGH_HEART_RATE/EXERCISE`).
-- **Notification.** `HealthAlert` carries the limit (`threshold`) and the activity (`context`).
-  The text names both, for example "While you were resting, your heart rate stayed above 120 bpm
-  for over 10 minutes (up to 131 bpm)."
+- **Cooldown.** One notification per kind every 3 hours. Exercise has its own cooldown key.
+- **Notification.** `HealthAlert` carries the limit (`threshold`), the activity (`context`) and
+  the wearer's normal (`normal`). For example: "While you were resting, your heart rate stayed
+  high for over 10 minutes: up to 108 bpm, 66 % above your usual 65 bpm."
+
+### Resting heart rate trend (`HeartBaseline.restingTrend`)
+A gentle notice, not an alarm. It fires when the heart rate in sleep is higher than usual on
+**3 of the last 5 nights**, the latest included. "Higher" means more than 2 standard deviations
+(at least 6 bpm) above the wearer's own average of the 28 nights before. This is Quer 2020's
+"unusual increase", on the baseline of Mishra 2020 and Alavi 2022. It often comes with an
+infection, fever, too little sleep, stress or overtraining, sometimes before symptoms. Those
+nights are marked unusual and not learnt from.
+- It is checked once a day from 10:00, and notifies at most every 3 days.
+- If the usual resting heart rate itself has been above 100 for a week, a separate notice
+  suggests talking to a doctor, at most weekly.
+- Both are sent as `HIGH_HEART_RATE` with `trend` set, so older phone versions still show them.
+
+### Where it runs
+On the watch, in `HeartMonitor`, so notifications don't need the phone. The limits in use go to
+the phone with every `HR_BATCH` (`HrBatch.limits`), so the phone shows exactly what the watch
+uses. With an older watch, the phone computes the same limits from its own minutes
+(`HeartSummaries.history`).
 
 ## 5. Irregular rhythm
 
 ### Scheduling and wearing (`IrnWindowWorker`)
-- Every 15, 30 or 60 minutes (setting), WorkManager runs one window of about 75 s on the Samsung
+- Every 15 minutes, WorkManager runs one window of about 75 s on the Samsung
   tracker. Without the background sensor permission, a silent notification shows for that minute.
 - **The window is skipped when the watch is not worn:**
   - when the all-day heart rate is on and there has been no passive heart rate for an hour (or
     ever since install);
   - when Android's off-body sensor says the watch is off the wrist (checked 1.5 s after it
     starts, and during the window).
-- If a readable window was irregular and the interval is over 15 minutes, one extra check runs
-  15 minutes later (`scheduleFollowUp`).
+- If a readable window was irregular, one extra check runs 7 minutes later (`scheduleFollowUp`).
 
 ### Is the window readable? (`IbiWindowQuality`)
 A window of about 60 s is analysed only if all of these hold. Otherwise it is *unreadable*: never
@@ -136,69 +217,139 @@ The reason a window was skipped is logged (`IRN window done: … skipped=…`).
 
 | Value | How |
 |---|---|
+| Your normal | the personal normal and usual range (5th–95th percentile) at rest, the normal in sleep, the limits in use, and the last 28 nights |
 | Resting heart rate | 10th percentile of today's `REST` minutes (sleep and exercise left out); ≥ 5 minutes needed |
 | Sleep | average and lowest of `SLEEP` minutes |
 | Exercise | number of `EXERCISE` minutes and the highest rate |
 | HRV | median RMSSD of still minutes (rest or sleep) that carry intervals |
-| Zones | minutes in 50–60, 60–70, 70–80, 80–90, 90+ % of the maximum (age-based, or the exercise limit setting) |
+| Zones | Karvonen: 50, 60, 70, 80, 90 % of the reserve between the resting rate and the personal maximum |
 | Resting week | the resting heart rate of each of the last 7 days |
 
-The day chart can be filtered by activity. The notification list shows each alert's limit and
-activity, and the ECG follow-up for rhythm notifications.
+The day chart can be filtered by activity. The notification list shows each alert's limit,
+activity and the usual rate, trend notices, and the ECG follow-up for rhythm notifications.
 
-## 7. Settings (`MonitorSettings`, synced, the newer copy wins)
+## 7. Settings: one switch (`MonitorSettings`)
 
-- All-day heart rate; sleep and exercise awareness.
-- Irregular rhythm on/off, interval, sensitivity.
-- High and low heart rate notifications: a master switch, separate switches and limits for high
-  and low, a sleep low limit, and a switch and limit for exercise.
-- Show heart notifications on the watch and/or the phone.
+- **Heart monitoring** turns everything on or off together:
+  - all-day heart rate and sleep and exercise awareness;
+  - high and low heart rate notifications;
+  - irregular rhythm checks;
+  - the resting trend.
 
-Every new field has a default, so settings from older versions still decode.
+  Turning it off asks twice, on the phone and on the watch: the first step lists what stops,
+  the second asks "Are you sure?". Turning it on asks nothing.
+- **Alert sensitivity** (Low, Standard, High) is shown only while monitoring is on. It sets the
+  ratios above. High also uses the looser irregular-rhythm rule.
+- **Your limits** (read only) shows the normal and the limits in use, or "learning".
+
+Older versions:
+- `heartMonitoring` defaults to on unless every old part (all-day heart rate, alerts, rhythm)
+  was off.
+- `withMonitoring` also writes the old part switches, so an older watch follows the one switch.
+- Fields that are no longer used stay in the JSON format.
 
 ## 8. Tests
 
 - `shared`:
-  - `HeartRateAlertRulesTest`: exercise vs rest, sparse readings, recovery, sleep limits,
-    toggles, cooldown keys, old JSON.
-  - `IrnQualityTest`: off-wrist noise, unreliable readings, premature beats, AF-like rhythm,
-    spread over an hour, ECG follow-up.
-  - `HeartTest`.
+  - `HeartBaselineTest`:
+    - the ratios equal the clinical numbers;
+    - defaults before data;
+    - personal after a day;
+    - high normal, athlete and the bounds;
+    - limits outside the wearer's own range;
+    - sensitivity order;
+    - the learned exercise maximum and its bounds;
+    - the trend (3 of 5 nights, latest included);
+    - raised days not learnt;
+    - night assignment;
+    - Karvonen zones.
+  - `HeartRateAlertRulesTest`:
+    - exercise vs rest;
+    - sparse readings;
+    - recovery;
+    - sleep limits;
+    - the single switch;
+    - cooldown keys;
+    - old JSON.
+  - `IrnQualityTest`, `HeartTest`.
 - `wear`:
-  - `HeartMonitorTest`.
-  - `BackgroundHeartTest`: alert history survives a new process, exercise doesn't alert, the
-    last minute is closed, rhythm minutes carry HRV.
+  - `HeartSimulationTest` (section 9);
+  - `HeartMonitorTest`;
+  - `BackgroundHeartTest`.
 - `phone`:
-  - `HeartRepositoryTest`: minute merge, resting without sleep/exercise, zones, ECG follow-up.
-  - `MigrationTest`: database v4 → v5.
+  - `HeartRepositoryTest`: minute merge, limits kept, the phone's own baseline, summaries,
+    zones, ECG follow-up;
+  - `MigrationTest`: v4 → v5 → v6.
 - On a device: [DEVICE_TESTING.md](../DEVICE_TESTING.md), checklist item 15.
 
-## 9. Known limits
+## 9. Simulation
 
-- The limits for rest and sleep are fixed numbers that the user chooses. People's normal resting
-  heart rate differs by up to 70 bpm (Quer 2020), so one fixed limit is too loose for some and
-  too tight for others. See the plan below.
-- The age-based maximum has a spread of about ±10 bpm. Fit people often exceed it in hard
-  workouts.
+`wear/src/test/.../sim/HeartSimulation.kt` runs 60 days of a simulated wearer through the
+watch's own `HeartMonitor`: minutes, activity, baseline, limits, rules and trend.
+
+The simulated wearer has:
+- a resting rate with day-to-day drift (SD 2.5 bpm, Quer 2020), minute noise, and a circadian
+  swing peaking in the afternoon (Avram 2019);
+- a sleep dip of 12–13 %;
+- workouts at a share of the heart-rate reserve with warm-up, intervals and recovery;
+- walks, two 6-minute stress spikes (+20) and a morning coffee (+8 for an hour) every day;
+- hours and a whole day without the watch.
+
+Passive heart rate arrives as from Health Services: every 5–10 minutes at rest and asleep, every
+5 s in a workout, every minute on a walk, delivered every 15 minutes.
+
+Abnormal episodes are injected. Each is clearly abnormal for that person, at least about 15 %
+beyond the standard limit:
+- 40 minutes of resting tachycardia or bradycardia;
+- an hour of very low heart rate in sleep;
+- overexertion above the true maximum;
+- 4–5 nights of illness (+9 to +11 bpm).
+
+An episode right at a limit may or may not notify, as with any threshold.
+
+Results (`build/reports/heart-simulation.md`, seed 7; Standard unless named):
+
+| Wearer | Episodes | Personal: caught / false alerts | Fixed 120/40/35: caught / false alerts |
+|---|---|---|---|
+| Typical adult (40, resting 65) | 4 | 4 / 0 | 4 / 0 |
+| High normal (35, F, resting 84) | 2 | 2 / 0 | 2 / 0 |
+| Athlete (28, resting 47) | 2 | 2 / 0 | 1 / **24** (low in sleep almost every few nights; resting 100 bpm missed) |
+| Older adult (70, resting 72) | 2 | 2 / 0 | 1 / 0 (awake 42 bpm missed) |
+| Runner without workout tracking (45, resting 60) | 2 | 2 / 0 | 1 / 0 (resting 108 bpm missed) |
+| Quiet routine (55, resting 68), illness | 1 | 1 / 0 | 1 / 0 |
+| **All** | **13** | **13 / 0** | **10 / 24** |
+
+- **Other random histories.** Over five more random 60-day histories per wearer (30 runs),
+  personal limits caught every episode with **0 false alerts**.
+- **First two weeks.** Two weeks of normal life without episodes gave no notification for any
+  wearer, learning included. A resting rate of ~150 on the first afternoon was caught before
+  anything was learnt.
+- **Sensitivity.**
+  - *Low* notifies only clear changes. It missed two of the moderate episodes: the typical
+    adult's ×1.8 and the older adult's ×0.58.
+  - *High* caught every episode with no false alerts.
+
+The simulation and the pipeline tests also changed the design. Four findings:
+1. **Low limits while learning.** They start at the safety floors, not the old 40 / 35, which
+   gave false low alerts on an athlete's first night.
+2. **No learning from population-guess limits or recovery.** Limits come from the wearer's own
+   data only, and recovery minutes after moving are not learnt. Otherwise an athlete's first
+   night, and a runner's raised post-run minutes, pushed the limits the wrong way.
+3. **Athletes' sleep.** Their own nights may set the sleep low limit below 30 (down to 28).
+4. **Exercise maximum from earlier days only.** The pipeline tests found that an overexertion
+   taught the exercise maximum during the episode itself (the 99th percentile of one session is
+   its peak), so it no longer counts towards today's limit.
+
+## 10. Known limits
+
+- Simulated data is not real data. The model follows published numbers, but real wearers will
+  differ. Device checks are in DEVICE_TESTING item 15.
 - If Samsung Health's continuous heart rate is off, passive heart rate may hardly arrive. Then
-  rhythm windows are skipped as "not worn".
+  rhythm windows are skipped as "not worn", and learning is slower.
 - Activity recognition is the watch's own. A workout that isn't started on the watch is only
-  seen through steps.
-
-## 10. Next: limits from the wearer's own normal (planned)
-
-Not built yet. The design:
-- A 28-day **personal baseline** on the watch: robust median and spread (MAD) of the wearer's own
-  `REST` and `SLEEP` minutes, learnt over a first week (fixed limits until then). Minutes around
-  notifications are not learnt from.
-- **Personal limits** as a percentage of that baseline, for example high = resting median + 45 %,
-  low = sleep median − 25 %. They are kept between fixed safety bounds, and an absolute safety
-  limit always applies, so a baseline that is itself abnormal can't hide a problem.
-- A **learned exercise maximum** from the wearer's own hardest workouts, never below the
-  age-based value.
-- A **trend notice** when the overnight resting heart rate stays well above the baseline for two
-  or more nights (Mishra 2020, Alavi 2022). This is wellness wording, not a diagnosis.
-- The phone shows "your normal" and the limits currently in use.
+  seen through steps (judged as "moving", with the same exercise maximum).
+- The day-of-week and time-of-day pattern is not modelled separately: the 99th-percentile guard
+  covers a normal afternoon rise.
 
 ## References
 
@@ -207,5 +358,9 @@ Not built yet. The design:
 - Avram R et al. Real-world heart rate norms in the Health eHeart study. *npj Digit Med* 2019. https://www.nature.com/articles/s41746-019-0134-9
 - Mishra T et al. Pre-symptomatic detection of COVID-19 from smartwatch data. *Nat Biomed Eng* 2020. https://www.nature.com/articles/s41551-020-00640-6
 - Alavi A et al. Real-time alerting system for COVID-19 and other stress events using wearable data. *Nat Med* 2022. https://www.nature.com/articles/s41591-021-01593-2
+- Kusumoto FM et al. 2018 ACC/AHA/HRS Guideline on the Evaluation and Management of Patients With Bradycardia and Cardiac Conduction Delay. *Circulation* 2019. https://www.ahajournals.org/doi/10.1161/CIR.0000000000000628
+- Blunted heart rate dip during sleep and all-cause mortality. *JAMA Intern Med*. https://jamanetwork.com/journals/jamainternalmedicine/fullarticle/486862
+- Apple Watch heart notifications: https://support.apple.com/en-lb/guide/watch/apde39f5426c/watchos · Fitbit / Google: https://support.google.com/googlehealth/answer/14237938
+- Karvonen MJ et al. The effects of training on heart rate. *Ann Med Exp Biol Fenn* 1957.
 - Dash S et al. Automatic real time detection of atrial fibrillation. *Ann Biomed Eng* 2009.
 - Petrėnas A et al. Low-complexity detection of atrial fibrillation in continuous long-term monitoring. *Comput Biol Med* 2015.

@@ -5,16 +5,18 @@ package com.heartline.shared.irn
 
 import com.heartline.shared.hr.AlertKind
 import com.heartline.shared.hr.HealthAlert
+import com.heartline.shared.hr.HeartLimits
 import com.heartline.shared.hr.HrContext
 import com.heartline.shared.hr.HrMinute
 import com.heartline.shared.hr.MonitorSettings
 
 /**
- * High/low heart rate notifications, judged by what the wearer was doing:
- * - awake and still: above [MonitorSettings.highBpm] or below [MonitorSettings.lowBpm];
+ * High/low heart rate notifications against the wearer's personal limits ([HeartLimits]), judged
+ * by what the wearer was doing:
+ * - awake and still: above the high limit or below the low limit;
  * - asleep: above the high limit, or below the (lower) sleep limit;
- * - exercise or moving about: never low, and high only above the exercise limit (by default the
- *   age-based maximum), held for [exerciseSustainMs].
+ * - exercise or moving about: never low, and high only above the personal exercise maximum, held
+ *   for [exerciseSustainMs].
  *
  * Background heart rate arrives every few minutes at rest and every second during a workout, so a
  * rate is "held" when every reading over at least [restSustainMs] is beyond the limit, with at
@@ -32,69 +34,64 @@ class HeartRateAlertRules(
     private val cooldownMs: Long = 3 * IrregularRhythmDetector.HOUR
 ) {
     /**
-     * [minutes]: the recent minutes (any order). [age]: the wearer's age in years, if known.
-     * [lastAlerts]: when each alert last fired, by [key].
+     * [minutes]: the recent minutes (any order). [limits]: the wearer's personal limits
+     * ([com.heartline.shared.hr.HeartBaseline]). [lastAlerts]: when each alert last fired, by [key].
      */
     fun evaluate(
         minutes: List<HrMinute>,
         settings: MonitorSettings,
-        age: Int?,
+        limits: HeartLimits,
         lastAlerts: Map<String, Long>,
         idFactory: () -> String
     ): List<HealthAlert> {
-        if (!settings.heartRateAlertsEnabled || minutes.isEmpty()) return emptyList()
+        if (!settings.heartMonitoring || !settings.heartRateAlertsEnabled || minutes.isEmpty()) return emptyList()
         val sorted = minutes.sortedBy { it.minuteStartMs }
         val now = sorted.last().minuteStartMs + MINUTE
         fun ready(kind: AlertKind, context: HrContext) = lastAlerts[key(kind, context)]?.let { now - it >= cooldownMs } ?: true
         val recovering = recoveryCheck(sorted)
+        fun lowLimit(m: HrMinute) = if (m.activity == HrContext.SLEEP) limits.sleepLow else limits.low
+        fun normal(context: HrContext) = if (context == HrContext.SLEEP) limits.sleepNormal else limits.restNormal
 
         return buildList {
-            val last = sorted.last()
-            if (last.activity.calm) {
-                if (settings.highAlertEnabled) {
-                    held(sorted, restSustainMs, restMaxGapMs) {
-                        it.activity.calm && !recovering(it) && it.avgBpm > settings.highBpm
-                    }?.let { run ->
-                        val context = run.last().activity
-                        if (ready(AlertKind.HIGH_HEART_RATE, context)) {
-                            add(
-                                HealthAlert(
-                                    idFactory(),
-                                    AlertKind.HIGH_HEART_RATE,
-                                    now,
-                                    run.maxOf {
-                                        it.avgBpm
-                                    },
-                                    threshold = settings.highBpm,
-                                    context = context
-                                )
+            if (sorted.last().activity.calm) {
+                held(sorted, restSustainMs, restMaxGapMs) { it.activity.calm && !recovering(it) && it.avgBpm > limits.high }?.let { run ->
+                    val context = run.last().activity
+                    if (ready(AlertKind.HIGH_HEART_RATE, context)) {
+                        add(
+                            HealthAlert(
+                                idFactory(),
+                                AlertKind.HIGH_HEART_RATE,
+                                now,
+                                run.maxOf {
+                                    it.avgBpm
+                                },
+                                threshold = limits.high,
+                                context = context,
+                                normal = limits.restNormal
                             )
-                        }
+                        )
                     }
                 }
-                if (settings.lowAlertEnabled) {
-                    fun limit(m: HrMinute) = if (m.activity == HrContext.SLEEP) settings.sleepLowLimit else settings.lowBpm
-                    held(sorted, restSustainMs, restMaxGapMs) { it.activity.calm && it.avgBpm < limit(it) }?.let { run ->
-                        val context = run.last().activity
-                        if (ready(AlertKind.LOW_HEART_RATE, context)) {
-                            add(
-                                HealthAlert(
-                                    idFactory(),
-                                    AlertKind.LOW_HEART_RATE,
-                                    now,
-                                    run.minOf {
-                                        it.avgBpm
-                                    },
-                                    threshold = limit(run.last()),
-                                    context = context
-                                )
+                held(sorted, restSustainMs, restMaxGapMs) { it.activity.calm && it.avgBpm < lowLimit(it) }?.let { run ->
+                    val context = run.last().activity
+                    if (ready(AlertKind.LOW_HEART_RATE, context)) {
+                        add(
+                            HealthAlert(
+                                idFactory(),
+                                AlertKind.LOW_HEART_RATE,
+                                now,
+                                run.minOf {
+                                    it.avgBpm
+                                },
+                                threshold = lowLimit(run.last()),
+                                context = context,
+                                normal = normal(context)
                             )
-                        }
+                        )
                     }
                 }
-            } else if (settings.exerciseAlertEnabled) {
-                val limit = settings.exerciseLimit(age)
-                held(sorted, exerciseSustainMs, exerciseMaxGapMs) { !it.activity.calm && it.avgBpm > limit }?.let { run ->
+            } else {
+                held(sorted, exerciseSustainMs, exerciseMaxGapMs) { !it.activity.calm && it.avgBpm > limits.exerciseMax }?.let { run ->
                     if (ready(AlertKind.HIGH_HEART_RATE, HrContext.EXERCISE)) {
                         add(
                             HealthAlert(
@@ -104,7 +101,7 @@ class HeartRateAlertRules(
                                 run.maxOf {
                                     it.avgBpm
                                 },
-                                threshold = limit,
+                                threshold = limits.exerciseMax,
                                 context = HrContext.EXERCISE
                             )
                         )
@@ -156,7 +153,10 @@ class HeartRateAlertRules(
             else -> kind.name
         }
 
-        fun key(alert: HealthAlert) = key(alert.kind, alert.context)
+        fun key(alert: HealthAlert) = when (alert.trend) {
+            null -> key(alert.kind, alert.context)
+            else -> "TREND/${alert.trend}"
+        }
     }
 }
 

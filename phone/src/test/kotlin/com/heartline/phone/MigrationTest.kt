@@ -73,6 +73,20 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate5To6AddsAlertNormalAndTrend() {
+        helper.createDatabase(DB, 5).use { db ->
+            db.execSQL("INSERT INTO alerts (id, kind, atMs, bpm, windowCount, read, threshold, context) VALUES ('a', 'HIGH_HEART_RATE', 1, 130, 0, 0, 120, 'REST')")
+        }
+        helper.runMigrationsAndValidate(DB, 6, true, HeartlineDatabase.MIGRATION_5_6).use { db ->
+            db.query("SELECT threshold, normal, trend FROM alerts").use { c ->
+                c.moveToFirst()
+                assertEquals(120, c.getInt(0))
+                assertEquals(true, c.isNull(1) && c.isNull(2))
+            }
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

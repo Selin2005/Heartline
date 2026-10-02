@@ -196,7 +196,24 @@ class PhoneScreenshotTest(private val theme: String) {
             com.heartline.shared.hr.MonitorSettings(dailyReminder = true),
             watchConnected = true,
             listState = rememberLazyListState(initialFirstVisibleItemIndex = 3),
+            heartLimits = SampleData.heartLimits,
         )
+    }
+
+    @Test fun settingsMonitoringOff() = shot("settings_monitoring_off") {
+        SettingsScreen(
+            com.heartline.shared.hr.MonitorSettings().withMonitoring(false),
+            watchConnected = true,
+            listState = rememberLazyListState(initialFirstVisibleItemIndex = 3),
+        )
+    }
+
+    @Test fun settingsMonitoringOffConfirm() = shot("settings_monitoring_off_confirm") {
+        SettingsScreen(watchConnected = true, heartLimits = SampleData.heartLimits, initialOffStep = 1)
+    }
+
+    @Test fun settingsMonitoringOffSure() = shot("settings_monitoring_off_sure") {
+        SettingsScreen(watchConnected = true, heartLimits = SampleData.heartLimits, initialOffStep = 2)
     }
 
     @Test fun settingsSharing() = shot("settings_sharing") {

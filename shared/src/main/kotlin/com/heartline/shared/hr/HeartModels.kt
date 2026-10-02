@@ -46,8 +46,9 @@ data class HrMinute(
     val activity: HrContext = if (resting) HrContext.REST else HrContext.ACTIVE
 )
 
+/** [limits]: the personal limits the watch uses now, so the phone can show them. */
 @Serializable
-data class HrBatch(val id: String, val minutes: List<HrMinute>)
+data class HrBatch(val id: String, val minutes: List<HrMinute>, val limits: HeartLimits? = null)
 
 @Serializable
 enum class AlertKind { IRREGULAR_RHYTHM, HIGH_HEART_RATE, LOW_HEART_RATE }
@@ -64,40 +65,49 @@ data class HealthAlert(
     /** The limit that was crossed (high/low alerts). */
     val threshold: Int? = null,
     /** What the wearer was doing (high/low alerts). */
-    val context: HrContext? = null
+    val context: HrContext? = null,
+    /** The wearer's usual heart rate in that context when the alert fired (personal limits). */
+    val normal: Int? = null,
+    /** A notice about the resting heart rate over several days, not a single episode. Sent as a high heart rate to older phones. */
+    val trend: HeartTrend? = null
 )
 
-/** Rhythm-check thresholds: standard suits the wrist sensor; high is the earlier, looser profile. */
 @Serializable
+enum class HeartTrend {
+    /** Resting heart rate in sleep raised over several nights. */
+    ELEVATED_RESTING,
+
+    /** The usual resting heart rate itself has been above 100 bpm for a week. */
+    HIGH_NORMAL
+}
+
+/** Rhythm-check thresholds: standard suits the wrist sensor; high is the earlier, looser profile. */
 enum class IrnSensitivity { STANDARD, HIGH }
+
+/** One choice for every heart notification: how far from the wearer's normal counts as unusual. */
+@Serializable
+enum class AlertSensitivity { LOW, STANDARD, HIGH }
 
 /** Monitoring preferences edited on the phone and applied on the watch. */
 @Serializable
 data class MonitorSettings(
     val irregularRhythmEnabled: Boolean = true,
     val heartRateAlertsEnabled: Boolean = true,
+    /** Fixed limits from older versions; the personal limits replace them (HeartBaseline). */
     val highBpm: Int = 120,
     val lowBpm: Int = 40,
     /** All-day heart rate for trends (passive, no notification). */
     val backgroundHeartRate: Boolean = true,
-    /** Minutes between irregular-rhythm checks (each check listens for about a minute). */
+    /** Unused since the single switch (checks run every 15 minutes). Kept so older versions still decode. */
     val irnIntervalMinutes: Int = 15,
-    val irnSensitivity: IrnSensitivity = IrnSensitivity.STANDARD,
-    /** High heart rate while awake and still (above [highBpm]). */
-    val highAlertEnabled: Boolean = true,
-    /** Low heart rate while awake and still (below [lowBpm]), or asleep (below [sleepLowBpm]). */
-    val lowAlertEnabled: Boolean = true,
-    /** Very high heart rate during exercise (above [exerciseMaxBpm], or the age-based maximum). */
-    val exerciseAlertEnabled: Boolean = true,
-    /** Exercise limit chosen by the user; null uses the age-based maximum ([MaxHr.predicted]). */
-    val exerciseMaxBpm: Int? = null,
-    /** Use the watch's sleep and exercise recognition (and steps) to judge each minute. */
-    val activityRecognition: Boolean = true,
-    /** Low limit while asleep; null means [lowBpm] − 5, since heart rate is normally lower in sleep. */
-    val sleepLowBpm: Int? = null,
-    /** Show heart alerts on the watch and on the phone. */
-    val alertOnWatch: Boolean = true,
-    val alertOnPhone: Boolean = true,
+    /**
+     * The one switch for heart monitoring: all-day heart rate, sleep and exercise awareness, high
+     * and low heart rate, irregular rhythm and resting-trend notifications. Settings from older
+     * versions start on unless every part was off.
+     */
+    val heartMonitoring: Boolean = backgroundHeartRate || heartRateAlertsEnabled || irregularRhythmEnabled,
+    /** How far from the wearer's normal a heart rate must be to notify (see HeartBaseline). */
+    val alertSensitivity: AlertSensitivity = AlertSensitivity.STANDARD,
     /** Remind 3 days before the BP calibration expires. */
     val calibrationReminder: Boolean = true,
     /** Daily reminder to take a measurement, at [dailyReminderMinute] (minutes after midnight). */
@@ -128,22 +138,30 @@ data class MonitorSettings(
     val updatedAtMs: Long = 0
 ) {
     /** Passive heart rate feeds trends and the high/low alerts. */
-    val passiveHeartRate: Boolean get() = backgroundHeartRate || heartRateAlertsEnabled
+    val passiveHeartRate: Boolean get() = heartMonitoring
 
-    val sleepLowLimit: Int get() = sleepLowBpm ?: (lowBpm - 5)
+    /** Rhythm-check thresholds follow the alert sensitivity: high uses the looser rule. */
+    val irnSensitivity: IrnSensitivity get() = if (alertSensitivity ==
+        AlertSensitivity.HIGH
+    ) {
+        IrnSensitivity.HIGH
+    } else {
+        IrnSensitivity.STANDARD
+    }
 
-    /** The exercise limit for someone of [age] (years, null when unknown). */
-    fun exerciseLimit(age: Int?): Int = exerciseMaxBpm ?: MaxHr.predicted(age)
+    /** Turns every part of heart monitoring on or off together (older app versions read the parts). */
+    fun withMonitoring(on: Boolean) =
+        copy(heartMonitoring = on, backgroundHeartRate = on, heartRateAlertsEnabled = on, irregularRhythmEnabled = on)
+
+    /** The parts follow the single switch, whatever older versions left in them. */
+    fun normalized() = withMonitoring(heartMonitoring)
 
     /** Last writer wins: a copy changed later on either device replaces an older one. */
     fun isNewerThan(other: MonitorSettings) = updatedAtMs > other.updatedAtMs
 
     companion object {
-        val IRN_INTERVALS = listOf(15, 30, 60)
-        val HIGH_BPM_RANGE = 100..150
-        val LOW_BPM_RANGE = 35..50
-        val SLEEP_LOW_BPM_RANGE = 30..50
-        val EXERCISE_MAX_RANGE = 140..220
+        /** Minutes between irregular-rhythm checks. */
+        const val IRN_INTERVAL_MINUTES = 15
     }
 }
 
@@ -162,4 +180,9 @@ object MaxHr {
  * the recent minutes the alert rules look back over, and when each alert last fired.
  */
 @Serializable
-data class MonitorState(val minutes: List<HrMinute> = emptyList(), val lastAlerts: Map<String, Long> = emptyMap())
+data class MonitorState(
+    val minutes: List<HrMinute> = emptyList(),
+    val lastAlerts: Map<String, Long> = emptyMap(),
+    /** Daily histograms for the personal baseline. */
+    val history: HeartHistory = HeartHistory()
+)

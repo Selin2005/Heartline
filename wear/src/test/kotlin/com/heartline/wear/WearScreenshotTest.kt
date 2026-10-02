@@ -267,13 +267,24 @@ class WearScreenshotTest(private val size: String) {
 
     @Test fun profileNeeded() = shot("profile_needed") { ProfileNeededScreen() }
 
-    private val settingsUi = WatchSettingsUi(true, true, "1.6.5.021", listOf("ECG_ON_DEMAND", "HEART_RATE_CONTINUOUS", "PPG_ON_DEMAND", "SPO2_ON_DEMAND"), "0.1.0")
+    private val settingsUi = WatchSettingsUi(
+        true,
+        com.heartline.shared.hr.AlertSensitivity.STANDARD,
+        "1.6.5.021",
+        listOf("ECG_ON_DEMAND", "HEART_RATE_CONTINUOUS", "PPG_ON_DEMAND", "SPO2_ON_DEMAND"),
+        "0.1.0",
+        limits = com.heartline.shared.hr.HeartLimits(58, 51, high = 90, low = 40, sleepLow = 36, exerciseMax = 185, restConfidence = 0.98, sleepConfidence = 0.95),
+    )
 
     @Test fun settings() = shot("settings") { WatchSettingsScreen(settingsUi) }
 
     @Test fun settingsToggles() = shot("settings_toggles") {
-        WatchSettingsScreen(settingsUi.copy(heartRateAlerts = false), listState = TransformingLazyColumnState(initialAnchorItemIndex = 3))
+        WatchSettingsScreen(settingsUi.copy(heartMonitoring = false), listState = TransformingLazyColumnState(initialAnchorItemIndex = 3))
     }
+
+    @Test fun settingsMonitoringOffConfirm() = shot("settings_monitoring_off_confirm") { WatchSettingsScreen(settingsUi, initialConfirmStep = 1) }
+
+    @Test fun settingsMonitoringOffSure() = shot("settings_monitoring_off_sure") { WatchSettingsScreen(settingsUi, initialConfirmStep = 2) }
 
     @Test fun settingsLinks() = shot("settings_links") {
         WatchSettingsScreen(settingsUi, listState = TransformingLazyColumnState(initialAnchorItemIndex = 11))

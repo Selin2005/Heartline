@@ -37,6 +37,8 @@ import com.heartline.shared.hr.MonitorSettings
 import com.heartline.shared.hr.MonitorState
 import com.heartline.shared.hr.StepSpan
 import com.heartline.shared.hr.WatchActivity
+import com.heartline.shared.profile.Sex
+import java.time.ZoneId
 import com.heartline.shared.model.Metric
 import com.heartline.shared.sensor.PermissionPolicy
 import com.heartline.wear.sensor.HrSource
@@ -63,7 +65,8 @@ object BackgroundMonitoring {
     private const val TAG = "Heartline/Monitor"
     private const val IRN_WORK = "heartline-irn-window"
     private const val IRN_FOLLOW_UP = "heartline-irn-follow-up"
-    private const val FOLLOW_UP_MINUTES = 15L
+    /** Halfway to the next regular check: an irregular window is confirmed or not sooner. */
+    private const val FOLLOW_UP_MINUTES = 7L
 
     fun canRun(context: Context): Boolean =
         PermissionPolicy.permissionsFor(Metric.HEART_RATE, Build.VERSION.SDK_INT)
@@ -98,7 +101,7 @@ object BackgroundMonitoring {
         val passive = HealthServices.getClient(context).passiveMonitoringClient
         runCatching {
             if (allowed && settings.passiveHeartRate) {
-                val activity = settings.activityRecognition && hasActivityPermission(context)
+                val activity = hasActivityPermission(context)
                 val supported = runCatching { passive.getCapabilitiesAsync().await().supportedDataTypesPassiveMonitoring }.getOrNull().orEmpty()
                 val types = buildSet<DataType<*, *>> {
                     add(DataType.HEART_RATE_BPM)
@@ -120,8 +123,8 @@ object BackgroundMonitoring {
         }.onFailure { HLog.w(TAG, "passive listener update failed", it) }
 
         val work = WorkManager.getInstance(context)
-        if (allowed && settings.irregularRhythmEnabled) {
-            val minutes = settings.irnIntervalMinutes.coerceAtLeast(15).toLong()
+        if (allowed && settings.heartMonitoring) {
+            val minutes = MonitorSettings.IRN_INTERVAL_MINUTES.toLong()
             work.enqueueUniquePeriodicWork(
                 IRN_WORK,
                 ExistingPeriodicWorkPolicy.UPDATE,
@@ -131,7 +134,7 @@ object BackgroundMonitoring {
             work.cancelUniqueWork(IRN_WORK)
             work.cancelUniqueWork(IRN_FOLLOW_UP)
         }
-        HLog.i(TAG, "sync allowed=$allowed passive=${settings.passiveHeartRate} irn=${settings.irregularRhythmEnabled} background=${hasBackgroundPermission(context)}")
+        HLog.i(TAG, "sync allowed=$allowed monitoring=${settings.heartMonitoring} sensitivity=${settings.alertSensitivity} background=${hasBackgroundPermission(context)}")
     }
 }
 
@@ -150,11 +153,13 @@ class BackgroundHeart(
     output: MonitorOutput,
     activity: (minuteStartMs: Long) -> HrContext? = { null },
     age: () -> Int? = { null },
+    sex: () -> Sex? = { null },
+    zone: ZoneId = ZoneId.systemDefault(),
     settings: () -> MonitorSettings,
 ) {
     private val lock = Mutex()
 
-    val trends = HeartMonitor(output, { false }, { settings().copy(irregularRhythmEnabled = false) }, activity, age)
+    val trends = HeartMonitor(output, { false }, { settings().normalized().copy(irregularRhythmEnabled = false) }, activity, age, sex, zone)
 
     /** Rhythm windows keep no alert history of their own (their heart-rate alerts are off). */
     private val irnOutput = object : MonitorOutput by output {
@@ -166,7 +171,7 @@ class BackgroundHeart(
     }
 
     /** Each window is a fresh check: no spacing inside the monitor, the worker does the scheduling. */
-    val irn = HeartMonitor(irnOutput, { false }, { settings().copy(heartRateAlertsEnabled = false) }, activity, age, windowEveryMs = 0)
+    val irn = HeartMonitor(irnOutput, { false }, { settings().normalized().copy(heartRateAlertsEnabled = false) }, activity, age, sex, zone, windowEveryMs = 0)
 
     suspend fun onPassive(samples: List<HrSample>) = lock.withLock {
         samples.sortedBy { it.tsMs }.forEach { trends.onSample(it) }
@@ -236,7 +241,7 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
     override suspend fun doWork(): Result {
         if (!BackgroundMonitoring.canRun(applicationContext)) return Result.success()
         val settings = store.settings.value
-        if (!settings.irregularRhythmEnabled) return Result.success()
+        if (!settings.heartMonitoring) return Result.success()
         // No recent background heart rate means the watch is very likely not being worn: don't listen
         // to a sensor on a table or charger, whose noise looks like an irregular rhythm.
         val lastWorn = store.lastPassiveHeartRateMs
@@ -282,7 +287,7 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
         heart.endIrnWindow()
         val irregular = heart.irn.lastWindowIrregular
         HLog.i(TAG, "IRN window done: $count samples, irregular=$irregular skipped=${heart.irn.lastSkipReason}")
-        if (irregular == true && settings.irnIntervalMinutes > 15) BackgroundMonitoring.scheduleFollowUp(applicationContext)
+        if (irregular == true) BackgroundMonitoring.scheduleFollowUp(applicationContext)
         return Result.success()
     }
 

@@ -37,25 +37,30 @@ import androidx.compose.material.icons.rounded.Vibration
 import androidx.wear.compose.material3.SwitchButton
 import com.heartline.wear.ui.theme.WearColors
 import com.heartline.shared.diag.formatLogSize
+import com.heartline.shared.hr.AlertSensitivity
+import com.heartline.shared.hr.HeartLimits
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 
 data class WatchSettingsUi(
-    val irregularRhythm: Boolean,
-    val heartRateAlerts: Boolean,
+    val heartMonitoring: Boolean,
+    val sensitivity: AlertSensitivity,
     val serviceVersion: String?,
     val trackers: List<String>,
     val appVersion: String,
-    val backgroundHeartRate: Boolean = true,
     val haptics: Boolean = true,
     val liveWave: Boolean = true,
-    val highBpm: Int = 120,
-    val lowBpm: Int = 40,
+    /** The personal limits in use (null before the first background minute). */
+    val limits: HeartLimits? = null,
     val diagnosticLogs: Boolean = false,
     /** The kept log, compressed. */
     val logBytes: Long = 0,
 )
 
 /** One setting toggled on the watch. */
-enum class WatchToggle { IRREGULAR_RHYTHM, HEART_RATE_ALERTS, BACKGROUND_HR, HAPTICS, LIVE_WAVE }
+enum class WatchToggle { HEART_MONITORING, HAPTICS, LIVE_WAVE }
 
 @Composable
 private fun Row(icon: ImageVector, label: String, secondary: String?, onClick: () -> Unit = {}) {
@@ -99,25 +104,54 @@ private fun Toggle(icon: ImageVector, label: String, checked: Boolean, secondary
 fun WatchSettingsScreen(
     state: WatchSettingsUi,
     onToggle: (WatchToggle, Boolean) -> Unit = { _, _ -> },
+    onSensitivity: (AlertSensitivity) -> Unit = {},
     onDevMode: () -> Unit = {},
     onDiagnostics: () -> Unit = {},
     onSourceCode: () -> Unit = {},
     onCommunity: () -> Unit = {},
     listState: TransformingLazyColumnState = rememberTransformingLazyColumnState(),
+    /** Turning heart monitoring off asks twice: 1 lists what stops, 2 asks again. */
+    initialConfirmStep: Int = 0,
 ) {
+    var confirm by rememberSaveable { mutableIntStateOf(initialConfirmStep) }
+    if (confirm > 0) {
+        MonitoringOffConfirm(
+            step = confirm,
+            onNext = {
+                if (confirm == 1) {
+                    confirm = 2
+                } else {
+                    confirm = 0
+                    onToggle(WatchToggle.HEART_MONITORING, false)
+                }
+            },
+            onCancel = { confirm = 0 },
+        )
+        return
+    }
     val list = listState
     ScreenScaffold(scrollState = list) { padding ->
         TransformingLazyColumn(state = list, contentPadding = padding) {
             item { ListHeader { Text(stringResource(R.string.settings)) } }
-            item { Toggle(Icons.Rounded.MonitorHeart, stringResource(R.string.settings_background_hr), state.backgroundHeartRate) { onToggle(WatchToggle.BACKGROUND_HR, it) } }
-            item { Toggle(Icons.Rounded.NotificationsActive, stringResource(R.string.settings_irn), state.irregularRhythm) { onToggle(WatchToggle.IRREGULAR_RHYTHM, it) } }
             item {
                 Toggle(
-                    Icons.Rounded.NotificationsActive,
-                    stringResource(R.string.settings_hr_alerts),
-                    state.heartRateAlerts,
-                    secondary = stringResource(R.string.settings_hr_alerts_range, state.highBpm, state.lowBpm),
-                ) { onToggle(WatchToggle.HEART_RATE_ALERTS, it) }
+                    Icons.Rounded.MonitorHeart,
+                    stringResource(R.string.settings_heart_monitoring),
+                    state.heartMonitoring,
+                    secondary = when {
+                        !state.heartMonitoring -> stringResource(R.string.settings_heart_monitoring_off)
+                        state.limits == null || state.limits.learning -> stringResource(R.string.settings_heart_monitoring_learning)
+                        else -> stringResource(R.string.settings_heart_monitoring_normal, state.limits.restNormal, state.limits.high, state.limits.low)
+                    },
+                ) { on -> if (on) onToggle(WatchToggle.HEART_MONITORING, true) else confirm = 1 }
+            }
+            if (state.heartMonitoring) {
+                item {
+                    Row(Icons.Rounded.NotificationsActive, stringResource(R.string.settings_sensitivity), stringResource(state.sensitivity.label)) {
+                        val all = AlertSensitivity.entries
+                        onSensitivity(all[(state.sensitivity.ordinal + 1) % all.size])
+                    }
+                }
             }
             item { Toggle(Icons.Rounded.Vibration, stringResource(R.string.settings_haptics), state.haptics) { onToggle(WatchToggle.HAPTICS, it) } }
             item { Toggle(Icons.AutoMirrored.Rounded.ShowChart, stringResource(R.string.settings_live_wave), state.liveWave) { onToggle(WatchToggle.LIVE_WAVE, it) } }
@@ -136,6 +170,43 @@ fun WatchSettingsScreen(
             // AGPL: the source is one tap away; it opens on the phone.
             item { Row(Icons.Rounded.Code, stringResource(R.string.source_code), stringResource(R.string.source_code_sub), onSourceCode) }
             item { Row(Icons.Rounded.Forum, stringResource(R.string.community), stringResource(R.string.community_sub), onCommunity) }
+        }
+    }
+}
+
+private val AlertSensitivity.label: Int get() = when (this) {
+    AlertSensitivity.LOW -> R.string.sensitivity_low
+    AlertSensitivity.STANDARD -> R.string.sensitivity_standard
+    AlertSensitivity.HIGH -> R.string.sensitivity_high
+}
+
+/** The two confirmations before heart monitoring goes off: what stops, then "are you sure?". */
+@Composable
+fun MonitoringOffConfirm(step: Int, onNext: () -> Unit, onCancel: () -> Unit) {
+    val list = rememberTransformingLazyColumnState()
+    ScreenScaffold(scrollState = list) { padding ->
+        TransformingLazyColumn(state = list, contentPadding = padding) {
+            item {
+                ListHeader {
+                    Text(stringResource(if (step == 1) R.string.monitoring_off_title else R.string.monitoring_off_sure_title), textAlign = TextAlign.Center)
+                }
+            }
+            item { Centered(stringResource(if (step == 1) R.string.monitoring_off_list else R.string.monitoring_off_sure_text)) }
+            item {
+                Button(
+                    onClick = onNext,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = if (step == 2) ButtonDefaults.buttonColors(containerColor = WearColors.severity(com.heartline.shared.model.Severity.ALERT)) else ButtonDefaults.filledTonalButtonColors(),
+                    label = { Text(stringResource(if (step == 1) R.string.action_continue else R.string.action_turn_off)) },
+                )
+            }
+            item {
+                Button(
+                    onClick = onCancel,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(stringResource(if (step == 1) R.string.action_cancel else R.string.action_keep_on)) },
+                )
+            }
         }
     }
 }
