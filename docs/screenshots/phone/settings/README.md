@@ -23,6 +23,7 @@ Settings, updates, what's new, diagnostics, sharing, help and about.
 | **About: source code, community on Telegram, report a problem, license** | <img src="about_links_light.png" width="240" alt=""> | <img src="about_links_dark.png" width="240" alt=""> |
 | **Terms of Use** | <img src="legal_light.png" width="240" alt=""> | <img src="legal_dark.png" width="240" alt=""> |
 | **App icon** | <img src="launcher_icon.png" width="240" alt=""> | — |
+| **Settings all day off confirm** | <img src="settings_all_day_off_confirm_light.png" width="240" alt=""> | <img src="settings_all_day_off_confirm_dark.png" width="240" alt=""> |
 | **Settings monitoring off confirm** | <img src="settings_monitoring_off_confirm_light.png" width="240" alt=""> | <img src="settings_monitoring_off_confirm_dark.png" width="240" alt=""> |
 | **Settings monitoring off sure** | <img src="settings_monitoring_off_sure_light.png" width="240" alt=""> | <img src="settings_monitoring_off_sure_dark.png" width="240" alt=""> |
 | **Settings monitoring off** | <img src="settings_monitoring_off_light.png" width="240" alt=""> | <img src="settings_monitoring_off_dark.png" width="240" alt=""> |

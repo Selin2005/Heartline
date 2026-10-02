@@ -41,6 +41,7 @@ import com.heartline.shared.hr.AlertSensitivity
 import com.heartline.shared.hr.HeartLimits
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 
@@ -52,6 +53,8 @@ data class WatchSettingsUi(
     val appVersion: String,
     val haptics: Boolean = true,
     val liveWave: Boolean = true,
+    /** All-day heart rate recording (its own switch; monitoring needs it). */
+    val allDayHeartRate: Boolean = true,
     /** The personal limits in use (null before the first background minute). */
     val limits: HeartLimits? = null,
     val diagnosticLogs: Boolean = false,
@@ -60,7 +63,7 @@ data class WatchSettingsUi(
 )
 
 /** One setting toggled on the watch. */
-enum class WatchToggle { HEART_MONITORING, HAPTICS, LIVE_WAVE }
+enum class WatchToggle { ALL_DAY_HEART_RATE, HEART_MONITORING, HAPTICS, LIVE_WAVE }
 
 @Composable
 private fun Row(icon: ImageVector, label: String, secondary: String?, onClick: () -> Unit = {}) {
@@ -112,17 +115,21 @@ fun WatchSettingsScreen(
     listState: TransformingLazyColumnState = rememberTransformingLazyColumnState(),
     /** Turning heart monitoring off asks twice: 1 lists what stops, 2 asks again. */
     initialConfirmStep: Int = 0,
+    /** The confirmation is for all-day heart rate (off while monitoring is on stops monitoring too). */
+    initialConfirmAllDay: Boolean = false,
 ) {
     var confirm by rememberSaveable { mutableIntStateOf(initialConfirmStep) }
+    var allDay by rememberSaveable { mutableStateOf(initialConfirmAllDay) }
     if (confirm > 0) {
         MonitoringOffConfirm(
             step = confirm,
+            allDay = allDay,
             onNext = {
                 if (confirm == 1) {
                     confirm = 2
                 } else {
                     confirm = 0
-                    onToggle(WatchToggle.HEART_MONITORING, false)
+                    onToggle(if (allDay) WatchToggle.ALL_DAY_HEART_RATE else WatchToggle.HEART_MONITORING, false)
                 }
             },
             onCancel = { confirm = 0 },
@@ -134,8 +141,20 @@ fun WatchSettingsScreen(
         TransformingLazyColumn(state = list, contentPadding = padding) {
             item { ListHeader { Text(stringResource(R.string.settings)) } }
             item {
+                Toggle(Icons.Rounded.MonitorHeart, stringResource(R.string.settings_background_hr), state.allDayHeartRate) { on ->
+                    when {
+                        on -> onToggle(WatchToggle.ALL_DAY_HEART_RATE, true)
+                        state.heartMonitoring -> {
+                            allDay = true
+                            confirm = 1
+                        }
+                        else -> onToggle(WatchToggle.ALL_DAY_HEART_RATE, false)
+                    }
+                }
+            }
+            item {
                 Toggle(
-                    Icons.Rounded.MonitorHeart,
+                    Icons.Rounded.NotificationsActive,
                     stringResource(R.string.settings_heart_monitoring),
                     state.heartMonitoring,
                     secondary = when {
@@ -143,7 +162,14 @@ fun WatchSettingsScreen(
                         state.limits == null || state.limits.learning -> stringResource(R.string.settings_heart_monitoring_learning)
                         else -> stringResource(R.string.settings_heart_monitoring_normal, state.limits.restNormal, state.limits.high, state.limits.low)
                     },
-                ) { on -> if (on) onToggle(WatchToggle.HEART_MONITORING, true) else confirm = 1 }
+                ) { on ->
+                    if (on) {
+                        onToggle(WatchToggle.HEART_MONITORING, true)
+                    } else {
+                        allDay = false
+                        confirm = 1
+                    }
+                }
             }
             if (state.heartMonitoring) {
                 item {
@@ -182,16 +208,36 @@ private val AlertSensitivity.label: Int get() = when (this) {
 
 /** The two confirmations before heart monitoring goes off: what stops, then "are you sure?". */
 @Composable
-fun MonitoringOffConfirm(step: Int, onNext: () -> Unit, onCancel: () -> Unit) {
+fun MonitoringOffConfirm(step: Int, onNext: () -> Unit, onCancel: () -> Unit, allDay: Boolean = false) {
     val list = rememberTransformingLazyColumnState()
     ScreenScaffold(scrollState = list) { padding ->
         TransformingLazyColumn(state = list, contentPadding = padding) {
             item {
                 ListHeader {
-                    Text(stringResource(if (step == 1) R.string.monitoring_off_title else R.string.monitoring_off_sure_title), textAlign = TextAlign.Center)
+                    Text(
+                        stringResource(
+                            when {
+                                step == 2 -> R.string.monitoring_off_sure_title
+                                allDay -> R.string.all_day_off_title
+                                else -> R.string.monitoring_off_title
+                            },
+                        ),
+                        textAlign = TextAlign.Center,
+                    )
                 }
             }
-            item { Centered(stringResource(if (step == 1) R.string.monitoring_off_list else R.string.monitoring_off_sure_text)) }
+            item {
+                Centered(
+                    stringResource(
+                        when {
+                            step == 1 && allDay -> R.string.all_day_off_list
+                            step == 1 -> R.string.monitoring_off_list
+                            allDay -> R.string.all_day_off_sure_text
+                            else -> R.string.monitoring_off_sure_text
+                        },
+                    ),
+                )
+            }
             item {
                 Button(
                     onClick = onNext,

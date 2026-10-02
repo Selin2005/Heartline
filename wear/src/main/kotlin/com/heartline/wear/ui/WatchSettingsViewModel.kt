@@ -30,6 +30,7 @@ class WatchSettingsViewModel(
         val connected = g as? GatewayState.Connected
         WatchSettingsUi(
             heartMonitoring = s.heartMonitoring,
+            allDayHeartRate = s.passiveHeartRate,
             sensitivity = s.alertSensitivity,
             serviceVersion = connected?.serviceVersion,
             trackers = connected?.trackers?.map { it.name }?.sorted().orEmpty(),

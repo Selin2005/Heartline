@@ -96,16 +96,20 @@ data class MonitorSettings(
     /** Fixed limits from older versions; the personal limits replace them (HeartBaseline). */
     val highBpm: Int = 120,
     val lowBpm: Int = 40,
-    /** All-day heart rate for trends (passive, no notification). */
+    /**
+     * All-day heart rate: recorded in the background for trends, with no notification. Its own
+     * switch: it keeps recording when heart monitoring is off. Monitoring needs it.
+     */
     val backgroundHeartRate: Boolean = true,
     /** Unused since the single switch (checks run every 15 minutes). Kept so older versions still decode. */
     val irnIntervalMinutes: Int = 15,
     /**
-     * The one switch for heart monitoring: all-day heart rate, sleep and exercise awareness, high
-     * and low heart rate, irregular rhythm and resting-trend notifications. Settings from older
-     * versions start on unless every part was off.
+     * The one switch for heart monitoring: high and low heart rate, irregular rhythm and
+     * resting-trend notifications. All-day heart rate ([backgroundHeartRate]) has its own switch
+     * and keeps recording when this is off. Settings from older versions start on unless both
+     * notification parts were off.
      */
-    val heartMonitoring: Boolean = backgroundHeartRate || heartRateAlertsEnabled || irregularRhythmEnabled,
+    val heartMonitoring: Boolean = heartRateAlertsEnabled || irregularRhythmEnabled,
     /** How far from the wearer's normal a heart rate must be to notify (see HeartBaseline). */
     val alertSensitivity: AlertSensitivity = AlertSensitivity.STANDARD,
     /** Remind 3 days before the BP calibration expires. */
@@ -137,8 +141,8 @@ data class MonitorSettings(
     /** When these settings were last changed (either device); the newer copy wins. */
     val updatedAtMs: Long = 0
 ) {
-    /** Passive heart rate feeds trends and the high/low alerts. */
-    val passiveHeartRate: Boolean get() = heartMonitoring
+    /** Passive heart rate: recorded when all-day heart rate is on (monitoring turns it on too). */
+    val passiveHeartRate: Boolean get() = backgroundHeartRate || heartMonitoring
 
     /** Rhythm-check thresholds follow the alert sensitivity: high uses the looser rule. */
     val irnSensitivity: IrnSensitivity get() = if (alertSensitivity ==
@@ -149,11 +153,22 @@ data class MonitorSettings(
         IrnSensitivity.STANDARD
     }
 
-    /** Turns every part of heart monitoring on or off together (older app versions read the parts). */
-    fun withMonitoring(on: Boolean) =
-        copy(heartMonitoring = on, backgroundHeartRate = on, heartRateAlertsEnabled = on, irregularRhythmEnabled = on)
+    /**
+     * Heart monitoring on or off, with its parts (older app versions read the parts). Turning it on
+     * also turns all-day heart rate on, which it needs; turning it off leaves recording as it is.
+     */
+    fun withMonitoring(on: Boolean) = copy(
+        heartMonitoring = on,
+        heartRateAlertsEnabled = on,
+        irregularRhythmEnabled = on,
+        backgroundHeartRate = backgroundHeartRate || on
+    )
 
-    /** The parts follow the single switch, whatever older versions left in them. */
+    /** All-day heart rate on or off. Without it there is nothing to monitor, so off turns monitoring off too. */
+    fun withAllDayHeartRate(on: Boolean) =
+        if (on) copy(backgroundHeartRate = true) else withMonitoring(false).copy(backgroundHeartRate = false)
+
+    /** The parts follow the switches, whatever older versions left in them. */
     fun normalized() = withMonitoring(heartMonitoring)
 
     /** Last writer wins: a copy changed later on either device replaces an older one. */

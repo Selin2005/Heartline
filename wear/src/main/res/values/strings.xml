@@ -385,7 +385,10 @@
     <string name="sensitivity_standard">Standard</string>
     <string name="sensitivity_high">High</string>
     <string name="monitoring_off_title">Turn off heart monitoring?</string>
-    <string name="monitoring_off_list">This turns off:\n• All-day heart rate\n• Sleep and exercise awareness\n• High and low heart rate alerts\n• Irregular rhythm notifications\n• Resting heart rate trend</string>
+    <string name="monitoring_off_list">This turns off:\n• High and low heart rate alerts\n• Irregular rhythm notifications\n• Resting heart rate trend\n\nAll-day heart rate keeps recording.</string>
+    <string name="all_day_off_title">Turn off all-day heart rate?</string>
+    <string name="all_day_off_list">This stops recording your heart rate in the background, and with it:\n• Trends and your normal\n• High and low heart rate alerts\n• Irregular rhythm notifications\n• Resting heart rate trend</string>
+    <string name="all_day_off_sure_text">Heartline will no longer record your heart rate in the background or tell you about a high or low heart rate, an irregular rhythm, or changes in your resting heart rate.</string>
     <string name="monitoring_off_sure_title">Are you sure?</string>
     <string name="monitoring_off_sure_text">Heartline will no longer tell you about a high or low heart rate, an irregular rhythm, or changes in your resting heart rate.</string>
     <string name="action_cancel">Cancel</string>

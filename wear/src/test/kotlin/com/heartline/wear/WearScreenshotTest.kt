@@ -286,6 +286,10 @@ class WearScreenshotTest(private val size: String) {
 
     @Test fun settingsMonitoringOffSure() = shot("settings_monitoring_off_sure") { WatchSettingsScreen(settingsUi, initialConfirmStep = 2) }
 
+    @Test fun settingsAllDayOffConfirm() = shot("settings_all_day_off_confirm") {
+        WatchSettingsScreen(settingsUi, initialConfirmStep = 1, initialConfirmAllDay = true)
+    }
+
     @Test fun settingsLinks() = shot("settings_links") {
         WatchSettingsScreen(settingsUi, listState = TransformingLazyColumnState(initialAnchorItemIndex = 11))
     }

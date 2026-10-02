@@ -162,9 +162,11 @@ attach them to a bug report.
     - **Your normal:** after about a day of wearing, Phone → Heart rate → *Your normal* and
       Settings → *Your limits* show your own resting rate and limits (no longer "learning"); the
       watch's Settings shows the same numbers.
-    - **One switch:** turning *Heart monitoring* off asks twice (the list of what stops, then "Are
-      you sure?") on the phone and on the watch; afterwards the log shows `monitoring=false` and no
-      `passive HR` lines arrive. Turning it on again asks nothing.
+    - **Switches:** turning *Heart monitoring* off asks twice (the list of what stops, then "Are
+      you sure?") on the phone and on the watch; afterwards the log shows `monitoring=false`, no
+      heart notifications come, but `passive HR` lines keep arriving (all-day heart rate still
+      records). Turning *All-day heart rate* off as well stops the `passive HR` lines. Turning
+      monitoring on again turns all-day heart rate on and asks nothing.
     - **Watch not worn:** leave the watch on a table or charger for two hours. The log shows
       `IRN window skipped` (no background heart rate, or off the wrist), never an irregular rhythm
       notification.

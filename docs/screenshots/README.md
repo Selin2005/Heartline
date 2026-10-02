@@ -15,7 +15,7 @@ Regenerate with `./gradlew recordPaparazziDebug` and `python3 tools/screenshots/
 | [**Heart rate and alerts**](phone/heart-rate/README.md) | [<img src="phone/heart-rate/heart_rate_light.png" width="120" alt="">](phone/heart-rate/README.md) | 5 |
 | [**SpO₂, temperature and stress**](phone/more-measurements/README.md) | [<img src="phone/more-measurements/spo2_light.png" width="120" alt="">](phone/more-measurements/README.md) | 3 |
 | [**Body composition**](phone/body-composition/README.md) | [<img src="phone/body-composition/body_composition_light.png" width="120" alt="">](phone/body-composition/README.md) | 3 |
-| [**Settings, updates and sharing**](phone/settings/README.md) | [<img src="phone/settings/settings_light.png" width="120" alt="">](phone/settings/README.md) | 20 |
+| [**Settings, updates and sharing**](phone/settings/README.md) | [<img src="phone/settings/settings_light.png" width="120" alt="">](phone/settings/README.md) | 21 |
 | [**Other**](phone/other/README.md) | [<img src="phone/other/diagnostics_exporting_light.png" width="120" alt="">](phone/other/README.md) | 1 |
 | [**Widgets**](widgets/README.md) | [<img src="widgets/dashboard_2_full_light.png" width="120" alt="">](widgets/README.md) | 38 |
 
@@ -30,5 +30,5 @@ Regenerate with `./gradlew recordPaparazziDebug` and `python3 tools/screenshots/
 | [**Heart rate**](wear/heart-rate/README.md) | [<img src="wear/heart-rate/heart_rate_small.png" width="160" alt="">](wear/heart-rate/README.md) | 2 |
 | [**SpO₂, temperature and stress**](wear/more-measurements/README.md) | [<img src="wear/more-measurements/spo2_instruction_small.png" width="160" alt="">](wear/more-measurements/README.md) | 8 |
 | [**Body composition**](wear/body-composition/README.md) | [<img src="wear/body-composition/body_weight_small.png" width="160" alt="">](wear/body-composition/README.md) | 6 |
-| [**Settings**](wear/settings/README.md) | [<img src="wear/settings/settings_small.png" width="160" alt="">](wear/settings/README.md) | 5 |
+| [**Settings**](wear/settings/README.md) | [<img src="wear/settings/settings_small.png" width="160" alt="">](wear/settings/README.md) | 6 |
 | [**Tiles and cards**](wear/tiles/README.md) | [<img src="wear/tiles/heart_large.png" width="160" alt="">](wear/tiles/README.md) | 10 |

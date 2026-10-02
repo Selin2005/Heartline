@@ -212,6 +212,10 @@ class PhoneScreenshotTest(private val theme: String) {
         SettingsScreen(watchConnected = true, heartLimits = SampleData.heartLimits, initialOffStep = 1)
     }
 
+    @Test fun settingsAllDayOffConfirm() = shot("settings_all_day_off_confirm") {
+        SettingsScreen(watchConnected = true, heartLimits = SampleData.heartLimits, initialOffStep = 1, initialOffAllDay = true)
+    }
+
     @Test fun settingsMonitoringOffSure() = shot("settings_monitoring_off_sure") {
         SettingsScreen(watchConnected = true, heartLimits = SampleData.heartLimits, initialOffStep = 2)
     }

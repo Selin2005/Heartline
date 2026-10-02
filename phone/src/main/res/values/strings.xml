@@ -502,8 +502,8 @@
     <string name="settings_watch_not_connected">Not connected · changes sync when it\'s back</string>
     <string name="settings_monitoring">Heart monitoring on the watch</string>
     <string name="settings_heart_monitoring">Heart monitoring</string>
-    <string name="settings_heart_monitoring_summary">All-day heart rate and every heart notification</string>
-    <string name="settings_heart_monitoring_off">Off: no background heart rate and no heart notifications</string>
+    <string name="settings_heart_monitoring_summary">High and low heart rate, irregular rhythm and resting trend notifications</string>
+    <string name="settings_heart_monitoring_off">Off: no heart notifications. All-day heart rate still records if on.</string>
     <string name="settings_sensitivity">Alert sensitivity</string>
     <string name="sensitivity_low">Low: only clear changes</string>
     <string name="sensitivity_standard">Standard (recommended)</string>
@@ -513,7 +513,10 @@
     <string name="settings_limits_learning">Learning your normal · for now above %1$d or below %2$d bpm at rest</string>
     <string name="settings_limits_summary">Usual %1$d · above %2$d or below %3$d · asleep below %4$d · exercise above %5$d</string>
     <string name="monitoring_off_title">Turn off heart monitoring?</string>
-    <string name="monitoring_off_list">This turns off:\n• All-day heart rate and trends\n• Sleep and exercise awareness\n• High and low heart rate notifications\n• Irregular rhythm notifications\n• Resting heart rate trend notices</string>
+    <string name="monitoring_off_list">This turns off:\n• High and low heart rate notifications\n• Irregular rhythm notifications\n• Resting heart rate trend notices\n\nAll-day heart rate keeps recording for your trends; it has its own switch.</string>
+    <string name="all_day_off_title">Turn off all-day heart rate?</string>
+    <string name="all_day_off_list">This stops recording your heart rate in the background, and with it:\n• Heart rate trends, sleep and exercise, your normal\n• High and low heart rate notifications\n• Irregular rhythm notifications\n• Resting heart rate trend notices</string>
+    <string name="all_day_off_sure_text">Heartline will no longer record your heart rate in the background or tell you about a high or low heart rate, an irregular rhythm, or changes in your resting heart rate.</string>
     <string name="monitoring_off_sure_title">Are you sure?</string>
     <string name="monitoring_off_sure_text">Heartline will no longer tell you about a high or low heart rate, an irregular rhythm, or changes in your resting heart rate.</string>
     <string name="action_turn_off">Turn off</string>

@@ -94,6 +94,9 @@ sealed interface SettingChange {
     /** The one switch for every part of heart monitoring. */
     data class HeartMonitoring(val on: Boolean) : SettingChange
     data class Sensitivity(val level: AlertSensitivity) : SettingChange
+
+    /** Background heart-rate recording, independent of monitoring (which needs it). */
+    data class AllDayHeartRate(val on: Boolean) : SettingChange
     data class CalibrationReminder(val on: Boolean) : SettingChange
     data class DailyReminder(val on: Boolean) : SettingChange
     data class DailyReminderTime(val minuteOfDay: Int) : SettingChange
@@ -110,6 +113,7 @@ sealed interface SettingChange {
     fun applyTo(s: MonitorSettings): MonitorSettings = when (this) {
         is HeartMonitoring -> s.withMonitoring(on)
         is Sensitivity -> s.copy(alertSensitivity = level)
+        is AllDayHeartRate -> s.withAllDayHeartRate(on)
         is CalibrationReminder -> s.copy(calibrationReminder = on)
         is DailyReminder -> s.copy(dailyReminder = on)
         is DailyReminderTime -> s.copy(dailyReminderMinute = minuteOfDay)
@@ -163,9 +167,12 @@ fun SettingsScreen(
     heartLimits: HeartLimits? = null,
     /** 1 or 2: the confirmation step shown for turning heart monitoring off (screenshots). */
     initialOffStep: Int = 0,
+    /** The confirmation is for turning all-day heart rate off (which stops monitoring too). */
+    initialOffAllDay: Boolean = false,
 ) {
     var editingPrompt by remember { mutableStateOf(false) }
     var offStep by remember { mutableIntStateOf(initialOffStep) }
+    var offAllDay by remember { mutableStateOf(initialOffAllDay) }
     val colors = HeartlineTheme.colors
     val uri = LocalUriHandler.current
     var picker by remember { mutableStateOf<Picker?>(null) }
@@ -200,18 +207,46 @@ fun SettingsScreen(
         item {
             RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
                 CardRow(
+                    stringResource(R.string.settings_background_hr),
+                    subtitle = stringResource(R.string.settings_background_hr_summary),
+                    leading = { IconBadge(Icons.Rounded.MonitorHeart, colors.heartRate) },
+                    // Recording has its own switch. Off while monitoring is on stops monitoring too, so that asks twice.
+                    trailing = {
+                        OneUiSwitch(monitor.backgroundHeartRate) {
+                            when {
+                                it -> onChange(SettingChange.AllDayHeartRate(true))
+                                monitor.heartMonitoring -> {
+                                    offAllDay = true
+                                    offStep = 1
+                                }
+                                else -> onChange(SettingChange.AllDayHeartRate(false))
+                            }
+                        }
+                    },
+                    showDivider = true,
+                )
+                CardRow(
                     stringResource(R.string.settings_heart_monitoring),
                     subtitle = stringResource(if (monitor.heartMonitoring) R.string.settings_heart_monitoring_summary else R.string.settings_heart_monitoring_off),
-                    leading = { IconBadge(Icons.Rounded.MonitorHeart, colors.heartRate) },
+                    leading = { IconBadge(Icons.Rounded.NotificationsActive, colors.heartRate) },
                     // Turning it off asks twice (what stops, then "are you sure?"); turning it on doesn't.
-                    trailing = { OneUiSwitch(monitor.heartMonitoring) { if (it) onChange(SettingChange.HeartMonitoring(true)) else offStep = 1 } },
+                    trailing = {
+                        OneUiSwitch(monitor.heartMonitoring) {
+                            if (it) {
+                                onChange(SettingChange.HeartMonitoring(true))
+                            } else {
+                                offAllDay = false
+                                offStep = 1
+                            }
+                        }
+                    },
                     showDivider = monitor.heartMonitoring,
                 )
                 if (monitor.heartMonitoring) {
                     CardRow(
                         stringResource(R.string.settings_sensitivity),
                         subtitle = stringResource(monitor.alertSensitivity.label),
-                        leading = { IconBadge(Icons.Rounded.NotificationsActive, colors.ecg) },
+                        leading = { Spacer(Modifier.size(40.dp)) },
                         showDivider = true,
                         onClick = { picker = Picker.Sensitivity },
                     )
@@ -454,15 +489,36 @@ fun SettingsScreen(
         val first = offStep == 1
         AlertDialog(
             onDismissRequest = { offStep = 0 },
-            title = { Text(stringResource(if (first) R.string.monitoring_off_title else R.string.monitoring_off_sure_title)) },
-            text = { Text(stringResource(if (first) R.string.monitoring_off_list else R.string.monitoring_off_sure_text)) },
+            title = {
+                Text(
+                    stringResource(
+                        when {
+                            !first -> R.string.monitoring_off_sure_title
+                            offAllDay -> R.string.all_day_off_title
+                            else -> R.string.monitoring_off_title
+                        },
+                    ),
+                )
+            },
+            text = {
+                Text(
+                    stringResource(
+                        when {
+                            first && offAllDay -> R.string.all_day_off_list
+                            first -> R.string.monitoring_off_list
+                            offAllDay -> R.string.all_day_off_sure_text
+                            else -> R.string.monitoring_off_sure_text
+                        },
+                    ),
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     if (first) {
                         offStep = 2
                     } else {
                         offStep = 0
-                        onChange(SettingChange.HeartMonitoring(false))
+                        onChange(if (offAllDay) SettingChange.AllDayHeartRate(false) else SettingChange.HeartMonitoring(false))
                     }
                 }) {
                     Text(stringResource(if (first) R.string.action_continue else R.string.action_turn_off), color = if (first) colors.primary else colors.statusAlert)

@@ -228,24 +228,33 @@ The reason a window was skipped is logged (`IRN window done: … skipped=…`).
 The day chart can be filtered by activity. The notification list shows each alert's limit,
 activity and the usual rate, trend notices, and the ECG follow-up for rhythm notifications.
 
-## 7. Settings: one switch (`MonitorSettings`)
+## 7. Settings: two switches (`MonitorSettings`)
 
-- **Heart monitoring** turns everything on or off together:
-  - all-day heart rate and sleep and exercise awareness;
-  - high and low heart rate notifications;
+- **All-day heart rate** (`backgroundHeartRate`) records heart rate in the background. That feeds
+  trends, sleep and exercise, and the personal normal, with no notification. It has its own
+  switch and keeps recording when heart monitoring is off.
+- **Heart monitoring** (`heartMonitoring`) turns every notification and check on or off
+  together:
+  - high and low heart rate;
   - irregular rhythm checks;
   - the resting trend.
-
-  Turning it off asks twice, on the phone and on the watch: the first step lists what stops,
-  the second asks "Are you sure?". Turning it on asks nothing.
+- **How the two work together:**
+  - Monitoring needs the recording. Turning monitoring on also turns all-day heart rate on.
+  - Turning all-day heart rate off turns monitoring off too. While monitoring is on, that asks
+    first.
+  - With monitoring off, the watch keeps learning the normal from the recording, so the limits
+    are ready when monitoring is turned back on.
+- **Turning off asks twice,** on the phone and on the watch: the first step lists what stops, the
+  second asks "Are you sure?". This applies to turning monitoring off, and to turning all-day
+  heart rate off while monitoring is on. Turning on asks nothing.
 - **Alert sensitivity** (Low, Standard, High) is shown only while monitoring is on. It sets the
   ratios above. High also uses the looser irregular-rhythm rule.
 - **Your limits** (read only) shows the normal and the limits in use, or "learning".
 
 Older versions:
-- `heartMonitoring` defaults to on unless every old part (all-day heart rate, alerts, rhythm)
-  was off.
-- `withMonitoring` also writes the old part switches, so an older watch follows the one switch.
+- `heartMonitoring` defaults to on unless both old notification parts (high/low alerts, rhythm)
+  were off. Recording stays as it was.
+- `withMonitoring` also writes the old part switches, so an older watch follows the switches.
 - Fields that are no longer used stay in the JSON format.
 
 ## 8. Tests
@@ -268,7 +277,7 @@ Older versions:
     - sparse readings;
     - recovery;
     - sleep limits;
-    - the single switch;
+    - the two switches (monitoring off keeps recording);
     - cooldown keys;
     - old JSON.
   - `IrnQualityTest`, `HeartTest`.

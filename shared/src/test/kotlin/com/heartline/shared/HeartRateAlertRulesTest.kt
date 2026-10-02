@@ -120,8 +120,16 @@ class HeartRateAlertRulesTest {
     }
 
     @Test
-    fun turningMonitoringOffAlsoTurnsOffThePartsOlderWatchesRead() {
+    fun turningMonitoringOffKeepsRecording() {
         val off = MonitorSettings().withMonitoring(false)
-        assertFalse(off.backgroundHeartRate || off.heartRateAlertsEnabled || off.irregularRhythmEnabled || off.passiveHeartRate)
+        // Notifications and checks stop (older watches read the parts) ...
+        assertFalse(off.heartMonitoring || off.heartRateAlertsEnabled || off.irregularRhythmEnabled)
+        // ... but all-day heart rate keeps recording, until it is turned off on its own.
+        assertTrue(off.backgroundHeartRate && off.passiveHeartRate)
+        val noRecording = off.withAllDayHeartRate(false)
+        assertFalse(noRecording.passiveHeartRate)
+        // Monitoring needs the recording: turning it on turns recording on, turning recording off turns it off.
+        assertTrue(noRecording.withMonitoring(true).passiveHeartRate)
+        assertFalse(MonitorSettings().withAllDayHeartRate(false).heartMonitoring)
     }
 }
