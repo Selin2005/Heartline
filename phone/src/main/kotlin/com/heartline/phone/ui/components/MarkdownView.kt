@@ -23,6 +23,7 @@ import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
@@ -103,6 +104,7 @@ private fun annotated(spans: List<Span>, onLink: (String) -> Unit, bold: Boolean
         for (span in spans) {
             val style = SpanStyle(
                 fontWeight = if (span.bold || bold) FontWeight.SemiBold else null,
+                fontStyle = if (span.italic) FontStyle.Italic else null,
                 fontFamily = if (span.code) FontFamily.Monospace else null,
             )
             val href = span.link

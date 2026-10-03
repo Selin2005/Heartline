@@ -96,4 +96,42 @@ class MarkdownTest {
         assertEquals("1.0.0", Changelog.entryFor(md, "1.0.0-dev.7")!!.version)
         assertNull(Changelog.entryFor(md, "2.0.0"))
     }
+
+    @Test
+    fun releaseNotesHideTheWorkflowMarkersAndShowQuotesAndItalics() {
+        // As GitHub shows a release body: comments hidden, the quote and italics rendered.
+        val body = """
+            > **Development build:** the newest code, for early testers. Update from the app: *Settings → Updates*, on the *Development* update channel.
+
+            <!-- notes -->
+            ## Changes
+            - Fix what a real watch log showed
+            - Stress monitoring
+            <!-- /notes -->
+
+            SHA-256 checksums: SHA256SUMS. <!-- heartline-run: 37141321052 --> <!-- heartline-telegram: no -->
+            <!--
+            several lines
+            -->
+        """.trimIndent()
+        val blocks = Markdown.parse(body)
+        val text = blocks.joinToString("\n") { b ->
+            when (b) {
+                is MdBlock.Paragraph -> Markdown.plain(b.spans)
+                is MdBlock.Heading -> Markdown.plain(b.spans)
+                is MdBlock.Item -> Markdown.plain(b.spans)
+                else -> ""
+            }
+        }
+        assertTrue(text, "<!--" !in text && "-->" !in text && "heartline-run" !in text && "several lines" !in text)
+        val intro = blocks.first() as MdBlock.Paragraph
+        assertTrue(Markdown.plain(intro.spans).startsWith("Development build:"))
+        assertEquals(listOf("Settings → Updates", "Development"), intro.spans.filter { it.italic }.map { it.text })
+        assertTrue(intro.spans.first().bold)
+        assertEquals("SHA-256 checksums: SHA256SUMS.", Markdown.plain((blocks.last() as MdBlock.Paragraph).spans).trim())
+        assertEquals(2, blocks.count { it is MdBlock.Item })
+        // A list marker, a multiplication and snake_case stay as they are.
+        assertEquals("2 * 3 = 6 and heart_rate_bpm", Markdown.plain(Markdown.spans("2 * 3 = 6 and heart_rate_bpm")))
+        assertEquals(listOf("emphasis"), Markdown.spans("an _emphasis_ here").filter { it.italic }.map { it.text })
+    }
 }

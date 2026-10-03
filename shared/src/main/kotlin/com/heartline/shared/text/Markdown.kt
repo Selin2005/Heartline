@@ -5,8 +5,14 @@ package com.heartline.shared.text
 
 import com.heartline.shared.AppInfo
 
-/** A run of text inside a block: plain, bold, inline code, or a link. */
-data class Span(val text: String, val bold: Boolean = false, val code: Boolean = false, val link: String? = null)
+/** A run of text inside a block: plain, bold, italic, inline code, or a link. */
+data class Span(
+    val text: String,
+    val bold: Boolean = false,
+    val code: Boolean = false,
+    val link: String? = null,
+    val italic: Boolean = false
+)
 
 sealed interface MdBlock {
     data class Heading(val level: Int, val spans: List<Span>) : MdBlock
@@ -22,8 +28,10 @@ sealed interface MdBlock {
 }
 
 /**
- * The small Markdown subset the app shows: the legal documents and the changelog. Headings,
- * paragraphs, bullet and numbered lists, tables, fenced code, **bold**, `code` and [links](url).
+ * The small Markdown subset the app shows: the legal documents, the changelog and the release
+ * notes. Headings, paragraphs, bullet and numbered lists, tables, fenced code, **bold**, *italic*,
+ * `code` and [links](url). Like GitHub, it hides HTML comments (the release workflow's markers,
+ * such as `<!-- notes -->`) and shows a > quote as its text.
  */
 object Markdown {
     private val heading = Regex("^(#{1,6})\\s+(.*)$")
@@ -31,11 +39,17 @@ object Markdown {
     private val numbered = Regex("^(\\s*)(\\d+)[.)]\\s+(.*)$")
     private val rule = Regex("^\\s*([-*_])(\\s*\\1){2,}\\s*$")
     private val tableSeparator = Regex("^\\s*\\|?\\s*:?-+:?\\s*(\\|\\s*:?-+:?\\s*)*\\|?\\s*$")
-    private val inline = Regex("\\*\\*(.+?)\\*\\*|`([^`]+)`|\\[([^\\]]+)]\\(([^)\\s]+)\\)|<(https?://[^>]+)>|(https?://[^\\s)]+[^\\s).,;])")
+    private val inline = Regex(
+        "\\*\\*(.+?)\\*\\*|`([^`]+)`|\\[([^\\]]+)]\\(([^)\\s]+)\\)|<(https?://[^>]+)>|(https?://[^\\s)]+[^\\s).,;])" +
+            "|(?<![*\\w])\\*(?![\\s*])([^*]+?)(?<!\\s)\\*(?![*\\w])|(?<![_\\w])_(?![\\s_])([^_]+?)(?<!\\s)_(?![_\\w])"
+    )
+    private val comment = Regex("<!--.*?-->", RegexOption.DOT_MATCHES_ALL)
+    private val quote = Regex("^\\s{0,3}>\\s?")
 
     fun parse(markdown: String): List<MdBlock> {
         val blocks = mutableListOf<MdBlock>()
-        val lines = markdown.replace("\r\n", "\n").lines()
+        // HTML comments are hidden, as on GitHub (also across lines); a quote shows as its text.
+        val lines = comment.replace(markdown.replace("\r\n", "\n"), "").lines().map { quote.replaceFirst(it, "") }
         val paragraph = mutableListOf<String>()
         fun flush() {
             if (paragraph.isNotEmpty()) blocks += MdBlock.Paragraph(spans(paragraph.joinToString(" ") { it.trim() }))
@@ -92,7 +106,9 @@ object Markdown {
         for (m in inline.findAll(text)) {
             if (m.range.first > last) out += Span(text.substring(last, m.range.first))
             val (bold, code, label, href, angle, bare) = m.destructured
+            val italic = m.groupValues[7].ifEmpty { m.groupValues[8] }
             out += when {
+                italic.isNotEmpty() -> Span(italic, italic = true)
                 bold.isNotEmpty() -> Span(bold, bold = true)
                 code.isNotEmpty() -> Span(code, code = true)
                 label.isNotEmpty() -> Span(label.replace("**", ""), link = href)
