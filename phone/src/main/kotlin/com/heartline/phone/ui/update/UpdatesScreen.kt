@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.NewReleases
 import androidx.compose.material.icons.rounded.Science
@@ -38,6 +39,7 @@ import com.heartline.phone.ui.components.SectionHeader
 import com.heartline.phone.ui.components.gutter
 import com.heartline.phone.ui.settings.OneUiSwitch
 import com.heartline.phone.ui.theme.HeartlineTheme
+import com.heartline.phone.update.UpdateDownloadWorker
 import com.heartline.phone.update.UpdatesUi
 import com.heartline.shared.AppInfo
 import com.heartline.shared.text.Markdown
@@ -68,6 +70,7 @@ fun UpdatesScreen(
     onBack: (() -> Unit)? = null,
     onCheck: () -> Unit = {},
     onInstall: () -> Unit = {},
+    onCancelDownload: () -> Unit = {},
     onAutoCheck: (Boolean) -> Unit = {},
     onTrack: (AppVersion.Channel) -> Unit = {},
 ) {
@@ -99,7 +102,11 @@ fun UpdatesScreen(
         item {
             val release = ui.available
             RoundedCard(Modifier.gutter()) {
+                val ready = ui.ready
+                val download = ui.downloading
                 val (icon, tint, title) = when {
+                    ready != null -> Triple(Icons.Rounded.DownloadDone, colors.primary, stringResource(R.string.updates_ready, ready))
+                    download is UpdateDownloadWorker.State.Failed -> Triple(Icons.Rounded.ErrorOutline, colors.statusWarn, stringResource(R.string.updates_download_failed))
                     ui.checking -> Triple(Icons.Rounded.Sync, colors.onSurfaceVariant, stringResource(R.string.updates_checking))
                     release != null -> Triple(
                         Icons.Rounded.NewReleases,
@@ -115,9 +122,13 @@ fun UpdatesScreen(
                     Spacer(Modifier.width(16.dp))
                     CardTitle(title)
                 }
-                ui.error?.let {
+                (ui.error ?: (download as? UpdateDownloadWorker.State.Failed)?.message?.takeIf { it.isNotBlank() })?.let {
                     Spacer(Modifier.height(8.dp))
                     Text(it, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                }
+                if (ready != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(stringResource(R.string.updates_ready_sub), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                 }
                 if (release != null && release.notes.isNotBlank()) {
                     Spacer(Modifier.height(12.dp))
@@ -125,15 +136,17 @@ fun UpdatesScreen(
                     MarkdownBlocks(blocks, onLink = { open(it) })
                 }
                 Spacer(Modifier.height(16.dp))
-                val progress = ui.progress
                 when {
-                    progress != null -> {
-                        LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = colors.primary)
+                    ready != null -> PillButton(stringResource(R.string.updates_install_now), onClick = onInstall)
+                    download is UpdateDownloadWorker.State.Running || download is UpdateDownloadWorker.State.Waiting -> {
+                        DownloadProgress(download)
                         Spacer(Modifier.height(8.dp))
-                        Text(stringResource(R.string.updates_downloading), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                        TextButton(onClick = onCancelDownload, modifier = Modifier.fillMaxWidth()) {
+                            Text(stringResource(R.string.updates_cancel))
+                        }
                     }
                     release != null -> {
-                        PillButton(stringResource(R.string.updates_install), onClick = onInstall)
+                        PillButton(stringResource(if (download is UpdateDownloadWorker.State.Failed) R.string.updates_retry else R.string.updates_install), onClick = onInstall)
                         TextButton(onClick = { open(release.pageUrl.ifBlank { AppInfo.RELEASES_URL }) }, modifier = Modifier.fillMaxWidth()) {
                             Text(stringResource(R.string.updates_release_page))
                         }
@@ -188,3 +201,28 @@ fun UpdatesScreen(
         }
     }
 }
+
+/** The background download: progress and size, or waiting for a connection. */
+@Composable
+private fun DownloadProgress(download: UpdateDownloadWorker.State) {
+    val colors = HeartlineTheme.colors
+    val running = download as? UpdateDownloadWorker.State.Running
+    val fraction = running?.fraction
+    if (fraction != null) {
+        LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth(), color = colors.primary)
+    } else {
+        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = colors.primary)
+    }
+    Spacer(Modifier.height(8.dp))
+    val text = when {
+        running != null && running.total > 0 -> stringResource(R.string.updates_downloading_size, megabytes(running.done), megabytes(running.total))
+        running != null -> stringResource(R.string.updates_downloading)
+        (download as UpdateDownloadWorker.State.Waiting).retrying -> stringResource(R.string.updates_waiting_network)
+        else -> stringResource(R.string.updates_starting)
+    }
+    Text(text, style = MaterialTheme.typography.bodyMedium, color = colors.onBackground)
+    Spacer(Modifier.height(4.dp))
+    Text(stringResource(R.string.updates_downloading_hint), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+}
+
+private fun megabytes(bytes: Long) = "%.1f".format(bytes / 1_048_576.0)

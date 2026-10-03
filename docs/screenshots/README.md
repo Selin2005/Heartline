@@ -9,13 +9,13 @@ Regenerate with `./gradlew recordPaparazziDebug` and `python3 tools/screenshots/
 | Section | Preview | Screens |
 |---|:-:|:-:|
 | [**Onboarding**](phone/onboarding/README.md) | [<img src="phone/onboarding/terms_light.png" width="120" alt="">](phone/onboarding/README.md) | 7 |
-| [**Home**](phone/home/README.md) | [<img src="phone/home/home_light.png" width="120" alt="">](phone/home/README.md) | 5 |
+| [**Home**](phone/home/README.md) | [<img src="phone/home/home_light.png" width="120" alt="">](phone/home/README.md) | 6 |
 | [**ECG**](phone/ecg/README.md) | [<img src="phone/ecg/ecg_home_light.png" width="120" alt="">](phone/ecg/README.md) | 8 |
 | [**Blood pressure**](phone/blood-pressure/README.md) | [<img src="phone/blood-pressure/bp_home_light.png" width="120" alt="">](phone/blood-pressure/README.md) | 7 |
 | [**Heart rate and alerts**](phone/heart-rate/README.md) | [<img src="phone/heart-rate/heart_rate_light.png" width="120" alt="">](phone/heart-rate/README.md) | 5 |
 | [**SpO₂, temperature and stress**](phone/more-measurements/README.md) | [<img src="phone/more-measurements/spo2_light.png" width="120" alt="">](phone/more-measurements/README.md) | 3 |
 | [**Body composition**](phone/body-composition/README.md) | [<img src="phone/body-composition/body_composition_light.png" width="120" alt="">](phone/body-composition/README.md) | 3 |
-| [**Settings, updates and sharing**](phone/settings/README.md) | [<img src="phone/settings/settings_light.png" width="120" alt="">](phone/settings/README.md) | 21 |
+| [**Settings, updates and sharing**](phone/settings/README.md) | [<img src="phone/settings/settings_light.png" width="120" alt="">](phone/settings/README.md) | 25 |
 | [**Other**](phone/other/README.md) | [<img src="phone/other/diagnostics_exporting_light.png" width="120" alt="">](phone/other/README.md) | 6 |
 | [**Widgets**](widgets/README.md) | [<img src="widgets/dashboard_2_full_light.png" width="120" alt="">](widgets/README.md) | 38 |
 

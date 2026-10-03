@@ -11,6 +11,10 @@ Settings, updates, what's new, diagnostics, sharing, help and about.
 | **Sharing** | <img src="settings_sharing_light.png" width="240" alt=""> | <img src="settings_sharing_dark.png" width="240" alt=""> |
 | **Help & diagnostics, community on Telegram and source code** | <img src="settings_help_light.png" width="240" alt=""> | <img src="settings_help_dark.png" width="240" alt=""> |
 | **Updates and beta versions** | <img src="settings_updates_light.png" width="240" alt=""> | <img src="settings_updates_dark.png" width="240" alt=""> |
+| **Downloading an update: it carries on after leaving the screen** | <img src="update_downloading_light.png" width="240" alt=""> | <img src="update_downloading_dark.png" width="240" alt=""> |
+| **Waiting for a connection to continue the download** | <img src="update_waiting_light.png" width="240" alt=""> | <img src="update_waiting_dark.png" width="240" alt=""> |
+| **Downloaded and verified: ready to install** | <img src="update_ready_light.png" width="240" alt=""> | <img src="update_ready_dark.png" width="240" alt=""> |
+| **The download didn't finish: try again** | <img src="update_failed_light.png" width="240" alt=""> | <img src="update_failed_dark.png" width="240" alt=""> |
 | **Up to date** | <img src="update_up_to_date_light.png" width="240" alt=""> | <img src="update_up_to_date_dark.png" width="240" alt=""> |
 | **What's new after an update** | <img src="whats_new_light.png" width="240" alt=""> | <img src="whats_new_dark.png" width="240" alt=""> |
 | **Share a result, with AI apps** | <img src="share_sheet_light.png" width="240" alt=""> | <img src="share_sheet_dark.png" width="240" alt=""> |

@@ -10,6 +10,7 @@ import com.heartline.phone.link.PhoneStatusPublisher
 import com.heartline.phone.notify.Reminders
 import com.heartline.phone.update.UpdateWorker
 import com.heartline.phone.update.UpdateRepository
+import com.heartline.phone.update.Updater
 import com.heartline.phone.diag.DiagnosticsRepository
 import com.heartline.phone.data.ProfileRepository
 import com.heartline.shared.diag.Redactor
@@ -63,7 +64,11 @@ class PhoneApplication : Application() {
         get<WidgetUpdater>().start(scope)
         scope.launch { Reminders.sync(this@PhoneApplication, get<SettingsRepository>().current()) }
         UpdateWorker.schedule(this, enabled = BuildConfig.UPDATER)
-        scope.launch { get<UpdateRepository>().recordInstalled() }
+        scope.launch {
+            get<UpdateRepository>().recordInstalled()
+            // Deletes the downloaded update once it's installed.
+            get<Updater>().cleanUp()
+        }
         // Diagnostic logs: on for beta users, stable users are asked; names never reach the file.
         get<DiagnosticsRepository>().start(scope)
         get<ProfileRepository>().profile.onEach { HLog.setRedactor(Redactor.of(it)) }.launchIn(scope)

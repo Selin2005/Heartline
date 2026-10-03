@@ -4,6 +4,7 @@
 package com.heartline.phone.notify
 
 import android.Manifest
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -37,6 +38,9 @@ class PhoneNotifier(private val context: Context) {
         )
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_REMINDERS, context.getString(R.string.channel_reminders), NotificationManager.IMPORTANCE_DEFAULT),
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_UPDATES, context.getString(R.string.channel_updates), NotificationManager.IMPORTANCE_LOW),
         )
     }
 
@@ -117,6 +121,62 @@ class PhoneNotifier(private val context: Context) {
         UPDATES_ROUTE,
     )
 
+    /** The update download's ongoing notification (the foreground job's), with a Cancel action. */
+    fun updateDownloading(version: String, done: Long, total: Long, cancel: PendingIntent): Notification {
+        val percent = if (total > 0) (done * 100 / total).toInt().coerceIn(0, 100) else 0
+        return NotificationCompat.Builder(context, CHANNEL_UPDATES)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentTitle(context.getString(R.string.update_notif_downloading_title, version))
+            .setContentText(if (total > 0) context.getString(R.string.update_notif_downloading_text, percent) else null)
+            .setProgress(100, percent, total <= 0)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(openPending(UPDATE_PROGRESS_ID, UPDATES_ROUTE))
+            .addAction(0, context.getString(R.string.update_notif_cancel), cancel)
+            .build()
+    }
+
+    /** A downloaded and verified update: tap to install (opens the app, which starts the installer). */
+    fun updateReady(version: String) {
+        manager.cancel(UPDATE_ID)
+        simple(
+            UPDATE_READY_ID,
+            context.getString(R.string.update_notif_ready_title, version),
+            context.getString(R.string.update_notif_ready_text),
+            UPDATES_INSTALL_ROUTE,
+        )
+    }
+
+    fun cancelUpdateReady() = manager.cancel(UPDATE_READY_ID)
+
+    /**
+     * The installer asks to confirm while Heartline is in the background, where Android doesn't let
+     * it open the confirmation itself: the notification opens it.
+     */
+    fun installConfirm(confirm: Intent) {
+        if (!canNotify()) return
+        val open = PendingIntent.getActivity(context, UPDATE_READY_ID, confirm, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        manager.cancel(UPDATE_READY_ID)
+        manager.notify(
+            UPDATE_READY_ID,
+            NotificationCompat.Builder(context, CHANNEL_REMINDERS)
+                .setSmallIcon(R.drawable.ic_heart)
+                .setContentTitle(context.getString(R.string.update_notif_confirm_title))
+                .setContentText(context.getString(R.string.update_notif_confirm_text))
+                .setAutoCancel(true)
+                .setContentIntent(open)
+                .build(),
+        )
+    }
+
+    /** The installer failed; the downloaded file is kept, so trying again doesn't download. */
+    fun installFailed() = simple(
+        UPDATE_READY_ID,
+        context.getString(R.string.update_notif_failed_title),
+        context.getString(R.string.update_notif_failed_text),
+        UPDATES_ROUTE,
+    )
+
     fun weeklySummary(title: String, text: String) = simple(WEEKLY_ID, title, text, SetupTarget.HOME.phoneRoute)
 
     fun dailyReminder() = simple(
@@ -126,14 +186,18 @@ class PhoneNotifier(private val context: Context) {
         SetupTarget.HOME.phoneRoute,
     )
 
+    private fun canNotify() = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+    private fun openPending(id: Int, route: String) = PendingIntent.getActivity(
+        context,
+        id,
+        Intent(Intent.ACTION_VIEW, Uri.parse(DeepLinks.phone(EntryLinks.tag(route, EntrySource.NOTIFICATION))), context, MainActivity::class.java),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+
     private fun simple(id: Int, title: String, text: String, route: String, channel: String = CHANNEL_REMINDERS) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
-        val open = PendingIntent.getActivity(
-            context,
-            id,
-            Intent(Intent.ACTION_VIEW, Uri.parse(DeepLinks.phone(EntryLinks.tag(route, EntrySource.NOTIFICATION))), context, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
+        if (!canNotify()) return
+        val open = openPending(id, route)
         manager.notify(
             id,
             NotificationCompat.Builder(context, channel)
@@ -214,7 +278,13 @@ class PhoneNotifier(private val context: Context) {
         const val BP_SAFETY_ID = 7_004
         const val WEEKLY_ID = 7_005
         const val UPDATE_ID = 7_006
+        const val UPDATE_PROGRESS_ID = 7_007
+        const val UPDATE_READY_ID = 7_008
         const val UPDATES_ROUTE = "updates"
+
+        /** The Updates screen, starting the installer for the downloaded update. */
+        const val UPDATES_INSTALL_ROUTE = "updates?install=true"
+        const val CHANNEL_UPDATES = "updates"
         const val CHANNEL_REMINDERS = "reminders"
         const val SETUP_ID = 7_001
         const val CHANNEL_ALERTS = "alerts"

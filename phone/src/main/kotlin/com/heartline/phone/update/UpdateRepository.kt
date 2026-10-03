@@ -33,9 +33,14 @@ class UpdateRepository(private val context: Context, private val installedVersio
         val notifiedVersion: String? = null,
         val lastSeenVersion: String? = null,
         val watchVersion: String? = null,
+        /** A downloaded and verified update waiting to be installed. */
+        val ready: Ready? = null,
     ) {
         val receivesBetas: Boolean get() = track != Channel.STABLE
     }
+
+    /** A verified phone APK in `files/updates` ([file] is its name there) and its SHA-256. */
+    data class Ready(val version: String, val file: String, val sha256: String)
 
     private object Keys {
         val AUTO = booleanPreferencesKey("auto_check")
@@ -46,6 +51,9 @@ class UpdateRepository(private val context: Context, private val installedVersio
         val NOTIFIED = stringPreferencesKey("notified_version")
         val LAST_SEEN = stringPreferencesKey("last_seen_version")
         val WATCH = stringPreferencesKey("watch_version")
+        val READY_VERSION = stringPreferencesKey("ready_version")
+        val READY_FILE = stringPreferencesKey("ready_file")
+        val READY_SHA = stringPreferencesKey("ready_sha256")
     }
 
     private val installedChannel = AppVersion.parse(installedVersion)?.channel ?: Channel.STABLE
@@ -62,6 +70,7 @@ class UpdateRepository(private val context: Context, private val installedVersio
             notifiedVersion = it[Keys.NOTIFIED],
             lastSeenVersion = it[Keys.LAST_SEEN],
             watchVersion = it[Keys.WATCH],
+            ready = it[Keys.READY_VERSION]?.let { v -> Ready(v, it[Keys.READY_FILE] ?: return@let null, it[Keys.READY_SHA] ?: return@let null) },
         )
     }
 
@@ -88,6 +97,18 @@ class UpdateRepository(private val context: Context, private val installedVersio
     suspend fun markChecked(nowMs: Long) = context.updateStore.edit { it[Keys.LAST_CHECK] = nowMs }
 
     suspend fun markNotified(version: String) = context.updateStore.edit { it[Keys.NOTIFIED] = version }
+
+    suspend fun setReady(ready: Ready) = context.updateStore.edit {
+        it[Keys.READY_VERSION] = ready.version
+        it[Keys.READY_FILE] = ready.file
+        it[Keys.READY_SHA] = ready.sha256
+    }
+
+    suspend fun clearReady() = context.updateStore.edit {
+        it.remove(Keys.READY_VERSION)
+        it.remove(Keys.READY_FILE)
+        it.remove(Keys.READY_SHA)
+    }
 
     suspend fun setWatchVersion(version: String) = context.updateStore.edit { it[Keys.WATCH] = version }
 

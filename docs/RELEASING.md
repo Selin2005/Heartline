@@ -181,6 +181,49 @@ by changing *Settings → Updates → Update channel*, without uninstalling.
 Run it on local builds too:
 `python3 tools/ci/check-apks.py --phone phone/build/outputs/apk/release/phone-release.apk --watch wear/build/outputs/apk/release/wear-release.apk`.
 
+## In-app updates (phone)
+The GitHub build updates itself from the releases (`phone/.../update/`); the Google Play build
+leaves that to the store (`BuildConfig.UPDATER`, and `src/play/AndroidManifest.xml` removes the
+permissions).
+
+- **Checking.** `UpdateWorker` looks once a day (with a network) and announces each new version
+  once. *Settings → Updates → Check now* looks right away.
+- **Downloading** (`UpdateDownloadWorker`). *Download and install* starts a background job,
+  independent of the screen:
+  - it runs as a data-sync foreground job with a progress notification and *Cancel*, so leaving
+    the screen, the app or locking the phone doesn't stop it;
+  - it waits for a network, and after a dropped connection tries again (backoff from 30 s, up to
+    8 attempts);
+  - the file is `files/updates/<apk>.part`, and every attempt continues it with an HTTP `Range`
+    request (`206` appends, `200` starts again, `416` means it's complete);
+  - the same version already downloading is kept; a newer version replaces it;
+  - "Install unknown apps" is asked for before downloading, and coming back with it allowed
+    carries on.
+- **Verifying.** The whole file's SHA-256 must match the release's `SHA256SUMS`, or the file is
+  deleted. A verified file is renamed to `files/updates/<apk>` and recorded as ready
+  (`UpdateRepository.Ready`: version, file, SHA-256). Tapping install again verifies it again and
+  installs without downloading; a damaged file is downloaded again.
+- **Installing.** When the download finishes:
+  - with Heartline on screen, the system installer starts right away;
+  - in the background, a *ready, tap to install* notification opens `updates?install=true`, which
+    starts it (Android 10+ doesn't let an app in the background open a screen). Home shows an
+    *Update X is ready* card too.
+
+  If the installer asks for confirmation while Heartline is in the background,
+  `InstallResultReceiver` posts a notification that opens the confirmation. A failed install is
+  notified and the file kept; *Cancel* in the system dialog leaves the update ready on the Updates
+  screen.
+- **Cleaning up.** On every start, once the ready version (or a newer one) is installed, its file
+  is deleted.
+- **Logs.** Every step is logged as `Heartline/Update`: the requested version and attempt, bytes
+  already on disk, the HTTP code, verification, ready, how it was handed to the installer, and the
+  installer's status.
+
+Tests: `ReleaseSourceTest` (a local HTTP server: `206`, `200`, `416`, the hash), `UpdaterTest`
+(reuse, damaged file, continuing, other versions, checksum, cleanup) and
+`UpdateDownloadWorkerTest` (ready notification, retry, the screen's states, the installer
+hand-over).
+
 ## Google Play
 See [PLAY_STORE.md](PLAY_STORE.md). The Play bundles come from the `play` build type, which leaves
 out the GitHub updater and its permissions.

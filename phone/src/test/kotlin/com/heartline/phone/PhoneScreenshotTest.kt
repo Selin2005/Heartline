@@ -47,6 +47,7 @@ import com.heartline.phone.ui.diagnostics.DiagnosticsQuestion
 import com.heartline.phone.ui.diagnostics.DiagnosticsScreen
 import com.heartline.phone.ui.update.UpdatesScreen
 import com.heartline.phone.ui.update.WhatsNewDialog
+import com.heartline.phone.update.UpdateDownloadWorker
 import com.heartline.phone.update.UpdateRepository
 import com.heartline.phone.update.UpdatesUi
 import com.heartline.shared.text.ChangelogEntry
@@ -109,6 +110,8 @@ class PhoneScreenshotTest(private val theme: String) {
     @Test fun homeWatchVersion() = shot("home_watch_version") {
         HomeScreen(SampleData.home, versionMismatch = "0.0.2.115-beta.1" to "0.0.2.115-dev.60")
     }
+
+    @Test fun homeUpdateReady() = shot("home_update_ready") { HomeScreen(SampleData.home, updateReady = "1.2.0") }
 
     @Test fun homeEmpty() = shot("home_empty") { HomeScreen(HomeState()) }
 
@@ -271,6 +274,24 @@ class PhoneScreenshotTest(private val theme: String) {
             UpdatesUi("1.1.0-beta.1", enabled = true, prefs = UpdateRepository.Prefs(track = AppVersion.Channel.BETA, watchVersion = "1.1.0-beta.1"), available = betaRelease),
             onBack = {},
         )
+    }
+
+    private val updatesOnBeta = UpdatesUi("1.1.0-beta.1", enabled = true, prefs = UpdateRepository.Prefs(track = AppVersion.Channel.BETA, watchVersion = "1.1.0-beta.1"), available = betaRelease)
+
+    @Test fun updateDownloading() = shot("update_downloading") {
+        UpdatesScreen(updatesOnBeta.copy(download = UpdateDownloadWorker.State.Running("1.2.0-beta.1", 26_200_000, 60_000_000)), onBack = {})
+    }
+
+    @Test fun updateWaitingForNetwork() = shot("update_waiting") {
+        UpdatesScreen(updatesOnBeta.copy(download = UpdateDownloadWorker.State.Waiting("1.2.0-beta.1", retrying = true)), onBack = {})
+    }
+
+    @Test fun updateReady() = shot("update_ready") {
+        UpdatesScreen(updatesOnBeta.copy(prefs = updatesOnBeta.prefs.copy(ready = UpdateRepository.Ready("1.2.0-beta.1", "Heartline-phone-1.2.0-beta.1.apk", "00"))), onBack = {})
+    }
+
+    @Test fun updateDownloadFailed() = shot("update_failed") {
+        UpdatesScreen(updatesOnBeta.copy(download = UpdateDownloadWorker.State.Failed("1.2.0-beta.1", "Checksum mismatch: the download is damaged or not an official release")), onBack = {})
     }
 
     @Test fun updateUpToDate() = shot("update_up_to_date") {

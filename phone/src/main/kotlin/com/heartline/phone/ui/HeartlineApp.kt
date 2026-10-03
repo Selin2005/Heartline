@@ -43,6 +43,8 @@ import com.heartline.phone.ui.heart.AlertsScreen
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import com.heartline.phone.link.OpenResult
 import com.heartline.phone.link.PhoneRoutes
 import com.heartline.phone.link.WatchRoutes
@@ -159,7 +161,7 @@ fun HeartlineApp(
             PhoneRoutes.BP_CALIBRATION -> Routes.BP_CALIBRATION
             PhoneRoutes.DEV_MODE_HELP -> Routes.DEV_MODE_HELP
             PhoneRoutes.SETTINGS -> Routes.SETTINGS
-            Routes.UPDATES -> Routes.UPDATES
+            Routes.UPDATES, PhoneNotifier.UPDATES_INSTALL_ROUTE -> link.route
             // Home-screen widgets open their metric.
             Routes.HEART_RATE, Routes.ECG, Routes.BLOOD_PRESSURE -> link.route
             else -> link.route.takeIf { it.startsWith("metric/") && Metric.entries.any { m -> it == Routes.metric(m) } } ?: Routes.HOME
@@ -238,7 +240,9 @@ fun HeartlineApp(
                     HomeScreen(
                         state,
                         versionMismatch = updatePrefs?.watchVersion?.takeIf { it != BuildConfig.VERSION_NAME }?.let { it to BuildConfig.VERSION_NAME },
+                        updateReady = updatePrefs?.ready?.version?.takeIf { it != BuildConfig.VERSION_NAME },
                         onUpdates = { navController.navigate(Routes.UPDATES) },
+                        onInstallUpdate = { navController.navigate(PhoneNotifier.UPDATES_INSTALL_ROUTE) },
                         watchLink = link,
                         onWatchRetry = linkVm::refresh,
                         onOpenWatch = linkVm::openWatchApp,
@@ -413,12 +417,38 @@ fun HeartlineApp(
                 composable(Routes.ABOUT) {
                     AboutScreen(BuildConfig.VERSION_NAME, onBack = goBack, onOpenDoc = { navController.navigate(Routes.doc(it)) })
                 }
-                composable(Routes.UPDATES) {
+                // "updates?install=true" (the "ready to install" notification) starts the installer.
+                composable(
+                    "${Routes.UPDATES}?install={install}",
+                    arguments = listOf(navArgument("install") {
+                        type = NavType.BoolType
+                        defaultValue = false
+                    }),
+                ) { entry ->
                     val vm: UpdatesViewModel = koinViewModel()
                     val ui by vm.ui.collectAsStateWithLifecycle()
                     LaunchedEffect(vm) { vm.startActivity.collect { runCatching { context.startActivity(it) } } }
                     LaunchedEffect(Unit) { vm.check() }
-                    UpdatesScreen(ui, onBack = goBack, onCheck = vm::check, onInstall = vm::install, onAutoCheck = { vm.setAutoCheck(it) }, onTrack = { vm.setTrack(it) })
+                    var installAsked by rememberSaveable { mutableStateOf(false) }
+                    LaunchedEffect(Unit) {
+                        if (entry.arguments?.getBoolean("install") == true && !installAsked) {
+                            installAsked = true
+                            vm.installReady()
+                        }
+                    }
+                    LifecycleResumeEffect(vm) {
+                        vm.onResume()
+                        onPauseOrDispose {}
+                    }
+                    UpdatesScreen(
+                        ui,
+                        onBack = goBack,
+                        onCheck = vm::check,
+                        onInstall = vm::install,
+                        onCancelDownload = vm::cancelDownload,
+                        onAutoCheck = { vm.setAutoCheck(it) },
+                        onTrack = { vm.setTrack(it) },
+                    )
                 }
                 composable(Routes.DIAGNOSTICS) {
                     val vm: DiagnosticsViewModel = koinViewModel()

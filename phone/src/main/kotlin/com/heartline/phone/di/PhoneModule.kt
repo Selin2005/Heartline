@@ -15,6 +15,7 @@ import com.heartline.phone.sync.WatchLogInbox
 import com.heartline.phone.update.UpdateRepository
 import com.heartline.phone.update.Updater
 import com.heartline.phone.update.UpdatesViewModel
+import com.heartline.phone.update.WorkManagerDownloads
 import com.heartline.datalayer.DataLayerTransport
 import com.heartline.datalayer.RemoteOpener
 import com.heartline.phone.link.PhoneStatusPublisher
@@ -207,7 +208,7 @@ val phoneModule = module {
             watchLimits = get<SettingsRepository>().heartLimits,
         )
     }
-    viewModel { UpdatesViewModel(get(), get(), BuildConfig.VERSION_NAME) }
+    viewModel { UpdatesViewModel(get(), get(), BuildConfig.VERSION_NAME, WorkManagerDownloads(androidContext()), get()) }
     viewModel { DiagnosticsViewModel(get(), get(), get()) }
     viewModel { BpHomeViewModel(get(), get()) }
     viewModel { CalibrationViewModel(get(), openOnWatch = { get<WatchOpener>().open(it) }) }

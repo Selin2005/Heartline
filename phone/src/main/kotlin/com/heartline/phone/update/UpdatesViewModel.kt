@@ -3,13 +3,16 @@
 
 package com.heartline.phone.update
 
+import android.content.Context
 import android.content.Intent
+import com.heartline.phone.notify.PhoneNotifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.heartline.shared.update.AppVersion
 import com.heartline.shared.update.Release
 import com.heartline.shared.update.Releases
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -33,8 +36,8 @@ data class UpdatesUi(
     val latest: Release? = null,
     val upToDate: Boolean = false,
     val error: String? = null,
-    /** 0..1 while downloading, null otherwise. */
-    val progress: Float? = null,
+    /** The download running in the background (UpdateDownloadWorker), if any. */
+    val download: UpdateDownloadWorker.State? = null,
     /** Every published release from the last check (when the watch's version was published). */
     val releases: List<Release> = emptyList(),
 ) {
@@ -45,11 +48,40 @@ data class UpdatesUi(
     val showsChannel: Boolean get() = AppVersion.parse(installed)?.channel.let { it != null && it != AppVersion.Channel.STABLE }
 
     val watchBehind: Boolean get() = Releases.watchBehind(prefs.watchVersion, available ?: latest, releases)
+
+    /** The downloaded update, unless a newer one is available. */
+    val ready: String? get() = prefs.ready?.version?.takeIf { available == null || it == available.version.toString() }
+
+    /** The download of the available version (a finished or another version's doesn't count). */
+    val downloading: UpdateDownloadWorker.State? get() = download?.takeIf { ready == null && (available == null || it.version == available.version.toString()) }
 }
 
-class UpdatesViewModel(private val updater: Updater, private val repository: UpdateRepository, installed: String) : ViewModel() {
+/** Starts, follows and cancels the background download ([UpdateDownloadWorker]). */
+interface UpdateDownloads {
+    val state: Flow<UpdateDownloadWorker.State?>
+
+    suspend fun start(release: Release)
+
+    fun cancel()
+}
+
+class WorkManagerDownloads(private val context: Context) : UpdateDownloads {
+    override val state: Flow<UpdateDownloadWorker.State?> = UpdateDownloadWorker.state(context)
+
+    override suspend fun start(release: Release) = UpdateDownloadWorker.start(context, release)
+
+    override fun cancel() = UpdateDownloadWorker.cancel(context)
+}
+
+class UpdatesViewModel(
+    private val updater: Updater,
+    private val repository: UpdateRepository,
+    installed: String,
+    private val downloads: UpdateDownloads,
+    private val notifier: PhoneNotifier? = null,
+) : ViewModel() {
     private val state = MutableStateFlow(UpdatesUi(installed, updater.enabled))
-    val ui: StateFlow<UpdatesUi> = combine(state, repository.prefs) { s, p -> s.copy(prefs = p) }
+    val ui: StateFlow<UpdatesUi> = combine(state, repository.prefs, downloads.state) { s, p, d -> s.copy(prefs = p, download = d) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), state.value)
 
     private val intents = MutableSharedFlow<Intent>(extraBufferCapacity = 1)
@@ -81,21 +113,60 @@ class UpdatesViewModel(private val updater: Updater, private val repository: Upd
         check()
     }
 
+    /**
+     * Installs the available update: the downloaded file when there is one, or else starts the
+     * background download, which installs (or notifies) when it's done.
+     */
     fun install() {
-        val release = state.value.available ?: return
-        if (job?.isActive == true) return
-        if (!updater.canInstall()) {
-            intents.tryEmit(updater.allowInstallIntent())
+        val current = ui.value
+        if (current.ready != null) {
+            installReady()
             return
         }
-        job = viewModelScope.launch {
-            state.update { it.copy(progress = 0f, error = null) }
-            runCatching { updater.download(release) { p -> state.update { it.copy(progress = p) } } }
-                .onSuccess { file ->
-                    state.update { it.copy(progress = null) }
-                    updater.install(file)
-                }
-                .onFailure { e -> state.update { it.copy(progress = null, error = e.message ?: e.javaClass.simpleName) } }
+        val release = current.available ?: return
+        if (!askedToAllow()) return
+        viewModelScope.launch {
+            state.update { it.copy(error = null) }
+            runCatching { downloads.start(release) }.onFailure { e -> state.update { it.copy(error = e.message ?: e.javaClass.simpleName) } }
+        }
+    }
+
+    /** Hands the downloaded update to the installer (also from the "ready" notification). */
+    fun installReady() {
+        if (!askedToAllow()) return
+        viewModelScope.launch {
+            val file = updater.readyFile()
+            if (file == null) {
+                // Damaged or deleted: download it again.
+                ui.value.available?.let { downloads.start(it) } ?: check()
+                return@launch
+            }
+            notifier?.cancelUpdateReady()
+            runCatching { updater.install(file) }.onFailure { e -> state.update { it.copy(error = e.message ?: e.javaClass.simpleName) } }
+        }
+    }
+
+    fun cancelDownload() = downloads.cancel()
+
+    /** Set while the user is in "Install unknown apps": coming back with it allowed carries on. */
+    private var waitingForPermission = false
+
+    /**
+     * Android asks once whether Heartline may install apps; it's asked before downloading, so the
+     * finished download isn't stopped by it. Returns whether installing is allowed now.
+     */
+    private fun askedToAllow(): Boolean {
+        if (updater.canInstall()) return true
+        waitingForPermission = true
+        intents.tryEmit(updater.allowInstallIntent())
+        return false
+    }
+
+    /** The screen is shown again (back from the system setting). */
+    fun onResume() {
+        if (waitingForPermission && updater.canInstall()) {
+            waitingForPermission = false
+            install()
         }
     }
 }

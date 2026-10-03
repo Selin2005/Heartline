@@ -153,6 +153,18 @@ attach them to a bug report.
 14. **Updates:** Settings → Updates → *Check now* finds the newest stable release; with the update
     channel set to Beta it also offers betas, and on Development every new build. The *Update
     channel* setting is shown only in beta and dev builds. After updating, *What's new* shows the changelog.
+    Capture `adb logcat -v time -s Heartline/Update`.
+    - **Leave during the download:** tap *Download and install*, go back and lock the phone. The
+      *Downloading Heartline X* notification keeps counting; at the end a *ready, tap to install*
+      notification comes, and tapping it opens the system installer without downloading again.
+    - **Connection drops:** turn on airplane mode halfway. The screen says *Waiting for a
+      connection*; turning it off continues, and the log shows `had N bytes, HTTP 206, resuming`.
+    - **Closed from Recents:** swipe Heartline away mid-download. The download continues (or
+      continues from where it stopped when it starts again).
+    - **Ready stays ready:** cancel the system's install dialog, then tap *Install* on the Updates
+      screen or the Home card: it installs with no download (`already downloaded and verified`).
+    - This works from the version that includes it on: the update *to* that version still needs
+      the Updates screen kept open.
 15. **Heart notifications and activity.** Capture `adb logcat -v time -s Heartline/Monitor Heartline/Alert`.
     - **Same version on both:** update the phone and the watch together (Home shows *Update the
       watch app* while they differ). Notices from an older watch app run older checks; the alert
