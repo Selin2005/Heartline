@@ -21,11 +21,34 @@ class HeartRateAlertRulesTest {
     private val rules = HeartRateAlertRules()
     private val on = MonitorSettings()
 
-    private fun limits(high: Int = 120, low: Int = 40, sleepLow: Int = 35, exerciseMax: Int = 180) =
-        HeartLimits(restNormal = 65, sleepNormal = 57, high = high, low = low, sleepLow = sleepLow, exerciseMax = exerciseMax)
+    private fun limits(high: Int = 120, low: Int = 40, sleepLow: Int = 35, exerciseMax: Int = 180) = HeartLimits(
+        restNormal = 65,
+        sleepNormal = 57,
+        high = high,
+        low = low,
+        sleepLow = sleepLow,
+        exerciseMax = exerciseMax,
+        restConfidence = 0.9,
+        sleepConfidence = 0.9
+    )
 
     private fun minute(at: Int, bpm: Int, activity: HrContext = HrContext.REST) =
         HrMinute(at * 60_000L, bpm, bpm - 3, bpm + 3, resting = activity == HrContext.REST, activity = activity)
+
+    @Test
+    fun rightAfterInstallNothingIsComparedWithAUsualThatDoesNotExist() {
+        // No readings of the wearer's own yet: the normal is only the population guess.
+        val fresh = HeartLimits(restNormal = 65, sleepNormal = 57, high = 120, low = 35, sleepLow = 30, exerciseMax = 180)
+        val raised = (0 until 12).map { minute(it, 128) }
+        assertTrue(rules.evaluate(raised, MonitorSettings(), fresh, emptyMap()) { "x" }.isEmpty())
+        // Only the safety net (150 at rest), and the notice names no usual.
+        val alert = rules.evaluate((0 until 12).map { minute(it, 158) }, MonitorSettings(), fresh, emptyMap()) { "x" }.single()
+        assertEquals(150, alert.threshold)
+        assertEquals(null, alert.normal)
+        // Once learnt, the personal limit and the usual apply.
+        val learnt = fresh.copy(restConfidence = 0.6)
+        assertEquals(65, rules.evaluate(raised, MonitorSettings(), learnt, emptyMap()) { "x" }.single().normal)
+    }
 
     @Test
     fun exerciseAtAHighButNormalRateNeverAlerts() {

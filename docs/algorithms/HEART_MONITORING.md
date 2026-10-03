@@ -133,6 +133,14 @@ Each minute is judged by the limits of what the wearer was doing:
 | Sleep | above the high limit | below the sleep low limit |
 | Exercise / moving | above the exercise maximum | never |
 
+- **Before the normal is learnt** (under half of it from the wearer's own readings, about 24
+  readings or a few hours of wearing), there is no "usual" to compare with. Right after install,
+  the watch also can't yet tell rest from moving about. So at rest and asleep only a safety net
+  notifies: 150 bpm, the rate above which a fast rhythm is likely the cause of symptoms (AHA ACLS
+  tachycardia algorithm). The low limits are already the safety floors. The notice names no
+  usual. A user report showed the bug this fixes: right after install, a notice said the heart
+  rate was "X % above your usual 65", where 65 was the population guess.
+
 - **"Held"** means every reading over a span is beyond the limit:
   - Rest and sleep: ≥ 10 minutes covered (as Apple, Fitbit and Google do), ≥ 3 readings, no gap
     over 10 minutes.

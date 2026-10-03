@@ -5,6 +5,7 @@ package com.heartline.shared.irn
 
 import com.heartline.shared.hr.AlertKind
 import com.heartline.shared.hr.HealthAlert
+import com.heartline.shared.hr.HeartBaseline
 import com.heartline.shared.hr.HeartLimits
 import com.heartline.shared.hr.HrContext
 import com.heartline.shared.hr.HrMinute
@@ -49,12 +50,27 @@ class HeartRateAlertRules(
         val now = sorted.last().minuteStartMs + MINUTE
         fun ready(kind: AlertKind, context: HrContext) = lastAlerts[key(kind, context)]?.let { now - it >= cooldownMs } ?: true
         val recovering = recoveryCheck(sorted)
+
+        // Personal only once learnt: before that, a "usual" would be the population guess (a
+        // comparison with nothing), and right after install the watch can't yet tell rest from
+        // moving about. Then only the safety net applies, and no usual is named.
+        fun known(context: HrContext) =
+            (if (context == HrContext.SLEEP) limits.sleepConfidence else limits.restConfidence) >= HeartBaseline.PERSONAL_FROM
+        fun highLimit(m: HrMinute) = if (known(m.activity)) limits.high else maxOf(limits.high, HeartBaseline.SAFETY_HIGH)
         fun lowLimit(m: HrMinute) = if (m.activity == HrContext.SLEEP) limits.sleepLow else limits.low
-        fun normal(context: HrContext) = if (context == HrContext.SLEEP) limits.sleepNormal else limits.restNormal
+        fun normal(context: HrContext) = if (!known(context)) {
+            null
+        } else if (context ==
+            HrContext.SLEEP
+        ) {
+            limits.sleepNormal
+        } else {
+            limits.restNormal
+        }
 
         return buildList {
             if (sorted.last().activity.calm) {
-                held(sorted, restSustainMs, restMaxGapMs) { it.activity.calm && !recovering(it) && it.avgBpm > limits.high }?.let { run ->
+                held(sorted, restSustainMs, restMaxGapMs) { it.activity.calm && !recovering(it) && it.avgBpm > highLimit(it) }?.let { run ->
                     val context = run.last().activity
                     if (ready(AlertKind.HIGH_HEART_RATE, context)) {
                         add(
@@ -65,9 +81,9 @@ class HeartRateAlertRules(
                                 run.maxOf {
                                     it.avgBpm
                                 },
-                                threshold = limits.high,
+                                threshold = highLimit(run.last()),
                                 context = context,
-                                normal = limits.restNormal
+                                normal = normal(context)
                             )
                         )
                     }

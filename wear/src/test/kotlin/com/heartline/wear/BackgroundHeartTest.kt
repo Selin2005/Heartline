@@ -63,12 +63,13 @@ class BackgroundHeartTest {
     @Test
     fun alertHistorySurvivesANewProcess() = runBlocking {
         val out = Recorder()
-        // Sparse resting readings above the limit: one alert.
-        val high = listOf(0, 6, 12, 18).map { HrSample(it * 60_000L, 130, emptyList()) }
+        // Sparse resting readings above the safety net (nothing learnt yet, so not 130: there is no
+        // usual to compare with right after install): one alert.
+        val high = listOf(0, 6, 12, 18).map { HrSample(it * 60_000L, 160, emptyList()) }
         BackgroundHeart(out) { MonitorSettings() }.onPassive(high)
         assertEquals(listOf(AlertKind.HIGH_HEART_RATE), out.alerts.map { it.kind })
         // A new process (new BackgroundHeart) gets the next reading: no repeat within the cooldown.
-        BackgroundHeart(out) { MonitorSettings() }.onPassive(listOf(HrSample(24 * 60_000L, 131, emptyList())))
+        BackgroundHeart(out) { MonitorSettings() }.onPassive(listOf(HrSample(24 * 60_000L, 161, emptyList())))
         assertEquals(1, out.alerts.size)
     }
 

@@ -136,6 +136,15 @@ object HeartBaseline {
      * rate; the simulation showed false low alerts on an athlete's first night with them.
      */
     const val FIXED_HIGH = 120
+
+    /**
+     * Until the wearer's own data makes up [PERSONAL_FROM] of their normal (about 24 readings, a
+     * few hours of wearing), there is no "usual" to compare with: only this safety net notifies at
+     * rest or asleep, the rate above which a fast rhythm is likely the cause of symptoms (AHA ACLS
+     * tachycardia algorithm, 150 bpm). The low limits are already the safety floors then.
+     */
+    const val SAFETY_HIGH = 150
+    const val PERSONAL_FROM = 0.5
     const val FIXED_LOW = 35
     const val FIXED_SLEEP_LOW = 30
 

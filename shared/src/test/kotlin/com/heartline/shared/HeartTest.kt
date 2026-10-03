@@ -37,7 +37,16 @@ import org.junit.Test
 class HeartTest {
     private var ids = 0
     private val id = { "id-${ids++}" }
-    private val fixed = com.heartline.shared.hr.HeartLimits(65, 57, high = 120, low = 40, sleepLow = 35, exerciseMax = 190)
+    private val fixed = com.heartline.shared.hr.HeartLimits(
+        65,
+        57,
+        high = 120,
+        low = 40,
+        sleepLow = 35,
+        exerciseMax = 190,
+        restConfidence = 0.9,
+        sleepConfidence = 0.9
+    )
 
     @Test
     fun hrvMatchesHandComputedValues() {
