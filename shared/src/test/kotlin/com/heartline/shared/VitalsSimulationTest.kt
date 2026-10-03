@@ -152,6 +152,7 @@ class VitalsSimulationTest {
             VitalAlert.SPO2_NIGHTS -> Want.SPO2_NIGHTS
             VitalAlert.TEMPERATURE -> Want.TEMPERATURE
             VitalAlert.COMBINED -> Want.COMBINED
+            VitalAlert.STRESS -> null
             null -> null
         }
         fun dayOf(a: HealthAlert) = (a.atMs / 86_400_000L - start).toInt()

@@ -19,6 +19,9 @@ import com.heartline.shared.hr.HrBatch
 import com.heartline.shared.hr.HrContext
 import com.heartline.shared.hr.HrMinute
 import com.heartline.shared.model.EcgResult
+import com.heartline.shared.hr.VitalAlert
+import com.heartline.shared.stress.StressLimits
+import com.heartline.shared.stress.StressSample
 import com.heartline.shared.vitals.Spo2Sample
 import com.heartline.shared.vitals.TempSample
 import com.heartline.shared.vitals.VitalsLimits
@@ -141,6 +144,28 @@ class HeartRepositoryTest {
         assertEquals(limits, kept)
         withVitals.deleteAll()
         assertTrue(withVitals.spo2Since(0).first().isEmpty() && withVitals.tempsSince(0).first().isEmpty())
+    }
+
+    @Test
+    fun stressReadingsAndVitalNoticesAreKept() = runBlocking {
+        var kept: StressLimits? = null
+        val repo = HeartRepository(db.heart(), onStressLimits = { kept = it })
+        val limits = StressLimits(usualRmssd = 40.0, usualBpm = 66, confidence = 1.0, windows = 300)
+        repo.saveBatch(
+            HrBatch(
+                "s", emptyList(),
+                stress = listOf(StressSample(1_000L, 42.0, 66, 30, HrContext.REST), StressSample(2_000L, 60.0, 55, null, HrContext.SLEEP)),
+                stressLimits = limits,
+            ),
+        )
+        assertEquals(listOf(30, null), repo.stressSince(0).first().map { it.score })
+        assertEquals(30, repo.latestStress.first()!!.score)
+        assertEquals(limits, kept)
+        // A vital notice keeps its kind and value, so the alert list can tell it from a heart-rate one.
+        repo.saveAlert(HealthAlert("v", AlertKind.HIGH_HEART_RATE, 5L, 70, vital = VitalAlert.STRESS, value = 81f))
+        assertEquals(VitalAlert.STRESS, repo.alerts.first().single().vital)
+        repo.deleteAll()
+        assertTrue(repo.stressSince(0).first().isEmpty())
     }
 
     @Test

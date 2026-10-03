@@ -283,8 +283,14 @@ class WearScreenshotTest(private val size: String) {
     }
 
     @Test fun settingsParts() = shot("settings_parts") {
-        WatchSettingsScreen(settingsUi.copy(spo2Part = false), listState = TransformingLazyColumnState(initialAnchorItemIndex = 3))
+        WatchSettingsScreen(settingsUi.copy(spo2Part = false), listState = TransformingLazyColumnState(initialAnchorItemIndex = 4))
     }
+
+    @Test fun settingsSetupNeeded() = shot("settings_setup_needed") { WatchSettingsScreen(settingsUi.copy(setupNeeded = true)) }
+
+    @Test fun breathing() = shot("breathing") { com.heartline.wear.ui.screens.BreathingScreen(initialElapsedMs = 3_500, animate = false) }
+
+    @Test fun breathingDone() = shot("breathing_done") { com.heartline.wear.ui.screens.BreathingScreen(initialElapsedMs = 60_000, animate = false) }
 
     @Test fun settingsMonitoringOffConfirm() = shot("settings_monitoring_off_confirm") { WatchSettingsScreen(settingsUi, initialConfirmStep = 1) }
 

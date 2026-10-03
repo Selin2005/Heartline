@@ -1,6 +1,6 @@
 # Heartline Privacy Policy
 
-**Version 1 · Effective 26 September 2026**
+**Version 2 · Effective 3 October 2026**
 
 Heartline is built so that **your health data stays on your devices**. This policy explains what
 Heartline processes, where it is kept, and your choices. It applies to the Heartline phone and
@@ -22,6 +22,7 @@ Play.
 | **Sensor readings:** ECG waveforms and results, PPG-based blood pressure estimates and features, heart rate, inter-beat intervals and HRV, blood oxygen, skin temperature, stress, body composition, motion used to check you are still | The features of the app | Watch until synced, then the phone |
 | **Your entries:** cuff readings for calibration, symptoms, notes | Calibration and your history | Phone (calibration also on the watch) |
 | **Settings:** alerts, thresholds, goals, update channel | App behaviour | Phone and watch |
+| **Health answers** from the monitoring setup (heart-rate lowering medicine, atrial fibrillation, pacemaker or ICD, a lung condition, endurance training, pregnancy; each optional to disclose with "not sure") | Adapting the background checks so they don't give false or useless notices | Phone and watch only: not in data exports or diagnostic logs |
 | **Diagnostic logs** (if on, see section 3) | Fixing problems you report | Phone and watch, until exported or deleted |
 
 Heartline reads sensors through the Samsung Health Sensor SDK on the watch. Heartline does not
@@ -67,8 +68,8 @@ removed before anything is written.
 ## 5. Permissions
 | Permission | Used for |
 |---|---|
-| Body sensors / health data (heart rate, SpO₂, skin temperature, additional Samsung health data) | Taking the measurements you start, and background heart rate for rhythm alerts if you turn them on |
-| Background health data | Irregular rhythm and high / low heart rate alerts while you're not using the app |
+| Body sensors / health data (heart rate, SpO₂, skin temperature, additional Samsung health data) | Taking the measurements you start, and the background health monitoring you turn on: heart rate, rhythm, blood oxygen, skin temperature and stress |
+| Background health data | Health monitoring notices (heart rate, rhythm, blood oxygen, temperature, stress) while you're not using the app |
 | Physical activity | Checking you are still during a measurement |
 | Notifications | Alerts, reminders and update notices |
 | Internet, install apps (GitHub version only) | Checking for, downloading and installing updates |

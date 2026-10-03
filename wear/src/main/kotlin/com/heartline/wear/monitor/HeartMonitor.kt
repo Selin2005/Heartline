@@ -62,7 +62,7 @@ class HeartMonitor(
     private val zone: ZoneId = ZoneId.systemDefault(),
     /** How limits come from the history; replaced only to compare with fixed limits (simulation). */
     private val limitsFor: (history: HeartHistory, today: Long, settings: MonitorSettings, age: Int?, sex: Sex?) -> HeartLimits =
-        { h, day, cfg, a, x -> HeartBaseline.limits(h, day, cfg.alertSensitivity, a, x) },
+        { h, day, cfg, a, x -> HeartBaseline.limits(h, day, cfg.alertSensitivity, a, x, cfg.health) },
     private val detector: IrregularRhythmDetector = IrregularRhythmDetector(),
     private val rules: HeartRateAlertRules = HeartRateAlertRules(),
     private val windowEveryMs: Long = 15 * 60_000L,

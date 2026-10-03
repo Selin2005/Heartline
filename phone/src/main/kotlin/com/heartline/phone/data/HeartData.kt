@@ -13,6 +13,7 @@ import androidx.room.Query
 import com.heartline.shared.hr.AlertKind
 import com.heartline.shared.hr.HeartTrend
 import com.heartline.shared.hr.HrContext
+import com.heartline.shared.hr.VitalAlert
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "hr_minutes")
@@ -41,6 +42,19 @@ data class AlertEntity(
     /** The wearer's usual heart rate then, and whether this is a several-day trend notice (v6). */
     val normal: Int? = null,
     val trend: HeartTrend? = null,
+    /** A blood-oxygen, temperature, combined or stress notice and its value (v8). */
+    val vital: VitalAlert? = null,
+    val value: Float? = null,
+)
+
+/** A background stress reading from the watch's rhythm windows (v8); [score] is null in sleep. */
+@Entity(tableName = "stress_samples")
+data class StressSampleEntity(
+    @PrimaryKey val tsMs: Long,
+    val rmssdMs: Double,
+    val bpm: Int,
+    val score: Int?,
+    val context: HrContext,
 )
 
 /** A background blood-oxygen reading from the watch (v7). */
@@ -78,6 +92,18 @@ interface HeartDao {
 
     @Query("DELETE FROM spo2_samples")
     suspend fun deleteSpo2()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertStress(samples: List<StressSampleEntity>)
+
+    @Query("SELECT * FROM stress_samples WHERE tsMs >= :fromMs ORDER BY tsMs")
+    fun stressSince(fromMs: Long): Flow<List<StressSampleEntity>>
+
+    @Query("SELECT * FROM stress_samples WHERE score IS NOT NULL ORDER BY tsMs DESC LIMIT 1")
+    fun latestStress(): Flow<StressSampleEntity?>
+
+    @Query("DELETE FROM stress_samples")
+    suspend fun deleteStress()
 
     @Query("DELETE FROM skin_temp_samples")
     suspend fun deleteTemps()

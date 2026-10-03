@@ -113,6 +113,7 @@ object Routes {
     const val HOME = "home"
     const val HISTORY = "history"
     const val SETTINGS = "settings"
+    const val MONITORING_SETUP = "monitoring_setup"
     const val ECG = "ecg"
     const val ECG_DETAIL = "ecg/{id}"
     const val HEART_RATE = "heart_rate"
@@ -261,6 +262,7 @@ fun HeartlineApp(
                     val monitor by vm.monitor.collectAsStateWithLifecycle()
                     val heartLimits by vm.heartLimits.collectAsStateWithLifecycle()
                     val vitalsLimits by vm.vitalsLimits.collectAsStateWithLifecycle()
+                    val stressLimits by vm.stressLimits.collectAsStateWithLifecycle()
                     val sharingPrefs by vm.sharing.collectAsStateWithLifecycle()
                     val linkVm: WatchLinkViewModel = koinViewModel()
                     val link by linkVm.link.collectAsStateWithLifecycle()
@@ -300,6 +302,8 @@ fun HeartlineApp(
                         onQuickTileMetric = { m -> scope.launch { QuickTilePrefs.setMetric(context, m) } },
                         heartLimits = heartLimits,
                         vitalsLimits = vitalsLimits,
+                        stressLimits = stressLimits,
+                        onHealthAnswers = { navController.navigate(Routes.MONITORING_SETUP) },
                         onAddQuickTiles = {
                             val asked = addQuickTiles(context, HeartlineQsTile.ALL) { added ->
                                 if (added) scope.launch { snackbar.showSnackbar(context.getString(R.string.settings_quick_tiles_added)) }
@@ -307,6 +311,9 @@ fun HeartlineApp(
                             if (!asked) scope.launch { snackbar.showSnackbar(context.getString(R.string.settings_quick_tiles_manual)) }
                         },
                     )
+                }
+                composable(Routes.MONITORING_SETUP) {
+                    com.heartline.phone.ui.onboarding.MonitoringSetupRoute(onDone = goBack, onBack = goBack)
                 }
                 composable(Routes.ECG) {
                     val vm: EcgListViewModel = koinViewModel()

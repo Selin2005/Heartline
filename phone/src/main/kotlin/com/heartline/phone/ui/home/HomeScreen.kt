@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -120,24 +119,6 @@ fun HomeScreen(
         }
         item {
             TileCard(Metric.STRESS, state.tiles[Metric.STRESS], large = true, onOpenMetric = onOpenMetric, modifier = Modifier.gutter())
-        }
-        if (state.irregularRhythmNotifications) {
-            item {
-                RoundedCard(Modifier.gutter()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconBadge(Icons.Rounded.NotificationsActive, HeartlineTheme.colors.primary)
-                        Spacer(Modifier.width(16.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                stringResource(R.string.home_irn_on),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = HeartlineTheme.colors.onBackground,
-                            )
-                            SmallCaption(stringResource(R.string.home_irn_caption))
-                        }
-                    }
-                }
-            }
         }
     }
 }

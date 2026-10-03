@@ -144,6 +144,11 @@ object VitalsBaseline {
 
     data class Rise(val celsius: Float, val sds: Float)
 
+    /** With a lung condition that keeps oxygen low, BTS's target range starts at 88 %. */
+    const val LUNG_LOW = 88
+
+    fun spo2Low(settings: MonitorSettings) = if (settings.health.lung) LUNG_LOW else spo2Low(settings.alertSensitivity)
+
     fun spo2Low(s: AlertSensitivity) = when (s) {
         AlertSensitivity.LOW -> 88
         AlertSensitivity.STANDARD -> 90
@@ -164,7 +169,7 @@ object VitalsBaseline {
 
     private fun ageShift(age: Int?) = ((age ?: 40) - 40).coerceAtLeast(0) * 0.043
 
-    fun limits(history: VitalsHistory, today: Long, sensitivity: AlertSensitivity, age: Int?): VitalsLimits {
+    fun limits(history: VitalsHistory, today: Long, sensitivity: AlertSensitivity, age: Int?, lung: Boolean = false): VitalsLimits {
         val recent = history.days.filter { it.day in (today - WINDOW_DAYS + 1)..today && !it.unusual }
         val day = Histogram.merge(recent.map { it.spo2Day })
         val night = Histogram.merge(recent.map { it.spo2Night })
@@ -173,7 +178,7 @@ object VitalsBaseline {
         fun blend(own: Double?, prior: Double, c: Double) = own?.let { it * c + prior * (1 - c) } ?: prior
         val temp = tempBaseline(history, today)
         return VitalsLimits(
-            spo2Low = spo2Low(sensitivity),
+            spo2Low = if (lung) LUNG_LOW else spo2Low(sensitivity),
             spo2DayNormal = blend(day.median(), PRIOR_DAY - ageShift(age), dayC).roundToInt(),
             spo2NightNormal = blend(night.median(), PRIOR_NIGHT - ageShift(age), nightC).roundToInt(),
             spo2Confidence = minOf(dayC, nightC).takeIf { day.count > 0 && night.count > 0 } ?: maxOf(dayC, nightC),
@@ -231,8 +236,7 @@ object VitalsBaseline {
  */
 class VitalsMonitor(private val zone: ZoneId = ZoneId.systemDefault(), private val newId: () -> String) {
     /** True when a reading is low enough to be checked again right away (below the limit). */
-    fun needsRecheck(percent: Int, settings: MonitorSettings) =
-        settings.spo2Active && percent < VitalsBaseline.spo2Low(settings.alertSensitivity)
+    fun needsRecheck(percent: Int, settings: MonitorSettings) = settings.spo2Active && percent < VitalsBaseline.spo2Low(settings)
 
     /**
      * A SpO2 reading with its re-checks (taken while each was still low, [RECHECKS] at most). Only
@@ -246,7 +250,8 @@ class VitalsMonitor(private val zone: ZoneId = ZoneId.systemDefault(), private v
         rechecks: List<Spo2Sample>,
         settings: MonitorSettings
     ): Pair<VitalsHistory, HealthAlert?> {
-        val limit = VitalsBaseline.spo2Low(settings.alertSensitivity)
+        val limit = VitalsBaseline.spo2Low(settings)
+        val nightLowBelow = minOf(NIGHT_LOW_PERCENT, limit)
         var h = history
         for (s in listOf(first) + rechecks) {
             val dayKey = VitalsBaseline.dayOf(s.tsMs, s.context, zone)
@@ -256,7 +261,7 @@ class VitalsMonitor(private val zone: ZoneId = ZoneId.systemDefault(), private v
                 when {
                     s.context == HrContext.SLEEP -> d.copy(
                         spo2Night = if (low) d.spo2Night else d.spo2Night.plus(s.percent),
-                        nightLow = d.nightLow + if (s.percent < NIGHT_LOW_PERCENT && !s.confirmation) 1 else 0
+                        nightLow = d.nightLow + if (s.percent < nightLowBelow && !s.confirmation) 1 else 0
                     )
                     low -> d
                     else -> d.copy(spo2Day = d.spo2Day.plus(s.percent))
@@ -311,7 +316,7 @@ class VitalsMonitor(private val zone: ZoneId = ZoneId.systemDefault(), private v
             h = h.copy(lastAlerts = h.lastAlerts + (key to nowMs)).markUnusual(nights)
         }
 
-        if (settings.skinTempActive) {
+        if (settings.temperatureNotices) {
             val base = VitalsBaseline.tempBaseline(h, today)
             val tonight = VitalsBaseline.nightTemp(h, today)
             val lastNight = VitalsBaseline.nightTemp(h, today - 1)
@@ -366,7 +371,7 @@ class VitalsMonitor(private val zone: ZoneId = ZoneId.systemDefault(), private v
         }
 
         if (settings.spo2Active) {
-            val limits = VitalsBaseline.limits(h, today - 3, settings.alertSensitivity, null)
+            val limits = VitalsBaseline.limits(h, today - 3, settings.alertSensitivity, null, settings.health.lung)
             val nights = (0..2).mapNotNull { i -> VitalsBaseline.nightSpo2(h, today - i)?.let { (today - i) to it } }
             // "Lower than usual" needs a usual: at least 5 nights of the wearer's own before these.
             val ownNights = (3 until 3 + VitalsBaseline.WINDOW_DAYS).count { VitalsBaseline.nightSpo2(h, today - it) != null }

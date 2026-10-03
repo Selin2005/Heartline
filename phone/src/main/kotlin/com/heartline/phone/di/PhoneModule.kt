@@ -90,6 +90,7 @@ val phoneModule = module {
             onAlert = { alert -> get<PhoneNotifier>().alert(alert) },
             onLimits = { limits -> get<SettingsRepository>().saveHeartLimits(limits) },
             onVitalsLimits = { limits -> get<SettingsRepository>().saveVitalsLimits(limits) },
+            onStressLimits = { limits -> get<SettingsRepository>().saveStressLimits(limits) },
         )
     }
     single { SettingsRepository(androidContext()) }
@@ -187,6 +188,7 @@ val phoneModule = module {
             ctx.getString(R.string.date_yesterday),
             ctx.getString(R.string.home_bp_calibration_left).replace("%1\$d", "%d"),
             ctx.getString(R.string.bp_needs_calibration),
+            ctx.getString(R.string.vitals_background_title),
         )
     }
     viewModel { HomeViewModel(get(), get(), get(), get(), get(), get()) }
@@ -207,13 +209,14 @@ val phoneModule = module {
     viewModel { DiagnosticsViewModel(get(), get(), get()) }
     viewModel { BpHomeViewModel(get(), get()) }
     viewModel { CalibrationViewModel(get(), openOnWatch = { get<WatchOpener>().open(it) }) }
-    viewModel { params -> MetricDetailViewModel(params.get(), get(), get(), get(), get<SettingsRepository>().vitalsLimits) }
+    viewModel { params -> MetricDetailViewModel(params.get(), get(), get(), get(), get<SettingsRepository>().vitalsLimits, get<SettingsRepository>().stressLimits) }
     viewModel { BodyCompositionViewModel(get(), get(), get()) }
     viewModel { ProfileViewModel(get()) }
     viewModel { OpenOnWatchViewModel(get()) }
     viewModel { WatchLinkViewModel(get(), get()) }
     viewModel { com.heartline.phone.ui.share.ShareViewModel(get(), get()) }
     viewModel { OnboardingViewModel(get()) }
+    viewModel { com.heartline.phone.ui.model.MonitoringSetupViewModel(get(), get()) { Reminders.sync(androidContext(), it) } }
     single { DataExporter(androidContext()) }
     single { com.heartline.phone.widget.WidgetDataSource(get(), get(), get(), { get() }, profiles = get(), settings = get()) }
     single { com.heartline.phone.widget.WidgetUpdater(androidContext(), get(), get(), get(), get(), get()) }

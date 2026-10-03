@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.heartline.shared.AppInfo
 import com.heartline.shared.hr.HeartLimits
+import com.heartline.shared.stress.StressLimits
 import com.heartline.shared.vitals.VitalsLimits
 import com.heartline.shared.hr.MonitorSettings
 import com.heartline.shared.sync.Protocol
@@ -40,6 +41,8 @@ class SettingsRepository(private val context: Context, private val now: () -> Lo
         val TERMS_VERSION = intPreferencesKey("accepted_terms_version")
         val HEART_LIMITS = stringPreferencesKey("heart_limits")
         val VITALS_LIMITS = stringPreferencesKey("vitals_limits")
+        val STRESS_LIMITS = stringPreferencesKey("stress_limits")
+        val MONITORING_SETUP = intPreferencesKey("monitoring_setup_version")
     }
 
     /**
@@ -140,6 +143,25 @@ class SettingsRepository(private val context: Context, private val now: () -> Lo
     /** Blood-oxygen and temperature normals and limits from the watch. */
     val vitalsLimits: Flow<VitalsLimits?> = context.settingsStore.data.map { p ->
         p[Keys.VITALS_LIMITS]?.let { runCatching { Protocol.json.decodeFromString<VitalsLimits>(it) }.getOrNull() }
+    }
+
+    /** The stress normal and today's summary from the watch. */
+    val stressLimits: Flow<StressLimits?> = context.settingsStore.data.map { p ->
+        p[Keys.STRESS_LIMITS]?.let { runCatching { Protocol.json.decodeFromString<StressLimits>(it) }.getOrNull() }
+    }
+
+    suspend fun saveStressLimits(limits: StressLimits) {
+        context.settingsStore.edit { it[Keys.STRESS_LIMITS] = Protocol.json.encodeToString(limits) }
+    }
+
+    /**
+     * Version of the monitoring setup the user went through (0 = never). Below
+     * [MonitorSettings.SETUP_VERSION] the setup is shown once, after onboarding or an update.
+     */
+    val monitoringSetupVersion: Flow<Int> = context.settingsStore.data.map { it[Keys.MONITORING_SETUP] ?: 0 }
+
+    suspend fun setMonitoringSetupDone(version: Int = MonitorSettings.SETUP_VERSION) {
+        context.settingsStore.edit { it[Keys.MONITORING_SETUP] = version }
     }
 
     suspend fun saveVitalsLimits(limits: VitalsLimits) {

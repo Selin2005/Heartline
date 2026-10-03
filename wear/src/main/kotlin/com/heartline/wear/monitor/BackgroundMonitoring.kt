@@ -134,7 +134,8 @@ object BackgroundMonitoring {
         }.onFailure { HLog.w(TAG, "passive listener update failed", it) }
 
         val work = WorkManager.getInstance(context)
-        if (allowed && settings.heartActive) {
+        // The 75-second windows serve the rhythm checks and stress.
+        if (allowed && (settings.rhythmActive || settings.stressActive)) {
             val minutes = MonitorSettings.IRN_INTERVAL_MINUTES.toLong()
             work.enqueueUniquePeriodicWork(
                 IRN_WORK,
@@ -152,7 +153,7 @@ object BackgroundMonitoring {
             work.cancelUniqueWork(VITALS_WORK)
             work.cancelUniqueWork(VITALS_RETRY)
         }
-        HLog.i(TAG, "sync allowed=$allowed monitoring=${settings.heartMonitoring} spo2=${settings.spo2Active} temp=${settings.skinTempActive} sensitivity=${settings.alertSensitivity} background=${hasBackgroundPermission(context)}")
+        HLog.i(TAG, "sync allowed=$allowed monitoring=${settings.heartMonitoring} rhythm=${settings.rhythmActive} stress=${settings.stressActive} spo2=${settings.spo2Active} temp=${settings.skinTempActive} sensitivity=${settings.alertSensitivity} background=${hasBackgroundPermission(context)}")
     }
 }
 
@@ -255,11 +256,12 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
     private val notifier: WatchNotifier by inject()
 
     private val store: WatchSettingsStore by inject()
+    private val output: WatchMonitorOutput by inject()
 
     override suspend fun doWork(): Result {
         if (!BackgroundMonitoring.canRun(applicationContext)) return Result.success()
-        val settings = store.settings.value
-        if (!settings.heartActive) return Result.success()
+        val settings = store.settings.value.normalized()
+        if (!settings.rhythmActive && !settings.stressActive) return Result.success()
         // No recent background heart rate means the watch is very likely not being worn: don't listen
         // to a sensor on a table or charger, whose noise looks like an irregular rhythm.
         val lastWorn = store.lastPassiveHeartRateMs
@@ -286,6 +288,7 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
         val motion = StepMotionMonitor(applicationContext).also { it.start() }
         heart.irn.resetWindow()
         var count = 0
+        val samples = mutableListOf<com.heartline.shared.hr.HrSample>()
         // A background session of its own, unless a measurement is running (then it records there).
         val raw = RawCapture.begin("irn_window", background = true)
         try {
@@ -294,12 +297,12 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
                     .catch { HLog.w(TAG, "IRN window stream failed", it) }
                     .collect { sample ->
                         count++
-                        heart.irn.onSample(
-                            sample.copy(
-                                moving = sample.moving || motion.movedSince(sample.tsMs - 60_000) || wrist.movedSince(sample.tsMs - 60_000),
-                                onBody = sample.onBody && !wrist.offBody,
-                            ),
+                        val checked = sample.copy(
+                            moving = sample.moving || motion.movedSince(sample.tsMs - 60_000) || wrist.movedSince(sample.tsMs - 60_000),
+                            onBody = sample.onBody && !wrist.offBody,
                         )
+                        samples += checked
+                        if (settings.rhythmActive) heart.irn.onSample(checked)
                     }
             }
         } finally {
@@ -308,6 +311,8 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
             RawCapture.end(raw, mapOf("samples" to count.toDouble()))
         }
         heart.endIrnWindow()
+        // Stress from the same window (a window judged irregular is not read as stress).
+        if (heart.irn.lastWindowIrregular != true) runCatching { StressWindows.onWindow(samples, settings, store, output) }.onFailure { HLog.w(TAG, "stress window failed", it) }
         val irregular = heart.irn.lastWindowIrregular
         HLog.i(TAG, "IRN window done: $count samples, irregular=$irregular skipped=${heart.irn.lastSkipReason}")
         if (irregular == true) BackgroundMonitoring.scheduleFollowUp(applicationContext)

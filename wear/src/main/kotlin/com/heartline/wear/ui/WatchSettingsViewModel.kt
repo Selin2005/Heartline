@@ -34,6 +34,8 @@ class WatchSettingsViewModel(
             heartPart = s.heartAlerts,
             spo2Part = s.spo2Monitoring,
             tempPart = s.skinTempMonitoring,
+            stressPart = s.stressMonitoring,
+            setupNeeded = !s.health.answered,
             sensitivity = s.alertSensitivity,
             serviceVersion = connected?.serviceVersion,
             trackers = connected?.trackers?.map { it.name }?.sorted().orEmpty(),

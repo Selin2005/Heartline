@@ -75,6 +75,8 @@ interface QuickSource {
 class StressSource(
     private val hr: HrSource,
     private val skinConductance: suspend () -> Float? = { null },
+    /** The score of an RMSSD and heart rate: personal once the background windows have learnt the wearer. */
+    private val scorer: (rmssdMs: Double, bpm: Int) -> Int = { rmssd, _ -> StressIndex.score(rmssd) },
     override val seconds: Int = 60,
     private val tickMs: Long = 1_000,
     private val noDataSeconds: Int = 15,
@@ -119,7 +121,9 @@ class StressSource(
         if (hrv == null) {
             send(QuickEvent.Failed(null, QuickHint.LOW_SIGNAL))
         } else {
-            send(QuickEvent.Result(RecordSummary.Stress(StressIndex.score(hrv.rmssdMs, skin), hrv.rmssdMs, skin)))
+            val bpm = (60_000.0 / Hrv.clean(ibis).average()).toInt()
+            val score = (scorer(hrv.rmssdMs, bpm) + StressIndex.edaNudge(skin)).toInt().coerceIn(0, 100)
+            send(QuickEvent.Result(RecordSummary.Stress(score, hrv.rmssdMs, skin)))
         }
     }
 

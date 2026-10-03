@@ -134,7 +134,7 @@ private fun HeroHeart() {
     }
 }
 
-/** First run: welcome, the profile, then connecting the watch, then the app. */
+/** First run: welcome, the profile, the monitoring setup, then connecting the watch, then the app. */
 @Composable
 fun OnboardingFlow(onFinished: () -> Unit) {
     var step by rememberSaveable { mutableIntStateOf(0) }
@@ -145,6 +145,7 @@ fun OnboardingFlow(onFinished: () -> Unit) {
             val profile by vm.profile.collectAsStateWithLifecycle()
             ProfileScreen(profile = profile, onBack = { step = 0 }, onSave = { vm.save(it) { step = 2 } })
         }
+        2 -> MonitoringSetupRoute(onDone = { step = 3 }, onBack = { step = 1 })
         else -> {
             val vm: WatchLinkViewModel = koinViewModel()
             val link by vm.link.collectAsStateWithLifecycle()

@@ -178,6 +178,18 @@ attach them to a bug report.
       - the phone's Blood oxygen and Skin temperature screens show *Measured by your watch*,
         and after 3 nights the temperature change replaces *Learning*;
       - with *Blood oxygen* off, no SpO2 readings come and the heart part still works.
+    - **Stress** ([STRESS_MONITORING.md](algorithms/STRESS_MONITORING.md)). Capture
+      `adb logcat -v time -s Heartline/Stress Heartline/Monitor`:
+      - `stress window:` lines every 15 minutes while still, with `context=REST` by day and `SLEEP`
+        at night; none for the hour after a workout;
+      - after a day of wearing, Phone → Stress shows *Measured by your watch* with today's slots;
+      - a stressful hour at a desk (after 3–4 days of wearing) gives one notice; *Breathe for a
+        minute* opens the breathing screen, which vibrates at each change and offers a
+        measurement at the end.
+    - **Monitoring setup:** a fresh install asks the setup after the profile; updating from the
+      previous version shows it once (after the new terms) and nothing stops meanwhile.
+      Answering "yes" to AFib turns rhythm checks and stress off (the log's `sync` line shows
+      `rhythm=false stress=false`), and the watch's settings no longer say "Finish setting up".
     - **Watch not worn:** leave the watch on a table or charger for two hours. The log shows
       `IRN window skipped` (no background heart rate, or off the wrist), never an irregular rhythm
       notification.

@@ -57,7 +57,10 @@ data class HrBatch(
     val limits: HeartLimits? = null,
     val spo2: List<com.heartline.shared.vitals.Spo2Sample> = emptyList(),
     val skinTemp: List<com.heartline.shared.vitals.TempSample> = emptyList(),
-    val vitals: com.heartline.shared.vitals.VitalsLimits? = null
+    val vitals: com.heartline.shared.vitals.VitalsLimits? = null,
+    /** Background stress readings (from the rhythm windows) and the wearer's stress normal. */
+    val stress: List<com.heartline.shared.stress.StressSample> = emptyList(),
+    val stressLimits: com.heartline.shared.stress.StressLimits? = null
 )
 
 @Serializable
@@ -91,7 +94,7 @@ data class HealthAlert(
 
 @Serializable
 enum class VitalAlert {
-    /** Two readings in a row (the second a re-check) at or below the oxygen limit. */
+    /** Three readings in a row (two re-checks) below the oxygen limit. */
     SPO2_LOW,
 
     /** Oxygen in sleep lower than the wearer's usual over several nights. */
@@ -101,7 +104,46 @@ enum class VitalAlert {
     TEMPERATURE,
 
     /** A warmer night together with a raised heart rate in sleep. */
-    COMBINED
+    COMBINED,
+
+    /** About 45 minutes of high stress while still (sent as a high heart rate to older phones). */
+    STRESS
+}
+
+/** An answer to a health question in the monitoring setup. Unsure counts as no. */
+@Serializable
+enum class Answer { YES, NO, UNSURE }
+
+/**
+ * What the wearer told the monitoring setup about themselves. Each answer adapts the checks so
+ * they don't give false or useless notices (docs/algorithms/HEART_MONITORING.md, section 7).
+ * Stored on the phone and the watch only.
+ */
+@Serializable
+data class HealthContext(
+    /** Medicine that lowers the heart rate (beta blockers and the like): Brawner's maximum. */
+    val rateLoweringMedicine: Answer? = null,
+    /** Diagnosed atrial fibrillation: no rhythm notifications, no stress (HRV is meaningless). */
+    val atrialFibrillation: Answer? = null,
+    /** Pacemaker or ICD: no rhythm or low heart rate notifications, no stress. */
+    val heartDevice: Answer? = null,
+    /** Lung condition with usually low oxygen: the oxygen limit is 88 % (BTS target 88–92 %). */
+    val lungCondition: Answer? = null,
+    /** Regular endurance training: a lower first guess of the resting heart rate. */
+    val enduranceTraining: Boolean = false,
+    /** Pregnant: no temperature notices, a 14-day heart-rate normal. */
+    val pregnant: Boolean = false
+) {
+    /** Every required question has an answer. */
+    val answered: Boolean get() = listOf(rateLoweringMedicine, atrialFibrillation, heartDevice, lungCondition).all { it != null }
+
+    val rateLowering: Boolean get() = rateLoweringMedicine == Answer.YES
+    val af: Boolean get() = atrialFibrillation == Answer.YES
+    val device: Boolean get() = heartDevice == Answer.YES
+    val lung: Boolean get() = lungCondition == Answer.YES
+
+    /** Heart-rate variability can't be read: an irregular or paced rhythm. */
+    val hrvUnreadable: Boolean get() = af || device
 }
 
 @Serializable
@@ -153,6 +195,19 @@ data class MonitorSettings(
     val heartAlerts: Boolean = true,
     val spo2Monitoring: Boolean = true,
     val skinTempMonitoring: Boolean = true,
+    /** Stress from the rhythm windows' heart-rate variability, and its notification. */
+    val stressMonitoring: Boolean = true,
+    val stressNotifications: Boolean = true,
+    /** Blood oxygen in sleep too (its red light can be seen in the dark). */
+    val spo2InSleep: Boolean = true,
+    /** The wearer's answers in the monitoring setup. */
+    val health: HealthContext = HealthContext(),
+    /** No stress or trend notices in these hours (minutes after midnight); heart and oxygen always notify. */
+    val quietStartMinute: Int = 22 * 60,
+    val quietEndMinute: Int = 7 * 60,
+    /** Usual sleep, used when the watch can't tell (no activity recognition). */
+    val sleepStartMinute: Int = 23 * 60,
+    val sleepEndMinute: Int = 7 * 60,
     /** Remind 3 days before the BP calibration expires. */
     val calibrationReminder: Boolean = true,
     /** Daily reminder to take a measurement, at [dailyReminderMinute] (minutes after midnight). */
@@ -202,7 +257,8 @@ data class MonitorSettings(
     fun withMonitoring(on: Boolean) = copy(
         heartMonitoring = on,
         heartRateAlertsEnabled = on && heartAlerts,
-        irregularRhythmEnabled = on && heartAlerts,
+        // Not with a known irregular or paced rhythm (the setup's answers): older watches follow this too.
+        irregularRhythmEnabled = on && heartAlerts && !health.hrvUnreadable,
         backgroundHeartRate = backgroundHeartRate || (on && heartAlerts)
     )
 
@@ -220,6 +276,34 @@ data class MonitorSettings(
 
     val skinTempActive: Boolean get() = heartMonitoring && skinTempMonitoring
 
+    /** Rhythm checks: the heart part, unless the rhythm is known irregular or paced. */
+    val rhythmActive: Boolean get() = heartActive && !health.hrvUnreadable
+
+    /** Low heart rate notifications: not with a pacemaker, which keeps the rate up. */
+    val lowHeartRateActive: Boolean get() = heartActive && !health.device
+
+    /** Stress needs readable heart-rate variability. */
+    val stressActive: Boolean get() = heartMonitoring && stressMonitoring && !health.hrvUnreadable
+
+    /** Temperature notices: not in pregnancy, when skin is warmer anyway. */
+    val temperatureNotices: Boolean get() = skinTempActive && !health.pregnant
+
+    /** Whether [minuteOfDay] (0–1439) is in the quiet hours. */
+    fun isQuiet(minuteOfDay: Int) = inRange(minuteOfDay, quietStartMinute, quietEndMinute)
+
+    /** Whether [minuteOfDay] is in the usual sleep hours. */
+    fun isUsualSleep(minuteOfDay: Int) = inRange(minuteOfDay, sleepStartMinute, sleepEndMinute)
+
+    private fun inRange(m: Int, start: Int, end: Int) = if (start ==
+        end
+    ) {
+        false
+    } else if (start < end) {
+        m in start until end
+    } else {
+        m >= start || m < end
+    }
+
     /** The parts follow the switches, whatever older versions left in them. */
     fun normalized() = withMonitoring(heartMonitoring)
 
@@ -229,14 +313,24 @@ data class MonitorSettings(
     companion object {
         /** Minutes between irregular-rhythm checks. */
         const val IRN_INTERVAL_MINUTES = 15
+
+        /** Raise when the monitoring setup asks something new: users are asked again once. */
+        const val SETUP_VERSION = 1
     }
 }
 
-/** Age-predicted maximum heart rate (Tanaka et al., 2001: 208 − 0.7 × age). */
+/**
+ * Age-predicted maximum heart rate: Tanaka et al. 2001 (208 − 0.7 × age), or with heart-rate
+ * lowering medicine Brawner et al. 2004 (164 − 0.7 × age; beta blockers lower the peak rate).
+ */
 object MaxHr {
     const val UNKNOWN_AGE_MAX = 190
+    const val UNKNOWN_AGE_MAX_RATE_LOWERED = 140
 
-    fun predicted(age: Int?): Int = age?.takeIf { it in 10..110 }?.let { (208 - 0.7 * it).toInt() } ?: UNKNOWN_AGE_MAX
+    fun predicted(age: Int?, rateLowering: Boolean = false): Int {
+        val a = age?.takeIf { it in 10..110 } ?: return if (rateLowering) UNKNOWN_AGE_MAX_RATE_LOWERED else UNKNOWN_AGE_MAX
+        return ((if (rateLowering) 164 else 208) - 0.7 * a).toInt()
+    }
 
     /** Heart-rate zones as lower bounds in bpm: 50, 60, 70, 80 and 90 % of [max]. */
     fun zones(max: Int): List<Int> = listOf(50, 60, 70, 80, 90).map { max * it / 100 }

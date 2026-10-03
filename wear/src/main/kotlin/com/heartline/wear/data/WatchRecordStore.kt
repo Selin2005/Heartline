@@ -61,7 +61,10 @@ class WatchRecordStore(
      */
     suspend fun addSession(log: BpSessionLog) = withContext(Dispatchers.IO) {
         val dir = File(root, SESSIONS).apply { mkdirs() }
-        File(dir, "${log.header.id}.hlbp").writeBytes(log.encode())
+        // Written aside, then renamed: the sync must never read a half-written log (a truncated
+        // gzip fails to decode on the phone).
+        val tmp = File(dir, "${log.header.id}.tmp").apply { writeBytes(log.encode()) }
+        if (!tmp.renameTo(File(dir, "${log.header.id}.hlbp"))) tmp.delete()
         val files = dir.listFiles().orEmpty().sortedBy { it.lastModified() }
         var total = files.sumOf { it.length() }
         for (f in files) {

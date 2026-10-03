@@ -176,7 +176,28 @@ object SampleData {
             )
             else -> null
         }
-        return MetricDetailUi(metric, rows, background)
+        val stress = if (metric == Metric.STRESS) {
+            com.heartline.phone.ui.model.BackgroundStressUi(
+                today = (0 until 64).map { i ->
+                    when {
+                        i >= 34 -> null
+                        i % 4 == 2 -> null
+                        i in 26..30 -> 70 + i % 3 * 6
+                        else -> 22 + (i * 7) % 25
+                    }
+                },
+                todayAverage = 38,
+                highMinutes = 45,
+                latest = "3:30 PM" to 74,
+                usualNightRmssd = 52,
+                lastNightRmssd = 47,
+                week = listOf(31, 28, 35, 42, 30, 33, 38),
+                learning = false,
+            )
+        } else {
+            null
+        }
+        return MetricDetailUi(metric, rows, background, stress)
     }
 
     val vitalsLimits = com.heartline.shared.vitals.VitalsLimits(
@@ -204,6 +225,8 @@ object SampleData {
     }
 
     val alerts = listOf(
+        AlertUi("a5", AlertKind.HIGH_HEART_RATE, "Today", "3:45 PM", 79, 0, read = false, vital = com.heartline.shared.hr.VitalAlert.STRESS, value = 78f),
+        AlertUi("a4", AlertKind.HIGH_HEART_RATE, "Sep 25", "10:05 AM", null, 0, read = false, vital = com.heartline.shared.hr.VitalAlert.TEMPERATURE, value = 1.2f),
         AlertUi("a1", AlertKind.IRREGULAR_RHYTHM, "Sep 21", "3:12 AM", 94, 5, read = false, ecgRegular = true),
         AlertUi("a0", AlertKind.HIGH_HEART_RATE, "Sep 23", "10:00 AM", 62, 0, read = false, threshold = 57, context = com.heartline.shared.hr.HrContext.SLEEP, normal = 51, trend = com.heartline.shared.hr.HeartTrend.ELEVATED_RESTING),
         AlertUi("a2", AlertKind.HIGH_HEART_RATE, "Sep 14", "11:40 PM", 104, 0, read = true, threshold = 90, context = com.heartline.shared.hr.HrContext.REST, normal = 58),

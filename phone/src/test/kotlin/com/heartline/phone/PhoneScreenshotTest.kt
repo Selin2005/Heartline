@@ -106,7 +106,7 @@ class PhoneScreenshotTest(private val theme: String) {
         EcgDetailScreen(SampleData.ecgRecords[0], onBack = {}, listState = rememberLazyListState(initialFirstVisibleItemIndex = 3))
     }
 
-    @Test fun homeEmpty() = shot("home_empty") { HomeScreen(HomeState(irregularRhythmNotifications = false)) }
+    @Test fun homeEmpty() = shot("home_empty") { HomeScreen(HomeState()) }
 
     @Test fun ecgHomeEmpty() = shot("ecg_home_empty") { EcgHomeScreen(EcgListState(loading = false), onBack = {}) }
 
@@ -190,6 +190,26 @@ class PhoneScreenshotTest(private val theme: String) {
     }
 
     @Test fun settings() = shot("settings") { SettingsScreen(watchConnected = true) }
+
+    private val setupBase = com.heartline.shared.hr.MonitorSettings()
+    private val setupAnswered = setupBase.copy(
+        health = com.heartline.shared.hr.HealthContext(
+            com.heartline.shared.hr.Answer.YES,
+            com.heartline.shared.hr.Answer.NO,
+            com.heartline.shared.hr.Answer.NO,
+            com.heartline.shared.hr.Answer.UNSURE,
+        ),
+    )
+
+    @Test fun setupMonitoring() = shot("setup_monitoring") { com.heartline.phone.ui.onboarding.MonitoringSetupFlow(setupBase, onFinish = {}) }
+
+    @Test fun setupParts() = shot("setup_parts") { com.heartline.phone.ui.onboarding.MonitoringSetupFlow(setupBase, onFinish = {}, startStep = 1) }
+
+    @Test fun setupHealth() = shot("setup_health") { com.heartline.phone.ui.onboarding.MonitoringSetupFlow(setupAnswered, onFinish = {}, startStep = 2) }
+
+    @Test fun setupOptional() = shot("setup_optional") { com.heartline.phone.ui.onboarding.MonitoringSetupFlow(setupAnswered, onFinish = {}, startStep = 3) }
+
+    @Test fun setupSummary() = shot("setup_summary") { com.heartline.phone.ui.onboarding.MonitoringSetupFlow(setupAnswered, onFinish = {}, startStep = 4) }
 
     @Test fun settingsMonitoring() = shot("settings_monitoring") {
         SettingsScreen(

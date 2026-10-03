@@ -27,6 +27,7 @@ import com.heartline.shared.hr.MonitorState
 import com.heartline.shared.hr.StepSpan
 import com.heartline.shared.hr.WatchActivity
 import com.heartline.shared.irn.IrnState
+import com.heartline.shared.stress.StressHistory
 import com.heartline.shared.vitals.VitalsHistory
 import com.heartline.shared.model.EcgResult
 import com.heartline.shared.sync.Protocol
@@ -140,6 +141,11 @@ class WatchSettingsStore(context: Context, private val now: () -> Long = System:
         get() = prefs.getString(KEY_VITALS, null)?.let { runCatching { Protocol.json.decodeFromString<VitalsHistory>(it) }.getOrNull() } ?: VitalsHistory()
         set(value) = prefs.edit().putString(KEY_VITALS, Protocol.json.encodeToString(value)).apply()
 
+    /** Stress history from the rhythm windows (daily values, recent windows, notices). */
+    var stress: StressHistory
+        get() = prefs.getString(KEY_STRESS, null)?.let { runCatching { Protocol.json.decodeFromString<StressHistory>(it) }.getOrNull() } ?: StressHistory()
+        set(value) = prefs.edit().putString(KEY_STRESS, Protocol.json.encodeToString(value)).apply()
+
     /** The latest background SpO2 and temperature readings, and the air temperature then. */
     var lastSpo2Ms: Long
         get() = prefs.getLong(KEY_LAST_SPO2, 0)
@@ -179,6 +185,7 @@ class WatchSettingsStore(context: Context, private val now: () -> Long = System:
         const val KEY_ACTIVITY = "activity"
         const val KEY_LIMITS = "limits"
         const val KEY_VITALS = "vitals"
+        const val KEY_STRESS = "stress"
         const val KEY_LAST_SPO2 = "last_spo2"
         const val KEY_LAST_TEMP = "last_temp"
         const val KEY_LAST_AMBIENT = "last_ambient"
@@ -257,6 +264,10 @@ class WatchNotifier(private val context: Context) {
         if (alert.kind == AlertKind.IRREGULAR_RHYTHM) {
             // Checking with an ECG right away is the most useful next step.
             builder.addAction(R.drawable.ic_heart, context.getString(R.string.alert_take_ecg), deepLink(5, MainActivity.ROUTE_ECG))
+        }
+        if (alert.vital == VitalAlert.STRESS) {
+            // A minute of slow breathing, right from the notice.
+            builder.addAction(R.drawable.ic_heart, context.getString(R.string.alert_breathe), deepLink(6, MainActivity.ROUTE_BREATHE))
         }
         manager.notify(alert.id.hashCode(), builder.build())
     }
@@ -361,7 +372,8 @@ object AlertText {
         val normal = alert.normal
         val change = alert.value?.let { "%.1f".format(it) } ?: ""
         return when {
-            alert.vital == VitalAlert.SPO2_LOW -> string(R.string.alert_spo2_low_title) to string(R.string.alert_spo2_low_text).format(bpm)
+            alert.vital == VitalAlert.SPO2_LOW -> string(R.string.alert_spo2_low_title) to string(R.string.alert_spo2_low_text).format(bpm, limit ?: 90)
+            alert.vital == VitalAlert.STRESS -> string(R.string.alert_stress_title) to string(R.string.alert_stress_text)
             alert.vital == VitalAlert.SPO2_NIGHTS -> string(R.string.alert_spo2_nights_title) to string(R.string.alert_spo2_nights_text)
             alert.vital == VitalAlert.TEMPERATURE -> string(R.string.alert_temp_title) to string(R.string.alert_temp_text).format(change)
             alert.vital == VitalAlert.COMBINED -> string(R.string.alert_combined_title) to string(R.string.alert_combined_text).format(change)

@@ -11,6 +11,7 @@
 - [Blood pressure algorithm](algorithms/BP_ALGORITHM.md)
 - [Background heart monitoring and heart notifications](algorithms/HEART_MONITORING.md)
 - [Background blood oxygen and skin temperature](algorithms/VITALS_MONITORING.md)
+- [Background stress monitoring](algorithms/STRESS_MONITORING.md)
 - [Watch ↔ phone sync protocol](architecture/PROTOCOL.md)
 - [Samsung Health Sensor SDK integration](SAMSUNG_HEALTH_SENSOR_SDK.md)
 - [Design system](DESIGN.md) · [App icon and promotional images](brand/README.md)

@@ -5,6 +5,7 @@ package com.heartline.phone.data
 
 import com.heartline.shared.hr.HealthAlert
 import com.heartline.shared.hr.HeartLimits
+import com.heartline.shared.stress.StressLimits
 import com.heartline.shared.vitals.VitalsLimits
 import com.heartline.shared.hr.HrBatch
 import com.heartline.shared.hr.HrContext
@@ -17,7 +18,13 @@ class HeartRepository(
     private val onAlert: suspend (HealthAlert) -> Unit = {},
     private val onLimits: suspend (HeartLimits) -> Unit = {},
     private val onVitalsLimits: suspend (VitalsLimits) -> Unit = {},
+    private val onStressLimits: suspend (StressLimits) -> Unit = {},
 ) : HeartDataSink {
+    /** Background stress readings since [fromMs], and the latest awake one. */
+    fun stressSince(fromMs: Long): Flow<List<StressSampleEntity>> = dao.stressSince(fromMs)
+
+    val latestStress: Flow<StressSampleEntity?> = dao.latestStress()
+
     /** Background blood oxygen and skin temperature since [fromMs]. */
     fun spo2Since(fromMs: Long): Flow<List<Spo2SampleEntity>> = dao.spo2Since(fromMs)
 
@@ -41,11 +48,13 @@ class HeartRepository(
         if (batch.spo2.isNotEmpty()) dao.insertSpo2(batch.spo2.map { Spo2SampleEntity(it.tsMs, it.percent, it.context, it.confirmation) })
         if (batch.skinTemp.isNotEmpty()) dao.insertTemps(batch.skinTemp.map { TempSampleEntity(it.tsMs, it.skinC, it.ambientC, it.context, it.counted) })
         batch.vitals?.let { onVitalsLimits(it) }
+        if (batch.stress.isNotEmpty()) dao.insertStress(batch.stress.map { StressSampleEntity(it.tsMs, it.rmssdMs, it.bpm, it.score, it.context) })
+        batch.stressLimits?.let { onStressLimits(it) }
     }
 
     override suspend fun saveAlert(alert: HealthAlert) {
         dao.insertAlert(
-            AlertEntity(alert.id, alert.kind, alert.atMs, alert.bpm, alert.windowStartsMs.size, threshold = alert.threshold, context = alert.context, normal = alert.normal, trend = alert.trend),
+            AlertEntity(alert.id, alert.kind, alert.atMs, alert.bpm, alert.windowStartsMs.size, threshold = alert.threshold, context = alert.context, normal = alert.normal, trend = alert.trend, vital = alert.vital, value = alert.value),
         )
         onAlert(alert)
     }
@@ -66,6 +75,7 @@ class HeartRepository(
     suspend fun deleteAll() {
         dao.deleteSpo2()
         dao.deleteTemps()
+        dao.deleteStress()
         dao.deleteMinutes()
         dao.deleteAlerts()
     }

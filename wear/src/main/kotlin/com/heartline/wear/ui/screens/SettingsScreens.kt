@@ -12,6 +12,7 @@ import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.DeveloperMode
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MonitorHeart
+import androidx.compose.material.icons.rounded.SelfImprovement
 import androidx.compose.material.icons.rounded.Thermostat
 import androidx.compose.material.icons.rounded.WaterDrop
 import androidx.compose.material.icons.rounded.NotificationsActive
@@ -61,6 +62,9 @@ data class WatchSettingsUi(
     val heartPart: Boolean = true,
     val spo2Part: Boolean = true,
     val tempPart: Boolean = true,
+    val stressPart: Boolean = true,
+    /** The monitoring setup's questions are still unanswered on the phone. */
+    val setupNeeded: Boolean = false,
     /** The personal limits in use (null before the first background minute). */
     val limits: HeartLimits? = null,
     val diagnosticLogs: Boolean = false,
@@ -69,7 +73,7 @@ data class WatchSettingsUi(
 )
 
 /** One setting toggled on the watch. */
-enum class WatchToggle { ALL_DAY_HEART_RATE, HEART_MONITORING, HEART_PART, SPO2_PART, TEMP_PART, HAPTICS, LIVE_WAVE }
+enum class WatchToggle { ALL_DAY_HEART_RATE, HEART_MONITORING, HEART_PART, SPO2_PART, TEMP_PART, STRESS_PART, HAPTICS, LIVE_WAVE }
 
 /** What a turn-off confirmation is for: the master and all-day ask twice, the heart part once. */
 enum class OffTarget { MASTER, ALL_DAY, HEART }
@@ -154,6 +158,17 @@ fun WatchSettingsScreen(
     ScreenScaffold(scrollState = list) { padding ->
         TransformingLazyColumn(state = list, contentPadding = padding) {
             item { ListHeader { Text(stringResource(R.string.settings)) } }
+            if (state.setupNeeded) {
+                item {
+                    Text(
+                        stringResource(R.string.settings_setup_on_phone),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = WearColors.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
             item {
                 Toggle(Icons.Rounded.MonitorHeart, stringResource(R.string.settings_background_hr), state.allDayHeartRate) { on ->
                     when {
@@ -199,6 +214,7 @@ fun WatchSettingsScreen(
                 }
                 item { Toggle(Icons.Rounded.WaterDrop, stringResource(R.string.settings_part_spo2), state.spo2Part) { onToggle(WatchToggle.SPO2_PART, it) } }
                 item { Toggle(Icons.Rounded.Thermostat, stringResource(R.string.settings_part_temp), state.tempPart) { onToggle(WatchToggle.TEMP_PART, it) } }
+                item { Toggle(Icons.Rounded.SelfImprovement, stringResource(R.string.settings_part_stress), state.stressPart) { onToggle(WatchToggle.STRESS_PART, it) } }
                 item {
                     Row(Icons.Rounded.NotificationsActive, stringResource(R.string.settings_sensitivity), stringResource(state.sensitivity.label)) {
                         val all = AlertSensitivity.entries

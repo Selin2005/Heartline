@@ -153,6 +153,7 @@ class PhoneNotifier(private val context: Context) {
             VitalAlert.SPO2_NIGHTS -> R.string.alert_spo2_nights_title
             VitalAlert.TEMPERATURE -> R.string.alert_temp_title
             VitalAlert.COMBINED -> R.string.alert_combined_title
+            VitalAlert.STRESS -> R.string.alert_stress_title
             null -> trendTitle(alert)
         }
 
@@ -176,7 +177,8 @@ class PhoneNotifier(private val context: Context) {
             fun percent(n: Int) = if (n <= 0) 0 else kotlin.math.abs(bpm - n) * 100 / n
             val change = alert.value?.let { "%.1f".format(it) } ?: ""
             when (alert.vital) {
-                VitalAlert.SPO2_LOW -> return context.getString(R.string.alert_spo2_low_text, bpm)
+                VitalAlert.SPO2_LOW -> return context.getString(R.string.alert_spo2_low_text, bpm, limit ?: 90)
+                VitalAlert.STRESS -> return context.getString(R.string.alert_stress_text)
                 VitalAlert.SPO2_NIGHTS -> return context.getString(R.string.alert_spo2_nights_text)
                 VitalAlert.TEMPERATURE -> return context.getString(R.string.alert_temp_text, change)
                 VitalAlert.COMBINED -> return context.getString(R.string.alert_combined_text, change)

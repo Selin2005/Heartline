@@ -56,6 +56,7 @@ import com.heartline.wear.ui.screens.LauncherEntry
 import com.heartline.wear.sensor.SensorProblem
 import com.heartline.wear.ui.screens.DiagnosticsScreen
 import com.heartline.wear.ui.screens.HeartRateScreen
+import com.heartline.wear.ui.screens.BreathingScreen
 import com.heartline.wear.ui.screens.WatchSettingsScreen
 import com.heartline.wear.ui.screens.WatchToggle
 import com.heartline.wear.ui.screens.HistoryScreen
@@ -101,6 +102,7 @@ private object Routes {
     const val BLOOD_PRESSURE = MainActivity.ROUTE_BP
     const val BP_CALIBRATION = MainActivity.ROUTE_BP_CALIBRATION
     const val QUICK = "quick/{metric}"
+    const val BREATHE = MainActivity.ROUTE_BREATHE
     const val SETTINGS = "settings"
     const val DEV_MODE = "dev_mode"
     const val DIAGNOSTICS = "diagnostics"
@@ -335,6 +337,7 @@ private fun AppNavHost(nav: NavHostController, gate: SetupGateViewModel) {
                             WatchToggle.HEART_PART -> s.withHeartAlerts(on)
                             WatchToggle.SPO2_PART -> s.copy(spo2Monitoring = on)
                             WatchToggle.TEMP_PART -> s.copy(skinTempMonitoring = on)
+                            WatchToggle.STRESS_PART -> s.copy(stressMonitoring = on)
                             WatchToggle.HAPTICS -> s.copy(haptics = on)
                             WatchToggle.LIVE_WAVE -> s.copy(liveWave = on)
                         }
@@ -366,6 +369,15 @@ private fun AppNavHost(nav: NavHostController, gate: SetupGateViewModel) {
             val vm: HeartRateViewModel = koinViewModel()
             val hr by vm.state.collectAsStateWithLifecycle()
             HeartRateScreen(hr.bpm, hr.onBody)
+        }
+        composable(Routes.BREATHE) {
+            val store: com.heartline.wear.monitor.WatchSettingsStore = koinInject()
+            val prefs by store.settings.collectAsStateWithLifecycle()
+            BreathingScreen(
+                buzz = com.heartline.wear.ui.components.rememberBuzz(prefs.haptics),
+                onMeasure = { nav.navigate(Routes.quick(Metric.STRESS)) { popUpTo(Routes.BREATHE) { inclusive = true } } },
+                onDone = exit,
+            )
         }
         composable(Routes.HISTORY) {
             val vm: HistoryViewModel = koinViewModel()

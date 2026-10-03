@@ -90,6 +90,9 @@ data class AlertUi(
     val ecgRegular: Boolean? = null,
     val normal: Int? = null,
     val trend: HeartTrend? = null,
+    /** A blood-oxygen, temperature, combined or stress notice, and its value. */
+    val vital: com.heartline.shared.hr.VitalAlert? = null,
+    val value: Float? = null,
 )
 
 /** Pure summaries so they can be unit tested. */
@@ -191,7 +194,7 @@ class HeartRateViewModel(
         fun dayRange(day: LocalDate) = day.atStartOfDay(zone).toInstant().toEpochMilli() until day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
         // The watch's own limits when it sent them; otherwise the same calculation on this phone's data.
         val history = HeartSummaries.history(month, zone)
-        val limits = sent ?: HeartBaseline.limits(history, todayKey, monitor.alertSensitivity, years, sex)
+        val limits = sent ?: HeartBaseline.limits(history, todayKey, monitor.alertSensitivity, years, sex, monitor.health)
         val maxHr = limits.exerciseMax
         val sleep = HeartSummaries.sleep(todays)
         val exercise = todays.filter { it.activity == HrContext.EXERCISE }
@@ -238,5 +241,5 @@ class AlertsViewModel(
     fun markRead() = viewModelScope.launch { repository.markAlertsRead() }
 
     private fun AlertEntity.toUi(ecgRegular: Boolean?) =
-        AlertUi(id, kind, formatter.date(atMs), formatter.time(atMs), bpm, windowCount, read, threshold, context, ecgRegular, normal, trend)
+        AlertUi(id, kind, formatter.date(atMs), formatter.time(atMs), bpm, windowCount, read, threshold, context, ecgRegular, normal, trend, vital, value)
 }

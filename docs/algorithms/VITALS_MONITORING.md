@@ -159,6 +159,15 @@ and diagnoses nothing.
 The texts stay at the wellness level, for example "Your skin was about 1.1 °C warmer than usual
 for two nights. Rest, and if you feel unwell, check your temperature with a thermometer."
 
+### Health answers (monitoring setup)
+
+- **Lung condition** with usually low oxygen: the limit is 88 % at every sensitivity, the start
+  of the BTS target range of 88–92 %, and night readings count as low below 88 %.
+- **Pregnancy:** skin temperature is still measured, but there are no temperature or combined
+  notices, since skin is warmer anyway.
+- **Blood oxygen in sleep** can be turned off in the setup (for people the red light bothers).
+- **Usual sleep hours** stand in for sleep when the watch has no activity recognition.
+
 ## 6. Sync and phone
 
 - **Batches.** `HrBatch` carries `spo2`, `skinTemp` and `vitals` (the limits in use). An older

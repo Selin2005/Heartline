@@ -8,6 +8,10 @@ import androidx.lifecycle.viewModelScope
 import com.heartline.phone.data.HeartRepository
 import com.heartline.phone.data.ProfileRepository
 import com.heartline.phone.data.Spo2SampleEntity
+import com.heartline.phone.data.StressSampleEntity
+import com.heartline.shared.profile.StressLevel
+import com.heartline.shared.stress.StressLimits
+import kotlin.math.roundToInt
 import com.heartline.phone.data.TempSampleEntity
 import com.heartline.shared.hr.MonitorSettings
 import com.heartline.shared.vitals.Spo2Sample
@@ -47,7 +51,12 @@ data class MetricReadingUi(
     val details: List<Pair<Int, String>> = emptyList(),
 )
 
-data class MetricDetailUi(val metric: Metric, val readings: List<MetricReadingUi> = emptyList(), val background: BackgroundVitalsUi? = null) {
+data class MetricDetailUi(
+    val metric: Metric,
+    val readings: List<MetricReadingUi> = emptyList(),
+    val background: BackgroundVitalsUi? = null,
+    val stress: BackgroundStressUi? = null,
+) {
     val latest get() = readings.firstOrNull()
 }
 
@@ -66,6 +75,56 @@ data class BackgroundVitalsUi(
     val nights: List<Float?> = emptyList(),
     val recent: List<Pair<String, String>> = emptyList(),
 )
+
+/**
+ * Background stress from the watch's rhythm windows: today's windows (7:00–23:00 in 15-minute
+ * slots, null when none), the day's average and time in high stress, sleep HRV against the usual,
+ * the last 7 days' averages (oldest first) and the week's insight.
+ */
+data class BackgroundStressUi(
+    val today: List<Int?> = emptyList(),
+    val todayAverage: Int? = null,
+    val highMinutes: Int = 0,
+    val latest: Pair<String, Int>? = null,
+    val usualNightRmssd: Int? = null,
+    val lastNightRmssd: Int? = null,
+    val week: List<Int?> = emptyList(),
+    val weekAboveUsual: Int? = null,
+    val learning: Boolean = true,
+)
+
+/** Stored stress readings to [BackgroundStressUi] (pure, unit tested). */
+object BackgroundStress {
+    const val FIRST_SLOT_HOUR = 7
+    const val SLOTS = 64
+
+    fun ui(samples: List<StressSampleEntity>, limits: StressLimits?, today: java.time.LocalDate, formatter: RecordFormatter, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): BackgroundStressUi? {
+        val scored = samples.filter { it.score != null }
+        if (scored.isEmpty() && limits == null) return null
+        fun dateOf(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(zone)
+        val todays = scored.filter { dateOf(it.tsMs).toLocalDate() == today }
+        val slots = arrayOfNulls<Int>(SLOTS)
+        todays.forEach { s ->
+            val t = dateOf(s.tsMs)
+            val slot = (t.hour - FIRST_SLOT_HOUR) * 4 + t.minute / 15
+            if (slot in 0 until SLOTS) slots[slot] = maxOf(slots[slot] ?: 0, s.score!!)
+        }
+        val week = (6 downTo 0).map { back ->
+            scored.filter { dateOf(it.tsMs).toLocalDate() == today.minusDays(back.toLong()) }.takeIf { it.isNotEmpty() }?.map { it.score!! }?.average()?.roundToInt()
+        }
+        return BackgroundStressUi(
+            today = slots.toList(),
+            todayAverage = todays.takeIf { it.isNotEmpty() }?.map { it.score!! }?.average()?.roundToInt(),
+            highMinutes = todays.count { StressIndex.level(it.score!!) == StressLevel.HIGH } * 15,
+            latest = scored.lastOrNull()?.let { formatter.time(it.tsMs) to it.score!! },
+            usualNightRmssd = limits?.usualNightRmssd?.roundToInt(),
+            lastNightRmssd = limits?.lastNightRmssd?.roundToInt(),
+            week = week,
+            weekAboveUsual = limits?.weekAboveUsual,
+            learning = (limits?.confidence ?: 0.0) < 0.8,
+        )
+    }
+}
 
 /** Background readings to [BackgroundVitalsUi] (pure, unit tested). */
 object BackgroundVitals {
@@ -185,6 +244,7 @@ class MetricDetailViewModel(
     /** Background readings from the watch (blood oxygen and skin temperature only). */
     heart: HeartRepository? = null,
     vitalsLimits: Flow<VitalsLimits?> = flowOf(null),
+    stressLimits: Flow<StressLimits?> = flowOf(null),
     today: java.time.LocalDate = java.time.LocalDate.now(),
 ) : ViewModel() {
     private val kind = RecordKind.entries.first { it.metric == metric }
@@ -197,8 +257,15 @@ class MetricDetailViewModel(
         else -> flowOf(null)
     }
 
-    val state: StateFlow<MetricDetailUi> = combine(repository.observe(kind), background) { records, bg ->
-        MetricDetailUi(metric, MetricFormat.readings(records, formatter), bg)
+    private val stress: Flow<BackgroundStressUi?> = if (heart != null && metric == Metric.STRESS) {
+        val weekStart = today.minusDays(6).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        combine(heart.stressSince(weekStart), stressLimits) { s, l -> BackgroundStress.ui(s, l, today, formatter) }
+    } else {
+        flowOf(null)
+    }
+
+    val state: StateFlow<MetricDetailUi> = combine(repository.observe(kind), background, stress) { records, bg, st ->
+        MetricDetailUi(metric, MetricFormat.readings(records, formatter), bg, st)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MetricDetailUi(metric))
 }
 

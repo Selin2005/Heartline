@@ -79,7 +79,7 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
     private fun foregroundInfo() = ForegroundInfo(WatchNotifier.MONITOR_ID, notifier.monitoring(), ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH)
 
     override suspend fun doWork(): Result {
-        val settings = store.settings.value
+        val settings = store.settings.value.normalized()
         if (!settings.spo2Active && !settings.skinTempActive) return Result.success()
         val now = System.currentTimeMillis()
         val lastWorn = store.lastPassiveHeartRateMs
@@ -88,7 +88,9 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
             return Result.success()
         }
         val minute = now / MINUTE * MINUTE
-        val context = store.activityAt(minute) ?: HrContext.REST
+        // Without activity recognition, the usual sleep hours (from the monitoring setup) stand in.
+        val context = store.activityAt(minute) ?: java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneId.systemDefault())
+            .let { if (settings.isUsualSleep(it.hour * 60 + it.minute)) HrContext.SLEEP else HrContext.REST }
         if (context == HrContext.EXERCISE) return Result.success()
         val moving = context == HrContext.ACTIVE || (0..2).any { store.activity.stepsPerMinute(minute - it * MINUTE) >= 20.0 }
         val asleep = context == HrContext.SLEEP
@@ -128,7 +130,8 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
                 }
                 // Blood oxygen: every hour, awake and asleep; by day not on a low battery.
                 val spo2Due = now - store.lastSpo2Ms >= 55 * MINUTE
-                if (settings.spo2Active && spo2Due && (asleep || battery() >= LOW_BATTERY) && allowed(Metric.SPO2)) {
+                val spo2Now = if (asleep) settings.spo2InSleep else battery() >= LOW_BATTERY
+        if (settings.spo2Active && spo2Due && spo2Now && allowed(Metric.SPO2)) {
                     if (moving) {
                         if (store.spo2Retries < MAX_RETRIES) {
                             store.spo2Retries += 1
@@ -168,7 +171,7 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
         alerts += nightAlerts
         store.vitals = history
         val today = VitalsBaseline.dayOf(now, HrContext.REST, java.time.ZoneId.systemDefault())
-        val limits = VitalsBaseline.limits(history, today, settings.alertSensitivity, profile.profile.value?.age())
+        val limits = VitalsBaseline.limits(history, today, settings.alertSensitivity, profile.profile.value?.age(), settings.health.lung)
         output.enqueueBatch(HrBatch(UUID.randomUUID().toString(), emptyList(), spo2 = spo2Samples, skinTemp = temps, vitals = limits))
         alerts.forEach {
             output.enqueueAlert(it)

@@ -58,12 +58,16 @@ class MainActivity : ComponentActivity() {
                 val onboarding: OnboardingViewModel = koinViewModel()
                 val onboarded by onboarding.onboarded.collectAsStateWithLifecycle()
                 val acceptedTerms by onboarding.acceptedTerms.collectAsStateWithLifecycle()
+                val monitoringSetup by onboarding.monitoringSetup.collectAsStateWithLifecycle()
                 val terms = acceptedTerms
                 when {
-                    onboarded == null || terms == null -> Unit
+                    onboarded == null || terms == null || monitoringSetup == null -> Unit
                     // Before anything else, and again whenever the terms change.
                     terms < AppInfo.TERMS_VERSION -> TermsGate(updated = terms > 0, onAccept = onboarding::acceptTerms, onDecline = ::finish)
                     onboarded == false -> OnboardingFlow(onFinished = onboarding::finish)
+                    // Once after an update that asks something new: until answered, monitoring runs as it was.
+                    monitoringSetup != null && monitoringSetup!! < com.heartline.shared.hr.MonitorSettings.SETUP_VERSION ->
+                        com.heartline.phone.ui.onboarding.MonitoringSetupRoute(onDone = {})
                     else -> HeartlineApp(openAlerts = openAlerts, deepLink = deepLink, onDeepLinkHandled = { deepLink = null })
                 }
             }

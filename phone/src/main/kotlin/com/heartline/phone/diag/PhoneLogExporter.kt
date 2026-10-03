@@ -155,7 +155,8 @@ class PhoneLogExporter(
             "Watch app" to (u.watchVersion ?: "never connected"),
             "Notifications" to if (notifications) "allowed" else "denied",
             "Monitoring" to "irregularRhythm=${s.irregularRhythmEnabled} hrAlerts=${s.heartRateAlertsEnabled} (${s.lowBpm}-${s.highBpm}) " +
-                "backgroundHr=${s.backgroundHeartRate} interval=${s.irnIntervalMinutes}min",
+                "backgroundHr=${s.backgroundHeartRate} interval=${s.irnIntervalMinutes}min master=${s.heartMonitoring} " +
+                "rhythm=${s.rhythmActive} spo2=${s.spo2Active} temp=${s.skinTempActive} stress=${s.stressActive} sensitivity=${s.alertSensitivity}",
             "Diagnostic logs" to "on=${s.diagnosticLogs} kept=${formatLogSize(HLog.sizeBytes())} watch copy=${formatLogSize(archive?.sizeBytes() ?: 0)}",
             "Log segments" to "${segments.size}, ${formatLogSize(segments.sumOf { it.length() })} compressed",
         )

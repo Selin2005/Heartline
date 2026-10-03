@@ -152,7 +152,14 @@ object HeartBaseline {
         AlertSensitivity.HIGH -> Ratios(95 / REFERENCE_REST, 50 / REFERENCE_REST, 45 / REFERENCE_SLEEP)
     }
 
-    fun priorRest(sex: Sex?): Double = REFERENCE_REST + if (sex == Sex.FEMALE) 3 else 0
+    /** Endurance athletes' resting rate is typically around 50 (first guess only; their own data decides). */
+    const val ENDURANCE_REST = 50.0
+
+    /** In pregnancy the resting rate rises week by week: a 14-day normal follows it. */
+    const val PREGNANCY_WINDOW_DAYS = 14
+
+    fun priorRest(sex: Sex?, health: HealthContext = HealthContext()): Double =
+        if (health.enduranceTraining) ENDURANCE_REST else REFERENCE_REST + if (sex == Sex.FEMALE) 3 else 0
 
     /** Day a minute belongs to: its local date, or for sleep the date the night ends (18:00–18:00). */
     fun dayOf(ms: Long, kind: HrContext, zone: ZoneId): Long {
@@ -160,14 +167,22 @@ object HeartBaseline {
         return Instant.ofEpochMilli(shifted).atZone(zone).toLocalDate().toEpochDay()
     }
 
-    fun limits(history: HeartHistory, today: Long, sensitivity: AlertSensitivity, age: Int?, sex: Sex?): HeartLimits {
-        val recent = history.days.filter { it.day in (today - WINDOW_DAYS + 1)..today && !it.unusual }
+    fun limits(
+        history: HeartHistory,
+        today: Long,
+        sensitivity: AlertSensitivity,
+        age: Int?,
+        sex: Sex?,
+        health: HealthContext = HealthContext()
+    ): HeartLimits {
+        val window = if (health.pregnant) PREGNANCY_WINDOW_DAYS else WINDOW_DAYS
+        val recent = history.days.filter { it.day in (today - window + 1)..today && !it.unusual }
         val rest = Histogram.merge(recent.map { it.rest })
         val sleep = Histogram.merge(recent.map { it.sleep })
         val r = ratios(sensitivity)
 
         val restC = confidence(rest.count)
-        val restNormal = blend(rest.median(), priorRest(sex), restC)
+        val restNormal = blend(rest.median(), priorRest(sex, health), restC)
         val sleepC = confidence(sleep.count)
         val sleepNormal = blend(sleep.median(), restNormal * (1 - SLEEP_DIP), sleepC)
 
@@ -197,7 +212,7 @@ object HeartBaseline {
             sleepLow = mix(sleepLow.coerceIn(SLEEP_LOW_BOUNDS), FIXED_SLEEP_LOW, sleepC).coerceIn(SLEEP_LOW_BOUNDS).let { limit ->
                 sleepOwnFloor?.takeIf { it < limit }?.let { maxOf(it, SLEEP_ABSOLUTE_MIN.toDouble()).roundToInt() } ?: limit
             },
-            exerciseMax = exerciseMax(history, today, age),
+            exerciseMax = exerciseMax(history, today, age, health.rateLowering),
             restConfidence = restC,
             sleepConfidence = sleepC,
             sensitivity = sensitivity
@@ -209,8 +224,8 @@ object HeartBaseline {
      * +15. Only earlier days count, from at least [EXERCISE_MIN_DAYS] days with exercise: a peak
      * today must not raise today's limit (the 99th percentile of one short session is its peak).
      */
-    fun exerciseMax(history: HeartHistory, today: Long, age: Int?): Int {
-        val predicted = MaxHr.predicted(age)
+    fun exerciseMax(history: HeartHistory, today: Long, age: Int?, rateLowering: Boolean = false): Int {
+        val predicted = MaxHr.predicted(age, rateLowering)
         val days = history.days.filter { it.day in (today - EXERCISE_DAYS + 1) until today && it.exercise.isNotEmpty() }
         val exercise = Histogram.merge(days.map { it.exercise })
         if (days.size < EXERCISE_MIN_DAYS || exercise.count < EXERCISE_MIN_READINGS) return predicted

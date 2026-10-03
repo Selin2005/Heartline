@@ -20,7 +20,7 @@ object AppInfo {
      * Version of the Terms of Use and Privacy Policy in legal/. Raising it makes the phone ask
      * every user to accept again (and the watch wait until they have).
      */
-    const val TERMS_VERSION = 1
+    const val TERMS_VERSION = 2
     const val TERMS_URL = "$REPO_URL/blob/main/legal/TERMS_OF_USE.md"
     const val PRIVACY_URL = "$REPO_URL/blob/main/legal/PRIVACY_POLICY.md"
 }

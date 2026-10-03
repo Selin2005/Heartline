@@ -49,7 +49,8 @@ class WatchLogExporter(private val context: Context, private val gateway: Sensor
                 "${p.substringAfterLast('.')}=${if (context.checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED) "yes" else "no"}"
             },
             "Monitoring" to "irregularRhythm=${s.irregularRhythmEnabled} hrAlerts=${s.heartRateAlertsEnabled} (${s.lowBpm}-${s.highBpm}) " +
-                "backgroundHr=${s.backgroundHeartRate} interval=${s.irnIntervalMinutes}min",
+                "backgroundHr=${s.backgroundHeartRate} interval=${s.irnIntervalMinutes}min master=${s.heartMonitoring} " +
+                "rhythm=${s.rhythmActive} spo2=${s.spo2Active} temp=${s.skinTempActive} stress=${s.stressActive} sensitivity=${s.alertSensitivity}",
             "Diagnostic logs" to "on=${s.diagnosticLogs} kept=${formatLogSize(HLog.sizeBytes())} raw=${formatLogSize(RawCapture.sizeBytes())}",
         )
     }

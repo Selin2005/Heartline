@@ -1,6 +1,6 @@
 # Heartline Terms of Use
 
-**Version 1 · Effective 26 September 2026**
+**Version 2 · Effective 3 October 2026**
 
 These Terms of Use ("Terms") apply to the Heartline apps for Android phones and Wear OS watches
 ("Heartline" or "the app"), published by Selin ("we", "us") at

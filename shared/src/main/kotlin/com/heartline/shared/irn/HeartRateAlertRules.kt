@@ -72,7 +72,9 @@ class HeartRateAlertRules(
                         )
                     }
                 }
-                held(sorted, restSustainMs, restMaxGapMs) { it.activity.calm && it.avgBpm < lowLimit(it) }?.let { run ->
+                held(sorted, restSustainMs, restMaxGapMs) {
+                    settings.lowHeartRateActive && it.activity.calm && it.avgBpm < lowLimit(it)
+                }?.let { run ->
                     val context = run.last().activity
                     if (ready(AlertKind.LOW_HEART_RATE, context)) {
                         add(

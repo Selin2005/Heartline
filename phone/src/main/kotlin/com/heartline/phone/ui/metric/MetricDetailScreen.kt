@@ -27,7 +27,14 @@ import com.heartline.phone.ui.components.WeekBars
 import com.heartline.phone.ui.components.gutter
 import com.heartline.phone.ui.components.label
 import com.heartline.phone.ui.ecg.EmptyCard
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import com.heartline.phone.ui.model.BackgroundStressUi
 import com.heartline.phone.ui.model.BackgroundVitalsUi
+import com.heartline.shared.profile.StressIndex
+import com.heartline.shared.profile.StressLevel
 import com.heartline.phone.ui.model.MetricDetailUi
 import com.heartline.phone.ui.theme.HeartlineTheme
 import com.heartline.shared.model.Metric
@@ -107,6 +114,86 @@ private fun BackgroundCard(metric: Metric, bg: BackgroundVitalsUi) {
     }
 }
 
+/** Stress the watch read by itself: today in 15-minute slots, the week, and sleep HRV. */
+@Composable
+private fun StressCard(st: BackgroundStressUi) {
+    val colors = HeartlineTheme.colors
+    val color = colors.metric(Metric.STRESS)
+    fun levelText(score: Int?) = when (score?.let { StressIndex.level(it) }) {
+        StressLevel.LOW -> R.string.stress_level_low
+        StressLevel.MEDIUM -> R.string.stress_level_medium
+        StressLevel.HIGH -> R.string.stress_level_high
+        null -> null
+    }
+    RoundedCard(Modifier.gutter()) {
+        CardTitle(stringResource(R.string.vitals_background_title))
+        Text(stringResource(R.string.stress_background_caption), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+        Spacer(Modifier.height(12.dp))
+        Row {
+            StatColumn(
+                stringResource(R.string.stress_today),
+                st.todayAverage?.let { a -> "$a · ${levelText(a)?.let { stringResource(it) } ?: ""}" } ?: "–",
+                Modifier.weight(1f),
+            )
+            StatColumn(stringResource(R.string.stress_high_time), stringResource(R.string.stress_minutes, st.highMinutes), Modifier.weight(1f))
+            StatColumn(
+                stringResource(R.string.stress_night_hrv),
+                st.lastNightRmssd?.let { n -> st.usualNightRmssd?.let { u -> stringResource(R.string.stress_night_value, n, u) } ?: "$n ms" } ?: "–",
+                Modifier.weight(1f),
+            )
+        }
+        if (st.today.any { it != null }) {
+            Spacer(Modifier.height(16.dp))
+            Text(stringResource(R.string.stress_today_chart), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            val track = colors.surfaceVariant
+            Canvas(Modifier.fillMaxWidth().height(56.dp)) {
+                val slot = size.width / st.today.size
+                val w = slot * 0.7f
+                st.today.forEachIndexed { i, score ->
+                    val left = i * slot + (slot - w) / 2
+                    drawRoundRect(track, Offset(left, 0f), Size(w, size.height), CornerRadius(w / 2))
+                    if (score != null) {
+                        val h = (score.coerceAtLeast(6) / 100f) * size.height
+                        val alpha = when (StressIndex.level(score)) {
+                            StressLevel.LOW -> 0.35f
+                            StressLevel.MEDIUM -> 0.65f
+                            StressLevel.HIGH -> 1f
+                        }
+                        drawRoundRect(color.copy(alpha = alpha), Offset(left, size.height - h), Size(w, h), CornerRadius(w / 2))
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth()) {
+                Text("7:00", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant, modifier = Modifier.weight(1f))
+                Text("15:00", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Text("23:00", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.End)
+            }
+        }
+        if (st.week.any { it != null }) {
+            Spacer(Modifier.height(16.dp))
+            Text(stringResource(R.string.stress_week), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
+            val days = java.time.format.TextStyle.SHORT
+            val today = java.time.LocalDate.now()
+            WeekBars(
+                st.week.map { it?.toFloat() },
+                (6 downTo 0).map { today.minusDays(it.toLong()).dayOfWeek.getDisplayName(days, java.util.Locale.getDefault()) },
+                color,
+                contentDescription = stringResource(R.string.stress_week),
+            )
+        }
+        st.weekAboveUsual?.let {
+            Spacer(Modifier.height(12.dp))
+            Text(stringResource(R.string.stress_insight, it), style = MaterialTheme.typography.bodyMedium, color = colors.onBackground)
+        }
+        if (st.learning) {
+            Spacer(Modifier.height(12.dp))
+            Text(stringResource(R.string.stress_learning), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+        }
+    }
+}
+
 /** Shared detail layout for SpO2, skin temperature, body composition and stress. */
 @Composable
 fun MetricDetailScreen(state: MetricDetailUi, onBack: (() -> Unit)? = null, onMeasureOnWatch: (() -> Unit)? = null) {
@@ -121,10 +208,11 @@ fun MetricDetailScreen(state: MetricDetailUi, onBack: (() -> Unit)? = null, onMe
             item { TonalPillButton(stringResource(R.string.action_measure_on_watch), onClick = measure, modifier = Modifier.gutter(), color = color) }
         }
         state.background?.let { bg -> item { BackgroundCard(state.metric, bg) } }
+        state.stress?.let { st -> item { StressCard(st) } }
         val latest = state.latest
         if (latest == null) {
             // With background readings only, no measurement of your own yet, there is nothing more to show.
-            if (state.background == null) {
+            if (state.background == null && state.stress == null) {
                 item { EmptyCard(stringResource(R.string.ecg_empty_title), stringResource(R.string.metric_empty_body)) }
             }
         } else {

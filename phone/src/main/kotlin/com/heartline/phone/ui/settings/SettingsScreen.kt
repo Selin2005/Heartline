@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.rounded.Alarm
+import androidx.compose.material.icons.rounded.SelfImprovement
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.TaskAlt
 import androidx.compose.foundation.layout.Box
@@ -105,6 +106,8 @@ sealed interface SettingChange {
     data class HeartPart(val on: Boolean) : SettingChange
     data class Spo2Part(val on: Boolean) : SettingChange
     data class TempPart(val on: Boolean) : SettingChange
+    data class StressPart(val on: Boolean) : SettingChange
+    data class StressNotifications(val on: Boolean) : SettingChange
     data class CalibrationReminder(val on: Boolean) : SettingChange
     data class DailyReminder(val on: Boolean) : SettingChange
     data class DailyReminderTime(val minuteOfDay: Int) : SettingChange
@@ -125,6 +128,8 @@ sealed interface SettingChange {
         is HeartPart -> s.withHeartAlerts(on)
         is Spo2Part -> s.copy(spo2Monitoring = on)
         is TempPart -> s.copy(skinTempMonitoring = on)
+        is StressPart -> s.copy(stressMonitoring = on)
+        is StressNotifications -> s.copy(stressNotifications = on)
         is CalibrationReminder -> s.copy(calibrationReminder = on)
         is DailyReminder -> s.copy(dailyReminder = on)
         is DailyReminderTime -> s.copy(dailyReminderMinute = minuteOfDay)
@@ -182,6 +187,10 @@ fun SettingsScreen(
     initialOffAllDay: Boolean = false,
     /** Blood-oxygen and temperature normals and limits from the watch (null until sent). */
     vitalsLimits: VitalsLimits? = null,
+    /** The stress normal from the watch (null until sent). */
+    stressLimits: com.heartline.shared.stress.StressLimits? = null,
+    /** Opens the monitoring setup to change the health answers. */
+    onHealthAnswers: () -> Unit = {},
 ) {
     var editingPrompt by remember { mutableStateOf(false) }
     var offStep by remember { mutableIntStateOf(initialOffStep) }
@@ -280,6 +289,23 @@ fun SettingsScreen(
                         showDivider = true,
                     )
                     CardRow(
+                        stringResource(R.string.settings_part_stress),
+                        subtitle = stringResource(
+                            if (monitor.health.hrvUnreadable) R.string.settings_part_stress_unavailable else R.string.settings_part_stress_summary,
+                        ),
+                        leading = { IconBadge(Icons.Rounded.SelfImprovement, colors.metric(Metric.STRESS)) },
+                        trailing = { OneUiSwitch(monitor.stressMonitoring) { onChange(SettingChange.StressPart(it)) } },
+                        showDivider = true,
+                    )
+                    if (monitor.stressActive) {
+                        CardRow(
+                            stringResource(R.string.settings_stress_notifications),
+                            leading = { Spacer(Modifier.size(40.dp)) },
+                            trailing = { OneUiSwitch(monitor.stressNotifications) { onChange(SettingChange.StressNotifications(it)) } },
+                            showDivider = true,
+                        )
+                    }
+                    CardRow(
                         stringResource(R.string.settings_sensitivity),
                         subtitle = stringResource(monitor.alertSensitivity.label),
                         leading = { Spacer(Modifier.size(40.dp)) },
@@ -297,9 +323,17 @@ fun SettingsScreen(
                             },
                             vitalsLimits?.takeIf { monitor.spo2Monitoring }?.let { stringResource(R.string.settings_limits_spo2, it.spo2Low, it.spo2NightNormal) },
                             vitalsLimits?.takeIf { monitor.skinTempMonitoring }?.let { stringResource(R.string.settings_limits_temp, "%.1f".format(it.tempRise)) },
+                            stressLimits?.usualRmssd?.takeIf { monitor.stressActive }?.let { stringResource(R.string.settings_limits_stress, it.toInt()) },
                         ).joinToString("\n"),
                         leading = { Spacer(Modifier.size(40.dp)) },
                         subtitleMaxLines = 8,
+                        showDivider = true,
+                    )
+                    CardRow(
+                        stringResource(R.string.settings_health_answers),
+                        subtitle = stringResource(if (monitor.health.answered) R.string.settings_health_answers_set else R.string.settings_health_answers_none),
+                        leading = { Spacer(Modifier.size(40.dp)) },
+                        onClick = onHealthAnswers,
                     )
                 }
             }
@@ -647,7 +681,7 @@ private fun buildLabel(versionName: String): String {
     }
 }
 
-private val AlertSensitivity.label: Int get() = when (this) {
+internal val AlertSensitivity.label: Int get() = when (this) {
     AlertSensitivity.LOW -> R.string.sensitivity_low
     AlertSensitivity.STANDARD -> R.string.sensitivity_standard
     AlertSensitivity.HIGH -> R.string.sensitivity_high

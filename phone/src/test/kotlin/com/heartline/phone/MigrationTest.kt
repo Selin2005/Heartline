@@ -100,6 +100,20 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate7To8AddsStressAndAlertVitals() {
+        helper.createDatabase(DB, 7).use { db ->
+            db.execSQL("INSERT INTO alerts (id, kind, atMs, bpm, windowCount, read) VALUES ('a', 'LOW_HEART_RATE', 1, 88, 0, 0)")
+        }
+        helper.runMigrationsAndValidate(DB, 8, true, HeartlineDatabase.MIGRATION_7_8).use { db ->
+            db.execSQL("INSERT INTO stress_samples (tsMs, rmssdMs, bpm, score, context) VALUES (1, 42.0, 66, 31, 'REST')")
+            db.query("SELECT vital, value FROM alerts").use { c ->
+                c.moveToFirst()
+                assertEquals(true, c.isNull(0) && c.isNull(1))
+            }
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

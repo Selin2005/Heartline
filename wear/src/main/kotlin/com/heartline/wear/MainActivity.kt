@@ -49,5 +49,6 @@ class MainActivity : ComponentActivity() {
         const val ROUTE_ECG = "ecg"
         const val ROUTE_HEART_RATE = "heart_rate"
         const val ROUTE_SETUP = "setup"
+        const val ROUTE_BREATHE = "breathe"
     }
 }

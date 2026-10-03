@@ -20,6 +20,8 @@ enum class Buzz(val timings: LongArray, val amplitudes: IntArray) {
     STARTED(longArrayOf(0, 30, 70, 30), intArrayOf(0, 160, 0, 160)),
     DONE(longArrayOf(0, 180), intArrayOf(0, 110)),
     ATTENTION(longArrayOf(0, 90, 90, 90, 90, 90), intArrayOf(0, 255, 0, 255, 0, 255)),
+    /** A soft tick between breathing in and out. */
+    BREATH(longArrayOf(0, 40), intArrayOf(0, 70)),
     CELEBRATE(longArrayOf(0, 25, 50, 25, 50, 25, 50, 120), intArrayOf(0, 120, 0, 160, 0, 200, 0, 255)),
     ;
 

@@ -11,6 +11,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.MonitorHeart
 import androidx.compose.material.icons.rounded.NorthEast
+import androidx.compose.material.icons.rounded.Thermostat
+import androidx.compose.material.icons.rounded.SelfImprovement
+import androidx.compose.material.icons.rounded.WaterDrop
 import androidx.compose.material.icons.rounded.SouthEast
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -259,15 +262,33 @@ fun AlertsScreen(alerts: List<AlertUi>, onBack: (() -> Unit)? = null) {
         item {
             RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
                 alerts.forEachIndexed { i, alert ->
-                    val (title, icon, tint) = if (alert.trend != null) {
+                    val vital = alert.vital
+                    val (title, icon, tint) = if (vital != null) {
+                        Triple(
+                            com.heartline.phone.notify.PhoneNotifier.alertTitle(com.heartline.shared.hr.HealthAlert(alert.id, alert.kind, 0, alert.bpm, vital = vital)),
+                            when (vital) {
+                                com.heartline.shared.hr.VitalAlert.SPO2_LOW, com.heartline.shared.hr.VitalAlert.SPO2_NIGHTS -> Icons.Rounded.WaterDrop
+                                com.heartline.shared.hr.VitalAlert.STRESS -> Icons.Rounded.SelfImprovement
+                                else -> Icons.Rounded.Thermostat
+                            },
+                            colors.statusWarn,
+                        )
+                    } else if (alert.trend != null) {
                         Triple(if (alert.trend == HeartTrend.HIGH_NORMAL) R.string.alert_high_normal_title else R.string.alert_trend_title, Icons.Rounded.NorthEast, colors.statusWarn)
                     } else when (alert.kind) {
                         AlertKind.IRREGULAR_RHYTHM -> Triple(R.string.alert_irn_title, Icons.Rounded.MonitorHeart, colors.statusAlert)
                         AlertKind.HIGH_HEART_RATE -> Triple(R.string.alert_high_title, Icons.Rounded.NorthEast, colors.statusWarn)
                         AlertKind.LOW_HEART_RATE -> Triple(R.string.alert_low_title, Icons.Rounded.SouthEast, colors.statusWarn)
                     }
-                    val detail = when (alert.kind) {
-                        AlertKind.IRREGULAR_RHYTHM -> listOfNotNull(
+                    val detail = when {
+                        vital != null -> alert.value?.let { v ->
+                            when (vital) {
+                                com.heartline.shared.hr.VitalAlert.SPO2_LOW, com.heartline.shared.hr.VitalAlert.SPO2_NIGHTS -> "${v.toInt()} %"
+                                com.heartline.shared.hr.VitalAlert.STRESS -> stringResource(R.string.alert_stress_score, v.toInt())
+                                else -> "%+.1f °C".format(v)
+                            }
+                        } ?: ""
+                        alert.kind == AlertKind.IRREGULAR_RHYTHM -> listOfNotNull(
                             stringResource(R.string.alert_irn_detail, alert.windows),
                             when (alert.ecgRegular) {
                                 true -> stringResource(R.string.alert_ecg_regular)

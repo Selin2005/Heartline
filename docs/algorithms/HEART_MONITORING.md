@@ -236,8 +236,11 @@ Health monitoring           [on]   master switch; turning it off asks twice
    ├─ Heart                 [on]   high/low heart rate, irregular rhythm, resting trend
    ├─ Blood oxygen          [on]   hourly SpO2 and its notices (VITALS_MONITORING.md)
    ├─ Skin temperature      [on]   temperature in sleep and by day, and its notices
-   ├─ Alert sensitivity  Standard  for all three parts
-   └─ Your limits                  the limits in use (read only)
+   ├─ Stress                [on]   from the rhythm windows (STRESS_MONITORING.md)
+   │    └─ Stress notifications [on]
+   ├─ Alert sensitivity  Standard  for all parts
+   ├─ Your limits                  the limits in use (read only)
+   └─ Your health answers          the monitoring setup's questions (below)
 ```
 
 - **All-day heart rate** (`backgroundHeartRate`) records heart rate in the background. That feeds
@@ -271,6 +274,41 @@ Health monitoring           [on]   master switch; turning it off asks twice
   irregular-rhythm rule.
 - **Your limits** (read only) shows the normal and the limits in use, or "learning", for each
   active part.
+
+### The monitoring setup (`MonitoringSetupFlow`, phone)
+
+The setup runs on first use, after the profile, and once after an update that asks something
+new (`MonitorSettings.SETUP_VERSION` above the version the user went through). Until it is
+answered after an update, monitoring keeps running as it was. Settings → *Your health answers*
+opens it again. The watch shows "Finish setting up health monitoring on your phone" until the
+questions are answered. Its pages:
+
+1. **Health monitoring (required):** what it does, battery, the red light, not a diagnosis.
+   Turn on, or not now.
+2. **Parts:** heart, blood oxygen, skin temperature and stress, all suggested on.
+3. **Health questions (required):** yes, no, or "not sure / rather not say" (counted as no).
+
+   | Question | Effect |
+   |---|---|
+   | Medicine that slows the heart rate (beta blocker) | Exercise maximum from Brawner 2004 (164 − 0.7 × age) instead of Tanaka |
+   | Diagnosed atrial fibrillation | No rhythm checks and no stress (HRV can't be read). High and low heart rate stay |
+   | Pacemaker or ICD | No rhythm checks, no low heart rate notices and no stress. High heart rate stays |
+   | Lung condition with usually low oxygen (COPD) | Oxygen limit 88 % at every sensitivity (BTS target 88–92 %), and night lows counted below 88 |
+
+4. **Fine-tune (optional, can be skipped):**
+   - sensitivity;
+   - endurance training: the first guess of the resting rate is 50;
+   - pregnancy: no temperature notices, and a 14-day heart-rate normal;
+   - stress notifications;
+   - blood oxygen in sleep;
+   - usual sleep hours: these stand in when the watch can't recognise sleep;
+   - quiet hours (default 22:00–7:00): no stress or trend notices then, while heart and oxygen
+     notices always come.
+5. **Summary:** what is on, and what the answers changed.
+
+The answers are stored in `MonitorSettings.health` (`HealthContext`) on the phone and the watch
+only. They are not in exports or diagnostic logs. The rhythm switch older watches read
+(`irregularRhythmEnabled`) follows the answers too.
 
 Older versions:
 - `heartMonitoring` defaults to on unless both old notification parts (high/low alerts, rhythm)

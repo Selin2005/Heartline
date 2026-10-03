@@ -98,12 +98,18 @@ class HomeViewModel(
         repository.observe(RecordKind.SKIN_TEMPERATURE),
         repository.observe(RecordKind.BODY_COMPOSITION),
         repository.observe(RecordKind.STRESS),
-    ) { spo2, temp, body, stress ->
+        heart.latestStress,
+    ) { spo2, temp, body, stress, background ->
         buildMap {
             listOf(Metric.SPO2 to spo2, Metric.SKIN_TEMPERATURE to temp, Metric.BODY_COMPOSITION to body, Metric.STRESS to stress).forEach { (metric, list) ->
                 MetricFormat.readings(list.take(8), formatter).firstOrNull()?.let { r ->
                     put(metric, TileValue(r.value, r.unit, "${r.date} ${r.time}", r.details.firstOrNull()?.second))
                 }
+            }
+            // The watch's background stress, when newer than the last measurement.
+            val manualAt = stress.firstOrNull()?.entity?.startedAtMs ?: 0
+            background?.takeIf { it.tsMs > manualAt && it.score != null }?.let { b ->
+                put(Metric.STRESS, TileValue("${b.score}", null, "${formatter.date(b.tsMs)} ${formatter.time(b.tsMs)}", formatter.backgroundLabel))
             }
         }
     }
@@ -114,7 +120,7 @@ class HomeViewModel(
         settings.monitor,
         combine(bp.readings, bp.calibration) { r, c -> r to c },
         others,
-    ) { records, minute, monitor, (bpReadings, calibration), otherTiles ->
+    ) { records, minute, _, (bpReadings, calibration), otherTiles ->
         val latest = records.firstOrNull()
         val tiles = buildMap {
             putAll(otherTiles)
@@ -137,7 +143,6 @@ class HomeViewModel(
         HomeState(
             latestEcg = latest?.let { formatter.ecg(it, repository.displayWave(it)) },
             tiles = tiles,
-            irregularRhythmNotifications = monitor.irregularRhythmEnabled,
         )
     }.combine(profile) { home, p ->
         val local = java.time.Instant.ofEpochMilli(now()).atZone(java.time.ZoneId.systemDefault())
@@ -162,6 +167,8 @@ class SettingsViewModel(
     val heartLimits: StateFlow<com.heartline.shared.hr.HeartLimits?> = settings.heartLimits.stateIn(viewModelScope, WHILE_SUBSCRIBED, null)
 
     val vitalsLimits: StateFlow<com.heartline.shared.vitals.VitalsLimits?> = settings.vitalsLimits.stateIn(viewModelScope, WHILE_SUBSCRIBED, null)
+
+    val stressLimits: StateFlow<com.heartline.shared.stress.StressLimits?> = settings.stressLimits.stateIn(viewModelScope, WHILE_SUBSCRIBED, null)
 
     val sharing: StateFlow<SettingsRepository.SharingPrefs> = settings.sharing.stateIn(viewModelScope, WHILE_SUBSCRIBED, SettingsRepository.SharingPrefs())
 
@@ -222,4 +229,28 @@ class OnboardingViewModel(private val settings: SettingsRepository) : ViewModel(
     fun finish() = viewModelScope.launch { settings.setOnboarded() }
 
     fun acceptTerms() = viewModelScope.launch { settings.acceptTerms() }
+
+    /** Null while loading; the monitoring setup version gone through (0 = never). */
+    val monitoringSetup: StateFlow<Int?> = settings.monitoringSetupVersion.map<Int, Int?> { it }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+}
+
+/**
+ * The monitoring setup (first run, once after an update, and Settings → Your health answers):
+ * saves the chosen settings, sends them to the watch and marks the setup done.
+ */
+class MonitoringSetupViewModel(
+    private val settings: SettingsRepository,
+    private val sync: PhoneSyncEngine,
+    private val onApplied: (MonitorSettings) -> Unit = {},
+) : ViewModel() {
+    /** Null while loading. */
+    val current: StateFlow<MonitorSettings?> = settings.monitor.map<MonitorSettings, MonitorSettings?> { it }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    fun finish(result: MonitorSettings, onDone: () -> Unit = {}) = viewModelScope.launch {
+        val next = settings.update { result }
+        settings.setMonitoringSetupDone()
+        sync.sendSettings(next)
+        onApplied(next)
+        onDone()
+    }
 }

@@ -178,7 +178,15 @@ val wearModule = module {
     single { com.heartline.wear.tile.TileUpdates(androidContext(), get(), get(), get()) }
     single { com.heartline.wear.tile.TileDataLoader(androidContext(), get(), get(), get(), get()) }
     single {
-        val hr = StressSource(get(), skinConductance = { (get<SensorGateway>() as? SdkSensorGateway)?.readSkinConductance() })
+        val hr = StressSource(
+            get(),
+            skinConductance = { (get<SensorGateway>() as? SdkSensorGateway)?.readSkinConductance() },
+            scorer = { rmssd, bpm ->
+                val history = get<WatchSettingsStore>().stress
+                val today = java.time.LocalDate.now().toEpochDay()
+                com.heartline.shared.stress.StressBaseline.score(rmssd, bpm, com.heartline.shared.stress.StressBaseline.normal(history, today))
+            },
+        )
         if (BuildConfig.USE_FAKE_SENSORS) {
             QuickSources(FakeQuickSource.all() + hr)
         } else {

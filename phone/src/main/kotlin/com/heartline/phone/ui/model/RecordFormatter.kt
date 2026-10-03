@@ -19,6 +19,8 @@ class RecordFormatter(
     private val yesterdayLabel: String,
     private val calibrationDaysPattern: String = "Calibration valid · %d days left",
     val calibrationNeeded: String = "Calibration needed",
+    /** Under a value the watch measured by itself (background stress). */
+    val backgroundLabel: String = "Measured by your watch",
     private val zone: ZoneId = ZoneId.systemDefault(),
     private val locale: Locale = Locale.getDefault(),
     private val today: () -> LocalDate = { LocalDate.now(zone) },
