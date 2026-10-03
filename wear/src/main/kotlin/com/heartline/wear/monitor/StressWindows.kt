@@ -79,3 +79,33 @@ object StressWindows {
         }
     }
 }
+
+/**
+ * Times a background window from its first reliable reading, not from switching the sensor on:
+ * right after another measurement (blood oxygen) the heart-rate tracker can report "initial" (status
+ * 0, rate 0) for up to a minute, and a window timed from the start was all warm-up ("weak signal" in
+ * a real Galaxy Watch8 log). Warm-up readings are dropped; without a reliable one within [warmupMs]
+ * the window ends.
+ */
+class WindowGate(private val windowMs: Long, private val warmupMs: Long, private val openedAtMs: Long) {
+    enum class Decision { SKIP, TAKE, STOP }
+
+    var startedAtMs: Long? = null
+        private set
+    var warmupSamples = 0
+        private set
+
+    fun decide(sample: HrSample, nowMs: Long): Decision {
+        val start = startedAtMs
+        if (start == null) {
+            if (nowMs - openedAtMs > warmupMs) return Decision.STOP
+            if (!(sample.reliable && sample.onBody && sample.bpm > 0)) {
+                warmupSamples++
+                return Decision.SKIP
+            }
+            startedAtMs = sample.tsMs
+            return Decision.TAKE
+        }
+        return if (sample.tsMs - start >= windowMs) Decision.STOP else Decision.TAKE
+    }
+}

@@ -114,6 +114,19 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate8To9KeepsTheWatchVersionOfAnAlert() {
+        helper.createDatabase(DB, 8).use { db ->
+            db.execSQL("INSERT INTO alerts (id, kind, atMs, bpm, windowCount, read) VALUES ('a', 'IRREGULAR_RHYTHM', 1, 90, 5, 0)")
+        }
+        helper.runMigrationsAndValidate(DB, 9, true, HeartlineDatabase.MIGRATION_8_9).use { db ->
+            db.query("SELECT watchVersion FROM alerts").use { c ->
+                c.moveToFirst()
+                assertEquals(true, c.isNull(0))
+            }
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

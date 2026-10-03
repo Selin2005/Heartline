@@ -65,10 +65,16 @@ It uses the same sources as a manual measurement, through `VitalsMeasurer`.
   sensor locked onto noise.
 
 **Skin temperature.** A reading is kept only when:
-- it completed (status 0), with skin between 25 and 42 °C;
-- the skin is at least 1.5 °C warmer than the air around the watch. Otherwise the watch is not
-  on a wrist, or the room is as warm as skin;
-- the air has not changed by more than 5 °C since the last reading (a shower, or going outside).
+- it completed (status 0), with skin between 30 and 40 °C. A watch lying on a table cools to
+  the room, below 30 °C, while covered wrist skin stays at 30–35 °C;
+- the off-body sensor says the watch is worn (checked by the worker);
+- the "ambient" value has not changed by more than 5 °C since the last reading (a shower, or
+  going outside).
+
+The ambient value is **not** compared with skin. An earlier rule required skin at least 1.5 °C
+warmer than ambient. A real Galaxy Watch8 Classic log showed that on Samsung watches the
+ambient sensor sits inside the case and reads warmer than skin when worn (skin 34.7 °C,
+ambient 35.9 °C), so that rule rejected every reading.
 
 ## 4. The usual values (`VitalsBaseline`)
 
@@ -113,7 +119,7 @@ An older phone shows these notices with a heart-rate title instead. Update both 
 |---|---|---|
 | Low | 88 % | Occult hypoxaemia (Sjoding 2020); BTS target for people at risk |
 | **Standard** | **90 %** | Clinical hypoxaemia |
-| High | 92 % | Lowest stable value in healthy older adults (BTS) |
+| High | 92 %, if the wearer's usual by day is at least 95 %; otherwise usual − 3, never below 90 % | Lowest stable value in healthy older adults (BTS); guarded for wrists that read low |
 
 - **Clinical, not personal.** The limit is the same for everyone, so a low usual value (an
   older wearer at 93 %) can't hide a real fall.
@@ -123,13 +129,25 @@ An older phone shows these notices with a heart-rate title instead. Update both 
   - Two in a row was still too many false notices in the simulation (section 8).
 - **Cooldown:** at most one such notice in 6 hours.
 
+**Why high sensitivity is guarded.** A real Galaxy Watch8 Classic read 90–92 % at rest for a
+healthy wearer, within a wrist oximeter's 2–4 % error of 92 %. A flat 92 % limit would re-check
+(with the red light) most hours and give false notices. So 92 % applies only to wearers whose own
+usual by day is at least 95 %. For the others the limit is their usual − 3 %, never below the
+clinical 90 %, and it is 90 % until their usual is learnt (20 readings). The simulation checks
+this (`highSensitivityOnAWristThatReadsLow`): no false notices for a 93 % wrist or a typical
+97 % one, and a sustained 88 % still caught.
+
 ### Lower in sleep than usual (`afterNight`, SPO2_NIGHTS)
 
 This is checked once a day, at or after 10:00. It notifies when either holds:
 - the night median is at least **3 points** (low 4, high 2) below the wearer's usual night on
   **2 of the last 3 nights**. "Usual" is computed without those 3 nights, and needs at least
   **5 of the wearer's own nights**;
-- **3 or more first readings below 90 %** in one night. Re-checks are not counted.
+- **3 or more readings below 90 % in one night, each confirmed by its re-check.** A low reading
+  whose re-check is back above 90 % was an artefact and does not count.
+
+At high sensitivity (a 2-point drop), all 3 of the last 3 nights must be lower, not 2: a
+2-point drop over 2 nights is within a wrist oximeter's noise.
 
 A trip to high altitude gives this notice too. The wording names altitude, illness and sleep,
 and diagnoses nothing.

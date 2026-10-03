@@ -45,6 +45,8 @@ data class AlertEntity(
     /** A blood-oxygen, temperature, combined or stress notice and its value (v8). */
     val vital: VitalAlert? = null,
     val value: Float? = null,
+    /** The watch app version that sent it (v9): another version than the phone's runs other algorithms. */
+    val watchVersion: String? = null,
 )
 
 /** A background stress reading from the watch's rhythm windows (v8); [score] is null in sleep. */
@@ -120,8 +122,9 @@ interface HeartDao {
     @Query("SELECT * FROM hr_minutes ORDER BY minuteStartMs DESC LIMIT 1")
     fun latestMinute(): Flow<HrMinuteEntity?>
 
+    /** @return the new row id, or -1 when the alert was already stored (a resend). */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertAlert(alert: AlertEntity)
+    suspend fun insertAlert(alert: AlertEntity): Long
 
     @Query("SELECT * FROM alerts ORDER BY atMs DESC")
     fun alerts(): Flow<List<AlertEntity>>

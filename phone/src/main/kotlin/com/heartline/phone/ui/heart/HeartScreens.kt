@@ -308,9 +308,10 @@ fun AlertsScreen(alerts: List<AlertUi>, onBack: (() -> Unit)? = null) {
                             alert.context?.let { stringResource(it.label) },
                         ).joinToString(" · ")
                     }
+                    val origin = alert.otherWatchVersion?.let { " · " + stringResource(R.string.alert_other_watch_version, it) }.orEmpty()
                     CardRow(
                         stringResource(title),
-                        subtitle = "${alert.date} · ${alert.time}${if (detail.isNotEmpty()) " · $detail" else ""}",
+                        subtitle = "${alert.date} · ${alert.time}${if (detail.isNotEmpty()) " · $detail" else ""}$origin",
                         leading = { IconBadge(icon, tint) },
                         showDivider = i < alerts.lastIndex,
                     )

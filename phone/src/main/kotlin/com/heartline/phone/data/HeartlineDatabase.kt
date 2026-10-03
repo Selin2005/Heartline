@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [RecordEntity::class, HrMinuteEntity::class, AlertEntity::class, Spo2SampleEntity::class, TempSampleEntity::class, StressSampleEntity::class, BpCalibrationEntity::class, BpValidationEntity::class],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class HeartlineDatabase : RoomDatabase() {
@@ -103,9 +103,16 @@ abstract class HeartlineDatabase : RoomDatabase() {
             }
         }
 
+        /** v9: the watch app version that sent each alert. */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `alerts` ADD COLUMN `watchVersion` TEXT")
+            }
+        }
+
         fun create(context: Context): HeartlineDatabase =
             Room.databaseBuilder(context, HeartlineDatabase::class.java, "heartline.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                 .build()
 
         fun inMemory(context: Context): HeartlineDatabase =

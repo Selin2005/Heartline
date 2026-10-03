@@ -234,8 +234,11 @@ fun HeartlineApp(
                         linkVm.refresh()
                         onPauseOrDispose {}
                     }
+                    val updatePrefs by koinInject<com.heartline.phone.update.UpdateRepository>().prefs.collectAsStateWithLifecycle(null)
                     HomeScreen(
                         state,
+                        versionMismatch = updatePrefs?.watchVersion?.takeIf { it != BuildConfig.VERSION_NAME }?.let { it to BuildConfig.VERSION_NAME },
+                        onUpdates = { navController.navigate(Routes.UPDATES) },
                         watchLink = link,
                         onWatchRetry = linkVm::refresh,
                         onOpenWatch = linkVm::openWatchApp,

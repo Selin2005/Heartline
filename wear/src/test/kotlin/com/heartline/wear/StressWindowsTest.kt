@@ -48,4 +48,23 @@ class StressWindowsTest {
         assertNotNull(StressWindows.measure(window(swing = 5)))
         assertTrue(StressWindows.measure(window(swing = 5))!!.first < 15.0)
     }
+
+    @Test
+    fun aWindowIsTimedFromTheFirstReliableReading() {
+        // After a blood-oxygen measurement: 30 s of "initial" readings (status 0, rate 0), then good ones.
+        val opened = 1_000_000L
+        val gate = com.heartline.wear.monitor.WindowGate(75_000, 45_000, opened)
+        val decisions = (0 until 120).map { i ->
+            val warming = i < 30
+            gate.decide(HrSample(opened + i * 1_000L, if (warming) 0 else 80, listOf(750), reliable = !warming), opened + i * 1_000L)
+        }
+        assertEquals(30, decisions.count { it == com.heartline.wear.monitor.WindowGate.Decision.SKIP })
+        assertEquals(75, decisions.count { it == com.heartline.wear.monitor.WindowGate.Decision.TAKE })
+        assertEquals(opened + 30_000, gate.startedAtMs)
+        // Never reliable: it gives up after the warm-up.
+        val never = com.heartline.wear.monitor.WindowGate(75_000, 45_000, opened)
+        val stop = (0 until 60).first { i -> never.decide(HrSample(opened + i * 1_000L, 0, emptyList(), reliable = false), opened + i * 1_000L) == com.heartline.wear.monitor.WindowGate.Decision.STOP }
+        assertEquals(46, stop)
+        assertNull(never.startedAtMs)
+    }
 }

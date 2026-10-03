@@ -14,7 +14,9 @@ import com.heartline.shared.nav.EntryLinks
 import com.heartline.shared.nav.EntrySource
 import androidx.core.app.NotificationCompat
 import com.heartline.shared.hr.AlertKind
+import com.heartline.datalayer.diag.HLog
 import com.heartline.shared.hr.HealthAlert
+import com.heartline.shared.hr.describe
 import com.heartline.shared.hr.HrBatch
 import com.heartline.shared.hr.ActivityChange
 import com.heartline.shared.hr.ActivityTimeline
@@ -347,6 +349,8 @@ class WatchMonitorOutput(
     }
 
     override suspend fun enqueueAlert(alert: HealthAlert) {
+        // Why it fired, so a notice can be checked from an exported log.
+        HLog.i("Heartline/Alert", "fired ${alert.describe()}")
         store.enqueueMessage(alert.id, Protocol.ALERT, Protocol.json.encodeToString(alert).encodeToByteArray())
         sync.schedule()
     }

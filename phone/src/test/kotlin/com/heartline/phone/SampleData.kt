@@ -227,7 +227,7 @@ object SampleData {
     val alerts = listOf(
         AlertUi("a5", AlertKind.HIGH_HEART_RATE, "Today", "3:45 PM", 79, 0, read = false, vital = com.heartline.shared.hr.VitalAlert.STRESS, value = 78f),
         AlertUi("a4", AlertKind.HIGH_HEART_RATE, "Sep 25", "10:05 AM", null, 0, read = false, vital = com.heartline.shared.hr.VitalAlert.TEMPERATURE, value = 1.2f),
-        AlertUi("a1", AlertKind.IRREGULAR_RHYTHM, "Sep 21", "3:12 AM", 94, 5, read = false, ecgRegular = true),
+        AlertUi("a1", AlertKind.IRREGULAR_RHYTHM, "Sep 21", "3:12 AM", 94, 5, read = false, ecgRegular = true, otherWatchVersion = "0.0.2.115-beta.1"),
         AlertUi("a0", AlertKind.HIGH_HEART_RATE, "Sep 23", "10:00 AM", 62, 0, read = false, threshold = 57, context = com.heartline.shared.hr.HrContext.SLEEP, normal = 51, trend = com.heartline.shared.hr.HeartTrend.ELEVATED_RESTING),
         AlertUi("a2", AlertKind.HIGH_HEART_RATE, "Sep 14", "11:40 PM", 104, 0, read = true, threshold = 90, context = com.heartline.shared.hr.HrContext.REST, normal = 58),
         AlertUi("a3", AlertKind.LOW_HEART_RATE, "Aug 30", "4:05 AM", 33, 0, read = true, threshold = 35, context = com.heartline.shared.hr.HrContext.SLEEP),

@@ -39,8 +39,11 @@ class VitalsTest {
         assertFalse(VitalsQuality.spo2(97, 90, 60, moved = false)) // its pulse doesn't match the wrist's
         assertFalse(VitalsQuality.spo2(65, null, null, moved = false))
         assertTrue(VitalsQuality.temperature(34.2f, 24f, 24.5f))
-        assertFalse(VitalsQuality.temperature(26f, 25.5f, null)) // as warm as the air: not on a wrist
-        assertFalse(VitalsQuality.temperature(34f, 30f, 22f)) // air changed by 8 °C: a shower, outside
+        // Real Galaxy Watch8 Classic readings: the case's "ambient" is warmer than skin when worn.
+        assertTrue(VitalsQuality.temperature(34.725f, 35.99f, 35.96f))
+        assertTrue(VitalsQuality.temperature(34.259f, 34.818f, null))
+        assertFalse(VitalsQuality.temperature(26f, 25.5f, null)) // cooled to the room: on a table
+        assertFalse(VitalsQuality.temperature(34f, 30f, 22f)) // ambient changed by 8 °C: a shower, outside
     }
 
     @Test

@@ -50,6 +50,9 @@ fun HomeScreen(
     watchLink: WatchLinkUi? = null,
     onWatchRetry: () -> Unit = {},
     onOpenWatch: () -> Unit = {},
+    /** The watch app's version when it differs from this phone's (watch, phone), or null. */
+    versionMismatch: Pair<String, String>? = null,
+    onUpdates: () -> Unit = {},
 ) {
     val latest = state.latestEcg
     // A live probe wins over the stored name, so the header never says "connected" above a "no watch" card.
@@ -65,6 +68,18 @@ fun HomeScreen(
     ) {
         if (watchLink != null && watchLink.probe != PeerProbe.REACHABLE) {
             item { WatchLinkCard(watchLink, onRetry = onWatchRetry, onOpenWatch = onOpenWatch, modifier = Modifier.gutter()) }
+        }
+        // A watch on another version runs other monitoring algorithms: its notices may not match this app.
+        versionMismatch?.let { (watch, phone) ->
+            item {
+                RoundedCard(Modifier.gutter()) {
+                    com.heartline.phone.ui.components.CardTitle(stringResource(R.string.home_watch_version_title))
+                    Spacer(Modifier.height(6.dp))
+                    SmallCaption(stringResource(R.string.home_watch_version_text, watch, phone))
+                    Spacer(Modifier.height(12.dp))
+                    com.heartline.phone.ui.components.TonalPillButton(stringResource(R.string.home_watch_version_action), onClick = onUpdates)
+                }
+            }
         }
         item {
             MetricCard(

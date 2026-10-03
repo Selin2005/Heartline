@@ -93,6 +93,8 @@ data class AlertUi(
     /** A blood-oxygen, temperature, combined or stress notice, and its value. */
     val vital: com.heartline.shared.hr.VitalAlert? = null,
     val value: Float? = null,
+    /** Sent by a watch app version other than the phone's (older algorithms), or null. */
+    val otherWatchVersion: String? = null,
 )
 
 /** Pure summaries so they can be unit tested. */
@@ -233,6 +235,7 @@ class AlertsViewModel(
     private val formatter: RecordFormatter,
     /** ECG recordings as (time, result), to show how a rhythm notification was followed up. */
     ecgs: Flow<List<Pair<Long, EcgResult>>> = flowOf(emptyList()),
+    private val phoneVersion: String = com.heartline.phone.BuildConfig.VERSION_NAME,
 ) : ViewModel() {
     val alerts: StateFlow<List<AlertUi>> = combine(repository.alerts, ecgs) { list, recordings ->
         list.map { it.toUi(HeartSummaries.ecgFollowUp(it, recordings)) }
@@ -241,5 +244,5 @@ class AlertsViewModel(
     fun markRead() = viewModelScope.launch { repository.markAlertsRead() }
 
     private fun AlertEntity.toUi(ecgRegular: Boolean?) =
-        AlertUi(id, kind, formatter.date(atMs), formatter.time(atMs), bpm, windowCount, read, threshold, context, ecgRegular, normal, trend, vital, value)
+        AlertUi(id, kind, formatter.date(atMs), formatter.time(atMs), bpm, windowCount, read, threshold, context, ecgRegular, normal, trend, vital, value, watchVersion?.takeIf { it != phoneVersion })
 }

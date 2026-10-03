@@ -5,6 +5,7 @@ package com.heartline.wear.sensor.sdk
 
 import com.heartline.datalayer.diag.HLog
 import com.heartline.shared.hr.HrSample
+import com.heartline.shared.hr.HrSamples
 import com.heartline.shared.sensor.TrackerKind
 import com.heartline.wear.sensor.GatewayState
 import com.heartline.wear.sensor.HrSource
@@ -76,30 +77,8 @@ class SdkHrSource(private val gateway: SdkSensorGateway) : HrSource {
         val status = getValue(ValueKey.HeartRateSet.HEART_RATE_STATUS) ?: 0
         val ibis = getValue(ValueKey.HeartRateSet.IBI_LIST).orEmpty()
         val ibiStatus = getValue(ValueKey.HeartRateSet.IBI_STATUS_LIST).orEmpty()
-        // Status 1 is a good reading; others mean the tracker is still searching, the signal is weak,
-        // the arm moves or the watch is off the wrist. Their "intervals" are noise, and off-wrist noise
-        // looks just like an irregular rhythm, so they are never used.
-        val reliable = status == STATUS_SUCCESS
-        // IBI status 0 marks a reliable interval. Without a status list at all (older trackers) a good
-        // reading's intervals are kept; with one, an interval it doesn't cover is not trusted.
-        val good = when {
-            !reliable -> emptyList()
-            ibiStatus.isEmpty() -> ibis
-            else -> ibis.filterIndexed { i, _ -> ibiStatus.getOrNull(i) == 0 }
-        }
         if (ibis.isNotEmpty()) HLog.v(SdkSensorGateway.TAG, "HR status=$status ibis=$ibis ibiStatus=$ibiStatus")
-        return HrSample(
-            tsMs = timestamp,
-            bpm = getValue(ValueKey.HeartRateSet.HEART_RATE) ?: 0,
-            ibiMs = good,
-            onBody = status != STATUS_OFF_BODY,
-            reliable = reliable,
-            rejectedIbis = ibis.size - good.size,
-        )
+        return HrSamples.fromTracker(timestamp, getValue(ValueKey.HeartRateSet.HEART_RATE) ?: 0, status, ibis, ibiStatus)
     }
 
-    private companion object {
-        const val STATUS_SUCCESS = 1
-        const val STATUS_OFF_BODY = -3
-    }
 }

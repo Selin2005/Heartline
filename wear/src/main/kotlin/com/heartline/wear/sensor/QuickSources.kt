@@ -70,7 +70,8 @@ interface QuickSource {
  *
  * The minute is timed by the clock, not by counting samples: the tracker can pause or deliver in
  * bursts, and a sample count could then wait forever. No data at all within [noDataSeconds] ends
- * the measurement with a hint instead of a stuck progress ring.
+ * the measurement with a hint instead of a stuck progress ring; so does a start with only unreliable
+ * readings (the tracker's own status), when the strap is loose or the arm moving.
  */
 class StressSource(
     private val hr: HrSource,
@@ -93,10 +94,13 @@ class StressSource(
         }
         val ibis = mutableListOf<Int>()
         var samples = 0
+        // Readings the tracker rated reliable (its beat intervals are kept); status -10 ones are not.
+        var reliable = 0
         var offBody = false
         val reader = launch {
             hr.stream().collect { sample ->
                 samples++
+                if (sample.reliable && sample.ibiMs.isNotEmpty()) reliable++
                 offBody = !sample.onBody
                 if (!sample.onBody) return@collect
                 ibis += sample.ibiMs
@@ -105,8 +109,10 @@ class StressSource(
         }
         for (second in 1..seconds) {
             delay(tickMs)
-            if (second == noDataSeconds && samples == 0) {
-                log("no heart-rate data after $noDataSeconds s")
+            // No data, or only unreliable readings (a loose strap, moving): say so instead of
+            // running the whole minute for nothing (a real log: every reading status -10).
+            if (second == noDataSeconds && reliable == 0) {
+                log("no reliable heart-rate data after $noDataSeconds s ($samples readings)")
                 reader.cancel()
                 eda.cancel()
                 send(QuickEvent.Failed(null, QuickHint.LOW_SIGNAL))

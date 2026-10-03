@@ -44,6 +44,8 @@ import com.heartline.shared.sensor.PermissionPolicy
 import com.heartline.wear.sensor.HrSource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.takeWhile
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -291,12 +293,17 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
         val samples = mutableListOf<com.heartline.shared.hr.HrSample>()
         // A background session of its own, unless a measurement is running (then it records there).
         val raw = RawCapture.begin("irn_window", background = true)
+        // Timed from the first reliable reading: the tracker may still be warming up after another measurement.
+        val gate = WindowGate(WINDOW_MS, WARMUP_MS, System.currentTimeMillis())
         try {
-            withTimeoutOrNull(WINDOW_MS) {
+            withTimeoutOrNull(WARMUP_MS + WINDOW_MS + 5_000) {
                 source.stream()
                     .catch { HLog.w(TAG, "IRN window stream failed", it) }
-                    .collect { sample ->
+                    .map { it to gate.decide(it, System.currentTimeMillis()) }
+                    .takeWhile { it.second != WindowGate.Decision.STOP }
+                    .collect { (sample, decision) ->
                         count++
+                        if (decision == WindowGate.Decision.SKIP) return@collect
                         val checked = sample.copy(
                             moving = sample.moving || motion.movedSince(sample.tsMs - 60_000) || wrist.movedSince(sample.tsMs - 60_000),
                             onBody = sample.onBody && !wrist.offBody,
@@ -314,7 +321,8 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
         // Stress from the same window (a window judged irregular is not read as stress).
         if (heart.irn.lastWindowIrregular != true) runCatching { StressWindows.onWindow(samples, settings, store, output) }.onFailure { HLog.w(TAG, "stress window failed", it) }
         val irregular = heart.irn.lastWindowIrregular
-        HLog.i(TAG, "IRN window done: $count samples, irregular=$irregular skipped=${heart.irn.lastSkipReason}")
+        val skipped = if (gate.startedAtMs == null) "warming up (${gate.warmupSamples} samples)" else heart.irn.lastSkipReason
+        HLog.i(TAG, "IRN window done: $count samples (${gate.warmupSamples} warm-up), irregular=$irregular skipped=$skipped")
         if (irregular == true) BackgroundMonitoring.scheduleFollowUp(applicationContext)
         return Result.success()
     }
@@ -326,6 +334,9 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
     private companion object {
         const val TAG = "Heartline/Monitor"
         const val WINDOW_MS = 75_000L
+
+        /** How long the tracker may stay in its "initial" state before the window gives up. */
+        const val WARMUP_MS = 45_000L
 
         /** Passive heart rate arrives every few minutes while the watch is worn; an hour without any means it isn't. */
         const val NOT_WORN_MS = 60 * 60_000L

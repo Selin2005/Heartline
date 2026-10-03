@@ -92,6 +92,23 @@ data class HealthAlert(
     val value: Float? = null
 )
 
+/**
+ * One line describing an alert for the diagnostic log: what fired and against which limit and
+ * usual (`normal=none` before the wearer's normal is learnt). No names or health answers.
+ */
+fun HealthAlert.describe(): String = buildString {
+    append("kind=").append(kind)
+    vital?.let { append(" vital=").append(it) }
+    trend?.let { append(" trend=").append(it) }
+    bpm?.let { append(" bpm=").append(it) }
+    value?.let { append(" value=").append(it) }
+    threshold?.let { append(" limit=").append(it) }
+    append(" normal=").append(normal ?: "none")
+    context?.let { append(" context=").append(it) }
+    if (windowStartsMs.isNotEmpty()) append(" windows=").append(windowStartsMs.size)
+    append(" at=").append(atMs)
+}
+
 @Serializable
 enum class VitalAlert {
     /** Three readings in a row (two re-checks) below the oxygen limit. */

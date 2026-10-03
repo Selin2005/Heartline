@@ -21,6 +21,7 @@ import kotlin.math.ln
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlin.random.Random
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -127,7 +128,7 @@ class VitalsSimulationTest {
                 val first = Spo2Sample(ms(day, hour), spo2Reading(nightDay.coerceAtMost(w.days - 1), hour, asleep), context)
                 val rechecks = mutableListOf<Spo2Sample>()
                 var last = first
-                while (monitor.needsRecheck(last.percent, settings) && rechecks.size < VitalsMonitor.RECHECKS) {
+                while (monitor.needsRecheck(last.percent, settings, history, last.tsMs) && rechecks.size < VitalsMonitor.RECHECKS) {
                     last =
                         Spo2Sample(
                             ms(day, hour, 2 + 2 * rechecks.size),
@@ -207,6 +208,34 @@ class VitalsSimulationTest {
             )
             assertTrue("${r.person}: false ${r.falseAlerts.map { describe(it) }}", r.falseAlerts.size <= 1)
         }
+    }
+
+    /**
+     * High sensitivity on a wrist that reads low (a real Galaxy Watch8 Classic read 90–92 % at
+     * rest): its 92 % limit would recheck and notify on noise, so it applies only from a usual of
+     * 95 %. A sustained 88 % is still caught; a typical 97 % wearer keeps the 92 % limit.
+     */
+    @Test
+    fun highSensitivityOnAWristThatReadsLow() {
+        (0 until 5).forEach { s ->
+            val low = simulate(
+                World(Person("Wrist reads 92–93 %, high sensitivity", spo2 = 93.0), seed = 300 + s).apply {
+                    for (h in 0 until 4) spo2Shift[40 * 24 + 13 + h] = -5.0
+                    episodes += Episode("sustained 88 % by day, day 40", 40, 40, Want.SPO2_LOW)
+                },
+                AlertSensitivity.HIGH
+            )
+            assertTrue("seed $s: false ${low.falseAlerts.map { describe(it) }}", low.falseAlerts.isEmpty())
+            assertTrue("seed $s: missed, alerts ${low.alerts.map { describe(it) }}", low.caught.size == 1)
+            val typical = simulate(World(Person("Typical 97 %, high sensitivity"), seed = 400 + s), AlertSensitivity.HIGH)
+            assertTrue("seed $s: false ${typical.falseAlerts.map { describe(it) }}", typical.falseAlerts.isEmpty())
+        }
+        var h = VitalsHistory()
+        val monitor = VitalsMonitor(zone) { "x" }
+        val high = MonitorSettings(alertSensitivity = AlertSensitivity.HIGH)
+        assertEquals(90, com.heartline.shared.vitals.VitalsBaseline.spo2Low(high, h, start))
+        repeat(30) { h = monitor.onSpo2(h, Spo2Sample(ms(0, 9) + it * 60_000L, 97, HrContext.REST), emptyList(), high).first }
+        assertEquals(92, com.heartline.shared.vitals.VitalsBaseline.spo2Low(high, h, start))
     }
 
     @Test

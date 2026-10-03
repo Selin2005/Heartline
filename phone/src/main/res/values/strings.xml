@@ -888,4 +888,8 @@
     <string name="settings_part_stress_unavailable">Off because of your answers (AFib or a pacemaker)</string>
     <string name="settings_stress_notifications">Stress notifications</string>
     <string name="settings_limits_stress">Stress: your usual heart-rate variability %1$d ms</string>
+    <string name="alert_other_watch_version">from watch app %1$s</string>
+    <string name="home_watch_version_title">Update the watch app</string>
+    <string name="home_watch_version_text">Your watch runs Heartline %1$s and this phone %2$s. Until both are the same version, the watch still checks with its own (older or newer) algorithms, and its notices may differ from what this app describes.</string>
+    <string name="home_watch_version_action">Updates</string>
 </resources>

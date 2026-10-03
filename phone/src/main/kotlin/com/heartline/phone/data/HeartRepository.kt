@@ -3,7 +3,9 @@
 
 package com.heartline.phone.data
 
+import com.heartline.datalayer.diag.HLog
 import com.heartline.shared.hr.HealthAlert
+import com.heartline.shared.hr.describe
 import com.heartline.shared.hr.HeartLimits
 import com.heartline.shared.stress.StressLimits
 import com.heartline.shared.vitals.VitalsLimits
@@ -19,6 +21,8 @@ class HeartRepository(
     private val onLimits: suspend (HeartLimits) -> Unit = {},
     private val onVitalsLimits: suspend (VitalsLimits) -> Unit = {},
     private val onStressLimits: suspend (StressLimits) -> Unit = {},
+    /** The connected watch app's version, kept with each alert. */
+    private val watchVersion: suspend () -> String? = { null },
 ) : HeartDataSink {
     /** Background stress readings since [fromMs], and the latest awake one. */
     fun stressSince(fromMs: Long): Flow<List<StressSampleEntity>> = dao.stressSince(fromMs)
@@ -52,11 +56,18 @@ class HeartRepository(
         batch.stressLimits?.let { onStressLimits(it) }
     }
 
+    /**
+     * Stores an alert and notifies once. The watch resends an alert until the phone acknowledges
+     * it, so the same alert can arrive again (after a reconnect or an update): only a new one notifies.
+     */
     override suspend fun saveAlert(alert: HealthAlert) {
-        dao.insertAlert(
-            AlertEntity(alert.id, alert.kind, alert.atMs, alert.bpm, alert.windowStartsMs.size, threshold = alert.threshold, context = alert.context, normal = alert.normal, trend = alert.trend, vital = alert.vital, value = alert.value),
+        val from = watchVersion()
+        val row = dao.insertAlert(
+            AlertEntity(alert.id, alert.kind, alert.atMs, alert.bpm, alert.windowStartsMs.size, threshold = alert.threshold, context = alert.context, normal = alert.normal, trend = alert.trend, vital = alert.vital, value = alert.value, watchVersion = from),
         )
-        onAlert(alert)
+        val fresh = row != -1L
+        HLog.i("Heartline/Alert", "received ${alert.describe()} watch=${from ?: "unknown"} ${if (fresh) "notified" else "duplicate, not notified"}")
+        if (fresh) onAlert(alert)
     }
 
     suspend fun markAlertsRead() = dao.markAlertsRead()

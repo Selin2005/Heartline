@@ -60,6 +60,7 @@ import kotlinx.coroutines.SupervisorJob
 import com.heartline.shared.model.RecordSummary
 import com.heartline.shared.model.RecordKind
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
@@ -91,6 +92,7 @@ val phoneModule = module {
             onLimits = { limits -> get<SettingsRepository>().saveHeartLimits(limits) },
             onVitalsLimits = { limits -> get<SettingsRepository>().saveVitalsLimits(limits) },
             onStressLimits = { limits -> get<SettingsRepository>().saveStressLimits(limits) },
+            watchVersion = { get<UpdateRepository>().prefs.first().watchVersion },
         )
     }
     single { SettingsRepository(androidContext()) }

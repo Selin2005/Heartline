@@ -184,6 +184,11 @@ uses. With an older watch, the phone computes the same limits from its own minut
   - when Android's off-body sensor says the watch is off the wrist (checked 1.5 s after it
     starts, and during the window).
 - If a readable window was irregular, one extra check runs 7 minutes later (`scheduleFollowUp`).
+- **The window is timed from its first reliable reading** (`WindowGate`), not from switching the
+  tracker on. Right after another measurement (blood oxygen), the tracker can report "initial"
+  (status 0, rate 0) for up to a minute. A real log showed a whole window lost to that ("weak
+  signal"). Warm-up readings are dropped, and without a reliable one within 45 s the window ends
+  with `skipped=warming up`.
 
 ### Is the window readable? (`IbiWindowQuality`)
 A window of about 60 s is analysed only if all of these hold. Otherwise it is *unreadable*: never
@@ -324,6 +329,24 @@ Older versions:
 - `withMonitoring` and `withHeartAlerts` also write the old part switches, so an older watch
   follows the heart part. An older watch ignores the oxygen and temperature parts.
 - Fields that are no longer used stay in the JSON format.
+
+### Checking a notice from a log
+
+- **Watch.** Every notice is logged on the watch as `Heartline/Alert: fired kind=… vital=… bpm=…
+  value=… limit=… normal=… context=… windows=…`. `normal=none` means the wearer's normal was not
+  learnt yet.
+- **Phone.** It logs `received … watch=<watch app version> notified` (or `duplicate, not
+  notified`). The watch resends a notice until the phone acknowledges it, and only the first copy
+  notifies.
+- **Watch version.** Each alert keeps the watch app version that sent it (database v9). The
+  alert list marks alerts from a watch app version other than the phone's, and Home shows
+  *Update the watch app* while the versions differ: a watch on another version runs other
+  checks.
+- **The case behind these.** In a real log, the phone was updated an hour before the watch. The
+  old watch app then sent an irregular-rhythm notice from status −10 readings, and it looked like
+  the new version's.
+- **Replay.** `tools/replay/extract.py` turns a log's raw tracker readings into a test fixture
+  (`ReplayTest`). That window is one of them: the current checks reject it as unreadable.
 
 ## 8. Tests
 

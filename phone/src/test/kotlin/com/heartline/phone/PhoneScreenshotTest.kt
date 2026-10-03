@@ -106,6 +106,10 @@ class PhoneScreenshotTest(private val theme: String) {
         EcgDetailScreen(SampleData.ecgRecords[0], onBack = {}, listState = rememberLazyListState(initialFirstVisibleItemIndex = 3))
     }
 
+    @Test fun homeWatchVersion() = shot("home_watch_version") {
+        HomeScreen(SampleData.home, versionMismatch = "0.0.2.115-beta.1" to "0.0.2.115-dev.60")
+    }
+
     @Test fun homeEmpty() = shot("home_empty") { HomeScreen(HomeState()) }
 
     @Test fun ecgHomeEmpty() = shot("ecg_home_empty") { EcgHomeScreen(EcgListState(loading = false), onBack = {}) }

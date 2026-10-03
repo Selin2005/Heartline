@@ -153,7 +153,15 @@ attach them to a bug report.
 14. **Updates:** Settings → Updates → *Check now* finds the newest stable release; with the update
     channel set to Beta it also offers betas, and on Development every new build. The *Update
     channel* setting is shown only in beta and dev builds. After updating, *What's new* shows the changelog.
-15. **Heart notifications and activity.** Capture `adb logcat -v time -s Heartline/Monitor`.
+15. **Heart notifications and activity.** Capture `adb logcat -v time -s Heartline/Monitor Heartline/Alert`.
+    - **Same version on both:** update the phone and the watch together (Home shows *Update the
+      watch app* while they differ). Notices from an older watch app run older checks; the alert
+      list marks them "from watch app <version>".
+    - **Every notice is explained:** each one has a `Heartline/Alert: fired …` line on the watch
+      and a `received … notified` line on the phone (limit, usual, context). Send the exported log
+      with any notice that looks wrong; `tools/replay/extract.py` turns it into a test.
+    - **Skin temperature:** `vitals:` lines show `temp=[…]` values in sleep (empty every time
+      means the readings are being rejected).
     - **Activity recognition:** start a workout in Samsung Health; within a few minutes the log
       shows `activity: EXERCISE`, and on the phone the heart-rate chart offers an *Exercise*
       filter. After a night's sleep it shows `activity: ASLEEP` and *Today by activity* shows sleep.

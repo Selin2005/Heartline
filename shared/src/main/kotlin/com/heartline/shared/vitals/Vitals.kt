@@ -96,16 +96,24 @@ object VitalsQuality {
     }
 
     /**
-     * Skin 25–42 °C, at least 1.5 °C above the air around the watch (otherwise it is not on the
-     * wrist, or the room is as warm as skin), and the air not changed by more than 5 °C since the
-     * last reading (a shower, going outside).
+     * Skin 30–40 °C, and the "ambient" reading not changed by more than 5 °C since the last
+     * reading (a shower, going outside). Whether the watch is on the wrist comes from the
+     * off-body sensor (checked by the worker).
+     *
+     * The ambient value is not compared with skin: on Samsung watches it is measured inside the
+     * case and reads *warmer* than skin when worn (a Galaxy Watch8 Classic: skin 34.7 °C, ambient
+     * 35.9 °C). Requiring skin above ambient rejected every reading. A watch lying on a table cools
+     * to the room, below 30 °C; covered wrist skin stays at 30–35 °C.
      */
     fun temperature(skinC: Float, ambientC: Float?, previousAmbientC: Float?): Boolean {
-        if (skinC !in 25f..42f) return false
-        if (ambientC != null && skinC - ambientC < 1.5f) return false
-        if (ambientC != null && previousAmbientC != null && abs(ambientC - previousAmbientC) > 5f) return false
+        if (skinC !in SKIN_MIN..SKIN_MAX) return false
+        if (ambientC != null && previousAmbientC != null && abs(ambientC - previousAmbientC) > AMBIENT_JUMP) return false
         return true
     }
+
+    const val SKIN_MIN = 30f
+    const val SKIN_MAX = 40f
+    const val AMBIENT_JUMP = 5f
 }
 
 /**
@@ -119,7 +127,7 @@ object VitalsQuality {
  * guess 95.4 % minus
  * 0.043 a year over 40, Apple Heart & Movement Study; learnt like the heart-rate normal) is used
  * for "lower than usual in sleep": 2 of the last 3 nights' medians that many points below it, or
- * 3 readings below 90 in one night.
+ * 3 readings below 90 in one night, each confirmed by its re-check.
  *
  * Skin temperature (as Apple's wrist temperature and Oura): one value per night, the median of
  * the readings after the first hour asleep; a baseline of the last 28 nights (median, robust spread); the change shown
@@ -147,7 +155,26 @@ object VitalsBaseline {
     /** With a lung condition that keeps oxygen low, BTS's target range starts at 88 %. */
     const val LUNG_LOW = 88
 
-    fun spo2Low(settings: MonitorSettings) = if (settings.health.lung) LUNG_LOW else spo2Low(settings.alertSensitivity)
+    /**
+     * The limit in use. High sensitivity's 92 % (the lowest stable value in healthy older adults)
+     * sits within a wrist oximeter's 2–4 % error of many people's usual: a Galaxy Watch8 Classic
+     * read 90–92 % at rest for a healthy wearer. So it applies only to wearers whose own usual by
+     * day is at least 95 %; for the others it is their usual − 3, never below the clinical 90 %.
+     * Until their usual is learnt ([HIGH_USUAL_READINGS]), 90 %.
+     */
+    fun spo2Low(settings: MonitorSettings, history: VitalsHistory? = null, today: Long? = null): Int {
+        if (settings.health.lung) return LUNG_LOW
+        val s = settings.alertSensitivity
+        if (s != AlertSensitivity.HIGH) return spo2Low(s)
+        val usual = history?.let { h ->
+            val days = h.days.filter { d -> !d.unusual && (today == null || d.day in (today - WINDOW_DAYS + 1)..today) }
+            Histogram.merge(days.map { it.spo2Day }).takeIf { it.count >= HIGH_USUAL_READINGS }?.median()?.roundToInt()
+        } ?: return spo2Low(AlertSensitivity.STANDARD)
+        return if (usual >= HIGH_USUAL_MIN) spo2Low(AlertSensitivity.HIGH) else maxOf(spo2Low(AlertSensitivity.STANDARD), usual - 3)
+    }
+
+    const val HIGH_USUAL_MIN = 95
+    const val HIGH_USUAL_READINGS = 20
 
     fun spo2Low(s: AlertSensitivity) = when (s) {
         AlertSensitivity.LOW -> 88
@@ -170,6 +197,15 @@ object VitalsBaseline {
     private fun ageShift(age: Int?) = ((age ?: 40) - 40).coerceAtLeast(0) * 0.043
 
     fun limits(history: VitalsHistory, today: Long, sensitivity: AlertSensitivity, age: Int?, lung: Boolean = false): VitalsLimits {
+        val inUse =
+            spo2Low(
+                MonitorSettings(
+                    alertSensitivity = sensitivity,
+                    health = com.heartline.shared.hr.HealthContext(lungCondition = if (lung) com.heartline.shared.hr.Answer.YES else null)
+                ),
+                history,
+                today
+            )
         val recent = history.days.filter { it.day in (today - WINDOW_DAYS + 1)..today && !it.unusual }
         val day = Histogram.merge(recent.map { it.spo2Day })
         val night = Histogram.merge(recent.map { it.spo2Night })
@@ -178,7 +214,7 @@ object VitalsBaseline {
         fun blend(own: Double?, prior: Double, c: Double) = own?.let { it * c + prior * (1 - c) } ?: prior
         val temp = tempBaseline(history, today)
         return VitalsLimits(
-            spo2Low = if (lung) LUNG_LOW else spo2Low(sensitivity),
+            spo2Low = inUse,
             spo2DayNormal = blend(day.median(), PRIOR_DAY - ageShift(age), dayC).roundToInt(),
             spo2NightNormal = blend(night.median(), PRIOR_NIGHT - ageShift(age), nightC).roundToInt(),
             spo2Confidence = minOf(dayC, nightC).takeIf { day.count > 0 && night.count > 0 } ?: maxOf(dayC, nightC),
@@ -236,7 +272,8 @@ object VitalsBaseline {
  */
 class VitalsMonitor(private val zone: ZoneId = ZoneId.systemDefault(), private val newId: () -> String) {
     /** True when a reading is low enough to be checked again right away (below the limit). */
-    fun needsRecheck(percent: Int, settings: MonitorSettings) = settings.spo2Active && percent < VitalsBaseline.spo2Low(settings)
+    fun needsRecheck(percent: Int, settings: MonitorSettings, history: VitalsHistory? = null, atMs: Long = System.currentTimeMillis()) =
+        settings.spo2Active && percent < VitalsBaseline.spo2Low(settings, history, VitalsBaseline.dayOf(atMs, HrContext.REST, zone))
 
     /**
      * A SpO2 reading with its re-checks (taken while each was still low, [RECHECKS] at most). Only
@@ -250,9 +287,12 @@ class VitalsMonitor(private val zone: ZoneId = ZoneId.systemDefault(), private v
         rechecks: List<Spo2Sample>,
         settings: MonitorSettings
     ): Pair<VitalsHistory, HealthAlert?> {
-        val limit = VitalsBaseline.spo2Low(settings)
+        val limit = VitalsBaseline.spo2Low(settings, history, VitalsBaseline.dayOf(first.tsMs, HrContext.REST, zone))
         val nightLowBelow = minOf(NIGHT_LOW_PERCENT, limit)
         var h = history
+        // A night reading counts as low only when its re-check agrees: single artefacts (3 % of
+        // wrist readings) added up to false "several low readings in one night" notices.
+        val confirmedLow = first.percent < nightLowBelow && rechecks.firstOrNull()?.let { it.percent < nightLowBelow } == true
         for (s in listOf(first) + rechecks) {
             val dayKey = VitalsBaseline.dayOf(s.tsMs, s.context, zone)
             val d = h.day(dayKey)
@@ -261,7 +301,7 @@ class VitalsMonitor(private val zone: ZoneId = ZoneId.systemDefault(), private v
                 when {
                     s.context == HrContext.SLEEP -> d.copy(
                         spo2Night = if (low) d.spo2Night else d.spo2Night.plus(s.percent),
-                        nightLow = d.nightLow + if (s.percent < nightLowBelow && !s.confirmation) 1 else 0
+                        nightLow = d.nightLow + if (s === first && confirmedLow) 1 else 0
                     )
                     low -> d
                     else -> d.copy(spo2Day = d.spo2Day.plus(s.percent))
@@ -379,7 +419,10 @@ class VitalsMonitor(private val zone: ZoneId = ZoneId.systemDefault(), private v
                 it.second <= limits.spo2NightNormal - limits.spo2NightDrop
             }.takeIf { ownNights >= MIN_OWN_NIGHTS }.orEmpty()
             val manyLow = h.day(today).nightLow >= NIGHT_LOW_READINGS
-            if ((dropped.size >= 2 || manyLow) && ready(SPO2_NIGHTS)) {
+            // High sensitivity's 2-point drop is within a wrist oximeter's noise over 2 nights: it
+            // needs all 3 (the simulation found false notices with 2 of 3).
+            val needed = if (settings.alertSensitivity == AlertSensitivity.HIGH) 3 else 2
+            if ((dropped.size >= needed || manyLow) && ready(SPO2_NIGHTS)) {
                 val median = VitalsBaseline.nightSpo2(h, today) ?: dropped.firstOrNull()?.second
                 fire(
                     SPO2_NIGHTS,

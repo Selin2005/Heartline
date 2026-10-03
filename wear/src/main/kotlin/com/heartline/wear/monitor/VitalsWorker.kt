@@ -83,7 +83,8 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
         if (!settings.spo2Active && !settings.skinTempActive) return Result.success()
         val now = System.currentTimeMillis()
         val lastWorn = store.lastPassiveHeartRateMs
-        if (settings.passiveHeartRate && (lastWorn == null || now - lastWorn > NOT_WORN_MS)) {
+        // Unknown right after an update or install: then the off-body sensor below decides.
+        if (settings.passiveHeartRate && lastWorn != null && now - lastWorn > NOT_WORN_MS) {
             HLog.i(TAG, "vitals skipped: not worn")
             return Result.success()
         }
@@ -148,7 +149,7 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
                                 // Low: check again (twice at most, while it stays low).
                                 val rechecks = mutableListOf<Spo2Sample>()
                                 var last: Spo2Sample = first
-                                while (monitor.needsRecheck(last.percent, settings) && rechecks.size < VitalsMonitor.RECHECKS) {
+                                while (monitor.needsRecheck(last.percent, settings, history, last.tsMs) && rechecks.size < VitalsMonitor.RECHECKS) {
                                     delay(RECHECK_DELAY_MS)
                                     last = spo2(source, context, System.currentTimeMillis(), wrist, confirmation = true) ?: break
                                     rechecks += last

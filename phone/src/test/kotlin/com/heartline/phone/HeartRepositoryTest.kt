@@ -147,6 +147,18 @@ class HeartRepositoryTest {
     }
 
     @Test
+    fun aResentAlertNotifiesOnceAndKeepsTheWatchVersion() = runBlocking {
+        val shown = mutableListOf<HealthAlert>()
+        val repo = HeartRepository(db.heart(), onAlert = { shown += it }, watchVersion = { "0.0.2.115-beta.1" })
+        val alert = HealthAlert("r", AlertKind.IRREGULAR_RHYTHM, 5L, 90, windowStartsMs = listOf(1, 2, 3, 4, 5))
+        // The watch resends until it has the acknowledgement (after a reconnect or an update).
+        repo.saveAlert(alert)
+        repo.saveAlert(alert)
+        assertEquals(1, shown.size)
+        assertEquals("0.0.2.115-beta.1", repo.alerts.first().single().watchVersion)
+    }
+
+    @Test
     fun stressReadingsAndVitalNoticesAreKept() = runBlocking {
         var kept: StressLimits? = null
         val repo = HeartRepository(db.heart(), onStressLimits = { kept = it })

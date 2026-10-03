@@ -119,6 +119,25 @@ class QuickMeasureTest {
     }
 
     @Test
+    fun stressEndsEarlyWhenEveryReadingIsUnreliable() = runBlocking {
+        // A real log: every reading status -10 (its intervals dropped), so nothing to measure.
+        val loose = object : HrSource {
+            override fun stream() = kotlinx.coroutines.flow.flow {
+                var t = 0L
+                while (true) {
+                    emit(com.heartline.shared.hr.HrSample(t, 0, emptyList(), reliable = false))
+                    t += 1_000
+                    kotlinx.coroutines.delay(5)
+                }
+            }
+        }
+        val vm = QuickMeasureViewModel(StressSource(loose, seconds = 60, tickMs = 5), profiles, store, { scheduled++ })
+        vm.start()
+        val failed = withTimeout(5_000) { vm.state.first { it is QuickState.Failed } } as QuickState.Failed
+        assertEquals(QuickHint.LOW_SIGNAL, failed.hint)
+    }
+
+    @Test
     fun stressSurvivesATrackerThatPausesMidway() = runBlocking {
         // Samples stop after 20 s (another listener took the tracker); the minute still ends on time.
         val pausing = object : HrSource {
