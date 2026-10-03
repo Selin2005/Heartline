@@ -12,3 +12,4 @@ Watch settings.
 | **Settings all day off confirm** | <img src="settings_all_day_off_confirm_small.png" width="200" alt=""> | <img src="settings_all_day_off_confirm_large.png" width="200" alt=""> |
 | **Settings monitoring off confirm** | <img src="settings_monitoring_off_confirm_small.png" width="200" alt=""> | <img src="settings_monitoring_off_confirm_large.png" width="200" alt=""> |
 | **Settings monitoring off sure** | <img src="settings_monitoring_off_sure_small.png" width="200" alt=""> | <img src="settings_monitoring_off_sure_large.png" width="200" alt=""> |
+| **Settings parts** | <img src="settings_parts_small.png" width="200" alt=""> | <img src="settings_parts_large.png" width="200" alt=""> |

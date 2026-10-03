@@ -30,5 +30,5 @@ Regenerate with `./gradlew recordPaparazziDebug` and `python3 tools/screenshots/
 | [**Heart rate**](wear/heart-rate/README.md) | [<img src="wear/heart-rate/heart_rate_small.png" width="160" alt="">](wear/heart-rate/README.md) | 2 |
 | [**SpO₂, temperature and stress**](wear/more-measurements/README.md) | [<img src="wear/more-measurements/spo2_instruction_small.png" width="160" alt="">](wear/more-measurements/README.md) | 8 |
 | [**Body composition**](wear/body-composition/README.md) | [<img src="wear/body-composition/body_weight_small.png" width="160" alt="">](wear/body-composition/README.md) | 6 |
-| [**Settings**](wear/settings/README.md) | [<img src="wear/settings/settings_small.png" width="160" alt="">](wear/settings/README.md) | 6 |
+| [**Settings**](wear/settings/README.md) | [<img src="wear/settings/settings_small.png" width="160" alt="">](wear/settings/README.md) | 7 |
 | [**Tiles and cards**](wear/tiles/README.md) | [<img src="wear/tiles/heart_large.png" width="160" alt="">](wear/tiles/README.md) | 10 |
