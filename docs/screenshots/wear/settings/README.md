@@ -13,3 +13,4 @@ Watch settings.
 | **Settings monitoring off confirm** | <img src="settings_monitoring_off_confirm_small.png" width="200" alt=""> | <img src="settings_monitoring_off_confirm_large.png" width="200" alt=""> |
 | **Settings monitoring off sure** | <img src="settings_monitoring_off_sure_small.png" width="200" alt=""> | <img src="settings_monitoring_off_sure_large.png" width="200" alt=""> |
 | **Settings parts** | <img src="settings_parts_small.png" width="200" alt=""> | <img src="settings_parts_large.png" width="200" alt=""> |
+| **Settings setup needed** | <img src="settings_setup_needed_small.png" width="200" alt=""> | <img src="settings_setup_needed_large.png" width="200" alt=""> |
