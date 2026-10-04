@@ -15,7 +15,7 @@ import kotlinx.serialization.encodeToString
 
 /**
  * Everything a blood-pressure session recorded, so the algorithm can be developed and replayed
- * on real watch data (see docs/algorithms/BP_ALGORITHM.md, "Raw session logs"):
+ * on real watch data (see docs/algorithms/BP_ALGORITHM.md, §14.1):
  * - [header]: device, versions, sensor capabilities and actual rates, timed events (phases,
  *   window choice, errors), every intermediate value (features, state, per-channel estimates,
  *   the fused result) and, later, the cuff reading the user entered for it;

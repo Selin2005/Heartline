@@ -93,7 +93,7 @@ class BpAlgorithm63Test {
     fun aRiseTo170Over100MovesTheNumberUp() {
         // Before 6.3: 142. The transit channel alone sees the rise here and its slope for this
         // user is still uncertain, so the number moves only part of the way: cuff checks at
-        // other pressures teach the slope (see BP_ALGORITHM.md, algorithm 6.3).
+        // other pressures teach the slope (see BP_HISTORY.md, algorithm 6.3).
         val e = measure(high)
         assertTrue("$e", e.systolic >= 143)
     }

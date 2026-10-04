@@ -295,7 +295,7 @@ sealed interface BpOutcome {
 }
 
 /**
- * Calibrated pulse-wave-analysis estimate (algorithm 3, see docs/algorithms/BP_ALGORITHM.md).
+ * Calibrated pulse-wave-analysis estimate (algorithm 3, see docs/algorithms/BP_ALGORITHM.md §6).
  *
  * BP = reference cuff reading + w · (features − reference features), where w is a Bayesian
  * (ridge-to-prior) fit: population sensitivities from the literature act as the prior and the
