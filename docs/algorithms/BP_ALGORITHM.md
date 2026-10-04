@@ -1,4 +1,4 @@
-# Blood pressure on the watch: technical specification (algorithm 6.4)
+# Blood pressure on the watch: technical specification (algorithm 6.5)
 
 This is the complete specification of how Heartline estimates blood pressure (BP) today. It
 contains every step, formula, threshold and constant, so the algorithm can be checked, reproduced
@@ -48,11 +48,11 @@ readings; there is no absolute, population-only model.
 
 | Item | Value | Where |
 |---|---|---|
-| Algorithm (stored with each reading) | 6 (6.4 behaviour) | `wear/.../bp/BpMeasureViewModel.kt` → `ALGORITHM` |
+| Algorithm (stored with each reading) | 6 (6.5 behaviour) | `wear/.../bp/BpMeasureViewModel.kt` → `ALGORITHM` |
 | Phone-refined reading | 4 (hybrid model applied) | `phone/.../data/BpData.kt` → `ALGORITHM_HYBRID` |
 | Feature extractor | `PpgFeatureVector.VERSION = 5` | `bp/PpgFeatures.kt` |
 | Oldest features the estimator accepts | `MIN_MODEL_VERSION = 2` | `bp/PpgFeatures.kt` |
-| Tunable choices | `BpTuning.DEFAULT` (6.4); `BpTuning.ALGORITHM_6_3` for comparison | `bp/BpTuning.kt` |
+| Tunable choices | `BpTuning.DEFAULT` (6.4 tuning, unchanged in 6.5); `BpTuning.ALGORITHM_6_3` for comparison | `bp/BpTuning.kt` |
 | Session log format | `BpSessionLog.FORMAT = 1`, magic `HLBP` | `bp/BpSessionLog.kt` |
 
 **Notation.**
@@ -454,8 +454,8 @@ $r = 2.5$ (`PRIOR_REL`; 3.5 with `shortValidity`). With $P = \operatorname{diag}
 
 The system is solved by Gauss–Jordan elimination with partial pivoting; if it is singular
 (pivot < 1e-12) the prior is used. The diastolic weights $\mathbf w_D$ are fitted the same way with
-`BpTuning.diaPriorRel = 2.5` (at least 3.5 with `shortValidity`); in 6.4 they only anchor the
-diastolic baseline (below).
+`BpTuning.diaPriorRel = 2.5` (at least 3.5 with `shortValidity`); they are used only by the 6.3
+`SHAPE` diastolic, kept for comparison.
 
 **Systolic misfit:**
 
@@ -476,13 +476,16 @@ With only 3 base points in a narrow range, $\rho$ stays near 0.5; it moves to th
 as cuff checks span a range.
 
 **Anchored baseline.** The slopes use every point, but the baseline follows recent cuff readings,
-each moved to the reference features along the slopes. Anchor weights
+each moved to the reference features along the slopes its change uses. Anchor weights
 $\alpha_i = \max(0.05, 2^{-a_i/5})$ (half-life 5 days):
 
 ```math
 S_\text{ref} = \frac{\sum_i \alpha_i\,(S_i - \mathbf w_S^\top X_i)}{\sum_i\alpha_i}, \qquad
-D_\text{ref} = \frac{\sum_i \alpha_i\,(D_i - \mathbf w_D^\top X_i)}{\sum_i\alpha_i}.
+D_\text{ref} = \frac{\sum_i \alpha_i\,(D_i - \rho\,\mathbf w_S^\top X_i)}{\sum_i\alpha_i}
 ```
+
+(with the 6.3 `SHAPE` diastolic, $\mathbf w_D^\top X_i$ instead of $\rho\,\mathbf w_S^\top X_i$; until 6.5 the
+coupled model also used $\mathbf w_D$ here).
 
 Without extra points this equals the weighted means $\bar S$, $\bar D$.
 
@@ -666,14 +669,18 @@ b = \frac{b^{(0)}/\tau_p^2 + \sum_i \tau_i\,\Delta x_i\,\Delta y_i/\sigma_c^2 \;
 \sigma_b = \Big(1/\tau_p^2 + \textstyle\sum_i \tau_i \Delta x_i^2/\sigma_c^2 \,[+\,1/\sigma_\text{obs}^2]\Big)^{-1/2}.
 ```
 
-4. **Noise.** Residual $r = \sqrt{\sum\tau_i(S_i - S_0 - b_S\Delta x_i)^2/\sum\tau_i}$; round
-   spread in ms $\text{sp} = \max\!\big(5, \sqrt{\sum \tau_i (\Delta x_i - \Delta S_i/b_S)^2/\sum\tau_i}\big)$
+4. **Noise.** Round spread in ms $\text{sp} = \max\!\big(5, \sqrt{\sum \tau_i (\Delta x_i - \Delta S_i/b_S)^2/\sum\tau_i}\big)$
    (`MIN_TRANSIT_NOISE_MS = 5`); $d$ = days since the latest point:
 
 ```math
-n_S^2 = \sigma_\text{base}^2 + r^2 + (b_S\,\text{sp})^2 + (0.15\,d)^2, \qquad
+n_S^2 = \sigma_\text{base}^2 + (b_S\,\text{sp})^2 + (0.15\,d)^2, \qquad
 n_D^2 = (0.7\,\sigma_\text{base})^2 + (b_D\,\text{sp})^2 + (0.15\,d)^2 .
 ```
+
+   Above the 5 ms floor $|b_S|\,\text{sp}$ equals the rounds' misfit
+   $r = \sqrt{\sum\tau_i(S_i - S_0 - b_S\Delta x_i)^2/\sum\tau_i}$, since
+   $b_S(\Delta x_i - \Delta S_i/b_S) = -(\Delta S_i - b_S\Delta x_i)$; $r$ is logged but not added again
+   (until 6.5 it was, so the misfit counted twice).
 
 5. **Scale** (how sure the slope is): $c_S = |\sigma_{b,S}\,\Delta x|$, $c_D = |\sigma_{b,D}\,\Delta x|$ with $\Delta x = x - x_0$.
 6. **Value:** $\hat S = S_0 + b_S\,\Delta x - \ell$, $\hat D = D_0 + b_D\,\Delta x - \ell$, where
@@ -851,13 +858,19 @@ the ECG's). Flags:
 | `ectopicBeats` | premature beats left out |
 | `notValidated` | pregnancy in the profile |
 | `state` | body state (§4) |
-| `deltaSystolic` | $\hat S$ − the plain mean cuff systolic of all calibration points |
+| `deltaSystolic` | $\hat S$ − the green model's reference $S_\text{ref} - H$ (6.5; the plain mean cuff systolic when the green channel gave no estimate) |
+| `wideRange` | the rounded $\sigma_S$ > 12 mmHg (`RANGE_ONLY_SD`): shown without a category (§11.2) |
 
 Outcomes: `Ok`, `NeedsCalibration`, `PoorSignal`, `OutOfRange` (not a trustworthy wave), plus the
 watch-only "moving" (§2.2). If the green channel fails but other channels give values, the fused
 number is still shown, marked beyond calibration.
 
 ### 11.2 Category (`BpCategory`, AHA, wellness labels)
+
+A reading whose ± is above 12 mmHg (`wideRange`) is still shown with its number and ±, but without
+a category: an interval that wide spans several of them. The watch and phone then say to measure
+again sitting still with the forearm at heart level, or to compare with a cuff, and the phone's
+personal model leaves the reading as it is (`RecordSummary.BloodPressure.rangeOnly`).
 
 | Category | Rule (first that matches) |
 |---|---|
@@ -916,8 +929,8 @@ b = \frac{\sum_i y_i}{n + \lambda}, \qquad \boldsymbol\alpha = (K + \lambda I)^{
 - **Gate:** used only if $\text{MAE}_\text{hybrid} \le 0.9\,\text{MAE}_\text{classical}$ (`GATE`) **and**
   $\text{MAE}_\text{hybrid} \le \text{MAE}_\text{classical} - 1.5$ (`MIN_GAIN_MMHG`), **and** the diastolic LOO
   MAE ≤ the mean $|y_D|$. $\text{MAE}_\text{classical}$ = mean $|y_S|$.
-- **Correction** clamped to ±25 mmHg (`MAX_CORRECTION`), then the output limits and
-  $D \le S - 15$. The reading keeps the watch's numbers (`watchSystolic/Diastolic`) and gets
+- **Correction** clamped to ±25 mmHg (`MAX_CORRECTION`), added to the classical value and rounded
+  (6.5; truncated before), then the output limits and $D \le S - 15$. The reading keeps the watch's numbers (`watchSystolic/Diastolic`) and gets
   algorithm 4.
 
 ### 12.2 Accuracy, drift and personal range (`BpAccuracy`, `BpDrift`, `BpConformal`)
@@ -1102,27 +1115,28 @@ and watches. Each new export with cuff checks goes through `bpEval` before a tun
   EDA or does not fire.
 - Pregnancy is not validated; readings are marked so.
 
-### 15.4 Open points found while writing this specification
+### 15.4 Open points found while writing this specification (fixed in 6.5)
 
-The code was not changed for this document; these are noted for a later, measured change.
+Writing the first version of this document found five points where the code did not do what it
+meant to. All five were fixed in algorithm 6.5 (`BpAlgorithm65Test`) and measured with `bpEval`:
 
-1. **Transit noise counts the residual twice.** In `TransitEstimator`,
-   $b_S\,	ext{sp} = r$ exactly whenever the spread is above its 5 ms floor, because
-   $b_S(\Delta x_i - \Delta S_i/b_S) = -(\Delta S_i - b_S\Delta x_i)$. So $n_S^2 = \sigma_	ext{base}^2 + 2r^2 + (0.15d)^2$:
-   the transit channels are weighted somewhat lower than intended.
-2. **Diastolic baseline in COUPLED mode** is anchored along the shape diastolic weights $\mathbf w_D$,
-   not along $
-ho\,\mathbf w_S$, which the change itself uses. The two agree without extra cuff
-   points; with older and newer cuff checks they can differ slightly.
-3. **`RANGE_ONLY_SD = 12`** and `RecordSummary.BloodPressure.rangeOnly` are defined and read, but
-   nothing sets them: a very wide ± is still shown with a category.
-4. **`deltaSystolic`** is measured from the plain mean of all cuff systolic values, not from the
-   time-weighted, anchored $S_	ext{ref}$. It only decides the "same direction" test of the
-   confirmation and the drift run.
-5. **`HybridBpModel.correct`** truncates (`toInt`) rather than rounds the corrected values.
-6. **KDoc:** `PulseArrival` still says PAT is not used in the estimate (precise mode uses the PAT and
-   ECG_PTT channels), and `WristBcg.beforePpgFeet` says the triggers are the steepest upstroke
-   (the pipeline passes tangent onsets).
+1. The transit noise counted the rounds' misfit twice (§7.4).
+2. In the coupled diastolic, the baseline was anchored along the shape model's diastolic slopes
+   instead of $\rho\,\mathbf w_S$ (§6.2).
+3. `RANGE_ONLY_SD` was defined but unused: a reading with a very wide ± was still given a category
+   (§11.2).
+4. `deltaSystolic` was measured from the plain mean of the cuff readings, not the model's reference
+   (§11.1).
+5. The phone's learned correction was truncated, not rounded (§12.1).
+
+Two outdated comments were corrected with them (`PulseArrival` said PAT was not used yet;
+`WristBcg.beforePpgFeet` named the steepest upstroke instead of the tangent onset).
+
+On the 9 cuff-checked readings the shown numbers did not change (ONLINE and LEAVE_ONE_OUT metrics
+identical to 6.4 to 0.1 mmHg). Unrounded, the fused systolic moved by at most 0.4 mmHg and the
+diastolic by at most 0.16; the BCG channel's ± fell by 0.1–1.2 mmHg (its weight rose by 0.01–0.07),
+and the posture-flagged reading lying in bed kept 142/84. These were corrections of
+the method, not tuning; their effect grows with a clearer BCG and with cuff checks spread over days.
 
 ---
 
@@ -1228,7 +1242,7 @@ Every constant the algorithm uses, from the code. Files are under `shared/.../bp
 | `PERFUSION_RANGE` | 0.6–1.7 | |
 | `COLD_SKIN_DELTA` | 2 °C | |
 | `MIN_HISTORY` | 5 | personal scale |
-| `RANGE_ONLY_SD` | 12 | defined, not used by the current pipeline (§15) |
+| `RANGE_ONLY_SD` | 12 mmHg | above it, no category (§11.2) |
 | `MAX_HISTORY` | 30 | wear WatchBpStore.kt |
 
 ### Transit and maneuver

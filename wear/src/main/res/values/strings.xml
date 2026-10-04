@@ -366,6 +366,7 @@
     <string name="bp_moving_title">Keep your arm still</string>
     <string name="bp_moving_body">Your arm moved during the reading. Rest it on a table and try again.</string>
     <string name="bp_beyond_calibration">Beyond your calibration · less certain</string>
+    <string name="bp_wide_range">Too uncertain for a category. Sit still, forearm resting at heart level, and measure again.</string>
     <string name="bp_posture_differs">Your arm isn\'t where it was at calibration. For a reliable number, sit with your forearm resting at heart level.</string>
     <string name="bp_confirmed">Confirmed by a 2nd reading</string>
     <string name="bp_safety_high">Very high. Check with a cuff. With chest pain, shortness of breath, weakness or trouble speaking or seeing, get help now.</string>

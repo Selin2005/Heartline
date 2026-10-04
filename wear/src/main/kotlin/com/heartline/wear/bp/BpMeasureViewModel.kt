@@ -124,6 +124,8 @@ sealed interface BpState {
         val bodyState: HemodynamicState = HemodynamicState.STEADY,
         val channels: List<BpChannel> = emptyList(),
         val postureDiffers: Boolean = false,
+        /** The ± is too wide for a category: the number and ± are shown without one. */
+        val wideRange: Boolean = false,
     ) : BpState {
         val needsConfirming get() = (beyondCalibration || safety != BpSafety.NONE) && !confirmed
     }
@@ -575,6 +577,7 @@ class BpMeasureViewModel(
                         confirmed = confirmed,
                         channels = e.channels.joinToString(",") { it.channel.name },
                         bodyState = e.state.state.name,
+                        rangeOnly = e.wideRange,
                         mode = if (input.precise != null) BpSessionHeader.MODE_PRECISE else BpSessionHeader.MODE_QUICK,
                         sessionId = sessionId,
                     ),
@@ -598,6 +601,7 @@ class BpMeasureViewModel(
                     bodyState = e.state.state,
                     channels = e.channels.map { it.channel },
                     postureDiffers = e.postureDiffers,
+                    wideRange = e.wideRange,
                 )
             }
         }

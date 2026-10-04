@@ -18,8 +18,8 @@ data class PulseArrivalTime(val medianMs: Double, val beats: Int, val spreadMs: 
  * changes better than pulse shape alone, though it includes the pre-ejection period
  * (Mukkamala et al. 2015). The Galaxy Watch reports a green PPG sample with every ECG sample
  * (EcgSet.PPG_GREEN), so both come on one clock at 500 Hz. Whether that channel carries a full
- * pulse wave on every model is being verified on devices (docs/DEVICE_TESTING.md); until then PAT
- * is logged and stored, not yet used in the estimate.
+ * pulse wave on every model is being verified on devices (docs/DEVICE_TESTING.md). Precise mode
+ * uses it as the PAT channel and, minus the pre-ejection period, the ECG_PTT channel ([TransitTimes]).
  */
 object PulseArrival {
     /** Plausible R → upstroke window at the wrist, ms. */

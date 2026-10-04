@@ -34,7 +34,7 @@ object WristBcg {
      */
     data class Result(val iLagMs: Double, val jLagMs: Double, val quality: Double, val beats: Int, val axis: Int, val amplitude: Double)
 
-    /** Aligned on PPG pulses (their steepest upstroke, wall-clock ns): the I wave precedes them by the transit time. */
+    /** Aligned on PPG pulses (their intersecting-tangent onsets, wall-clock ns): the I wave precedes them by the transit time. */
     fun beforePpgFeet(accel: SensorStream, feetNs: LongArray): Result? =
         analyse(accel, feetNs, preMs = 450, postMs = 100, searchFromMs = -400, searchToMs = -40)
 

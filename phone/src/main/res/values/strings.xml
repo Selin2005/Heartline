@@ -500,6 +500,8 @@
     <string name="bp_safety_low">Low. Check with a cuff. If you feel dizzy or faint, sit or lie down.</string>
     <string name="bp_refined_note">Refined by your personal model (watch showed %1$d/%2$d)</string>
     <string name="bp_tag_beyond">beyond calibration</string>
+    <string name="bp_tag_wide">no category</string>
+    <string name="bp_wide_range">The ± is too wide for a category. Measure again sitting still with your forearm resting at heart level, or compare with a cuff.</string>
     <string name="bp_tag_precise">precise</string>
     <string name="bp_state_transient">Taken while your pulse was still changing.</string>
     <string name="bp_state_compensatory">Fast pulse with a weak wrist pulse: weighted towards transit time rather than pulse shape.</string>

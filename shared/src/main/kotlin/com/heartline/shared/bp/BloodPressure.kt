@@ -266,6 +266,9 @@ data class BpEstimate(
     /** Algorithm 6.4: taken in a posture unlike the calibration's (lying down, hand raised or hanging). */
     val postureDiffers: Boolean = false
 ) {
+    /** The ± is too wide for a category ([BpEstimator.RANGE_ONLY_SD]); the number and ± are still shown. */
+    val wideRange: Boolean get() = uncertaintySys > BpEstimator.RANGE_ONLY_SD
+
     /** A very high reading driven by the pulse rate alone is not presented as very high. */
     val safety: BpSafety get() = BpSafety.of(systolic, diastolic).let {
         if (it == BpSafety.VERY_HIGH &&
@@ -367,7 +370,10 @@ object BpEstimator {
     const val HR_CAP_SYS = 6.0
     const val HR_CAP_DIA = 4.0
 
-    /** Above this ± (mmHg) a reading is shown as a range without a category. */
+    /**
+     * Above this ± (mmHg) a reading is still shown with its number and ±, but without a category
+     * (normal, high…): an interval that wide spans several of them (algorithm 6.5).
+     */
     const val RANGE_ONLY_SD = 12
 
     /** Extra ± for each source of doubt (added in quadrature), mmHg. */
@@ -685,8 +691,18 @@ object BpEstimator {
         }
         fun anchored(cuff: (CalibrationPoint) -> Int, w: DoubleArray) =
             points.indices.sumOf { i -> anchor[i] * (cuff(points[i]) - centred[i].indices.sumOf { w[it] * centred[i][it] }) } / anchor.sum()
+        // The diastolic baseline is moved along the slopes its change uses: ρ × the systolic's
+        // when coupled (algorithm 6.5; until then along the shape model's own diastolic slopes).
+        val diaSlopes = when (tuning.diastolic) {
+            BpTuning.Diastolic.SHAPE -> dia
+            BpTuning.Diastolic.COUPLED -> DoubleArray(sys.size) { diaRatio * sys[it] }
+        }
         return Model(
-            ref, anchored({ it.cuffSystolic }, sys), anchored({ it.cuffDiastolic }, dia), sys, dia, residual, residualDia, diaRatio, active,
+            ref,
+            anchored({
+                it.cuffSystolic
+            }, sys),
+            anchored({ it.cuffDiastolic }, diaSlopes), sys, dia, residual, residualDia, diaRatio, active,
             timed.maxOf { it.second },
             points.minOf { it.cuffSystolic }.toDouble(),
             points.maxOf { it.cuffSystolic }.toDouble()

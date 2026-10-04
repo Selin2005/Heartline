@@ -142,6 +142,7 @@ fun BpResultScreen(
     bodyState: HemodynamicState = HemodynamicState.STEADY,
     channels: List<BpChannel> = emptyList(),
     postureDiffers: Boolean = false,
+    wideRange: Boolean = uncertainty > com.heartline.shared.bp.BpEstimator.RANGE_ONLY_SD,
     onMeasureAgain: () -> Unit = {},
     onDone: () -> Unit = {},
 ) {
@@ -165,12 +166,17 @@ fun BpResultScreen(
         }
         // Lying down or the hand far from where it was at calibration: say how to measure instead.
         if (postureDiffers) Note(stringResource(R.string.bp_posture_differs), WearColors.warn)
-        Text(
-            stringResource(category.label),
-            style = MaterialTheme.typography.labelMedium,
-            color = Color.Black,
-            modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(50)).background(category.color).padding(horizontal = 10.dp, vertical = 3.dp),
-        )
+        // A ± this wide spans several categories: the number without a label (algorithm 6.5).
+        if (wideRange) {
+            Note(stringResource(R.string.bp_wide_range), WearColors.onSurfaceVariant)
+        } else {
+            Text(
+                stringResource(category.label),
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.Black,
+                modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(50)).background(category.color).padding(horizontal = 10.dp, vertical = 3.dp),
+            )
+        }
         stateNote(bodyState)?.let { Note(stringResource(it), WearColors.onSurfaceVariant) }
         if (channels.isNotEmpty()) {
             val names = channels.map { it.label }.distinct().map { stringResource(it) }
@@ -180,7 +186,7 @@ fun BpResultScreen(
         Body(stringResource(R.string.bp_pulse, pulse))
         if (ectopicBeats > 0) Note(stringResource(R.string.bp_ectopic_removed), WearColors.onSurfaceVariant)
         com.heartline.wear.ui.components.BaselineNote(Metric.BLOOD_PRESSURE, systolic.toFloat())
-        if (category == BpCategory.NORMAL && !needsConfirming) PersonalNote(GoodResult.BLOOD_PRESSURE)
+        if (category == BpCategory.NORMAL && !needsConfirming && !wideRange) PersonalNote(GoodResult.BLOOD_PRESSURE)
         when (safety) {
             BpSafety.VERY_HIGH -> Note(stringResource(R.string.bp_safety_high), WearColors.warn)
             BpSafety.LOW -> Note(stringResource(R.string.bp_safety_low), WearColors.warn)
@@ -192,7 +198,7 @@ fun BpResultScreen(
             }
         }
     }
-        if (category == BpCategory.NORMAL && !needsConfirming) com.heartline.wear.ui.components.EdgeGlowSweep(systolic, category.color)
+        if (category == BpCategory.NORMAL && !needsConfirming && !wideRange) com.heartline.wear.ui.components.EdgeGlowSweep(systolic, category.color)
     }
 }
 

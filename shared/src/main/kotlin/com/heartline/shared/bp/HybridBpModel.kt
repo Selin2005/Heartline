@@ -6,6 +6,7 @@ package com.heartline.shared.bp
 import com.heartline.shared.dsp.Biquad
 import com.heartline.shared.dsp.filtFilt
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /** Turns one recording into a fixed-length vector for the learned model. */
 fun interface PpgEmbedder {
@@ -77,8 +78,14 @@ class HybridBpModel(private val embedder: PpgEmbedder = MorphologyEmbedder) {
             val x = DoubleArray(e.size) { e[it] - mean[it] }
             val ds = sysBias + x.indices.sumOf { sysWeights[it] * x[it] }
             val dd = diaBias + x.indices.sumOf { diaWeights[it] * x[it] }
-            val sys = (classical.systolic + ds.coerceIn(-MAX_CORRECTION, MAX_CORRECTION)).toInt().coerceIn(BpEstimator.SYSTOLIC_LIMITS)
-            val dia = (classical.diastolic + dd.coerceIn(-MAX_CORRECTION, MAX_CORRECTION)).toInt().coerceIn(BpEstimator.DIASTOLIC_LIMITS)
+            // Rounded, not truncated (truncation moved every correction towards zero, by up to 1 mmHg).
+            val sys = (classical.systolic + ds.coerceIn(-MAX_CORRECTION, MAX_CORRECTION)).roundToInt().coerceIn(BpEstimator.SYSTOLIC_LIMITS)
+            val dia = (
+                classical.diastolic + dd.coerceIn(
+                    -MAX_CORRECTION,
+                    MAX_CORRECTION
+                )
+                ).roundToInt().coerceIn(BpEstimator.DIASTOLIC_LIMITS)
             return sys to dia.coerceAtMost(sys - 15)
         }
     }

@@ -9,6 +9,28 @@ PpgFeatures v3, now v5). **The current algorithm is specified completely in
 Heartline estimates blood pressure (BP) from the watch's green PPG pulse wave. It uses the same
 approach as Samsung Health Monitor: calibrated pulse-wave analysis (PWA).
 
+## Algorithm 6.5: five corrections found by writing the full specification
+
+Writing the complete specification ([BP_ALGORITHM.md](BP_ALGORITHM.md)) line by line from the code
+found five places where the code didn't do what it meant to:
+
+1. **Transit noise:** `TransitEstimator` added the rounds' misfit $r$ and the slope × round spread,
+   which is the same misfit expressed in ms ($b(\Delta x - \Delta S/b) = -(\Delta S - b\Delta x)$), so
+   it counted twice. Now only the spread term (with its 5 ms floor) is used.
+2. **Coupled diastolic baseline:** anchored along $\rho \times$ the systolic slopes, which its change
+   uses, instead of the 6.3 shape model's diastolic slopes.
+3. **Wide ±:** above ±12 mmHg (`RANGE_ONLY_SD`, defined but unused since algorithm 6) the reading
+   keeps its number and ± but is shown without a category, on the watch and the phone.
+4. **Direction of a change** (`deltaSystolic`, used to confirm a reading with a second one) is
+   measured from the model's own time-weighted, anchored reference, not the plain mean of the cuff
+   readings.
+5. **Phone correction** is rounded, not truncated.
+
+Measured with `bpEval` on the 9 cuff checks: the shown numbers are the same as 6.4 (systolic
++1.7 / 4.0 / 3.2, diastolic −2.9 / 7.7 / 6.0 ONLINE; +0.1 / 3.7 / 2.6 and −1.3 / 8.6 / 6.9
+leave-one-out). Unrounded, the systolic moved by at most 0.4 mmHg and the diastolic by at most
+0.16; the BCG channel's ± fell by 0.1–1.2 mmHg. These are corrections, not tuning.
+
 ## What changed in algorithm 3 (and why)
 
 Algorithm 2 refused to show a number ("Outside your calibration") whenever today's pulse wave or

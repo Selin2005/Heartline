@@ -320,7 +320,11 @@ object BpPipeline {
         val base = (green as? BpOutcome.Ok)?.estimate
         val systolic = fused.systolic.roundToInt().coerceIn(BpEstimator.SYSTOLIC_LIMITS)
         val diastolic = fused.diastolic.roundToInt().coerceIn(BpEstimator.DIASTOLIC_LIMITS).coerceAtMost(systolic - 15)
-        val refSys = calibration.timedPoints().map { it.first.cuffSystolic }.average()
+        // The change is measured from the green model's own reference (time-weighted and anchored
+        // to recent cuff readings, algorithm 6.5), so a confirmation compares like with like; the
+        // plain mean of the cuff readings only without a green estimate.
+        val refSys = base?.channels?.firstOrNull()?.let { it.systolic - base.deltaSystolic }
+            ?: calibration.timedPoints().map { it.first.cuffSystolic }.average()
         // A posture unlike the calibration's (lying down, the hand raised or hanging): the wave may
         // differ for reasons the model hasn't seen. Shown with a wider ± and flagged.
         val postureSd = if (postureDiffers) POSTURE_SD else 0.0
