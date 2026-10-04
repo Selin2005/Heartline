@@ -276,14 +276,35 @@ class BpRepository(
         }
 
     /** Every cuff check whose reading's pulse wave is on the phone. */
-    internal suspend fun trainingSamples(excluding: String? = null): List<HybridBpModel.Sample> =
-        dao.validations().first().filter { it.readingId != excluding }.mapNotNull { v ->
+    internal suspend fun trainingSamples(excluding: String? = null): List<HybridBpModel.Sample> {
+        val cal = calibration.first()
+        return dao.validations().first().filter { it.readingId != excluding }.mapNotNull { v ->
             val record = records.get(v.readingId) ?: return@mapNotNull null
             val s = record.summary as? RecordSummary.BloodPressure ?: return@mapNotNull null
             val wave = records.wave(record) ?: return@mapNotNull null
             val features = PpgFeatures.extract(wave, record.entity.sampleRateHz.takeIf { it > 0 } ?: BpCalibration.PPG_FS) ?: return@mapNotNull null
-            HybridBpModel.Sample(features, wave, s.watchSystolic ?: s.systolic, s.watchDiastolic ?: s.diastolic, v.cuffSystolic, v.cuffDiastolic)
+            // The classical estimate as the current algorithm gives it (algorithm 6.4: the number
+            // shown then may have had a correction since removed), from the reading's raw session
+            // and the calibration without this check's own point.
+            val classical = s.sessionId?.let { session(it) }?.let { log ->
+                cal?.let { c ->
+                    val own = c.copy(extraPoints = c.extraPoints.filter { it.sessionId != s.sessionId && it.atMs != record.entity.startedAtMs })
+                    withContext(Dispatchers.Default) {
+                        (BpPipeline.run(own, BpSessionReplay.input(log), record.entity.startedAtMs).outcome as? com.heartline.shared.bp.BpOutcome.Ok)?.estimate
+                    }
+                }
+            }
+            if (s.sessionId != null && classical == null) return@mapNotNull null
+            HybridBpModel.Sample(
+                features,
+                wave,
+                classical?.systolic ?: s.watchSystolic ?: s.systolic,
+                classical?.diastolic ?: s.watchDiastolic ?: s.diastolic,
+                v.cuffSystolic,
+                v.cuffDiastolic,
+            )
         }
+    }
 
     /** The user's BP data for offline analysis (tools/bp-ml): calibration and cuff-checked readings with their raw PPG. */
     suspend fun dataset(): BpDataset? {

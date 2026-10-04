@@ -105,7 +105,14 @@ class HybridBpModel(private val embedder: PpgEmbedder = MorphologyEmbedder) {
         }
         val (lambda, looErrors) = best ?: return null
         val hybridMae = looErrors.average()
-        if (hybridMae > classicalMae * GATE) return null
+        // Algorithm 6.4: on a real user it switched on with 6 checks and made one reading 4 mmHg
+        // worse. Now it must clearly beat the classical estimate, on the diastolic too.
+        if (hybridMae > classicalMae * GATE || hybridMae > classicalMae - MIN_GAIN_MMHG) return null
+        val diaLoo = x.indices.map { out ->
+            val keep = x.indices.filter { it != out }
+            abs(yDia[out] - ridge(keep.map { x[it] }, keep.map { yDia[it] }, lambda).predict(x[out]))
+        }.average()
+        if (diaLoo > yDia.map { abs(it) }.average()) return null
         val sys = ridge(x, ySys, lambda)
         val dia = ridge(x, yDia, lambda)
         return Trained(embedder, fs, sys.mean, sys.weights, dia.weights, sys.bias, dia.bias, lambda, classicalMae, hybridMae, looErrors)
@@ -150,7 +157,10 @@ class HybridBpModel(private val embedder: PpgEmbedder = MorphologyEmbedder) {
     }
 
     companion object {
-        const val MIN_SAMPLES = 6
+        const val MIN_SAMPLES = 12
+
+        /** The hybrid must also cut the LOO systolic error by at least this much, mmHg. */
+        const val MIN_GAIN_MMHG = 1.5
 
         /** The hybrid must cut the LOO error by at least 10 %. */
         const val GATE = 0.9

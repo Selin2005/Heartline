@@ -160,6 +160,7 @@ fun BpFlow(
             ectopicBeats = s.ectopicBeats,
             bodyState = s.bodyState,
             channels = s.channels,
+            postureDiffers = s.postureDiffers,
             onMeasureAgain = { start(mode) },
             onDone = done,
         )

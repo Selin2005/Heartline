@@ -34,6 +34,66 @@ changes need re-calibration at the change point (Tae et al. 2026). Algorithm 3:
 
 Algorithm 4 is the phone's personal learned model, described below.
 
+## Algorithm 6.4: measured on real cuff checks, the forearm angle no longer moves the number
+
+A user with treated hypertension (Galaxy Watch6 Classic) sent a complete export: a calibration,
+9 readings each checked with a cuff, and one reading taken lying in bed that came out far too
+low (111/39, while the cuff the same afternoon said 142/87). `./gradlew :shared:bpEval
+-Pdir=<unpacked export>` replays every cuff-checked session through the algorithm
+(`BpExportEvaluation`; it reproduced the numbers the watch had shown exactly).
+
+**What was wrong:**
+
+1. **The forearm angle was taken as the hand's height.**
+   - The wrist's ρgh (0.78 mmHg/cm × 0.33 × height × sin of the forearm angle) was taken off
+     every channel.
+   - Lying in bed the forearm pointed 58° down, so 37 mmHg came off, though the wrist was nowhere
+     near 47 cm below the heart. At +15° and −18° it gave +15 and −17 mmHg errors.
+   - The model is calibrated to a cuff on the upper arm at heart level, which the hand's height
+     doesn't change.
+
+   | Reading | Forearm | Taken off | Shown | Cuff | Error (6.3) | Error (6.4) |
+   |---|---|---|---|---|---|---|
+   | 1 Oct 02:30 | +15° | −13 | 152/92 | 137/86 | +15/+6 | +2/−8 |
+   | 1 Oct 03:18 | −18° | +13 | 129/62 | 146/99 | −17/−37 | −6/−19 |
+   | 2 Oct 14:25, lying | −58° | +37 | 111/39 | (≈142/87 sitting) | | 142/84 ±11, flagged |
+
+2. **The diastolic had its own shape model with population slopes.** For this user, a wider,
+   flatter wave meant a lower diastolic by 11–13 mmHg while the cuff's went up. Its ± was
+   0.7 × the systolic's (±4) while it missed by ±10.
+
+3. **The phone's personal correction (`HybridBpModel`) switched on after 6 checks**, trained on
+   numbers that carried the angle error, and made one reading worse.
+
+**What changed** (`BpTuning`, all variants measurable with `bpEval`):
+
+- **Forearm angle:** no ρgh is taken off any more (`hydrostaticFactor = 0`, also for the transit
+  channel, where the geometry from the forearm angle was as unreliable). A posture far from the
+  calibration's (forearm > 30° off, or the watch > 45° from every calibration round) is flagged
+  instead: the ± grows by 8 mmHg, the reading is marked beyond calibration, and the watch says to
+  sit with the forearm resting at heart level.
+- **Diastolic:** it now follows the systolic change times this user's own diastolic/systolic
+  ratio, learned from the cuff readings around 0.5 (`Diastolic.COUPLED`). Its ± comes from its
+  own misfit on the cuff readings.
+- **Phone correction:** only from 12 checks, when it beats the classical estimate by at least
+  1.5 mmHg and on the diastolic too. It is trained on the classical numbers recomputed by
+  replaying each reading's session.
+- **Crash:** a motion recorder left running made the watch run out of memory after hours. It
+  now stops itself after 40 000 samples, and a screen that goes away stops it.
+
+**Result on the 9 cuff checks** (calibration as it was before each reading):
+
+| | Systolic mean / SD / MAE | Diastolic mean / SD / MAE |
+|---|---|---|
+| 6.3 | +1.8 / 9.0 / 6.9 | −4.9 / 14.3 / 9.1 |
+| 6.4 | +1.7 / 4.0 / 3.2 | −2.9 / 7.7 / 6.0 |
+| 6.4, leave-one-out | +0.1 / 3.7 / 2.6 | −1.3 / 8.6 / 6.9 |
+
+Nine readings from one person in a narrow range (133–146) are not a validation study. Each new
+export with cuff checks goes through `bpEval` before a tuning changes. `BpRealLog2Test` keeps
+this user's derived numbers (features, forearm angle, cuff; no raw waves, nothing identifying)
+as a regression test.
+
 ## Algorithm 6.3: follow the pressure away from the calibration, with an honest ±
 
 The second user's first reading after a new calibration was 141/80 ±3; the cuff said 137/76. The

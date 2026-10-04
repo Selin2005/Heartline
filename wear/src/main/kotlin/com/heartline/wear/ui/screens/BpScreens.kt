@@ -141,6 +141,7 @@ fun BpResultScreen(
     ectopicBeats: Int = 0,
     bodyState: HemodynamicState = HemodynamicState.STEADY,
     channels: List<BpChannel> = emptyList(),
+    postureDiffers: Boolean = false,
     onMeasureAgain: () -> Unit = {},
     onDone: () -> Unit = {},
 ) {
@@ -162,6 +163,8 @@ fun BpResultScreen(
         } else if (beyondCalibration) {
             Note(stringResource(R.string.bp_beyond_calibration), WearColors.warn)
         }
+        // Lying down or the hand far from where it was at calibration: say how to measure instead.
+        if (postureDiffers) Note(stringResource(R.string.bp_posture_differs), WearColors.warn)
         Text(
             stringResource(category.label),
             style = MaterialTheme.typography.labelMedium,

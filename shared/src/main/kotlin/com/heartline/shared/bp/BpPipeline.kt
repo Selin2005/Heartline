@@ -104,6 +104,13 @@ object BpWindowSelector {
  * See docs/algorithms/BP_ALGORITHM.md. Every intermediate goes to [log] when given.
  */
 object BpPipeline {
+    /** Forearm angle (°) or watch orientation (° from every calibration round) beyond which the posture differs. */
+    const val POSTURE_PITCH_DEG = 30.0
+    const val POSTURE_ANGLE_DEG = 45.0
+
+    /** Extra uncertainty of a reading taken in a posture unlike the calibration's, mmHg systolic. */
+    private const val POSTURE_SD = 8.0
+
     /** Assumed pulse pressure share when turning a mean pressure into systolic/diastolic. */
     private const val PP_SYS_SHARE = 2.0 / 3.0
 
@@ -112,7 +119,8 @@ object BpPipeline {
         input: BpSessionInput,
         nowMs: Long,
         history: List<PpgFeatureVector> = emptyList(),
-        log: BpSessionRecorder? = null
+        log: BpSessionRecorder? = null,
+        tuning: BpTuning = BpTuning.DEFAULT
     ): BpResult {
         fun done(outcome: BpOutcome, f: PpgFeatureVector? = null) = BpResult(outcome, f, null, null, null, null, null, null).also {
             log?.value("outcome.code", outcomeCode(outcome).toDouble())
@@ -170,20 +178,30 @@ object BpPipeline {
         log?.note("state", state.state.name)
         state.reason?.let { log?.note("state.reason", it.name) }
 
-        // Arm height against the calibration's: a lower hand has a higher wrist pressure by ρgh.
+        // The hand's height against the calibration's, from the forearm angle. Algorithm 6.4: its
+        // ρgh is no longer taken off (tuning.hydrostaticFactor = 0). On 9 real cuff checks (Galaxy
+        // Watch6) taking it off made the systolic error SD 9.0 mmHg against 4.0 without, and lying
+        // in bed (forearm −58°, the wrist nowhere near 47 cm below the heart) it took 37 mmHg off.
+        // The model is calibrated to a cuff on the upper arm at heart level, which the hand's
+        // height doesn't change. A posture far from the calibration's is flagged instead.
         val armCm = (input.heightCm?.takeIf { it > 100 } ?: 170.0) * HydrostaticCalibration.ARM_SHARE_OF_HEIGHT
         val pitch = gravity?.let { ImuStreams.pitchDeg(it, calibration.armSign) }
         val refPitch = calibration.referencePitchDeg()
-        val hydrostatic = if (pitch != null && refPitch != null) {
-            -HydrostaticCalibration.MMHG_PER_CM * armCm * (sin(Math.toRadians(pitch)) - sin(Math.toRadians(refPitch)))
-        } else {
-            0.0
-        }
+        val handCm = if (pitch != null && refPitch != null) armCm * (sin(Math.toRadians(pitch)) - sin(Math.toRadians(refPitch))) else 0.0
+        val hydrostatic = -HydrostaticCalibration.MMHG_PER_CM * handCm
+        val armAngle = gravity?.let { calibration.armAngleDeg(it) }
+        val postureDiffers = (pitch != null && refPitch != null && abs(pitch - refPitch) > POSTURE_PITCH_DEG) ||
+            (armAngle != null && armAngle > POSTURE_ANGLE_DEG)
         log?.value("arm.pitchDeg", pitch)
-        log?.value("arm.hydrostaticMmHg", hydrostatic)
+        log?.value("arm.referencePitchDeg", refPitch)
+        log?.value("arm.handHeightCm", handCm)
+        log?.value("arm.angleFromCalibrationDeg", armAngle)
+        log?.value("arm.appliedMmHg", hydrostatic * tuning.hydrostaticFactor)
+        log?.value("posture.differs", if (postureDiffers) 1.0 else 0.0)
 
         val channels = mutableListOf<ChannelEstimate>()
-        val green = BpEstimator.estimate(calibration, features, nowMs, history, context, BpChannel.PWA_GREEN, state, hydrostatic, fs)
+        val applied = hydrostatic * tuning.hydrostaticFactor
+        val green = BpEstimator.estimate(calibration, features, nowMs, history, context, BpChannel.PWA_GREEN, state, applied, fs, tuning)
         (green as? BpOutcome.Ok)?.let { channels += it.estimate.channels }
         if (green == BpOutcome.NeedsCalibration) log?.note("needsCalibration", needsCalibrationReason(calibration, nowMs))
 
@@ -199,8 +217,8 @@ object BpPipeline {
         }
         log?.features("ir", irFeatures)
         irFeatures?.let { f ->
-            (BpEstimator.estimate(calibration, f, nowMs, emptyList(), context, BpChannel.PWA_IR, state, hydrostatic, fs) as? BpOutcome.Ok)
-                ?.let { channels += it.estimate.channels }
+            val ir = BpEstimator.estimate(calibration, f, nowMs, emptyList(), context, BpChannel.PWA_IR, state, applied, fs, tuning)
+            (ir as? BpOutcome.Ok)?.let { channels += it.estimate.channels }
         }
 
         // Wrist ballistocardiogram against the PPG feet.
@@ -273,7 +291,16 @@ object BpPipeline {
                     ChannelEstimate(BpChannel.HYDRO_MAP, map + PP_SYS_SHARE * pp, map - (1 - PP_SYS_SHARE) * pp, sqrt(sd * sd + 16.0), sd)
             }
         }
-        bcgPtt?.let { TransitEstimator.estimate(calibration, BpChannel.BCG_PTT, it, nowMs, null, hydrostatic)?.let { c -> channels += c } }
+        bcgPtt?.let {
+            TransitEstimator.estimate(
+                calibration,
+                BpChannel.BCG_PTT,
+                it,
+                nowMs,
+                null,
+                hydrostatic * tuning.transitHydrostaticFactor
+            )?.let { c -> channels += c }
+        }
 
         channels.forEach { c ->
             log?.value("channel.${c.channel}.systolic", c.systolic)
@@ -294,14 +321,18 @@ object BpPipeline {
         val systolic = fused.systolic.roundToInt().coerceIn(BpEstimator.SYSTOLIC_LIMITS)
         val diastolic = fused.diastolic.roundToInt().coerceIn(BpEstimator.DIASTOLIC_LIMITS).coerceAtMost(systolic - 15)
         val refSys = calibration.timedPoints().map { it.first.cuffSystolic }.average()
+        // A posture unlike the calibration's (lying down, the hand raised or hanging): the wave may
+        // differ for reasons the model hasn't seen. Shown with a wider ± and flagged.
+        val postureSd = if (postureDiffers) POSTURE_SD else 0.0
         val estimate = BpEstimate(
             systolic,
             diastolic,
             (transit?.heartRateBpm ?: features.heartRateBpm).roundToInt(),
-            fused.sdSys.roundToInt(),
-            fused.sdDia.roundToInt(),
+            sqrt(fused.sdSys * fused.sdSys + postureSd * postureSd).roundToInt(),
+            sqrt(fused.sdDia * fused.sdDia + (postureSd * 0.7) * (postureSd * 0.7)).roundToInt(),
             // Channels that disagree more than their noise allows: shown, flagged for a cuff check.
-            beyondCalibration = (base?.beyondCalibration ?: true) || fused.conflict,
+            beyondCalibration = (base?.beyondCalibration ?: true) || fused.conflict || postureDiffers,
+            postureDiffers = postureDiffers,
             deltaSystolic = fused.systolic - refSys,
             heartRateDominated = base?.heartRateDominated ?: false,
             ectopicBeats = features.ectopicCount,

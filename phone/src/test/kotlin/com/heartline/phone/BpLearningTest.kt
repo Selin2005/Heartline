@@ -94,9 +94,10 @@ class BpLearningTest {
         reading("first", 0.5, RecordSummary.BloodPressure(121, 79, 70, 6, algorithm = 3), seed = 20)
         assertEquals(3, (records.get("first")!!.summary as RecordSummary.BloodPressure).algorithm)
 
-        // This user reads systematically low on stiff pulses; the checks teach the model that.
-        for (i in 0 until 10) {
-            val stiffness = 0.2 + 0.07 * i
+        // This user reads systematically low on stiff pulses; the checks teach the model that
+        // (algorithm 6.4: it takes 12 checks before the personal model may correct anything).
+        for (i in 0 until 12) {
+            val stiffness = 0.2 + 0.06 * i
             reading("c$i", stiffness, RecordSummary.BloodPressure(122, 79, 70, 6, algorithm = 3), seed = 30 + i)
             bp.addValidation(BpValidationEntity("v$i", "c$i", now, 122, 79, (122 + 40 * (stiffness - 0.5)).toInt(), 79))
         }

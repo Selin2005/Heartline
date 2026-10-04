@@ -12,6 +12,7 @@ import com.heartline.shared.bp.BpSessionLog
 import com.heartline.shared.bp.BpSessionRecorder
 import com.heartline.shared.bp.BpSessionReplay
 import com.heartline.shared.bp.BpSessionStreams
+import com.heartline.shared.bp.BpTuning
 import com.heartline.shared.bp.BpWindowSelector
 import com.heartline.shared.bp.CalibrationPoint
 import com.heartline.shared.bp.HemodynamicState
@@ -192,10 +193,16 @@ class BpAlgorithm6Test {
     }
 
     @Test
-    fun theArmsHeightIsCorrectedInTheTransitChannel() {
+    fun theArmsHeightIsFlaggedAndCanStillBeCorrectedInTheTransitChannel() {
         val hanging = base.copy(pitchDeg = { -40.0 }, withIr = false, seed = 15)
+        // Algorithm 6.4: the angle no longer moves the number; a posture this far from the
+        // calibration's is flagged instead (real cuff checks: the correction made errors larger).
         val e = ok(run(hanging).outcome)
-        val bcg = e.channels.first { it.channel == BpChannel.BCG_PTT }
+        assertTrue(e.postureDiffers && e.beyondCalibration)
+        // The physics is still there when asked for: the transit channel, corrected back.
+        val corrected =
+            ok(BpPipeline.run(calibration(), SyntheticSession.generate(hanging).input, 1_000, tuning = BpTuning.ALGORITHM_6_3).outcome)
+        val bcg = corrected.channels.first { it.channel == BpChannel.BCG_PTT }
         assertEquals(104.0, bcg.systolic, 7.0)
     }
 
