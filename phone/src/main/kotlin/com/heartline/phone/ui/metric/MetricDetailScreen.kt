@@ -205,7 +205,8 @@ fun MetricDetailScreen(state: MetricDetailUi, onBack: (() -> Unit)? = null, onMe
     val color = colors.metric(state.metric)
     ReachabilityScaffold(
         title = stringResource(state.metric.label),
-        subtitle = state.newest?.let { stringResource(R.string.bp_last_measured, "${it.date} ${it.time}") },
+        // A watch row's time is a range ("1:19–6:07 AM"): its last reading is the latest.
+        subtitle = state.newest?.let { stringResource(R.string.bp_last_measured, "${it.date} ${it.time.substringAfterLast('–')}") },
         onBack = onBack,
     ) {
         onMeasureOnWatch?.let { measure ->
@@ -270,7 +271,7 @@ private fun HistoryRows(rows: List<MetricReadingUi>) {
             CardRow(
                 listOfNotNull(r.value, r.unit).joinToString(" "),
                 subtitle = if (r.fromWatch) {
-                    stringResource(R.string.history_watch_day, r.date, r.details.lastOrNull()?.second ?: "")
+                    stringResource(R.string.history_watch_day, r.date, r.time, r.details.lastOrNull()?.second ?: "")
                 } else {
                     "${r.date} · ${r.time}"
                 },

@@ -43,23 +43,35 @@ class BackgroundReadingsTest {
     }
 
     @Test
-    fun aDayOfReadingsIsOneHistoryRowWithItsReadings() {
+    fun aStretchOfReadingsIsOneHistoryRowWithItsReadings() {
         val temps = listOf(
             TempSampleEntity(at(2), 33.0f, 33f, HrContext.SLEEP, true),
             TempSampleEntity(at(3), 34.0f, 34f, HrContext.SLEEP, true),
             TempSampleEntity(at(4), 33.6f, 33f, HrContext.SLEEP, true),
-            // By day the air moves it: the night decides the day's value.
-            TempSampleEntity(at(14), 30.1f, 29f, HrContext.REST, false),
         )
         val row = BackgroundReadings.tempDays(temps, formatter, zone).single()
         assertEquals("33.6", row.value)
         assertTrue(row.fromWatch)
-        assertEquals(at(14), row.atMs)
-        assertEquals(4, row.entries.size)
-        assertEquals(formatter.time(at(14)) to "30.1 °C", row.entries.first())
+        assertEquals(at(4), row.atMs)
+        assertEquals("${formatter.time(at(2))}–${formatter.time(at(4))}", row.time)
+        assertEquals(3, row.entries.size)
+        assertEquals(formatter.time(at(4)) to "33.6 °C", row.entries.first())
         val spo2 = BackgroundReadings.spo2Days(listOf(Spo2SampleEntity(at(1), 96, HrContext.SLEEP, false), Spo2SampleEntity(at(2), 93, HrContext.SLEEP, false), Spo2SampleEntity(at(3), 97, HrContext.SLEEP, false)), formatter, zone).single()
         assertEquals("96", spo2.value)
         assertEquals(listOf(R.string.detail_lowest to "93 %", R.string.detail_readings to "3"), spo2.details)
+    }
+
+    @Test
+    fun aNightAndAnEveningNapAreTwoRowsAroundAMeasurementBetweenThem() {
+        // The real case: readings 1:19–6:07 at night, a manual one at 17:50, a nap reading at 20:09.
+        val spo2 = listOf(1 to 19, 2 to 31, 3 to 55, 5 to 6, 6 to 7, 20 to 9).map { (h, m) -> Spo2SampleEntity(at(h, m), 95, HrContext.SLEEP, false) }
+        val watch = BackgroundReadings.spo2Days(spo2, formatter, zone)
+        assertEquals(2, watch.size)
+        val manual = MetricReadingUi("m", "Today", formatter.time(at(17, 50)), "95", "%", 95f, atMs = at(17, 50))
+        val merged = BackgroundReadings.merge(listOf(manual), watch)
+        assertEquals(listOf(at(20, 9), at(17, 50), at(6, 7)), merged.map { it.atMs })
+        assertEquals("${formatter.time(at(1, 19))}–${formatter.time(at(6, 7))}", merged.last().time)
+        assertEquals(formatter.time(at(20, 9)), merged.first().time)
     }
 
     @Test

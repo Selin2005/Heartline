@@ -282,33 +282,45 @@ object BackgroundReadings {
     fun stressDays(samples: List<StressSampleEntity>, formatter: RecordFormatter, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()) =
         days(Metric.STRESS, samples.filter { it.score != null }, { it.tsMs }, { it.score!!.toFloat() }, null, zone, formatter) { "${it.toInt()}" }
 
+    /** Readings further apart than this start a new row (a night and an afternoon nap are two). */
+    private const val SESSION_GAP_MS = 3 * 3_600_000L
+
+    /**
+     * One row per stretch of readings (a night, a nap, an afternoon), not per calendar day: a day
+     * row mixed last night's readings with the evening's and sorted them above a measurement
+     * taken in between, so the night looked as if it came after it.
+     */
     private fun <T> days(
         metric: Metric,
         samples: List<T>,
         ts: (T) -> Long,
         value: (T) -> Float,
         unit: String?,
-        zone: java.time.ZoneId,
+        @Suppress("UNUSED_PARAMETER") zone: java.time.ZoneId,
         formatter: RecordFormatter,
         low: Boolean = false,
         prefer: (T) -> Boolean = { true },
         format: (Float) -> String,
-    ): List<MetricReadingUi> = samples
-        .groupBy { java.time.Instant.ofEpochMilli(ts(it)).atZone(zone).toLocalDate() }
-        .map { (day, list) ->
-            val sorted = list.sortedBy(ts)
+    ): List<MetricReadingUi> {
+        val groups = mutableListOf<MutableList<T>>()
+        samples.sortedBy(ts).forEach { s ->
+            val last = groups.lastOrNull()
+            if (last == null || ts(s) - ts(last.last()) > SESSION_GAP_MS) groups += mutableListOf(s) else last += s
+        }
+        return groups.map { sorted ->
             val counted = sorted.filter(prefer).ifEmpty { sorted }.map(value).sorted()
             val median = counted[counted.size / 2]
+            val first = ts(sorted.first())
             val last = ts(sorted.last())
             MetricReadingUi(
-                id = "watch-${metric.name}-$day",
+                id = "watch-${metric.name}-$first",
                 date = formatter.date(last),
-                time = formatter.time(last),
+                time = if (first == last) formatter.time(last) else "${formatter.time(first)}–${formatter.time(last)}",
                 value = format(median),
                 unit = unit,
                 plot = median,
                 details = listOfNotNull(
-                    if (low) com.heartline.phone.R.string.detail_lowest to "${format(sorted.minOf(value))}${unit.orEmpty().let { if (it == "%") " %" else "" }}" else null,
+                    if (low) com.heartline.phone.R.string.detail_lowest to "${format(sorted.minOf(value))}${if (unit == "%") " %" else ""}" else null,
                     com.heartline.phone.R.string.detail_readings to "${sorted.size}",
                 ),
                 atMs = last,
@@ -316,8 +328,9 @@ object BackgroundReadings {
                 entries = sorted.reversed().map { formatter.time(ts(it)) to listOfNotNull(format(value(it)), unit).joinToString(" ") },
             )
         }
+    }
 
-    /** Manual measurements and the watch's days together, newest first. */
+    /** Manual measurements and the watch's stretches together, newest first. */
     fun merge(manual: List<MetricReadingUi>, watch: List<MetricReadingUi>) = (manual + watch).sortedByDescending { it.atMs }
 }
 

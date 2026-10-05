@@ -19,7 +19,14 @@ data class RrFeatures(
     val cov: Double,
     val nRmssd: Double,
     val shannonEntropy: Double,
-    val turningPointRatio: Double
+    val turningPointRatio: Double,
+    /**
+     * Correlation of each interval with the next (lag 1). A sinus rhythm drifts smoothly with
+     * breathing (clearly positive, about +0.3 to +0.6 in a real night of high HRV); the intervals of
+     * atrial fibrillation are random (about 0). Equivalent to the Poincaré plot's
+     * SD1/SD2 = sqrt((1 − r) / (1 + r)), round for AF.
+     */
+    val lag1: Double = 0.0
 ) {
     /** Irregularly irregular: high successive variation, spread-out and non-patterned intervals. */
     val isIrregular: Boolean get() = irregular(count, nRmssd, shannonEntropy, turningPointRatio)
@@ -50,7 +57,15 @@ data class RrFeatures(
                 (clean[i] > clean[i - 1] && clean[i] > clean[i + 1]) || (clean[i] < clean[i - 1] && clean[i] < clean[i + 1])
             }
             val tpr = if (clean.size > 2) turning.toDouble() / (clean.size - 2) else 0.0
-            return RrFeatures(clean.size, mean, sdnn, rmssd, sdnn / mean, rmssd / mean, entropy, tpr)
+            val variance = clean.sumOf { (it - mean) * (it - mean) } / clean.size
+            val lag1 = if (variance <=
+                0.0
+            ) {
+                1.0
+            } else {
+                clean.zipWithNext { a, b -> (a - mean) * (b - mean) }.sum() / (clean.size - 1) / variance
+            }
+            return RrFeatures(clean.size, mean, sdnn, rmssd, sdnn / mean, rmssd / mean, entropy, tpr, lag1)
         }
 
         /** Normalised Shannon entropy over 16 equal-width bins between min and max. */

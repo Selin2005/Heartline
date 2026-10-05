@@ -31,7 +31,44 @@ object BackgroundWindow {
 
     data class HrvReading(val rmssdMs: Double, val bpm: Int, val pairs: Int, val startMs: Long)
 
-    private fun ordered(samples: List<HrSample>) = samples.sortedBy { it.tsMs }.distinctBy { it.tsMs }
+    /** A reading whose intervals add up to more than this carries a held batch of beats. */
+    private const val PACKED_MS = 3_000
+
+    private fun ordered(samples: List<HrSample>) = unpack(samples.sortedBy { it.tsMs }.distinctBy { it.tsMs })
+
+    /**
+     * Puts every beat at its own time. A held batch can arrive as one reading with minutes of
+     * intervals (665 beats, 10 minutes, in a real nap); they follow the reading's time. Each beat
+     * becomes a reading of its own, worn and still as the real reading at or before it was.
+     * Judging that batch as one "window" read 10 minutes against limits made for one, and a
+     * smooth sleeping rhythm looked irregular.
+     */
+    internal fun unpack(sorted: List<HrSample>): List<HrSample> {
+        if (sorted.none { it.rawIbiMs.sum() > PACKED_MS }) return sorted
+        val real = sorted.filter { it.rawIbiMs.sum() <= PACKED_MS }
+        fun around(ts: Long, packed: HrSample) = real.lastOrNull { it.tsMs <= ts }?.takeIf { ts - it.tsMs <= 5_000 } ?: packed
+        val beats = sorted.filter { it.rawIbiMs.sum() > PACKED_MS }.flatMap { packed ->
+            var t = packed.tsMs
+            packed.rawIbiMs.mapIndexed { k, ibi ->
+                t += ibi
+                val ok = packed.rawIbiOk.getOrElse(k) { false }
+                val state = around(t, packed)
+                HrSample(
+                    tsMs = t,
+                    bpm = packed.bpm,
+                    ibiMs = if (ok) listOf(ibi) else emptyList(),
+                    onBody = packed.onBody && state.onBody,
+                    moving = packed.moving || state.moving,
+                    reliable = packed.reliable,
+                    rejectedIbis = if (ok) 0 else 1,
+                    rawIbiMs = listOf(ibi),
+                    rawIbiOk = listOf(ok)
+                )
+            }
+        }
+        // Real readings without beats keep the still/worn record; beats take their place in time.
+        return (real + beats).sortedBy { it.tsMs }.distinctBy { it.tsMs }
+    }
 
     private fun HrSample.usable() = reliable && onBody && !moving && bpm > 0
 

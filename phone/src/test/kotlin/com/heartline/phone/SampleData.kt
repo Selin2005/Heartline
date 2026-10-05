@@ -179,10 +179,10 @@ object SampleData {
         // The watch's own days come first in the history (one row a day).
         val watchDays = when (metric) {
             Metric.SPO2 -> listOf("Today" to "96", "Yesterday" to "95").map { (d, v) ->
-                MetricReadingUi("w$d", d, "6:07 AM", v, "%", v.toFloat(), listOf(R.string.detail_lowest to "93 %", R.string.detail_readings to "6"), fromWatch = true)
+                MetricReadingUi("w$d", d, "1:19–6:07 AM", v, "%", v.toFloat(), listOf(R.string.detail_lowest to "93 %", R.string.detail_readings to "6"), fromWatch = true)
             }
             Metric.SKIN_TEMPERATURE -> listOf("Today" to "33.8", "Yesterday" to "33.6").map { (d, v) ->
-                MetricReadingUi("w$d", d, "6:43 AM", v, "°C", v.toFloat(), listOf(R.string.detail_readings to "42"), fromWatch = true)
+                MetricReadingUi("w$d", d, "11:42 PM–6:43 AM", v, "°C", v.toFloat(), listOf(R.string.detail_readings to "42"), fromWatch = true)
             }
             else -> emptyList()
         }

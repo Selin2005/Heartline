@@ -18,7 +18,13 @@ data class WindowResult(val startMs: Long, val irregular: Boolean, val meanBpm: 
  * the last alert looked regular, so the next alert waits longer and needs stronger evidence.
  */
 @Serializable
-data class IrnState(val windows: List<WindowResult> = emptyList(), val lastAlertMs: Long? = null, val regularEcgAtMs: Long? = null) {
+data class IrnState(
+    val windows: List<WindowResult> = emptyList(),
+    val lastAlertMs: Long? = null,
+    val regularEcgAtMs: Long? = null,
+    /** The rule the [windows] were judged by ([IrnThresholds.RULE]); older ones are dropped. */
+    val rule: Int = 1
+) {
     /** Records an ECG result: a regular one within [IrregularRhythmDetector.ECG_FOLLOW_UP_MS] of the alert counts. */
     fun withEcg(regular: Boolean, atMs: Long): IrnState {
         val alert = lastAlertMs ?: return this
@@ -27,24 +33,43 @@ data class IrnState(val windows: List<WindowResult> = emptyList(), val lastAlert
     }
 }
 
-/** Irregularity thresholds for beat-to-beat intervals from the wrist (PPG) sensor. */
+/**
+ * Irregularity thresholds for beat-to-beat intervals from the wrist (PPG) sensor
+ * (docs/algorithms/HEART_MONITORING.md section 5). Irregularly irregular means all of: large
+ * successive changes (nRMSSD), spread-out intervals (entropy), a random up-and-down pattern
+ * (turning points, about 2/3 for random) and no correlation between neighbours ([maxLag1]).
+ */
 data class IrnThresholds(
     val minNRmssd: Double,
     val minEntropy: Double,
     val turningPoint: ClosedFloatingPointRange<Double>,
     val minBeats: Int,
     /** Drop isolated premature beats (and the pause after them) before judging. */
-    val dropIsolatedEctopics: Boolean
+    val dropIsolatedEctopics: Boolean,
+    /**
+     * Neighbouring intervals correlated more than this are a smooth (breathing) rhythm, not an
+     * irregular one: a real nap with high HRV passed every other test (nRMSSD 0.10–0.13) at +0.3–0.6.
+     */
+    val maxLag1: Double = 0.25
 ) {
-    fun irregular(f: RrFeatures) =
-        f.count >= minBeats && f.nRmssd > minNRmssd && f.shannonEntropy > minEntropy && f.turningPointRatio in turningPoint
+    fun irregular(f: RrFeatures) = f.count >= minBeats &&
+        f.nRmssd > minNRmssd &&
+        f.shannonEntropy > minEntropy &&
+        f.turningPointRatio in turningPoint &&
+        f.lag1 < maxLag1
 
     companion object {
         /** Wrist intervals are noisier than ECG ones, and isolated extra beats are common and harmless. */
         val STANDARD = IrnThresholds(0.12, 0.65, 0.55..0.85, minBeats = 50, dropIsolatedEctopics = true)
 
-        /** The earlier, looser rule (the ECG thresholds), for those who choose high sensitivity. */
-        val HIGH = IrnThresholds(0.10, 0.55, 0.45..0.95, minBeats = 40, dropIsolatedEctopics = false)
+        /**
+         * Looser, for those who choose high sensitivity. Turning points as Dash et al. 2009 (0.54–0.77):
+         * the earlier 0.45–0.95 let a smooth sinus rhythm in sleep (0.46–0.48) through.
+         */
+        val HIGH = IrnThresholds(0.10, 0.55, 0.54..0.77, minBeats = 40, dropIsolatedEctopics = false)
+
+        /** Bumped when the rule changes: windows judged by an older rule are dropped (IrnState.rule). */
+        const val RULE = 2
 
         fun of(sensitivity: IrnSensitivity) = if (sensitivity == IrnSensitivity.HIGH) HIGH else STANDARD
     }
@@ -148,6 +173,9 @@ class IrregularRhythmDetector(
         idFactory: () -> String,
         sensitivity: IrnSensitivity = IrnSensitivity.STANDARD
     ): Pair<IrnState, HealthAlert?> {
+        // Windows judged by an earlier rule don't count towards a notice.
+        @Suppress("NAME_SHADOWING")
+        val state = if (state.rule < IrnThresholds.RULE) state.copy(windows = emptyList(), rule = IrnThresholds.RULE) else state
         val ibis = when (val quality = IbiWindowQuality.assess(samples)) {
             is IbiWindowQuality.Result.Readable -> quality.ibisMs
             is IbiWindowQuality.Result.Unreadable -> {

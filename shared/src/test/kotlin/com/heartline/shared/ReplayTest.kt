@@ -62,10 +62,14 @@ class ReplayTest {
 
     @Test
     fun takenAtFaceValueTheSameIntervalsLookIrregular() {
-        // Shows the fixture reproduces the false notice: unfiltered, the noise passes the rhythm test.
+        // Shows the fixture reproduces the false notice: unfiltered, the noise passed the old app's
+        // rule (high sensitivity, turning points 0.45–0.95, no neighbour test)…
         val ibis = oldAlerts.flatMap { allIntervals(it) }
         val features = RrFeatures.of(ibis.map(Int::toDouble))!!
-        assertTrue("$features", IrnThresholds.HIGH.irregular(features))
+        val oldRule = IrnThresholds(0.10, 0.55, 0.45..0.95, minBeats = 40, dropIsolatedEctopics = false, maxLag1 = 1.0)
+        assertTrue("$features", oldRule.irregular(features))
+        // …and the current one doesn't pass it even taken at face value.
+        assertTrue("$features", !IrnThresholds.HIGH.irregular(features))
     }
 
     /** A raw background window (tools/replay/sessions.py): offsetMs,status,bpm,ibis,ibiStatus. */
@@ -123,5 +127,44 @@ class ReplayTest {
         val samples = window("day-untrusted-beats-1305")
         assertNull(BackgroundWindow.rhythm(samples).samples)
         assertNull(BackgroundWindow.hrv(samples))
+    }
+
+    @Test
+    fun aSmoothSleepingRhythmIsNotIrregular() {
+        // A nap with high HRV (RMSSD about 80 ms): three windows the first background rule judged
+        // irregular. One held batch carried 10 minutes of beats in a single reading.
+        listOf("nap-packed-1955", "nap-2038", "nap-2055").forEach { name ->
+            val picked = BackgroundWindow.rhythm(window(name)).samples
+            assertNotNull(name, picked)
+            // About 60 s of beats is judged, not the whole batch.
+            val beats = picked!!.sumOf { it.ibiMs.size }
+            assertTrue("$name: $beats beats", beats in 40..110)
+            IrnSensitivity.entries.forEach { sensitivity ->
+                val (state, alert) = IrregularRhythmDetector().onWindow(IrnState(), picked, { "x" }, sensitivity)
+                assertNull("$name $sensitivity", alert)
+                assertEquals("$name $sensitivity", false, state.windows.single().irregular)
+            }
+        }
+    }
+
+    @Test
+    fun randomIntervalsAreStillIrregular() {
+        // What atrial fibrillation looks like to the rule: neighbouring intervals unrelated.
+        val random = java.util.Random(3)
+        val rr = List(80) { 500.0 + random.nextDouble() * 600 }
+        val features = RrFeatures.of(rr)!!
+        assertTrue("${features.lag1}", kotlin.math.abs(features.lag1) < 0.25)
+        IrnSensitivity.entries.forEach { assertTrue("$it $features", IrnThresholds.of(it).irregular(features)) }
+    }
+
+    @Test
+    fun windowsJudgedByTheEarlierRuleAreDropped() {
+        val old = IrnState(windows = List(5) { com.heartline.shared.irn.WindowResult(it * 900_000L, irregular = true, meanBpm = 70) })
+        val (state, alert) = IrregularRhythmDetector().onWindow(old, BackgroundWindow.rhythm(window("nap-2038")).samples!!, {
+            "x"
+        }, IrnSensitivity.HIGH)
+        assertNull(alert)
+        assertEquals(IrnThresholds.RULE, state.rule)
+        assertEquals(1, state.windows.size)
     }
 }

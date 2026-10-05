@@ -305,6 +305,7 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
         val samples = mutableListOf<com.heartline.shared.hr.HrSample>()
         val lateMs = mutableListOf<Long>()
         var flushed = false
+        var flushMs = -1L
         // A background session of its own, unless a measurement is running (then it records there).
         val raw = RawCapture.begin("irn_window", background = true)
         val opened = SystemClock.elapsedRealtime()
@@ -331,7 +332,9 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
                             }
                     }
                     delay(LISTEN_MS)
+                    val asked = SystemClock.elapsedRealtime()
                     flushed = source.flush()
+                    flushMs = SystemClock.elapsedRealtime() - asked
                     // Readings sent with the flush are still being handed over.
                     delay(1_000)
                     listening.cancel()
@@ -363,7 +366,7 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
         HLog.i(
             TAG,
             "IRN window done in $tookS s: ${BackgroundWindow.statusMix(samples)}, trusted beats ${BackgroundWindow.trustedShare(samples)} %, " +
-                "late median/max $late, flush=$flushed; rhythm $read$reason; stress $stress",
+                "late median/max $late, flush=$flushed in ${flushMs / 1_000} s; rhythm $read$reason; stress $stress",
         )
         if (irregular == true) BackgroundMonitoring.scheduleFollowUp(applicationContext)
         return Result.success()

@@ -220,12 +220,13 @@ attach them to a bug report.
     - **Rhythm windows:** each `IRN window done in N s` line lists the readings (good, moving,
       weak, off-wrist), the share of trusted beats, how late the readings came, `flush=true`,
       and `rhythm read …` or `rhythm not read: <reason>`, then the stress result. No window
-      takes more than about 2.5 minutes. After a night of wearing, several lines show
-      `rhythm read` and `stress score`.
+      takes more than about 2.5 minutes (`flush=true in N s`, N at most 10). After a night of
+      wearing, several lines show `rhythm read` and `stress score`, with `irregular=false` for
+      a regular rhythm, even in sleep with high HRV.
     - **Background readings on the phone:** the morning after a night of wearing, Home's blood
       oxygen and skin temperature tiles show last night's time with *Measured by your watch*,
-      and each metric's history has a *by your watch* row for the day (tap it for the
-      readings). The CSV export has them as `source=background`.
+      and each metric's history has a *by your watch* row for each stretch of readings (a night
+      and a nap are two rows, with their times; tap one for the readings). The CSV export has them as `source=background`.
 16. **Blood pressure sensors (algorithm 6).** Every session writes a raw log. Capture
     `adb logcat -v time -s Heartline/BP Heartline/BpRaw Heartline/Sensor` and export
     Phone → Blood pressure → Share → **BP raw sessions (zip)**, or use Settings → Help & diagnostics →

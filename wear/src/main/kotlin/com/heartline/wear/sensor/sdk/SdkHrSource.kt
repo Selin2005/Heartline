@@ -16,6 +16,7 @@ import com.samsung.android.service.health.tracking.HealthTracker
 import com.samsung.android.service.health.tracking.data.DataPoint
 import com.samsung.android.service.health.tracking.data.ValueKey
 import kotlinx.coroutines.CompletableDeferred
+import kotlin.concurrent.thread
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -54,11 +55,17 @@ class SdkHrSource(private val gateway: SdkSensorGateway) : HrSource {
 
     override fun stream(): Flow<HrSample> = shared.map { it.getOrThrow() }
 
+    /**
+     * The tracker's flush() can block until it sends its next batch (minutes, with the screen off),
+     * which no coroutine timeout can stop: it runs on a thread of its own and is waited for at most
+     * [FLUSH_TIMEOUT_MS]. Readings that come later reach the next window.
+     */
     override suspend fun flush(): Boolean {
         val tracker = active ?: return false
         val done = CompletableDeferred<Unit>().also { flushed = it }
-        if (!runCatching { tracker.flush() }.getOrDefault(false)) return false
-        return withTimeoutOrNull(FLUSH_TIMEOUT_MS) { done.await() } != null
+        val called = CompletableDeferred<Boolean>()
+        thread(name = "heartline-hr-flush", isDaemon = true) { called.complete(runCatching { tracker.flush() }.getOrDefault(false)) }
+        return withTimeoutOrNull(FLUSH_TIMEOUT_MS) { called.await() && run { done.await(); true } } == true
     }
 
     private fun tracked(): Flow<HrSample> = callbackFlow {

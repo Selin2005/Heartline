@@ -206,11 +206,21 @@ The window now works like this (`IrnWindowWorker.window`):
 1. **Listen** for 90 s, with a partial wake lock (at most 2.5 minutes in all).
 2. **Ask for the held readings** with the SDK's `HealthTracker.flush()`, and wait for
    `onFlushCompleted` (at most 10 s).
+   - The call can block until the tracker's next batch, which can take minutes. A blocking call
+     can't be stopped by a coroutine timeout, and windows of 11–20 minutes were seen.
+   - So it runs on a thread of its own. Readings that come later reach the next window as
+     readings from before it started.
 3. **Judge every reading by its own timestamp.** It is moving if steps or arm movement (by the
    sensor event's own time) fall in the 30 s before it, or the watch marks that minute active.
 4. **Rhythm** (`BackgroundWindow.rhythm`): the newest 60–75 s stretch that starts on a reliable,
    still, on-wrist reading and passes `IbiWindowQuality` is judged. The stretch can lie before
    the window started.
+   - **Packed beats.** A held batch can arrive as one reading carrying minutes of intervals (665
+     beats, 10 minutes, in a real nap). Its beats are first put at their own times, counting
+     forward from the reading's time, and each takes the worn and still state of the reading
+     at that time.
+   - **One window per run.** About 60 s of beats is judged, never the whole batch: the limits are
+     made for that much, and one batch must not count as several windows.
 5. **Stress** (`BackgroundWindow.hrv`): see
    [STRESS_MONITORING.md](STRESS_MONITORING.md#2-measuring-no-extra-battery).
 
@@ -218,7 +228,7 @@ The window now works like this (`IrnWindowWorker.window`):
 
 ```
 IRN window done in 92 s: 598 readings: 598 good, 0 moving, 0 weak, 0 off-wrist, trusted beats 100 %,
-late median/max 95/187 s, flush=true; rhythm read 74 s from 01:55:04, irregular=false;
+late median/max 95/187 s, flush=true in 0 s; rhythm read 74 s from 01:55:04, irregular=false;
 stress score 31 from 597 beat pairs (SLEEP)
 ```
 
@@ -253,12 +263,33 @@ The reason a window was not read is logged (`IRN window done: … rhythm not rea
   intervals more than 20 % from the local median, between steady beats (Petrėnas 2015, as in the
   ECG algorithm). In an irregularly irregular rhythm the neighbours are not steady, so those
   intervals stay.
-- Features (Dash 2009): normalised RMSSD, Shannon entropy, turning-point ratio.
+- **Features** (Dash 2009): normalised RMSSD, Shannon entropy and the turning-point ratio, plus
+  the **lag-1 correlation** of neighbouring intervals. That one equals the Poincaré plot's
+  SD1/SD2 = √((1 − r)/(1 + r)) (Park 2009).
 
-| Sensitivity | nRMSSD | Entropy | Turning points | Min. beats | Premature beats removed |
-|---|---|---|---|---|---|
-| Standard (default) | > 0.12 | > 0.65 | 0.55–0.85 | 50 | yes |
-| High (the earlier rule) | > 0.10 | > 0.55 | 0.45–0.95 | 40 | no |
+| Sensitivity | nRMSSD | Entropy | Turning points | Lag-1 correlation | Min. beats | Premature beats removed |
+|---|---|---|---|---|---|---|
+| Standard (default) | > 0.12 | > 0.65 | 0.55–0.85 | < 0.25 | 50 | yes |
+| High | > 0.10 | > 0.55 | 0.54–0.77 (Dash) | < 0.25 | 40 | no |
+
+**Why the lag-1 test (rule 2).** In a real nap (October 2026), three windows were judged
+irregular at High sensitivity, and none were.
+- **The windows.** The wearer's HRV in sleep was high (RMSSD about 80 ms), so nRMSSD was 0.10–0.13
+  and entropy 0.9: both tests passed.
+- **The difference from AF.**
+  - **Sinus rhythm with breathing** (sinus arrhythmia) drifts smoothly: neighbouring intervals
+    were correlated **+0.32 to +0.62** (SD1/SD2 ≤ 0.71), and turning points were 0.46–0.48.
+  - **Random, AF-like intervals** sit near **0** (SD1/SD2 near 1), with turning points near 2/3.
+- **What changed.**
+  - The High turning-point range, 0.45–0.95, was wider than Dash's 0.54–0.77, and is now Dash's.
+  - Every window must also have a lag-1 correlation under 0.25.
+  - Windows judged by the earlier rule are dropped (`IrnState.rule`), so they can't add up with
+    new ones to a notice.
+- **Tests.**
+  - `ReplayTest.aSmoothSleepingRhythmIsNotIrregular` replays the three nap windows; they must be
+    regular at both sensitivities.
+  - `randomIntervalsAreStillIrregular` and the existing detection tests (`IrnQualityTest`,
+    `BackgroundHeartTest`) must still find random intervals irregular.
 
 ### Notification (`IrregularRhythmDetector`)
 - 5 of the last 6 *readable* windows are irregular, the irregular ones spread over ≥ 1 hour,
@@ -273,12 +304,12 @@ The reason a window was not read is logged (`IRN window done: … rhythm not rea
 
 | Value | How |
 |---|---|
-| Your normal | the personal normal and usual range (5th–95th percentile) at rest, the normal in sleep, the limits in use, and the last 28 nights |
+| Your normal | shown as *Awake and still*: the personal normal and usual range (5th–95th percentile) awake and still, which the limits use. Also the normal in sleep, the limits in use, and the last 28 nights. The resting rate (below) is lower: it is the lowest you settle to, and two things both called "Resting" looked contradictory |
 | Resting heart rate | 10th percentile of today's `REST` minutes (sleep and exercise left out); ≥ 5 minutes needed |
 | Sleep | average and lowest of `SLEEP` minutes |
 | Exercise | number of `EXERCISE` minutes and the highest rate |
 | HRV | median RMSSD of still minutes (rest or sleep) that carry intervals |
-| Zones | Karvonen: 50, 60, 70, 80, 90 % of the reserve between the resting rate and the personal maximum |
+| Zones | Karvonen: 50, 60, 70, 80, 90 % of the reserve between the week's resting rate and the personal maximum. Using the awake-and-still normal instead put zone 1 at 136 bpm, so most days showed 0–1 minutes. Without any minute in a zone, the card says so instead of showing five zeros |
 | Resting week | the resting heart rate of each of the last 7 days |
 
 The day chart can be filtered by activity. The notification list shows each alert's limit,
@@ -506,4 +537,6 @@ The simulation and the pipeline tests also changed the design. Four findings:
 - Apple Watch heart notifications: https://support.apple.com/en-lb/guide/watch/apde39f5426c/watchos · Fitbit / Google: https://support.google.com/googlehealth/answer/14237938
 - Karvonen MJ et al. The effects of training on heart rate. *Ann Med Exp Biol Fenn* 1957.
 - Dash S et al. Automatic real time detection of atrial fibrillation. *Ann Biomed Eng* 2009.
+- Park J, Lee S, Jeon M. Atrial fibrillation detection by heart rate variability in Poincaré
+  plot. *Biomed Eng Online* 2009.
 - Petrėnas A et al. Low-complexity detection of atrial fibrillation in continuous long-term monitoring. *Comput Biol Med* 2015.

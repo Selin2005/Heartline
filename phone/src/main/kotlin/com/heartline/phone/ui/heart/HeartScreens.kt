@@ -4,6 +4,7 @@
 package com.heartline.phone.ui.heart
 
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -149,7 +150,7 @@ fun HeartRateScreen(
                         Spacer(Modifier.height(12.dp))
                         Row {
                             StatColumn(
-                                stringResource(R.string.hr_resting),
+                                stringResource(R.string.hr_awake_still),
                                 limits.restLow?.let { lo -> limits.restHigh?.let { hi -> stringResource(R.string.hr_normal_range, limits.restNormal, lo, hi) } }
                                     ?: "${limits.restNormal}",
                                 Modifier.weight(1f),
@@ -168,10 +169,15 @@ fun HeartRateScreen(
                             Spacer(Modifier.height(8.dp))
                             WeekBars(
                                 state.nights,
-                                state.nights.indices.map { i -> if ((27 - i) % 7 == 0) "−${27 - i}" else "" },
+                                state.nights.map { "" },
                                 colors.heartRate,
                                 contentDescription = stringResource(R.string.hr_nights_title),
                             )
+                            // Under the bars, not in their narrow columns ("−14" broke into "– / 1 / 4").
+                            Row(Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.vitals_nights_start), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant, modifier = Modifier.weight(1f))
+                                Text(stringResource(R.string.vitals_last_night), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+                            }
                         }
                     }
                 }
@@ -200,12 +206,17 @@ fun HeartRateScreen(
                     }
                 }
             }
-            if (state.zoneMinutes.any { it > 0 }) {
+            if (state.zoneBounds.isNotEmpty()) {
                 item {
                     RoundedCard(Modifier.gutter()) {
                         CardTitle(stringResource(R.string.hr_zones_title))
-                        Text(stringResource(R.string.hr_zones_caption, state.maxHr), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                        Text(stringResource(R.string.hr_zones_caption, state.zoneBounds.first(), state.maxHr), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
                         Spacer(Modifier.height(8.dp))
+                        if (state.zoneMinutes.none { it > 0 }) {
+                            // Five zero columns said nothing; most days without exercise look like this.
+                            Text(stringResource(R.string.hr_zones_none), style = MaterialTheme.typography.bodyMedium, color = colors.onBackground)
+                            return@RoundedCard
+                        }
                         WeekBars(
                             state.zoneMinutes.map { it.toFloat() },
                             state.zoneBounds.map { "$it+" },

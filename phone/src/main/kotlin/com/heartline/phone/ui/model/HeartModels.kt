@@ -199,6 +199,9 @@ class HeartRateViewModel(
         val limits = sent ?: HeartBaseline.limits(history, todayKey, monitor.alertSensitivity, years, sex, monitor.health)
         val maxHr = limits.exerciseMax
         val sleep = HeartSummaries.sleep(todays)
+        // Zones start from the resting rate (the lowest you settle to awake, as the weekly chart),
+        // not from the usual awake-and-still rate the limits use: that put zone 1 at 136 bpm.
+        val zoneRest = HeartSummaries.resting(week) ?: limits.restNormal
         val exercise = todays.filter { it.activity == HrContext.EXERCISE }
         HeartRateUi(
             latestBpm = latest?.avgBpm,
@@ -220,8 +223,8 @@ class HeartRateViewModel(
             exerciseMinutes = exercise.size,
             exercisePeakBpm = exercise.maxOfOrNull { it.maxBpm },
             maxHr = maxHr,
-            zoneBounds = HeartBaseline.zones(maxHr, limits.restNormal),
-            zoneMinutes = HeartSummaries.zones(todays, HeartBaseline.zones(maxHr, limits.restNormal)),
+            zoneBounds = HeartBaseline.zones(maxHr, zoneRest),
+            zoneMinutes = HeartSummaries.zones(todays, HeartBaseline.zones(maxHr, zoneRest)),
             limits = limits,
             nights = (0 until 28).map { i -> HeartSummaries.night(history, todayKey - 27 + i)?.toFloat() },
             restingWeek = days.map { day -> HeartSummaries.resting(week.filter { it.minuteStartMs in dayRange(day) })?.toFloat() },
