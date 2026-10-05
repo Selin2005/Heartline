@@ -6,6 +6,7 @@ package com.heartline.wear
 import com.heartline.shared.hr.AlertKind
 import com.heartline.shared.hr.HealthAlert
 import com.heartline.shared.hr.HrBatch
+import com.heartline.shared.hr.BackgroundWindow
 import com.heartline.shared.hr.HrContext
 import com.heartline.shared.hr.HrSample
 import com.heartline.shared.hr.MonitorState
@@ -91,8 +92,8 @@ class BackgroundHeartTest {
         val out = Recorder()
         val heart = BackgroundHeart(out) { MonitorSettings() }
         heart.irn.resetWindow()
-        SyntheticHr.samples(0, 75, bpm = 70.0).forEach { heart.irn.onSample(it) }
-        heart.endIrnWindow()
+        val samples = SyntheticHr.samples(0, 75, bpm = 70.0)
+        heart.onIrnWindow(samples, BackgroundWindow.rhythm(samples).samples)
         assertEquals(false, heart.irn.lastWindowIrregular)
         val minutes = out.batches.flatMap { it.minutes }
         assertTrue(minutes.isNotEmpty())
@@ -107,7 +108,8 @@ class BackgroundHeartTest {
         repeat(6) { i ->
             heart.irn.resetWindow()
             val start = i * 15 * 60_000L
-            SyntheticHr.samples(start, 75, bpm = 92.0, irregularity = 0.35, seed = 9 + i).forEach { heart.irn.onSample(it) }
+            val samples = SyntheticHr.samples(start, 75, bpm = 92.0, irregularity = 0.35, seed = 9 + i)
+            heart.onIrnWindow(samples, BackgroundWindow.rhythm(samples).samples)
         }
         assertEquals(listOf(AlertKind.IRREGULAR_RHYTHM), out.alerts.map { it.kind })
     }

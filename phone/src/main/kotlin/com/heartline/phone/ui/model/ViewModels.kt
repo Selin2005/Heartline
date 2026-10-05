@@ -98,18 +98,15 @@ class HomeViewModel(
         repository.observe(RecordKind.SKIN_TEMPERATURE),
         repository.observe(RecordKind.BODY_COMPOSITION),
         repository.observe(RecordKind.STRESS),
-        heart.latestStress,
+        heart.backgroundLatest,
     ) { spo2, temp, body, stress, background ->
         buildMap {
             listOf(Metric.SPO2 to spo2, Metric.SKIN_TEMPERATURE to temp, Metric.BODY_COMPOSITION to body, Metric.STRESS to stress).forEach { (metric, list) ->
                 MetricFormat.readings(list.take(8), formatter).firstOrNull()?.let { r ->
                     put(metric, TileValue(r.value, r.unit, "${r.date} ${r.time}", r.details.firstOrNull()?.second))
                 }
-            }
-            // The watch's background stress, when newer than the last measurement.
-            val manualAt = stress.firstOrNull()?.entity?.startedAtMs ?: 0
-            background?.takeIf { it.tsMs > manualAt && it.score != null }?.let { b ->
-                put(Metric.STRESS, TileValue("${b.score}", null, "${formatter.date(b.tsMs)} ${formatter.time(b.tsMs)}", formatter.backgroundLabel))
+                // The watch's background reading, when newer than the last measurement.
+                BackgroundReadings.tile(metric, background, list.firstOrNull()?.entity?.startedAtMs ?: 0, formatter)?.let { put(metric, it) }
             }
         }
     }
@@ -186,12 +183,14 @@ class SettingsViewModel(
     }
 
     fun export(exporter: DataExporter, onReady: (Intent) -> Unit) = viewModelScope.launch {
-        val file = withContext(Dispatchers.IO) { exporter.export(repository.all()) }
+        val file = withContext(Dispatchers.IO) { exporter.export(repository.all(), background = heart.backgroundAll()) }
         onReady(exporter.shareIntent(file))
     }
 
     /** The CSV under a chosen name, for the share sheet. */
-    suspend fun exportFile(exporter: DataExporter, fileName: String) = withContext(Dispatchers.IO) { exporter.export(repository.all(), fileName) }
+    suspend fun exportFile(exporter: DataExporter, fileName: String) = withContext(Dispatchers.IO) {
+        exporter.export(repository.all(), fileName, heart.backgroundAll())
+    }
 
     fun deleteAll() = viewModelScope.launch {
         repository.deleteAll()

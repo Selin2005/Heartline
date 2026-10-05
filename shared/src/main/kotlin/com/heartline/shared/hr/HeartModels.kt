@@ -10,6 +10,9 @@ import kotlinx.serialization.Serializable
  * [reliable]: the tracker reported a good reading (status 1); off-wrist, weak-signal and
  * still-searching readings are not, and are never used for rhythm checks or trends.
  * [rejectedIbis]: intervals in this reading that the tracker itself flagged as unreliable.
+ * [rawIbiMs] / [rawIbiOk]: every interval the tracker sent, in order, and whether it is trusted
+ * ([ibiMs] keeps only the trusted ones). Successive differences (HRV) need to know which trusted
+ * intervals really follow each other.
  */
 data class HrSample(
     val tsMs: Long,
@@ -18,7 +21,9 @@ data class HrSample(
     val onBody: Boolean = true,
     val moving: Boolean = false,
     val reliable: Boolean = true,
-    val rejectedIbis: Int = 0
+    val rejectedIbis: Int = 0,
+    val rawIbiMs: List<Int> = ibiMs,
+    val rawIbiOk: List<Boolean> = List(rawIbiMs.size) { reliable }
 )
 
 /** What the wearer was doing during a minute, so each is judged by its own rules. */

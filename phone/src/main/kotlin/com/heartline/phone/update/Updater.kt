@@ -14,6 +14,7 @@ import com.heartline.shared.update.AppVersion
 import com.heartline.shared.update.GitHubAsset
 import com.heartline.shared.update.Release
 import com.heartline.shared.update.Releases
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -51,6 +52,8 @@ class Updater(
             HLog.i(TAG, "checked ${releases.size} releases; installed=$installedVersion track=${prefs.track} update=${update?.version}")
             if (update != null) Check.Available(update, releases) else Check.UpToDate(Releases.newest(releases, prefs.track), releases)
         }.getOrElse {
+            // Leaving the screen cancels the check: that's not a failure.
+            if (it is CancellationException) throw it
             HLog.w(TAG, "update check failed", it)
             Check.Failed(it.message ?: it.javaClass.simpleName)
         }

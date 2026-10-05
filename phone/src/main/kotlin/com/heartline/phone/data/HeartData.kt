@@ -92,6 +92,21 @@ interface HeartDao {
     @Query("SELECT * FROM skin_temp_samples WHERE tsMs >= :fromMs ORDER BY tsMs")
     fun tempsSince(fromMs: Long): Flow<List<TempSampleEntity>>
 
+    @Query("SELECT * FROM spo2_samples ORDER BY tsMs DESC LIMIT 1")
+    fun latestSpo2(): Flow<Spo2SampleEntity?>
+
+    @Query("SELECT * FROM skin_temp_samples ORDER BY tsMs DESC LIMIT 1")
+    fun latestTemp(): Flow<TempSampleEntity?>
+
+    @Query("SELECT * FROM spo2_samples ORDER BY tsMs")
+    suspend fun allSpo2(): List<Spo2SampleEntity>
+
+    @Query("SELECT * FROM skin_temp_samples ORDER BY tsMs")
+    suspend fun allTemps(): List<TempSampleEntity>
+
+    @Query("SELECT * FROM stress_samples ORDER BY tsMs")
+    suspend fun allStress(): List<StressSampleEntity>
+
     @Query("DELETE FROM spo2_samples")
     suspend fun deleteSpo2()
 

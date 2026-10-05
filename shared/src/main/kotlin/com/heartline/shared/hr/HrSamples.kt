@@ -17,18 +17,17 @@ object HrSamples {
      */
     fun fromTracker(tsMs: Long, bpm: Int, status: Int, ibis: List<Int>, ibiStatus: List<Int>): HrSample {
         val reliable = status == STATUS_SUCCESS
-        val good = when {
-            !reliable -> emptyList()
-            ibiStatus.isEmpty() -> ibis
-            else -> ibis.filterIndexed { i, _ -> ibiStatus.getOrNull(i) == 0 }
-        }
+        val ok = ibis.indices.map { i -> reliable && (ibiStatus.isEmpty() || ibiStatus.getOrNull(i) == 0) }
+        val good = ibis.filterIndexed { i, _ -> ok[i] }
         return HrSample(
             tsMs = tsMs,
             bpm = bpm,
             ibiMs = good,
             onBody = status != STATUS_OFF_BODY,
             reliable = reliable,
-            rejectedIbis = ibis.size - good.size
+            rejectedIbis = ibis.size - good.size,
+            rawIbiMs = ibis,
+            rawIbiOk = ok
         )
     }
 }

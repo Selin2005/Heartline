@@ -132,8 +132,13 @@ object HLog {
     /** This process's logcat buffer (apps may only read their own), redacted. */
     fun processLogcat(): String = runCatching {
         val process = ProcessBuilder("logcat", "-d", "-v", "threadtime", "--pid=${Process.myPid()}").redirectErrorStream(true).start()
-        val text = process.inputStream.bufferedReader().use { it.readText() }
+        val text = process.inputStream.bufferedReader().use { r -> r.lineSequence().filterNot(::isUiNoise).joinToString("\n", postfix = "\n") }
         process.waitFor(5, TimeUnit.SECONDS)
         redactor.redact(text)
     }.getOrElse { "(logcat unavailable: ${it.message})" }
+
+    /** Drawing and input chatter from the UI toolkit, hundreds of lines per screen, never useful here. */
+    private val uiNoise = Regex("""^\S+ \S+\s+\d+\s+\d+ [VDI] (View|VRI\[[^\]]*]@\w+|ViewRootImpl|InsetsController|InsetsSourceConsumer|BLASTBufferQueue\w*|InputTransport|InputMethodManager\w*|ImeTracker|ImeFocusController|WindowOnBackDispatcher|HWUI|AdrenoVK-\d+|SurfaceComposerClient|BufferQueueProducer|DecorView|qdgralloc|vulkan|NativeCustomFrequencyManager|HardwareRenderer|IDS_TAG|SnapAlloc|BBA2)\s*:""")
+
+    internal fun isUiNoise(line: String) = uiNoise.containsMatchIn(line)
 }

@@ -213,8 +213,15 @@ attach them to a bug report.
     - **Watch not worn:** leave the watch on a table or charger for two hours. The log shows
       `IRN window skipped` (no background heart rate, or off the wrist), never an irregular rhythm
       notification.
-    - **Rhythm windows:** while wearing it and sitting still, `IRN window done` lines show
-      `irregular=false` (or a `skipped=` reason for moving or weak signal).
+    - **Rhythm windows:** each `IRN window done in N s` line lists the readings (good, moving,
+      weak, off-wrist), the share of trusted beats, how late the readings came, `flush=true`,
+      and `rhythm read …` or `rhythm not read: <reason>`, then the stress result. No window
+      takes more than about 2.5 minutes. After a night of wearing, several lines show
+      `rhythm read` and `stress score`.
+    - **Background readings on the phone:** the morning after a night of wearing, Home's blood
+      oxygen and skin temperature tiles show last night's time with *Measured by your watch*,
+      and each metric's history has a *by your watch* row for the day (tap it for the
+      readings). The CSV export has them as `source=background`.
 16. **Blood pressure sensors (algorithm 6).** Every session writes a raw log. Capture
     `adb logcat -v time -s Heartline/BP Heartline/BpRaw Heartline/Sensor` and export
     Phone → Blood pressure → Share → **BP raw sessions (zip)**, or use Settings → Help & diagnostics →

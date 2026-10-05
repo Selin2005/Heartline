@@ -45,8 +45,14 @@ It uses the same sources as a manual measurement, through `VitalsMeasurer`.
 - **Conditions,** the same as the rhythm windows:
   - The watch is worn: background heart rate in the last hour, and the off-body sensor.
   - The wearer is not exercising.
-  - The wearer is still: no steps (20 a minute or more) in the last 3 minutes, and not marked
-    active.
+  - The wearer is still: not marked active, and no steps in the last 3 minutes (20 a minute
+    asleep, 5 a minute awake).
+  - Awake, the arm is also watched for 15 s before SpO2, and any movement puts it off. In a real
+    two-day log most by-day tries ended "hold still" (status −4) after 30–40 s: only 2 of about
+    16 gave a value.
+- **Logged reasons.** A try without a result logs why (`SpO2 no result after 32 s: timed out
+  (HOLD_STILL)`), as does a rejected temperature and SpO2 skipped for the battery or the sleep
+  setting.
 - **Moving.** When the wearer is moving, SpO2 is tried again 15 minutes later, twice at most.
   After that the hour is left out.
 - **One sensor at a time.** The worker and the rhythm windows share one lock

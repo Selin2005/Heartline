@@ -88,10 +88,7 @@ class HeartMonitor(
     val lastSkipReason: String? get() = detector.lastSkipReason
 
     suspend fun onSample(raw: HrSample) {
-        val sample = raw.copy(moving = raw.moving || motion.movedSince(raw.tsMs - 60_000))
-        val minuteStart = sample.tsMs / MINUTE * MINUTE
-        if (open.keys.any { it < minuteStart }) closeMinutes(before = minuteStart)
-        open.getOrPut(minuteStart) { mutableListOf() } += sample
+        val sample = addToMinute(raw)
 
         val cfg = settings()
         if (!cfg.irregularRhythmEnabled) return
@@ -101,17 +98,43 @@ class HeartMonitor(
         if (window.isEmpty()) lastWindowStart = sample.tsMs
         window += sample
         if (sample.tsMs - window.first().tsMs >= 60_000) {
-            val before = irn ?: output.loadIrnState()
-            val (next, alert) = detector.onWindow(before, window.toList(), newId, cfg.irnSensitivity)
-            irn = next
-            output.saveIrnState(next)
-            val read = alert != null || next.windows.lastOrNull()?.startMs == window.first().tsMs
-            lastWindowIrregular = if (alert != null) true else next.windows.lastOrNull()?.takeIf { read }?.irregular
+            val read = judge(window.toList(), cfg)
             window.clear()
             // A window spoiled by motion or a poor signal is retried on the next minute instead of waiting.
             if (!read) lastWindowStart = Long.MIN_VALUE / 2
-            alert?.let { emit(it) }
         }
+    }
+
+    /**
+     * A background rhythm window: every reading joins its minute, and only [picked] (the stretch
+     * BackgroundWindow.rhythm chose by the readings' own times) is judged, all at once.
+     */
+    suspend fun onWindow(all: List<HrSample>, picked: List<HrSample>?) {
+        window.clear()
+        lastWindowIrregular = null
+        all.sortedBy { it.tsMs }.forEach { addToMinute(it) }
+        val cfg = settings()
+        if (cfg.irregularRhythmEnabled && picked != null) judge(picked, cfg)
+    }
+
+    private suspend fun addToMinute(raw: HrSample): HrSample {
+        val sample = raw.copy(moving = raw.moving || motion.movedBetween(raw.tsMs - 60_000, raw.tsMs))
+        val minuteStart = sample.tsMs / MINUTE * MINUTE
+        if (open.keys.any { it < minuteStart }) closeMinutes(before = minuteStart)
+        open.getOrPut(minuteStart) { mutableListOf() } += sample
+        return sample
+    }
+
+    /** Judges one window's rhythm; returns whether it could be read. */
+    private suspend fun judge(samples: List<HrSample>, cfg: MonitorSettings): Boolean {
+        val before = irn ?: output.loadIrnState()
+        val (next, alert) = detector.onWindow(before, samples, newId, cfg.irnSensitivity)
+        irn = next
+        output.saveIrnState(next)
+        val read = alert != null || next.windows.lastOrNull()?.startMs == samples.first().tsMs
+        lastWindowIrregular = if (alert != null) true else next.windows.lastOrNull()?.takeIf { read }?.irregular
+        alert?.let { emit(it) }
+        return read
     }
 
     /** Closes every minute still collecting samples (the end of a passive delivery or a short window). */

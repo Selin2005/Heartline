@@ -12,6 +12,12 @@ import kotlinx.coroutines.flow.flow
 /** HEART_RATE_CONTINUOUS: ~1 Hz heart rate with inter-beat intervals. */
 interface HrSource {
     fun stream(): Flow<HrSample>
+
+    /**
+     * Asks the tracker for the readings it is still holding (it sends them in batches, minutes
+     * late while the screen is off). True once they were delivered; false when it can't.
+     */
+    suspend fun flush(): Boolean = false
 }
 
 /** Real-time synthetic heart rate for development without sensors. */

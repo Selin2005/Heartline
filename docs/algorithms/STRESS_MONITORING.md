@@ -38,11 +38,25 @@ Settings and the monitoring setup are described in
   15 minutes for the rhythm checks. Stress reuses those windows.
 - **When the worker runs.** It runs while the rhythm checks or stress are active. A window is
   read for rhythm only with the heart part on, and for stress only with the stress part on.
-- **Which windows count.** A window gives a stress reading only when:
-  - it passes the rhythm checks' quality test (`IbiWindowQuality`): worn, still, a clean and
-    complete series of beats, and a rate matching the tracker's;
-  - it is not judged irregular;
-  - after isolated extra beats are removed, RMSSD and heart rate are computed.
+- **Which windows count** (`BackgroundWindow.hrv`). A window gives a stress reading when:
+  - **Enough trusted pairs.** Within up to two minutes of worn, still readings it has at least
+    40 pairs of successive beats that the tracker trusted. A beat more than 20 % from the one
+    before (an extra beat or an artefact) doesn't make a pair.
+  - **Matching rate.** The heart rate matches the tracker's own within 15 %.
+  - **Not irregular.** The window is not judged irregular.
+
+  RMSSD comes from those pairs only.
+- **Why not the rhythm checks' quality test.**
+  - **Flagged intervals.** Wrist intervals are often flagged one by one. In a real two-day log,
+    57 % of the intervals of good readings were flagged by day, so the rhythm test (nine in ten
+    trusted) read almost no windows.
+  - **Enough for HRV.** RMSSD only needs true neighbours, and ultra-short RMSSD is valid from
+    about 30–60 s of beats (Munoz 2015; Shaffer and Ginsberg 2017).
+  - **Result.** Replayed on that log, about one window in ten gives a stress reading instead of
+    none.
+- **Late readings.** The tracker sends readings in batches, minutes late. Each reading is judged
+  by its own time
+  ([HEART_MONITORING.md](HEART_MONITORING.md#background-windows-batches-flush-and-the-readings-own-times-backgroundwindow)).
 - **What the wearer was doing:**
   - exercise, and the hour after it, gives no score;
   - asleep, the window only feeds the night's HRV. Without activity recognition, the usual
@@ -217,6 +231,8 @@ The report is written to `shared/build/reports/stress-simulation.md`.
 
 ## References
 
+- Munoz ML et al. Validity of (ultra-)short recordings for heart rate variability measurements.
+  *PLoS One* 2015.
 - Task Force of the ESC and NASPE. Heart rate variability: standards of measurement,
   physiological interpretation and clinical use. *Circulation* 1996.
 - Shaffer F, Ginsberg JP. An overview of heart rate variability metrics and norms. *Front Public

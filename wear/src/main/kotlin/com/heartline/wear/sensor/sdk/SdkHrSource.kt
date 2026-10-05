@@ -15,6 +15,7 @@ import com.heartline.wear.diag.RawCapture
 import com.samsung.android.service.health.tracking.HealthTracker
 import com.samsung.android.service.health.tracking.data.DataPoint
 import com.samsung.android.service.health.tracking.data.ValueKey
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -29,6 +30,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * HEART_RATE_CONTINUOUS (sample: track-heart-rate-with-off-body-sensor.html).
@@ -40,12 +42,24 @@ import kotlinx.coroutines.withTimeout
 class SdkHrSource(private val gateway: SdkSensorGateway) : HrSource {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    /** The tracker while someone listens, and the pending flush (see [flush]). */
+    @Volatile private var active: HealthTracker? = null
+
+    @Volatile private var flushed: CompletableDeferred<Unit>? = null
+
     private val shared: SharedFlow<Result<HrSample>> = tracked()
         .map { Result.success(it) }
         .catch { emit(Result.failure(it)) }
         .shareIn(scope, SharingStarted.WhileSubscribed(), replay = 0)
 
     override fun stream(): Flow<HrSample> = shared.map { it.getOrThrow() }
+
+    override suspend fun flush(): Boolean {
+        val tracker = active ?: return false
+        val done = CompletableDeferred<Unit>().also { flushed = it }
+        if (!runCatching { tracker.flush() }.getOrDefault(false)) return false
+        return withTimeoutOrNull(FLUSH_TIMEOUT_MS) { done.await() } != null
+    }
 
     private fun tracked(): Flow<HrSample> = callbackFlow {
         gateway.connect()
@@ -62,7 +76,9 @@ class SdkHrSource(private val gateway: SdkSensorGateway) : HrSource {
                     points.forEach { trySendBlocking(it.toSample()) }
                 }
 
-                override fun onFlushCompleted() = Unit
+                override fun onFlushCompleted() {
+                    flushed?.complete(Unit)
+                }
 
                 override fun onError(error: HealthTracker.TrackerError) {
                     HLog.w(SdkSensorGateway.TAG, "HR tracker error: $error")
@@ -70,7 +86,15 @@ class SdkHrSource(private val gateway: SdkSensorGateway) : HrSource {
                 }
             },
         )
-        awaitClose { tracker.unsetEventListener() }
+        active = tracker
+        awaitClose {
+            active = null
+            tracker.unsetEventListener()
+        }
+    }
+
+    private companion object {
+        const val FLUSH_TIMEOUT_MS = 10_000L
     }
 
     private fun DataPoint.toSample(): HrSample {

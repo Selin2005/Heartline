@@ -53,7 +53,14 @@ class DataLayerTransport(context: Context, private val peerCapability: String) :
         capabilities.getCapability(peerCapability, CapabilityClient.FILTER_REACHABLE).await().nodes
     }.onFailure { HLog.w(TAG, "capability lookup '$peerCapability' failed", it) }
         .getOrDefault(emptySet())
-        .also { found -> HLog.i(TAG, "capability '$peerCapability' -> ${found.joinToString { "${it.displayName}(${it.id})" }.ifEmpty { "none" }}") }
+        .also { found ->
+            // Looked up for every message: logged only when the answer changes (it was most of the log).
+            val text = found.joinToString { "${it.displayName}(${it.id})" }.ifEmpty { "none" }
+            if (text != lastPeers) HLog.i(TAG, "capability '$peerCapability' -> $text")
+            lastPeers = text
+        }
+
+    @Volatile private var lastPeers: String? = null
 
     /** Every device connected over Bluetooth/Wi-Fi, Heartline or not. */
     suspend fun connectedNodes(): List<Node> = runCatching { nodes.connectedNodes.await() }

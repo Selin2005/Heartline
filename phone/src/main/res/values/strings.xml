@@ -320,6 +320,10 @@
     <string name="detail_level">Level</string>
     <string name="detail_hrv">HRV</string>
     <string name="detail_eda">Skin conductance</string>
+    <string name="detail_lowest">Lowest</string>
+    <string name="detail_readings">Readings</string>
+    <!-- A day of background readings in a metric's history: date, number of readings. -->
+    <string name="history_watch_day">%1$s · by your watch, %2$s readings</string>
     <string name="about_spo2">Blood oxygen is measured with red and infrared light while you keep still. Readings of 95–100% are typical at rest. It isn\'t a medical oximeter.</string>
     <string name="about_temp">Skin temperature changes with the room and your activity, so Heartline shows the change from your own 7-day baseline. It isn\'t body temperature.</string>
     <string name="about_body">Body composition uses a small electrical current between your wrist and fingers. Measure at the same time of day, before eating or exercising.</string>

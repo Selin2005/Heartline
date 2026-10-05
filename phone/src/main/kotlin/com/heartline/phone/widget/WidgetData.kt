@@ -9,6 +9,7 @@ import com.heartline.phone.data.HrMinuteEntity
 import com.heartline.phone.data.RecordRepository
 import com.heartline.phone.data.StoredRecord
 import com.heartline.phone.ui.model.HeartSummaries
+import com.heartline.phone.ui.model.BackgroundReadings
 import com.heartline.phone.ui.model.MetricFormat
 import com.heartline.phone.ui.model.RecordFormatter
 import com.heartline.shared.bp.BpCalibration
@@ -85,10 +86,14 @@ object WidgetSnapshots {
         formatter: RecordFormatter,
         nowMs: Long,
         zone: ZoneId = ZoneId.systemDefault(),
+        background: com.heartline.phone.data.BackgroundLatest = com.heartline.phone.data.BackgroundLatest(),
     ): WidgetSnapshot {
         fun at(ms: Long) = "${formatter.date(ms)} ${formatter.time(ms)}"
         fun reading(kind: RecordKind) = records[kind].orEmpty().let { list ->
-            MetricFormat.readings(list.take(8), formatter).firstOrNull()?.let { WidgetSnapshot.Reading(it.value, it.unit, "${it.date} ${it.time}") }
+            // The watch's background reading wins when it is newer than the last measurement.
+            BackgroundReadings.tile(kind.metric, background, list.firstOrNull()?.entity?.startedAtMs ?: 0, formatter)
+                ?.let { WidgetSnapshot.Reading(it.value, it.unit, it.caption) }
+                ?: MetricFormat.readings(list.take(8), formatter).firstOrNull()?.let { WidgetSnapshot.Reading(it.value, it.unit, "${it.date} ${it.time}") }
         }
         val latestMinute = todaysMinutes.maxByOrNull { it.minuteStartMs }
         val heartRate = latestMinute?.let { latest ->
@@ -183,6 +188,7 @@ class WidgetDataSource(
             formatter(),
             nowMs,
             zone(),
+            heart.backgroundLatest.first(),
         ).copy(name = widgetName())
     }
 

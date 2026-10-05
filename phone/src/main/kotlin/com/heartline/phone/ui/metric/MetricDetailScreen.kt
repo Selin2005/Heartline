@@ -3,6 +3,7 @@
 
 package com.heartline.phone.ui.metric
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
@@ -11,6 +12,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -36,6 +41,7 @@ import com.heartline.phone.ui.model.BackgroundVitalsUi
 import com.heartline.shared.profile.StressIndex
 import com.heartline.shared.profile.StressLevel
 import com.heartline.phone.ui.model.MetricDetailUi
+import com.heartline.phone.ui.model.MetricReadingUi
 import com.heartline.phone.ui.theme.HeartlineTheme
 import com.heartline.shared.model.Metric
 
@@ -174,11 +180,9 @@ private fun StressCard(st: BackgroundStressUi) {
             Spacer(Modifier.height(16.dp))
             Text(stringResource(R.string.stress_week), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
-            val days = java.time.format.TextStyle.SHORT
-            val today = java.time.LocalDate.now()
             WeekBars(
                 st.week.map { it?.toFloat() },
-                (6 downTo 0).map { today.minusDays(it.toLong()).dayOfWeek.getDisplayName(days, java.util.Locale.getDefault()) },
+                st.weekDays,
                 color,
                 contentDescription = stringResource(R.string.stress_week),
             )
@@ -201,7 +205,7 @@ fun MetricDetailScreen(state: MetricDetailUi, onBack: (() -> Unit)? = null, onMe
     val color = colors.metric(state.metric)
     ReachabilityScaffold(
         title = stringResource(state.metric.label),
-        subtitle = state.latest?.let { stringResource(R.string.bp_last_measured, "${it.date} ${it.time}") },
+        subtitle = state.newest?.let { stringResource(R.string.bp_last_measured, "${it.date} ${it.time}") },
         onBack = onBack,
     ) {
         onMeasureOnWatch?.let { measure ->
@@ -210,12 +214,10 @@ fun MetricDetailScreen(state: MetricDetailUi, onBack: (() -> Unit)? = null, onMe
         state.background?.let { bg -> item { BackgroundCard(state.metric, bg) } }
         state.stress?.let { st -> item { StressCard(st) } }
         val latest = state.latest
-        if (latest == null) {
-            // With background readings only, no measurement of your own yet, there is nothing more to show.
-            if (state.background == null && state.stress == null) {
-                item { EmptyCard(stringResource(R.string.ecg_empty_title), stringResource(R.string.metric_empty_body)) }
-            }
-        } else {
+        if (state.readings.isEmpty() && state.background == null && state.stress == null) {
+            item { EmptyCard(stringResource(R.string.ecg_empty_title), stringResource(R.string.metric_empty_body)) }
+        }
+        if (latest != null) {
             item {
                 RoundedCard(Modifier.gutter()) {
                     CardTitle(stringResource(state.metric.valueLabel))
@@ -229,29 +231,20 @@ fun MetricDetailScreen(state: MetricDetailUi, onBack: (() -> Unit)? = null, onMe
                     }
                 }
             }
-            if (state.readings.size >= 2) {
+            if (state.manual.size >= 2) {
                 item {
                     RoundedCard(Modifier.gutter()) {
                         CardTitle(stringResource(R.string.bp_trend))
                         Spacer(Modifier.height(12.dp))
-                        val recent = state.readings.take(7).reversed()
+                        val recent = state.manual.take(7).reversed()
                         WeekBars(recent.map { it.plot - recent.minOf { r -> r.plot } * 0.9f }, recent.map { if (' ' in it.date) it.date.substringAfterLast(' ') else it.date }, color)
                     }
                 }
             }
+        }
+        if (state.readings.isNotEmpty()) {
             item { SectionHeader(stringResource(R.string.bp_history)) }
-            item {
-                RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
-                    val rows = state.readings.take(10)
-                    rows.forEachIndexed { i, r ->
-                        CardRow(
-                            listOfNotNull(r.value, r.unit).joinToString(" "),
-                            subtitle = "${r.date} · ${r.time}",
-                            showDivider = i < rows.lastIndex,
-                        )
-                    }
-                }
-            }
+            item { HistoryRows(state.readings.take(14)) }
         }
         item {
             Text(
@@ -260,6 +253,40 @@ fun MetricDetailScreen(state: MetricDetailUi, onBack: (() -> Unit)? = null, onMe
                 color = colors.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 28.dp),
             )
+        }
+    }
+}
+
+/**
+ * Measurements and the watch's days, newest first. A watch day shows its usual value and how many
+ * readings it had; tapping it lists them.
+ */
+@Composable
+private fun HistoryRows(rows: List<MetricReadingUi>) {
+    var open by remember { mutableStateOf<String?>(null) }
+    RoundedCard(Modifier.gutter(), contentPadding = 0.dp) {
+        rows.forEachIndexed { i, r ->
+            val expanded = open == r.id
+            CardRow(
+                listOfNotNull(r.value, r.unit).joinToString(" "),
+                subtitle = if (r.fromWatch) {
+                    stringResource(R.string.history_watch_day, r.date, r.details.lastOrNull()?.second ?: "")
+                } else {
+                    "${r.date} · ${r.time}"
+                },
+                showDivider = i < rows.lastIndex || expanded,
+                onClick = if (r.fromWatch) ({ open = if (expanded) null else r.id }) else null,
+            )
+            if (expanded) {
+                Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                    r.entries.take(48).forEach { (time, value) ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                            Text(time, style = MaterialTheme.typography.bodySmall, color = HeartlineTheme.colors.onSurfaceVariant, modifier = Modifier.weight(1f))
+                            Text(value, style = MaterialTheme.typography.bodySmall, color = HeartlineTheme.colors.onBackground)
+                        }
+                    }
+                }
+            }
         }
     }
 }

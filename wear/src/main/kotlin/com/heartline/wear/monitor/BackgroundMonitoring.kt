@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.PowerManager
 import android.os.SystemClock
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -31,6 +32,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.heartline.shared.hr.ActivityChange
+import com.heartline.shared.hr.BackgroundWindow
 import com.heartline.shared.hr.HrContext
 import com.heartline.shared.hr.HrSample
 import com.heartline.shared.hr.MonitorSettings
@@ -42,9 +44,10 @@ import java.time.ZoneId
 import com.heartline.shared.model.Metric
 import com.heartline.shared.sensor.PermissionPolicy
 import com.heartline.wear.sensor.HrSource
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
@@ -201,8 +204,12 @@ class BackgroundHeart(
         trends.flushBatch()
     }
 
-    /** Ends a rhythm window: its minutes (with HRV) go to the phone. A partial window is dropped when the next one starts. */
-    suspend fun endIrnWindow() = lock.withLock {
+    /**
+     * A finished rhythm window: [all] its readings become minutes (with HRV) for the phone, and
+     * [picked] is judged for the rhythm.
+     */
+    suspend fun onIrnWindow(all: List<HrSample>, picked: List<HrSample>?) = lock.withLock {
+        irn.onWindow(all, picked)
         irn.closeOpenMinutes()
         irn.flushBatch()
     }
@@ -268,7 +275,7 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
         // to a sensor on a table or charger, whose noise looks like an irregular rhythm.
         val lastWorn = store.lastPassiveHeartRateMs
         if (settings.passiveHeartRate && (lastWorn == null || System.currentTimeMillis() - lastWorn > NOT_WORN_MS)) {
-            HLog.i(TAG, "IRN window skipped: no background heart rate since ${lastWorn ?: "install"}")
+            HLog.i(TAG, "IRN window skipped: no background heart rate since ${lastWorn?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDateTime().withNano(0) } ?: "install"}")
             return Result.success()
         }
         val wrist = WristState(applicationContext).also { it.start() }
@@ -286,46 +293,83 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
         return BackgroundSensors.lock.withLock { window(settings, wrist) }
     }
 
+    /**
+     * Listens for [LISTEN_MS], then asks the tracker for the readings it still holds (it sends
+     * them in batches, minutes late while the screen is off) and judges every reading by its own
+     * time: the rhythm on the best 60 s stretch, stress on the trusted beat pairs
+     * (docs/algorithms/HEART_MONITORING.md, "Background windows").
+     */
     private suspend fun window(settings: com.heartline.shared.hr.MonitorSettings, wrist: WristState): Result {
         val motion = StepMotionMonitor(applicationContext).also { it.start() }
         heart.irn.resetWindow()
-        var count = 0
         val samples = mutableListOf<com.heartline.shared.hr.HrSample>()
+        val lateMs = mutableListOf<Long>()
+        var flushed = false
         // A background session of its own, unless a measurement is running (then it records there).
         val raw = RawCapture.begin("irn_window", background = true)
-        // Timed from the first reliable reading: the tracker may still be warming up after another measurement.
-        val gate = WindowGate(WINDOW_MS, WARMUP_MS, System.currentTimeMillis())
+        val opened = SystemClock.elapsedRealtime()
+        // Keeps the processor awake for the timers: without it a window once ran 13 minutes.
+        val wake = applicationContext.getSystemService(PowerManager::class.java)
+            ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "heartline:rhythm-window")
+            ?.apply { acquire(MAX_MS + 10_000) }
         try {
-            withTimeoutOrNull(WARMUP_MS + WINDOW_MS + 5_000) {
-                source.stream()
-                    .catch { HLog.w(TAG, "IRN window stream failed", it) }
-                    .map { it to gate.decide(it, System.currentTimeMillis()) }
-                    .takeWhile { it.second != WindowGate.Decision.STOP }
-                    .collect { (sample, decision) ->
-                        count++
-                        if (decision == WindowGate.Decision.SKIP) return@collect
-                        val checked = sample.copy(
-                            moving = sample.moving || motion.movedSince(sample.tsMs - 60_000) || wrist.movedSince(sample.tsMs - 60_000),
-                            onBody = sample.onBody && !wrist.offBody,
-                        )
-                        samples += checked
-                        if (settings.rhythmActive) heart.irn.onSample(checked)
+            withTimeoutOrNull(MAX_MS) {
+                coroutineScope {
+                    val listening = launch {
+                        source.stream()
+                            .catch { HLog.w(TAG, "IRN window stream failed", it) }
+                            .collect { sample ->
+                                val now = System.currentTimeMillis()
+                                lateMs += now - sample.tsMs
+                                val from = sample.tsMs - MOTION_LOOKBACK_MS
+                                val activity = store.activityAt(sample.tsMs / 60_000 * 60_000)
+                                samples += sample.copy(
+                                    moving = sample.moving || motion.movedBetween(from, sample.tsMs) || wrist.movedBetween(from, sample.tsMs) ||
+                                        activity == HrContext.ACTIVE || activity == HrContext.EXERCISE,
+                                    onBody = sample.onBody && !wrist.offBody,
+                                )
+                            }
                     }
+                    delay(LISTEN_MS)
+                    flushed = source.flush()
+                    // Readings sent with the flush are still being handed over.
+                    delay(1_000)
+                    listening.cancel()
+                }
             }
         } finally {
             motion.stop()
             wrist.stop()
-            RawCapture.end(raw, mapOf("samples" to count.toDouble()))
+            RawCapture.end(raw, mapOf("samples" to samples.size.toDouble()))
+            wake?.takeIf { it.isHeld }?.release()
         }
-        heart.endIrnWindow()
-        // Stress from the same window (a window judged irregular is not read as stress).
-        if (heart.irn.lastWindowIrregular != true) runCatching { StressWindows.onWindow(samples, settings, store, output) }.onFailure { HLog.w(TAG, "stress window failed", it) }
+        val tookS = (SystemClock.elapsedRealtime() - opened) / 1_000
+        val rhythm = BackgroundWindow.rhythm(samples)
+        heart.onIrnWindow(samples, rhythm.samples)
         val irregular = heart.irn.lastWindowIrregular
-        val skipped = if (gate.startedAtMs == null) "warming up (${gate.warmupSamples} samples)" else heart.irn.lastSkipReason
-        HLog.i(TAG, "IRN window done: $count samples (${gate.warmupSamples} warm-up), irregular=$irregular skipped=$skipped")
+        // Stress from the same readings (a window judged irregular is not read as stress).
+        val stress = if (irregular == true) {
+            "skipped (irregular)"
+        } else {
+            runCatching { StressWindows.onWindow(samples, settings, store, output) }.getOrElse {
+                HLog.w(TAG, "stress window failed", it)
+                "failed"
+            }
+        }
+        val late = lateMs.sorted().let { if (it.isEmpty()) "-" else "${it[it.size / 2] / 1_000}/${it.last() / 1_000} s" }
+        val read = rhythm.samples?.let { "read ${(it.last().tsMs - it.first().tsMs) / 1_000} s from ${clock(it.first().tsMs)}, irregular=$irregular" }
+            ?: "not read: ${heart.irn.lastSkipReason ?: rhythm.reason}"
+        val reason = if (rhythm.samples != null && irregular == null) " (${heart.irn.lastSkipReason})" else ""
+        HLog.i(
+            TAG,
+            "IRN window done in $tookS s: ${BackgroundWindow.statusMix(samples)}, trusted beats ${BackgroundWindow.trustedShare(samples)} %, " +
+                "late median/max $late, flush=$flushed; rhythm $read$reason; stress $stress",
+        )
         if (irregular == true) BackgroundMonitoring.scheduleFollowUp(applicationContext)
         return Result.success()
     }
+
+    private fun clock(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault()).toLocalTime().withNano(0).toString()
 
     override suspend fun getForegroundInfo(): ForegroundInfo = foregroundInfo()
 
@@ -333,10 +377,14 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
 
     private companion object {
         const val TAG = "Heartline/Monitor"
-        const val WINDOW_MS = 75_000L
+        /** How long the window listens before asking for the held readings. */
+        const val LISTEN_MS = 90_000L
 
-        /** How long the tracker may stay in its "initial" state before the window gives up. */
-        const val WARMUP_MS = 45_000L
+        /** The hard limit for a window: the sensor is always released by then. */
+        const val MAX_MS = 150_000L
+
+        /** A reading counts as moving if the arm moved in the 30 seconds before it. */
+        const val MOTION_LOOKBACK_MS = 30_000L
 
         /** Passive heart rate arrives every few minutes while the watch is worn; an hour without any means it isn't. */
         const val NOT_WORN_MS = 60 * 60_000L

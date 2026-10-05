@@ -5,13 +5,12 @@ package com.heartline.wear.monitor
 
 import com.heartline.datalayer.diag.HLog
 import com.heartline.shared.hr.HeartBaseline
+import com.heartline.shared.hr.BackgroundWindow
 import com.heartline.shared.hr.HeartHistory
 import com.heartline.shared.hr.HrBatch
 import com.heartline.shared.hr.HrContext
 import com.heartline.shared.hr.HrSample
-import com.heartline.shared.hr.Hrv
 import com.heartline.shared.hr.MonitorSettings
-import com.heartline.shared.irn.IbiWindowQuality
 import com.heartline.shared.stress.StressBaseline
 import com.heartline.shared.stress.StressMonitor
 import com.heartline.shared.vitals.VitalsBaseline
@@ -28,13 +27,11 @@ object StressWindows {
     private const val TAG = "Heartline/Stress"
     private const val MINUTE = 60_000L
 
-    /** RMSSD (ms) and heart rate of a readable window, or null (off the wrist, moving, weak signal). */
-    fun measure(samples: List<HrSample>): Pair<Double, Int>? {
-        val readable = IbiWindowQuality.assess(samples) as? IbiWindowQuality.Result.Readable ?: return null
-        val ibis = IbiWindowQuality.dropIsolatedEctopics(readable.ibisMs)
-        val hrv = Hrv.compute(ibis) ?: return null
-        return hrv.rmssdMs to (60_000.0 / ibis.average()).toInt()
-    }
+    /**
+     * RMSSD (ms) and heart rate from the window's successive trusted beats
+     * ([BackgroundWindow.hrv]), or null (off the wrist, moving, too few trusted beats).
+     */
+    fun measure(samples: List<HrSample>): Pair<Double, Int>? = BackgroundWindow.hrv(samples)?.let { it.rmssdMs to it.bpm }
 
     /**
      * What the window counts as: exercise (also for the hour after it, while HRV recovers), asleep
@@ -58,11 +55,16 @@ object StressWindows {
         return warmer || HeartBaseline.nightRaised(heart, today)
     }
 
-    /** Scores a finished window, stores the history and sends the reading (and any notice). */
-    suspend fun onWindow(samples: List<HrSample>, settings: MonitorSettings, store: WatchSettingsStore, output: WatchMonitorOutput) {
-        if (!settings.stressActive || samples.isEmpty()) return
-        val (rmssd, bpm) = measure(samples) ?: return
-        val ts = samples.last().tsMs
+    /**
+     * Scores a finished window, stores the history and sends the reading (and any notice).
+     * Returns what happened, for the window's log line.
+     */
+    suspend fun onWindow(samples: List<HrSample>, settings: MonitorSettings, store: WatchSettingsStore, output: WatchMonitorOutput): String {
+        if (!settings.stressActive) return "off"
+        val reading = BackgroundWindow.hrv(samples) ?: return "too few trusted beats"
+        val rmssd = reading.rmssdMs
+        val bpm = reading.bpm
+        val ts = reading.startMs
         val zone = ZoneId.systemDefault()
         val context = contextAt(ts, settings, store::activityAt, zone)
         val today = StressBaseline.dayOf(ts, HrContext.REST, zone)
@@ -77,35 +79,6 @@ object StressWindows {
             output.enqueueAlert(it)
             output.notify(it)
         }
-    }
-}
-
-/**
- * Times a background window from its first reliable reading, not from switching the sensor on:
- * right after another measurement (blood oxygen) the heart-rate tracker can report "initial" (status
- * 0, rate 0) for up to a minute, and a window timed from the start was all warm-up ("weak signal" in
- * a real Galaxy Watch8 log). Warm-up readings are dropped; without a reliable one within [warmupMs]
- * the window ends.
- */
-class WindowGate(private val windowMs: Long, private val warmupMs: Long, private val openedAtMs: Long) {
-    enum class Decision { SKIP, TAKE, STOP }
-
-    var startedAtMs: Long? = null
-        private set
-    var warmupSamples = 0
-        private set
-
-    fun decide(sample: HrSample, nowMs: Long): Decision {
-        val start = startedAtMs
-        if (start == null) {
-            if (nowMs - openedAtMs > warmupMs) return Decision.STOP
-            if (!(sample.reliable && sample.onBody && sample.bpm > 0)) {
-                warmupSamples++
-                return Decision.SKIP
-            }
-            startedAtMs = sample.tsMs
-            return Decision.TAKE
-        }
-        return if (sample.tsMs - start >= windowMs) Decision.STOP else Decision.TAKE
+        return "score ${sample?.score ?: "-"} from ${reading.pairs} beat pairs ($context)"
     }
 }

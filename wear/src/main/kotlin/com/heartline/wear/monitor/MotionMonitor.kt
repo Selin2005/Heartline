@@ -8,19 +8,50 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.os.SystemClock
 import com.heartline.wear.diag.RawCapture
 
 /** Tracks recent steps so rhythm checks only use windows where the wearer is still. */
 fun interface MotionMonitor {
     /** True if the wearer moved (took steps) since [sinceMs]. */
     fun movedSince(sinceMs: Long): Boolean
+
+    /**
+     * True if the wearer moved between [fromMs] and [toMs]. Heart-rate readings can arrive minutes
+     * late, so a reading is judged by movement around its own time, not by any movement since.
+     */
+    fun movedBetween(fromMs: Long, toMs: Long): Boolean = movedSince(fromMs)
 }
 
-class StepMotionMonitor(context: Context, private val now: () -> Long = System::currentTimeMillis) :
+/**
+ * When movements happened, by the sensor event's own time (events can arrive batched too).
+ * Keeps the last [keepMs].
+ */
+internal class MoveTimes(private val keepMs: Long = 20 * 60_000L) {
+    private val times = ArrayDeque<Long>()
+
+    @Synchronized fun add(atMs: Long) {
+        // One mark per half second is plenty.
+        if (times.isNotEmpty() && atMs - times.last() < 500) return
+        times.addLast(atMs)
+        while (times.isNotEmpty() && atMs - times.first() > keepMs) times.removeFirst()
+    }
+
+    @Synchronized fun any(fromMs: Long, toMs: Long) = times.any { it in fromMs..toMs }
+
+    @Synchronized fun latest() = times.lastOrNull() ?: 0L
+
+    companion object {
+        /** A sensor event's time (elapsed-realtime nanoseconds) as wall-clock milliseconds. */
+        fun wallMs(event: SensorEvent) = System.currentTimeMillis() - (SystemClock.elapsedRealtimeNanos() - event.timestamp) / 1_000_000
+    }
+}
+
+class StepMotionMonitor(context: Context) :
     MotionMonitor,
     SensorEventListener {
     private val manager = context.getSystemService(SensorManager::class.java)
-    @Volatile private var lastStepMs = 0L
+    private val steps = MoveTimes()
 
     fun start() {
         manager?.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)?.let {
@@ -32,12 +63,14 @@ class StepMotionMonitor(context: Context, private val now: () -> Long = System::
 
     override fun onSensorChanged(event: SensorEvent) {
         RawCapture.android(event)
-        lastStepMs = now()
+        steps.add(MoveTimes.wallMs(event))
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 
-    override fun movedSince(sinceMs: Long) = lastStepMs >= sinceMs
+    override fun movedSince(sinceMs: Long) = steps.latest() >= sinceMs
+
+    override fun movedBetween(fromMs: Long, toMs: Long) = steps.any(fromMs, toMs)
 }
 
 /**
@@ -45,7 +78,7 @@ class StepMotionMonitor(context: Context, private val now: () -> Long = System::
  * the arm last moved (accelerometer). Steps alone miss typing or gesturing, which spoil the
  * beat-to-beat intervals as much as walking does.
  */
-class WristState(context: Context, private val now: () -> Long = System::currentTimeMillis) :
+class WristState(context: Context) :
     MotionMonitor,
     SensorEventListener {
     private val manager = context.getSystemService(SensorManager::class.java)
@@ -55,7 +88,7 @@ class WristState(context: Context, private val now: () -> Long = System::current
     @Volatile var offBody = false
         private set
 
-    @Volatile private var lastMoveMs = 0L
+    private val moves = MoveTimes()
     private var average = Double.NaN
 
     fun start() {
@@ -72,14 +105,16 @@ class WristState(context: Context, private val now: () -> Long = System::current
                 val (x, y, z) = event.values
                 val magnitude = kotlin.math.sqrt((x * x + y * y + z * z).toDouble())
                 average = if (average.isNaN()) magnitude else average * 0.9 + magnitude * 0.1
-                if (kotlin.math.abs(magnitude - average) > MOVE_MS2) lastMoveMs = now()
+                if (kotlin.math.abs(magnitude - average) > MOVE_MS2) moves.add(MoveTimes.wallMs(event))
             }
         }
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 
-    override fun movedSince(sinceMs: Long) = lastMoveMs >= sinceMs
+    override fun movedSince(sinceMs: Long) = moves.latest() >= sinceMs
+
+    override fun movedBetween(fromMs: Long, toMs: Long) = moves.any(fromMs, toMs)
 
     private companion object {
         /** A resting arm stays within about 0.15 m/s² of its average; this is a clear movement. */

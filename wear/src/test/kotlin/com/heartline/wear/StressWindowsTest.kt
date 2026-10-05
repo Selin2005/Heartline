@@ -3,6 +3,7 @@
 
 package com.heartline.wear
 
+import com.heartline.shared.hr.BackgroundWindow
 import com.heartline.shared.hr.HrContext
 import com.heartline.shared.hr.HrSample
 import com.heartline.shared.hr.MonitorSettings
@@ -50,21 +51,23 @@ class StressWindowsTest {
     }
 
     @Test
-    fun aWindowIsTimedFromTheFirstReliableReading() {
-        // After a blood-oxygen measurement: 30 s of "initial" readings (status 0, rate 0), then good ones.
-        val opened = 1_000_000L
-        val gate = com.heartline.wear.monitor.WindowGate(75_000, 45_000, opened)
-        val decisions = (0 until 120).map { i ->
-            val warming = i < 30
-            gate.decide(HrSample(opened + i * 1_000L, if (warming) 0 else 80, listOf(750), reliable = !warming), opened + i * 1_000L)
+    fun readingsThatArriveLateAndBeforeTheWindowStillCount() {
+        // A batch from before the listener started: 40 s of warm-up, then a still minute and more.
+        val start = day + 3 * 3_600_000L
+        val warming = (0 until 40).map { HrSample(start + it * 1_000L, 0, emptyList(), reliable = false) }
+        var t = start + 40_000L
+        val good = (0 until 90).map { i ->
+            val beat = 950 + if (i % 2 == 0) 15 else -15
+            t += beat
+            HrSample(t, 63, listOf(beat))
         }
-        assertEquals(30, decisions.count { it == com.heartline.wear.monitor.WindowGate.Decision.SKIP })
-        assertEquals(75, decisions.count { it == com.heartline.wear.monitor.WindowGate.Decision.TAKE })
-        assertEquals(opened + 30_000, gate.startedAtMs)
-        // Never reliable: it gives up after the warm-up.
-        val never = com.heartline.wear.monitor.WindowGate(75_000, 45_000, opened)
-        val stop = (0 until 60).first { i -> never.decide(HrSample(opened + i * 1_000L, 0, emptyList(), reliable = false), opened + i * 1_000L) == com.heartline.wear.monitor.WindowGate.Decision.STOP }
-        assertEquals(46, stop)
-        assertNull(never.startedAtMs)
+        val rhythm = BackgroundWindow.rhythm((good + warming).shuffled(java.util.Random(1)))
+        assertNotNull(rhythm.samples)
+        assertTrue(rhythm.samples!!.all { it.reliable })
+        assertNotNull(StressWindows.measure(warming + good))
+        // Only warm-up readings: nothing to read, and the log says why.
+        val none = BackgroundWindow.rhythm(warming)
+        assertNull(none.samples)
+        assertTrue(none.reason, none.reason.startsWith("no reliable still reading"))
     }
 }

@@ -184,11 +184,54 @@ uses. With an older watch, the phone computes the same limits from its own minut
   - when Android's off-body sensor says the watch is off the wrist (checked 1.5 s after it
     starts, and during the window).
 - If a readable window was irregular, one extra check runs 7 minutes later (`scheduleFollowUp`).
-- **The window is timed from its first reliable reading** (`WindowGate`), not from switching the
-  tracker on. Right after another measurement (blood oxygen), the tracker can report "initial"
-  (status 0, rate 0) for up to a minute. A real log showed a whole window lost to that ("weak
-  signal"). Warm-up readings are dropped, and without a reliable one within 45 s the window ends
-  with `skipped=warming up`.
+
+### Background windows: batches, flush and the readings' own times (`BackgroundWindow`)
+A real two-day log (Galaxy Watch8 Classic, October 2026) had **91 windows and none read**: no
+rhythm check and no stress reading in two days. The raw readings showed why:
+
+- **The tracker sends batches.** While the screen is off, `HEART_RATE_CONTINUOUS` holds its
+  readings and sends them minutes late. A new listener even gets readings from before it started
+  (up to 5 minutes earlier), and one reading can carry 10 minutes of beat intervals.
+  - The old window was timed by the wall clock from its first reliable reading (`WindowGate`).
+    When the first batch came after 45 s, it ended with **0 samples**.
+  - That happened to the one perfect window of the log: 598 readings at 1:58 at night, every
+    interval trusted, logged as "0 samples, warming up".
+- **Movement was matched to the wrong time.** A reading counted as "moving" if the arm moved at
+  any time after it, even at the end of the window. One movement then spoiled every late reading.
+- **The skip reason could be stale:** a window too short to judge logged the previous window's
+  reason.
+- **Windows ran 7–13 minutes** with the sensor on, as the processor slept through the timers.
+
+The window now works like this (`IrnWindowWorker.window`):
+1. **Listen** for 90 s, with a partial wake lock (at most 2.5 minutes in all).
+2. **Ask for the held readings** with the SDK's `HealthTracker.flush()`, and wait for
+   `onFlushCompleted` (at most 10 s).
+3. **Judge every reading by its own timestamp.** It is moving if steps or arm movement (by the
+   sensor event's own time) fall in the 30 s before it, or the watch marks that minute active.
+4. **Rhythm** (`BackgroundWindow.rhythm`): the newest 60–75 s stretch that starts on a reliable,
+   still, on-wrist reading and passes `IbiWindowQuality` is judged. The stretch can lie before
+   the window started.
+5. **Stress** (`BackgroundWindow.hrv`): see
+   [STRESS_MONITORING.md](STRESS_MONITORING.md#2-measuring-no-extra-battery).
+
+**One line per window** (`Heartline/Monitor`):
+
+```
+IRN window done in 92 s: 598 readings: 598 good, 0 moving, 0 weak, 0 off-wrist, trusted beats 100 %,
+late median/max 95/187 s, flush=true; rhythm read 74 s from 01:55:04, irregular=false;
+stress score 31 from 597 beat pairs (SLEEP)
+```
+
+**What to expect.** By day, wrist intervals are often untrusted: in that log, 57 % of the
+intervals of good readings were flagged.
+- Replayed on the same 91 windows, the rhythm can be read in only a few, mostly at night.
+- Stress, which only needs 40 trusted pairs, could be read in about one in ten.
+
+The rhythm check stays strict, since a false notice is worse than none.
+
+**Tests.** `ReplayTest` replays real windows from that log (`tools/replay/sessions.py`). The 1:58
+night window must be read as regular with a stress value. The off-wrist and weak-signal windows
+must not be read, and no real window may be judged irregular.
 
 ### Is the window readable? (`IbiWindowQuality`)
 A window of about 60 s is analysed only if all of these hold. Otherwise it is *unreadable*: never
@@ -197,13 +240,13 @@ counted as irregular, and not as regular either.
 | Check | Limit |
 |---|---|
 | On the wrist | no off-body sample |
-| Still | no steps and no arm movement (accelerometer > 1 m/s² from its average) in the last minute |
+| Still | no steps, no arm movement (accelerometer > 1 m/s² from its average) in the 30 s before each reading, and not an active minute |
 | Signal | ≤ 5 % of samples not `reliable` |
 | Rejected intervals | ≤ 10 % (tracker-flagged, out of 300–2000 ms, or from unreliable samples) |
 | Coverage | the intervals add up to ≥ 85 % of the window (no gaps) |
 | Rate | 40–150 bpm, and within 15 % of the tracker's own median heart rate |
 
-The reason a window was skipped is logged (`IRN window done: … skipped=…`).
+The reason a window was not read is logged (`IRN window done: … rhythm not read: …`).
 
 ### Is it irregular? (`IrnThresholds`, `RrFeatures`)
 - With *Standard* sensitivity, isolated premature beats are removed first: runs of one or two

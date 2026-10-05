@@ -25,6 +25,9 @@ class RecordFormatter(
     private val locale: Locale = Locale.getDefault(),
     private val today: () -> LocalDate = { LocalDate.now(zone) },
 ) {
+    /** A short day name ("Mon"). */
+    fun weekday(day: LocalDate): String = day.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, locale)
+
     private val month = DateTimeFormatter.ofPattern("LLLL yyyy", locale)
     private val shortDate = DateTimeFormatter.ofPattern("MMM d", locale)
     private val shortDateYear = DateTimeFormatter.ofPattern("MMM d, yyyy", locale)

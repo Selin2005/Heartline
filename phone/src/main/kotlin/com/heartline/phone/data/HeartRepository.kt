@@ -34,6 +34,13 @@ class HeartRepository(
 
     fun tempsSince(fromMs: Long): Flow<List<TempSampleEntity>> = dao.tempsSince(fromMs)
 
+    /** The newest background reading of each kind (Home tiles, widgets). */
+    val backgroundLatest: Flow<BackgroundLatest> =
+        kotlinx.coroutines.flow.combine(dao.latestSpo2(), dao.latestTemp(), dao.latestStress()) { o, t, s -> BackgroundLatest(o, t, s) }
+
+    /** Every background reading, for the data export. */
+    suspend fun backgroundAll() = BackgroundAll(dao.allSpo2(), dao.allTemps(), dao.allStress())
+
     fun minutes(fromMs: Long, toMs: Long): Flow<List<HrMinuteEntity>> = dao.minutes(fromMs, toMs)
 
     val latestMinute: Flow<HrMinuteEntity?> = dao.latestMinute()
@@ -91,3 +98,8 @@ class HeartRepository(
         dao.deleteAlerts()
     }
 }
+
+/** The newest background blood oxygen, skin temperature and stress reading, if any. */
+data class BackgroundLatest(val spo2: Spo2SampleEntity? = null, val temp: TempSampleEntity? = null, val stress: StressSampleEntity? = null)
+
+data class BackgroundAll(val spo2: List<Spo2SampleEntity> = emptyList(), val temps: List<TempSampleEntity> = emptyList(), val stress: List<StressSampleEntity> = emptyList())

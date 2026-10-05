@@ -48,11 +48,12 @@ class WidgetUpdater(
                 records.observe(RecordKind.BODY_COMPOSITION),
                 records.observe(RecordKind.STRESS),
             ) { a, b, c, d, e -> listOf(a.size, b.size, c.size, d.size, e.size) },
-            heart.latestMinute,
+            // A new minute, or a new background reading from the watch.
+            combine(heart.latestMinute, heart.backgroundLatest) { m, b -> m?.minuteStartMs to listOf(b.spo2?.tsMs, b.temp?.tsMs, b.stress?.tsMs) },
             bp.calibration,
             // The name on widgets follows the profile and the "show my name" setting.
             combine(profiles?.profile ?: flowOf(null), settings?.monitor ?: flowOf(null)) { p, s -> p?.displayName to s?.showNameOnWidgets },
-        ) { ecg, others, minute, calibration, name -> listOf(ecg.firstOrNull()?.entity?.id, others, minute?.minuteStartMs, calibration?.id, name) }
+        ) { ecg, others, minute, calibration, name -> listOf(ecg.firstOrNull()?.entity?.id, others, minute, calibration?.id, name) }
             .drop(1)
             .debounce(1_500)
             .onEach { updateAll() }
