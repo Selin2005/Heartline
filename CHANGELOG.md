@@ -3,6 +3,14 @@
 All notable changes to Heartline. Each release's notes are written by the Build workflow when the
 release is made, and the app shows them under *What's new* after an update.
 
+## 0.0.2.116-beta.1 — 2026-10-05
+
+### Changes
+- Read background windows by the readings' own time, and show the watch's readings everywhere
+- BP algorithm 6.5: five corrections found by the full specification
+- Write the complete blood-pressure algorithm specification
+- BP algorithm 6.4: measured on real cuff checks, no forearm correction, coupled diastolic
+
 ## 0.0.2.115-beta.3 — 2026-10-03
 
 ### Changes
