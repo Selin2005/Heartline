@@ -56,6 +56,10 @@ happened earlier, *Keep diagnostic logs* must be on (it is by default in beta ve
 | `records/` | `records.csv` (every saved measurement and its result) and each one's stored wave |
 | `bp/` | `calibrations.json` (every blood-pressure calibration: each round's cuff reading, features and `sessionId`) and `cuff-checks.csv` (each cuff check: watch vs cuff, with the reading's `sessionId`). A `bp` session's `header.json` also carries its own cuff reading (`cuffSystolic` / `cuffDiastolic`), and a session left half-way is kept with `result` = `cancelled` or `error: …` |
 
+To measure the blood-pressure algorithm on an export: unzip it and run
+`./gradlew :shared:bpEval -Pdir=<folder>`. Every cuff-checked reading is replayed through the
+current algorithm and its variants, with the error in the terms of ISO 81060-2 / IEEE 1708.
+
 In a session, `ECG_ON_DEMAND.csv`, `PPG_ON_DEMAND.csv`, `HEART_RATE_CONTINUOUS.csv`,
 `SPO2_ON_DEMAND.csv`, … hold every value the Samsung tracker gave (all its keys: values, statuses,
 LEAD_OFF, sequence, …); `HEART_RATE_CONTINUOUS.IBI_LIST.csv` the beat-to-beat intervals;

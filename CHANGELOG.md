@@ -3,6 +3,21 @@
 All notable changes to Heartline. Each release's notes are written by the Build workflow when the
 release is made, and the app shows them under *What's new* after an update.
 
+## 0.0.2.115-beta.3 — 2026-10-03
+
+### Changes
+- Update downloads that survive leaving the screen and continue where they stopped
+- Release notes in the app: hide comments, show quotes and italics
+- Fix what a real watch log showed: temperature, window warm-up, alert logs
+- No heart-rate notice compared with a usual that doesn't exist yet
+- Stress monitoring, monitoring setup with health questions, and no rhythm card on Home
+- Background blood oxygen and skin temperature monitoring
+- All-day heart rate keeps recording when heart monitoring is off
+- Personal heart-rate limits, one heart monitoring switch, and a 60-day simulation
+- Heart alerts that know about exercise and sleep, and fewer false rhythm notifications
+- Fix the Telegram group link, add the ECG GIF and a Samsung disclaimer
+- Documentation, terms and policy updates
+
 ## 0.0.2.115-beta.2 — 2026-09-30
 
 ### Improved

@@ -103,7 +103,7 @@ fun BpFlow(
     LaunchedEffect(state is BpState.Done || state is BpState.CalibrationRecorded) {
         when (val s = state) {
             is BpState.Done -> vibrate(
-                if (s.category == com.heartline.shared.bp.BpCategory.NORMAL || s.category == com.heartline.shared.bp.BpCategory.ELEVATED) Buzz.DONE else Buzz.ATTENTION,
+                if (!s.wideRange && (s.category == com.heartline.shared.bp.BpCategory.NORMAL || s.category == com.heartline.shared.bp.BpCategory.ELEVATED)) Buzz.DONE else Buzz.ATTENTION,
             )
             is BpState.CalibrationRecorded -> vibrate(Buzz.DONE)
             else -> Unit
@@ -160,6 +160,8 @@ fun BpFlow(
             ectopicBeats = s.ectopicBeats,
             bodyState = s.bodyState,
             channels = s.channels,
+            postureDiffers = s.postureDiffers,
+            wideRange = s.wideRange,
             onMeasureAgain = { start(mode) },
             onDone = done,
         )

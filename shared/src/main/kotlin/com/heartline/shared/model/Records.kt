@@ -44,7 +44,10 @@ sealed interface RecordSummary {
         /** When the phone's personal model refined the reading (algorithm 4): what the watch showed. */
         val watchSystolic: Int? = null,
         val watchDiastolic: Int? = null,
-        /** Algorithm 5 only (no longer written): the reading was shown as a range ± [uncertainty]. */
+        /**
+         * The ± was too wide for a category (BpEstimator.RANGE_ONLY_SD): shown with its number and
+         * ± but no category (algorithm 6.5; algorithm 5 showed such readings as a range).
+         */
         val rangeOnly: Boolean = false,
         /** Algorithm 6: the channels fused (BpChannel names, comma-separated), the body's state and the mode. */
         val channels: String? = null,

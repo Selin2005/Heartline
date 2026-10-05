@@ -22,3 +22,4 @@ Calibrated blood pressure estimates from the PPG sensor.
 | **Bp instruction precise** | <img src="bp_instruction_precise_small.png" width="200" alt=""> | <img src="bp_instruction_precise_large.png" width="200" alt=""> |
 | **Bp measuring precise** | <img src="bp_measuring_precise_small.png" width="200" alt=""> | <img src="bp_measuring_precise_large.png" width="200" alt=""> |
 | **Bp result fused** | <img src="bp_result_fused_small.png" width="200" alt=""> | <img src="bp_result_fused_large.png" width="200" alt=""> |
+| **Bp result posture** | <img src="bp_result_posture_small.png" width="200" alt=""> | <img src="bp_result_posture_large.png" width="200" alt=""> |

@@ -279,7 +279,9 @@ object TransitEstimator {
             pts.indices.sumOf { i -> w[i] * (pts[i].first - x0 - (pts[i].second.cuffSystolic - sys0) / bSys.nonZero()).pow(2) } / wSum
         )
             .coerceAtLeast(MIN_TRANSIT_NOISE_MS)
-        val noiseSys = sqrt(prior.baseSd.pow(2) + residual.pow(2) + (bSys * spread).pow(2) + (DRIFT_SD_PER_DAY * days).pow(2))
+        // bSys × spread is the rounds' misfit itself (bSys·(Δx − ΔS/bSys) = −(ΔS − bSys·Δx)), never
+        // below the 5 ms floor: the residual is not added again (it was counted twice until 6.5).
+        val noiseSys = sqrt(prior.baseSd.pow(2) + (bSys * spread).pow(2) + (DRIFT_SD_PER_DAY * days).pow(2))
         val noiseDia = sqrt((prior.baseSd * 0.7).pow(2) + (bDia * spread).pow(2) + (DRIFT_SD_PER_DAY * days).pow(2))
         // How sure the slope is: uncertainty about the size of a change, not about its direction.
         val scaleSys = abs(sdBSys * dx)

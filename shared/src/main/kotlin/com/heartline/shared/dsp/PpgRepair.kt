@@ -15,8 +15,14 @@ object PpgRepair {
     /** The SDK's "no value" placeholder in the ECG tracker's PPG channel. */
     const val PLACEHOLDER = -1f
 
-    /** Placeholders and non-finite values become NaN. */
-    fun markMissing(x: FloatArray): FloatArray = FloatArray(x.size) { i -> x[i].takeIf { it.isFinite() && it != PLACEHOLDER } ?: Float.NaN }
+    /**
+     * Placeholders and non-finite values become NaN, and so do exact zeros before the first real
+     * value (the tracker's first point can be all zeros on a real Galaxy Watch6).
+     */
+    fun markMissing(x: FloatArray): FloatArray {
+        val first = x.indexOfFirst { it != 0f }.let { if (it < 0) x.size else it }
+        return FloatArray(x.size) { i -> x[i].takeIf { i >= first && it.isFinite() && it != PLACEHOLDER } ?: Float.NaN }
+    }
 
     /** Share of samples that carry a value. */
     fun validShare(x: FloatArray): Double = if (x.isEmpty()) 0.0 else x.count { it.isFinite() && it != PLACEHOLDER }.toDouble() / x.size

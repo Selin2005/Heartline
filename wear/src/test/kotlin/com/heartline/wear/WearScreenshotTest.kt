@@ -185,6 +185,10 @@ class WearScreenshotTest(private val size: String) {
         BpResultScreen(158, 96, 84, BpCategory.HIGH_STAGE_2, uncertainty = 13, beyondCalibration = true)
     }
 
+    @Test fun bpResultPostureDiffers() = shot("bp_result_posture") {
+        BpResultScreen(142, 84, 74, BpCategory.HIGH_STAGE_2, uncertainty = 11, beyondCalibration = true, postureDiffers = true)
+    }
+
     @Test fun bpResultVeryHigh() = shot("bp_result_very_high") {
         BpResultScreen(186, 112, 90, BpCategory.CRISIS, uncertainty = 15, beyondCalibration = true, confirmed = true, safety = com.heartline.shared.bp.BpSafety.VERY_HIGH)
     }

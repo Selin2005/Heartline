@@ -123,6 +123,9 @@ sealed interface BpState {
         val ectopicBeats: Int = 0,
         val bodyState: HemodynamicState = HemodynamicState.STEADY,
         val channels: List<BpChannel> = emptyList(),
+        val postureDiffers: Boolean = false,
+        /** The ± is too wide for a category: the number and ± are shown without one. */
+        val wideRange: Boolean = false,
     ) : BpState {
         val needsConfirming get() = (beyondCalibration || safety != BpSafety.NONE) && !confirmed
     }
@@ -225,7 +228,7 @@ class BpMeasureViewModel(
         // This flow's own log has every sensor it uses; the raw session next to it keeps every
         // value of every tracker as the SDK gave it (ECG sequence and thresholds, the heart-rate
         // tracker's beat intervals, temperature status), linked by the session id.
-        rawId = RawCapture.begin("bp", mapOf("bpSession" to id))
+        rawId = RawCapture.begin("bp_raw", mapOf("bpSession" to id))
         val header: BpSessionHeader.() -> BpSessionHeader = {
             copy(
                 mode = if (effective == BpMode.PRECISE) BpSessionHeader.MODE_PRECISE else BpSessionHeader.MODE_QUICK,
@@ -574,6 +577,7 @@ class BpMeasureViewModel(
                         confirmed = confirmed,
                         channels = e.channels.joinToString(",") { it.channel.name },
                         bodyState = e.state.state.name,
+                        rangeOnly = e.wideRange,
                         mode = if (input.precise != null) BpSessionHeader.MODE_PRECISE else BpSessionHeader.MODE_QUICK,
                         sessionId = sessionId,
                     ),
@@ -596,6 +600,8 @@ class BpMeasureViewModel(
                     ectopicBeats = e.ectopicBeats,
                     bodyState = e.state.state,
                     channels = e.channels.map { it.channel },
+                    postureDiffers = e.postureDiffers,
+                    wideRange = e.wideRange,
                 )
             }
         }
@@ -639,6 +645,13 @@ class BpMeasureViewModel(
         if (job?.isActive == true) imu.stop()
         job?.cancel()
         mutable.value = BpState.Idle
+    }
+
+    /** The screen is gone for good: nothing may keep listening to the sensors. */
+    override fun onCleared() {
+        if (job?.isActive == true) cancel()
+        imu.stop()
+        super.onCleared()
     }
 
     fun reset() {

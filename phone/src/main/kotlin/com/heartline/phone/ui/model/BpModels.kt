@@ -54,6 +54,9 @@ data class BpReadingUi(
     val bodyState: String? = null,
 ) {
     val category get() = BpCategory.of(systolic, diastolic)
+
+    /** The ± is too wide for a category (algorithm 6.5): the number and ± are shown without one. */
+    val wideRange get() = (uncertainty ?: 0) > com.heartline.shared.bp.BpEstimator.RANGE_ONLY_SD
     val safety get() = BpSafety.of(systolic, diastolic)
     val refined get() = watchSystolic != null
 }

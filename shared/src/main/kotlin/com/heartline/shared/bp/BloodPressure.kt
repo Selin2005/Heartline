@@ -262,8 +262,13 @@ data class BpEstimate(
     val ectopicBeats: Int = 0,
     val notValidated: Boolean = false,
     val state: StateAssessment = StateAssessment.STEADY,
-    val channels: List<ChannelEstimate> = emptyList()
+    val channels: List<ChannelEstimate> = emptyList(),
+    /** Algorithm 6.4: taken in a posture unlike the calibration's (lying down, hand raised or hanging). */
+    val postureDiffers: Boolean = false
 ) {
+    /** The ± is too wide for a category ([BpEstimator.RANGE_ONLY_SD]); the number and ± are still shown. */
+    val wideRange: Boolean get() = uncertaintySys > BpEstimator.RANGE_ONLY_SD
+
     /** A very high reading driven by the pulse rate alone is not presented as very high. */
     val safety: BpSafety get() = BpSafety.of(systolic, diastolic).let {
         if (it == BpSafety.VERY_HIGH &&
@@ -293,7 +298,7 @@ sealed interface BpOutcome {
 }
 
 /**
- * Calibrated pulse-wave-analysis estimate (algorithm 3, see docs/algorithms/BP_ALGORITHM.md).
+ * Calibrated pulse-wave-analysis estimate (algorithm 3, see docs/algorithms/BP_ALGORITHM.md §6).
  *
  * BP = reference cuff reading + w · (features − reference features), where w is a Bayesian
  * (ridge-to-prior) fit: population sensitivities from the literature act as the prior and the
@@ -365,7 +370,10 @@ object BpEstimator {
     const val HR_CAP_SYS = 6.0
     const val HR_CAP_DIA = 4.0
 
-    /** Above this ± (mmHg) a reading is shown as a range without a category. */
+    /**
+     * Above this ± (mmHg) a reading is still shown with its number and ±, but without a category
+     * (normal, high…): an interval that wide spans several of them (algorithm 6.5).
+     */
     const val RANGE_ONLY_SD = 12
 
     /** Extra ± for each source of doubt (added in quadrature), mmHg. */
@@ -415,7 +423,8 @@ object BpEstimator {
         channel: BpChannel = BpChannel.PWA_GREEN,
         state: StateAssessment? = null,
         hydrostaticMmHg: Double = 0.0,
-        inputFs: Int = BpCalibration.PPG_FS
+        inputFs: Int = BpCalibration.PPG_FS,
+        tuning: BpTuning = BpTuning.DEFAULT
     ): BpOutcome {
         if (calibration == null || !calibration.isValid(nowMs)) return BpOutcome.NeedsCalibration
         if (features == null || features.version < PpgFeatureVector.MIN_MODEL_VERSION) return BpOutcome.PoorSignal
@@ -428,7 +437,7 @@ object BpEstimator {
         val minBeats = if (irregular) MIN_BEATS_IRREGULAR else MIN_BEATS
         if (features.quality < minQuality || features.beats < minBeats) return BpOutcome.PoorSignal
         if (!isPlausible(features)) return BpOutcome.OutOfRange(OutOfRangeReason.SIGNAL_INCONSISTENT)
-        val model = fit(calibration, nowMs, features.version, select)
+        val model = fit(calibration, nowMs, features.version, select, tuning)
         val f = corrected(features)
         val scale = personalScale(history)
         val delta = DoubleArray(f.size) { if (model.active[it]) f[it] - model.refFeatures[it] else 0.0 }
@@ -453,7 +462,10 @@ object BpEstimator {
         val trust = if (assessed.state == HemodynamicState.COMPENSATORY) COMPENSATORY_SHAPE else 1.0
         val shapeSys = rawShapeSys * trust
         val dSys = shapeSys + hrSys
-        val dDia = rawShapeDia * trust + hrDia
+        val dDia = when (tuning.diastolic) {
+            BpTuning.Diastolic.SHAPE -> rawShapeDia * trust + hrDia
+            BpTuning.Diastolic.COUPLED -> model.diaRatio * dSys
+        }
         val hrDominated = abs(hrSys) >= HR_DOMINANT_MMHG && abs(hrSys) > abs(shapeSys)
         val days = (nowMs - model.latestPointMs).coerceAtLeast(0) / BpCalibration.DAY_MS.toDouble()
         // Uncertainty grows with how far today's wave is from calibration (weights are uncertain too).
@@ -476,7 +488,12 @@ object BpEstimator {
             BASE_SD * BASE_SD + model.residualSys * model.residualSys + (DRIFT_SD_PER_DAY * days).let { it * it } +
                 extrapolation * extrapolation + doubt.sumOf { it * it }
         )
-        val sdDia = sdSys * 0.7
+        // The diastolic's own ±: its own misfit on the cuff readings, not a share of the systolic's
+        // (real cuff checks missed the diastolic by ±10 while it showed ±4).
+        val sdDia = sqrt(
+            BASE_SD_DIA * BASE_SD_DIA + model.residualDia * model.residualDia + (DRIFT_SD_PER_DAY * days).let { it * it } +
+                (extrapolation * 0.7).let { it * it } + doubt.sumOf { (it * 0.7) * (it * 0.7) }
+        )
         val rawSys = model.refSys + dSys - hydrostaticMmHg
         val rawDia = model.refDia + dDia - hydrostaticMmHg
         val systolic = rawSys.roundToInt().coerceIn(SYSTOLIC_LIMITS)
@@ -585,6 +602,10 @@ object BpEstimator {
         val sysWeights: DoubleArray,
         val diaWeights: DoubleArray,
         val residualSys: Double,
+        /** Diastolic misfit of the cuff points under [BpTuning.diastolic], mmHg. */
+        val residualDia: Double,
+        /** This user's diastolic change per systolic change ([BpTuning.Diastolic.COUPLED]). */
+        val diaRatio: Double,
         val active: BooleanArray,
         val latestPointMs: Long,
         val minSys: Double,
@@ -609,7 +630,8 @@ object BpEstimator {
         calibration: BpCalibration,
         nowMs: Long = calibration.createdAtMs,
         currentVersion: Int = PpgFeatureVector.VERSION,
-        select: (CalibrationPoint) -> PpgFeatureVector? = { it.features }
+        select: (CalibrationPoint) -> PpgFeatureVector? = { it.features },
+        tuning: BpTuning = BpTuning.DEFAULT
     ): Model {
         val timed = calibration.timedPoints().mapNotNull { (p, at) -> select(p)?.let { p.copy(features = it) to at } }
         val points = timed.map { it.first }
@@ -639,14 +661,27 @@ object BpEstimator {
         // Stiffening arteries (diabetes, kidney disease, age): the user's slopes may be further from the population's.
         val priorRel = if (calibration.profile.shortValidity) PRIOR_REL_STIFF else PRIOR_REL
         val sys = posterior(centred, points.map { it.cuffSystolic - refSys }, slopeWeights, priorSys, active, priorRel)
-        val dia = posterior(centred, points.map { it.cuffDiastolic - refDia }, slopeWeights, priorDia, active, priorRel)
-        val residual = sqrt(
-            centred.indices.sumOf { i ->
-                val predicted = centred[i].indices.sumOf { sys[it] * centred[i][it] }
-                val r = (points[i].cuffSystolic - refSys) - predicted
-                weights[i] * r * r
-            } / wSum
+        val diaRel = if (calibration.profile.shortValidity) maxOf(tuning.diaPriorRel, PRIOR_REL_STIFF) else tuning.diaPriorRel
+        val dia = posterior(centred, points.map { it.cuffDiastolic - refDia }, slopeWeights, priorDia, active, diaRel)
+        fun misfit(y: (Int) -> Double, predict: (Int) -> Double) = sqrt(
+            centred.indices.sumOf { i -> weights[i] * (y(i) - predict(i)).let { it * it } } / wSum
         )
+        val residual = misfit({ points[it].cuffSystolic - refSys }) { i -> centred[i].indices.sumOf { sys[it] * centred[i][it] } }
+        // This user's diastolic change per systolic change, from the cuff readings (Bayesian, around 0.5).
+        val sysDev = points.map { it.cuffSystolic - refSys }
+        val diaDev = points.map { it.cuffDiastolic - refDia }
+        val ratioPrecision =
+            1 / (DIA_RATIO_SD * DIA_RATIO_SD) + sysDev.indices.sumOf { slopeWeights[it] * sysDev[it] * sysDev[it] } / (CUFF_SD * CUFF_SD)
+        val diaRatio =
+            (
+                DIA_RATIO_PRIOR / (DIA_RATIO_SD * DIA_RATIO_SD) +
+                    sysDev.indices.sumOf { slopeWeights[it] * sysDev[it] * diaDev[it] } / (CUFF_SD * CUFF_SD)
+                ) /
+                ratioPrecision
+        val residualDia = when (tuning.diastolic) {
+            BpTuning.Diastolic.SHAPE -> misfit({ diaDev[it] }) { i -> centred[i].indices.sumOf { dia[it] * centred[i][it] } }
+            BpTuning.Diastolic.COUPLED -> misfit({ diaDev[it] }) { i -> diaRatio * sysDev[i] }
+        }
         // The slopes use every point; the baseline follows the most recent cuff readings, each
         // moved to the reference features along those slopes. Without later cuff checks this is
         // the same weighted mean as above.
@@ -656,8 +691,18 @@ object BpEstimator {
         }
         fun anchored(cuff: (CalibrationPoint) -> Int, w: DoubleArray) =
             points.indices.sumOf { i -> anchor[i] * (cuff(points[i]) - centred[i].indices.sumOf { w[it] * centred[i][it] }) } / anchor.sum()
+        // The diastolic baseline is moved along the slopes its change uses: ρ × the systolic's
+        // when coupled (algorithm 6.5; until then along the shape model's own diastolic slopes).
+        val diaSlopes = when (tuning.diastolic) {
+            BpTuning.Diastolic.SHAPE -> dia
+            BpTuning.Diastolic.COUPLED -> DoubleArray(sys.size) { diaRatio * sys[it] }
+        }
         return Model(
-            ref, anchored({ it.cuffSystolic }, sys), anchored({ it.cuffDiastolic }, dia), sys, dia, residual, active,
+            ref,
+            anchored({
+                it.cuffSystolic
+            }, sys),
+            anchored({ it.cuffDiastolic }, diaSlopes), sys, dia, residual, residualDia, diaRatio, active,
             timed.maxOf { it.second },
             points.minOf { it.cuffSystolic }.toDouble(),
             points.maxOf { it.cuffSystolic }.toDouble()
@@ -670,6 +715,13 @@ object BpEstimator {
      * pressure range is followed.
      */
     private const val CUFF_SD = 4.0
+
+    /** Population diastolic change per systolic change, and how far a user's own may be from it. */
+    private const val DIA_RATIO_PRIOR = 0.5
+    private const val DIA_RATIO_SD = 0.3
+
+    /** Diastolic counterpart of [BASE_SD]: cuff and beat-to-beat variation of the diastolic, mmHg. */
+    private const val BASE_SD_DIA = 4.0
 
     /** Baseline random-walk variance per day, mmHg² (≈ 2 mmHg a day). */
     private const val DRIFT_VAR_PER_DAY = 4.0

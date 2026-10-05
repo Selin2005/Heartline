@@ -209,7 +209,11 @@ fun BpHomeScreen(
                     }
                     ReadingNotes(latest)
                     Spacer(Modifier.height(14.dp))
-                    CategoryScale(latest.category)
+                    if (latest.wideRange) {
+                        Text(stringResource(R.string.bp_wide_range), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                    } else {
+                        CategoryScale(latest.category)
+                    }
                 }
             }
             item {
@@ -273,9 +277,15 @@ fun BpHomeScreen(
                                 stringResource(R.string.bp_tag_refined).takeIf { r.refined },
                                 stringResource(R.string.bp_tag_precise).takeIf { r.channels?.contains("ECG_PTT") == true || r.channels?.contains("PAT") == true },
                             ).joinToString(" · "),
-                            leading = { Box(Modifier.size(10.dp).clip(CircleShape).background(colors.bpCategory(r.category))) },
+                            leading = {
+                                Box(Modifier.size(10.dp).clip(CircleShape).background(if (r.wideRange) colors.onSurfaceVariant else colors.bpCategory(r.category)))
+                            },
                             trailing = {
-                                Text(stringResource(r.category.label), style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
+                                Text(
+                                    stringResource(if (r.wideRange) R.string.bp_tag_wide else r.category.label),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = colors.onSurfaceVariant,
+                                )
                             },
                             showDivider = i < rows.lastIndex,
                             dividerStart = 46.dp,

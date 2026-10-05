@@ -9,6 +9,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.SystemClock
+import com.heartline.datalayer.diag.HLog
 import com.heartline.shared.bp.BpSessionRecorder
 import com.heartline.shared.bp.ImuStreams
 import com.heartline.wear.diag.RawCapture
@@ -47,9 +48,18 @@ class AndroidImuRecorder(context: Context) : ImuRecorder, SensorEventListener {
     /** Sensor clock (elapsed realtime) → wall clock, ns. */
     @Volatile private var offsetNs = 0L
 
-    private fun writer(name: String, vararg columns: String) = BpSessionRecorder.StreamWriter(name, columns.toList())
+    @Volatile private var listening = false
+
+    private fun writer(name: String, vararg columns: String) = BpSessionRecorder.StreamWriter(name, columns.toList(), MAX_SAMPLES)
 
     override fun start() {
+        // A recording still listening (never stopped) is ended first, never stacked.
+        if (listening) {
+            HLog.w(TAG, "IMU start while still recording: the earlier recording is stopped")
+            manager?.unregisterListener(this)
+        }
+        HLog.i(TAG, "IMU start")
+        listening = true
         synchronized(this) {
             accelW = writer(ImuStreams.ACCEL, "x", "y", "z")
             gyroW = writer(ImuStreams.GYRO, "x", "y", "z")
@@ -62,6 +72,8 @@ class AndroidImuRecorder(context: Context) : ImuRecorder, SensorEventListener {
 
     override fun stop(): Double? {
         manager?.unregisterListener(this)
+        if (listening) HLog.i(TAG, "IMU stop")
+        listening = false
         val a = streams().accel ?: return null
         if (a.size < 20) return null
         val mags = DoubleArray(a.size) { i -> sqrt((0 until 3).sumOf { c -> a.values[i * 3 + c].toDouble().let { it * it } }) }
@@ -82,13 +94,28 @@ class AndroidImuRecorder(context: Context) : ImuRecorder, SensorEventListener {
         RawCapture.android(event)
         val t = event.timestamp + offsetNs
         val v = event.values
-        synchronized(this) {
+        val stored = synchronized(this) {
             when (event.sensor.type) {
                 Sensor.TYPE_ACCELEROMETER -> accelW.append(t, v[0], v[1], v[2])
                 Sensor.TYPE_GYROSCOPE -> gyroW.append(t, v[0], v[1], v[2])
                 Sensor.TYPE_GAME_ROTATION_VECTOR -> rotationW.append(t, v[0], v[1], v[2], if (v.size > 3) v[3] else Float.NaN)
+                else -> true
             }
         }
+        // Far longer than any session: something forgot to stop it. Stop listening rather than
+        // grow until the watch runs out of memory (as a real one did).
+        if (!stored && listening) {
+            listening = false
+            manager?.unregisterListener(this)
+            HLog.w(TAG, "IMU auto-stopped after $MAX_SAMPLES samples: the recording was never stopped")
+        }
+    }
+
+    private companion object {
+        const val TAG = "Heartline/Sensor"
+
+        /** About 3 minutes at the fastest rate (200 Hz): longer than any blood-pressure session. */
+        const val MAX_SAMPLES = 40_000
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit

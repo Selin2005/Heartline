@@ -15,7 +15,7 @@ import kotlinx.serialization.encodeToString
 
 /**
  * Everything a blood-pressure session recorded, so the algorithm can be developed and replayed
- * on real watch data (see docs/algorithms/BP_ALGORITHM.md, "Raw session logs"):
+ * on real watch data (see docs/algorithms/BP_ALGORITHM.md, §14.1):
  * - [header]: device, versions, sensor capabilities and actual rates, timed events (phases,
  *   window choice, errors), every intermediate value (features, state, per-channel estimates,
  *   the fused result) and, later, the cuff reading the user entered for it;
@@ -241,14 +241,22 @@ class BpSessionRecorder(
     }
 
     /** Appends samples of one stream; [append] takes one value per column. */
-    class StreamWriter(val name: String, val columns: List<String>) {
+    /**
+     * One growing stream. [maxSamples] bounds it: a recorder left running (a real watch ran out of
+     * memory after hours of motion samples) stops growing instead; [full] tells it to stop.
+     */
+    class StreamWriter(val name: String, val columns: List<String>, private val maxSamples: Int = Int.MAX_VALUE) {
         private var t = LongArray(256)
         private var v = FloatArray(256 * columns.size)
         private var n = 0
 
+        val full: Boolean @Synchronized get() = n >= maxSamples
+
+        /** @return false once [maxSamples] are stored (the sample is dropped). */
         @Synchronized
-        fun append(timestampNs: Long, vararg sample: Float) {
+        fun append(timestampNs: Long, vararg sample: Float): Boolean {
             require(sample.size == columns.size) { "$name: ${sample.size} values for ${columns.size} columns" }
+            if (n >= maxSamples) return false
             if (n == t.size) {
                 t = t.copyOf(n * 2)
                 v = v.copyOf(n * 2 * columns.size)
@@ -256,6 +264,7 @@ class BpSessionRecorder(
             t[n] = timestampNs
             sample.copyInto(v, n * columns.size)
             n++
+            return true
         }
 
         val size: Int @Synchronized get() = n
