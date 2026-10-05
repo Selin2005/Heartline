@@ -18,6 +18,9 @@ interface HrSource {
      * late while the screen is off). True once they were delivered; false when it can't.
      */
     suspend fun flush(): Boolean = false
+
+    /** True while someone is listening to the tracker (a screen, stress or a background window). */
+    val isActive: Boolean get() = false
 }
 
 /** Real-time synthetic heart rate for development without sensors. */

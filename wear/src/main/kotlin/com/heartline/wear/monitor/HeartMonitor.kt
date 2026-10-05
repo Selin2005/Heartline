@@ -73,7 +73,6 @@ class HeartMonitor(
     private val window = mutableListOf<HrSample>()
     private val unsent = sortedMapOf<Long, HrMinute>()
     private var lastWindowStart = Long.MIN_VALUE / 2
-    private var irn: IrnState? = null
     private var state: MonitorState? = null
 
     /** Result of the last rhythm window: true irregular, false regular, null not readable (or none yet). */
@@ -127,9 +126,9 @@ class HeartMonitor(
 
     /** Judges one window's rhythm; returns whether it could be read. */
     private suspend fun judge(samples: List<HrSample>, cfg: MonitorSettings): Boolean {
-        val before = irn ?: output.loadIrnState()
+        // Read fresh every time: an ECG result is noted in the same stored state between windows.
+        val before = output.loadIrnState()
         val (next, alert) = detector.onWindow(before, samples, newId, cfg.irnSensitivity)
-        irn = next
         output.saveIrnState(next)
         val read = alert != null || next.windows.lastOrNull()?.startMs == samples.first().tsMs
         lastWindowIrregular = if (alert != null) true else next.windows.lastOrNull()?.takeIf { read }?.irregular

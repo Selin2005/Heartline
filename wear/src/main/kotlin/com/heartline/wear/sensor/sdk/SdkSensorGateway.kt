@@ -28,7 +28,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /** Health Sensor Service connection via Samsung Health Sensor SDK 1.4.1. */
-class SdkSensorGateway(private val context: Context) : SensorGateway {
+class SdkSensorGateway(
+    private val context: Context,
+    /** Whether the shared heart-rate tracker is running (see [probeHealth]). */
+    private val heartRateInUse: () -> Boolean = { false },
+) : SensorGateway {
     private val mutable = MutableStateFlow<GatewayState>(GatewayState.Disconnected)
     override val state: StateFlow<GatewayState> = mutable.asStateFlow()
 
@@ -81,7 +85,11 @@ class SdkSensorGateway(private val context: Context) : SensorGateway {
         val result = when (connected) {
             null -> SensorProblem.NOT_SUPPORTED
             is GatewayState.Failed -> connected.problem
-            is GatewayState.Connected -> {
+            // A running heart-rate tracker shows the platform allows it; probing it would replace
+            // that listener and cut off a background window or the live screen.
+            is GatewayState.Connected -> if (heartRateInUse()) {
+                null
+            } else {
                 // Any tracker surfaces the policy/permission errors; heart rate exists on every Galaxy Watch.
                 val kind = PROBE_TRACKERS.firstOrNull { it in connected.trackers }
                 val tracker = kind?.let { runCatching { tracker(it) }.getOrNull() }

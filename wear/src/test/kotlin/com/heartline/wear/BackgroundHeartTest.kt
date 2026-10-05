@@ -17,6 +17,8 @@ import com.heartline.wear.monitor.BackgroundHeart
 import com.heartline.wear.monitor.MonitorOutput
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -112,5 +114,38 @@ class BackgroundHeartTest {
             heart.onIrnWindow(samples, BackgroundWindow.rhythm(samples).samples)
         }
         assertEquals(listOf(AlertKind.IRREGULAR_RHYTHM), out.alerts.map { it.kind })
+    }
+
+    @Test
+    fun rhythmWindowBatchesLeaveThePersonalLimitsAlone() = runBlocking {
+        val out = Recorder()
+        val heart = BackgroundHeart(out) { MonitorSettings() }
+        heart.onPassive(SyntheticHr.samples(0, 5 * 60, bpm = 64.0).map { it.copy(ibiMs = emptyList()) })
+        assertNotNull(out.batches.single().limits)
+        // The rhythm window learns from no history of its own: its batch must not replace those limits.
+        heart.irn.resetWindow()
+        val samples = SyntheticHr.samples(10 * 60_000L, 75, bpm = 70.0)
+        heart.onIrnWindow(samples, BackgroundWindow.rhythm(samples).samples)
+        assertEquals(2, out.batches.size)
+        assertNull(out.batches.last().limits)
+    }
+
+    @Test
+    fun anEcgNotedBetweenWindowsIsKept() = runBlocking {
+        val out = Recorder()
+        val heart = BackgroundHeart(out) { MonitorSettings() }
+        repeat(6) { i ->
+            heart.irn.resetWindow()
+            val samples = SyntheticHr.samples(i * 15 * 60_000L, 75, bpm = 92.0, irregularity = 0.35, seed = 9 + i)
+            heart.onIrnWindow(samples, BackgroundWindow.rhythm(samples).samples)
+        }
+        val alertAt = requireNotNull(out.irn.lastAlertMs) { "six irregular windows notify" }
+        // A regular ECG soon after the notice is stored by the ECG screen (WatchSettingsStore.noteEcg).
+        val ecgAt = alertAt + 60_000L
+        out.irn = out.irn.withEcg(regular = true, atMs = ecgAt)
+        heart.irn.resetWindow()
+        val samples = SyntheticHr.samples(alertAt + 15 * 60_000L, 75, bpm = 70.0)
+        heart.onIrnWindow(samples, BackgroundWindow.rhythm(samples).samples)
+        assertEquals(ecgAt, out.irn.regularEcgAtMs)
     }
 }

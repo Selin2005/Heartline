@@ -171,7 +171,9 @@ nights are marked unusual and not learnt from.
 On the watch, in `HeartMonitor`, so notifications don't need the phone. The limits in use go to
 the phone with every `HR_BATCH` (`HrBatch.limits`), so the phone shows exactly what the watch
 uses. With an older watch, the phone computes the same limits from its own minutes
-(`HeartSummaries.history`).
+(`HeartSummaries.history`). Only the all-day monitor's batches carry limits: the rhythm windows
+learn from no history of their own, so their batches send none (they used to overwrite the
+personal limits on the watch and the phone every 15 minutes).
 
 ## 5. Irregular rhythm
 
@@ -179,11 +181,16 @@ uses. With an older watch, the phone computes the same limits from its own minut
 - Every 15 minutes, WorkManager runs one window of about 75 s on the Samsung
   tracker. Without the background sensor permission, a silent notification shows for that minute.
 - **The window is skipped when the watch is not worn:**
-  - when the all-day heart rate is on and there has been no passive heart rate for an hour (or
-    ever since install);
+  - when the all-day heart rate is on and the latest passive heart rate is more than an hour
+    old. With none at all (just installed, or passive heart rate unavailable on the watch) the
+    off-body sensor below decides, as for blood oxygen: otherwise rhythm and stress never ran;
   - when Android's off-body sensor says the watch is off the wrist (checked 1.5 s after it
     starts, and during the window).
 - If a readable window was irregular, one extra check runs 7 minutes later (`scheduleFollowUp`).
+- The rhythm state is read from storage for every window, so a regular ECG noted between two
+  windows (`noteEcg`) is kept rather than overwritten by an older copy.
+- Opening the app during a window doesn't cut it off: the setup gate's sensor probe is skipped
+  while the heart-rate tracker is already running (it shows the platform allows it).
 
 ### Background windows: batches, flush and the readings' own times (`BackgroundWindow`)
 A real two-day log (Galaxy Watch8 Classic, October 2026) had **91 windows and none read**: no

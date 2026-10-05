@@ -54,6 +54,8 @@ It uses the same sources as a manual measurement, through `VitalsMeasurer`.
   (HOLD_STILL)`), as does a rejected temperature and SpO2 skipped for the battery or the sleep
   setting.
 - **Moving.** When the wearer is moving, SpO2 is tried again 15 minutes later, twice at most.
+- **App open.** While a Heartline screen is open (it may be measuring SpO2, blood pressure or an
+  ECG on the same sensors), the run is put off to 15 minutes later.
   After that the hour is left out.
 - **One sensor at a time.** The worker and the rhythm windows share one lock
   (`BackgroundSensors.lock`), so they never measure at the same time.

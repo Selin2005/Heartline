@@ -139,6 +139,7 @@ val wearModule = module {
                 }
             },
             onArchiveAck = { get<LogOffload>().onAck(it) },
+            onError = { path, error -> HLog.w("Heartline/Sync", "could not handle $path", error) },
         )
     }
     single { WatchLogExporter(androidContext(), get(), get()) }
@@ -167,7 +168,7 @@ val wearModule = module {
     }
     single<SensorGateway> {
         // Debug builds use real sensors when the build flag is off; see BuildConfig.USE_FAKE_SENSORS.
-        if (BuildConfig.USE_FAKE_SENSORS) FakeSensorGateway() else SdkSensorGateway(androidContext())
+        if (BuildConfig.USE_FAKE_SENSORS) FakeSensorGateway() else SdkSensorGateway(androidContext()) { get<HrSource>().isActive }
     }
     single<EcgSource> {
         if (BuildConfig.USE_FAKE_SENSORS) FakeEcgSource() else SdkEcgSource(get<SensorGateway>() as SdkSensorGateway)

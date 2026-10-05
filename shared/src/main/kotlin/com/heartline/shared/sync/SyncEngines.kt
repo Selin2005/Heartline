@@ -65,7 +65,9 @@ class WatchSyncEngine(
     private val onStatus: suspend (PhoneStatus) -> Unit = {},
     private val onLogRequest: suspend (LogRequest) -> Unit = {},
     /** The phone stored a log file this watch sent to it ([sendArchive]). */
-    private val onArchiveAck: suspend (ArchiveAck) -> Unit = {}
+    private val onArchiveAck: suspend (ArchiveAck) -> Unit = {},
+    /** A message that could not be handled (it stays unacknowledged, so the phone sends it again). */
+    private val onError: (path: String, error: Throwable) -> Unit = { _, _ -> }
 ) {
     /** Watch → phone: the diagnostic log (or its manifest) the phone asked for with [LogRequest]. */
     suspend fun sendLogs(requestId: String, text: ByteArray): Boolean = transport.sendLarge(Protocol.logsPath(requestId), text)
@@ -107,7 +109,10 @@ class WatchSyncEngine(
 
     /** Malformed or unknown messages are dropped rather than crashing the listener service. */
     suspend fun handle(envelope: Envelope) {
-        runCatching { handleOrThrow(envelope) }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+        runCatching { handleOrThrow(envelope) }.onFailure {
+            if (it is kotlinx.coroutines.CancellationException) throw it
+            onError(envelope.path, it)
+        }
     }
 
     private suspend fun handleOrThrow(envelope: Envelope) {
@@ -151,7 +156,9 @@ class PhoneSyncEngine(
     /** A log segment arrived whole (the app reads segment channels as streams, not through here). */
     private val onLogSegment: suspend (requestId: String, input: InputStream) -> Unit = { _, _ -> },
     /** A log file the watch moved here (read as a stream in the app); [ackArchive] once stored. */
-    private val onArchive: suspend (type: String, name: String, input: InputStream) -> Unit = { _, _, _ -> }
+    private val onArchive: suspend (type: String, name: String, input: InputStream) -> Unit = { _, _, _ -> },
+    /** A message that could not be handled (it stays unacknowledged, so the watch sends it again). */
+    private val onError: (path: String, error: Throwable) -> Unit = { _, _ -> }
 ) {
     private val metas = mutableMapOf<String, RecordMeta>()
     private val waves = mutableMapOf<String, FloatArray>()
@@ -159,7 +166,10 @@ class PhoneSyncEngine(
 
     /** Safe to call concurrently (listener callbacks arrive on arbitrary threads). */
     suspend fun handle(envelope: Envelope) = lock.withLock {
-        runCatching { handleLocked(envelope) }.onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+        runCatching { handleLocked(envelope) }.onFailure {
+            if (it is kotlinx.coroutines.CancellationException) throw it
+            onError(envelope.path, it)
+        }
         Unit
     }
 

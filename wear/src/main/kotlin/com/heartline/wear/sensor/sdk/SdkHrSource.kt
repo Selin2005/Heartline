@@ -55,6 +55,8 @@ class SdkHrSource(private val gateway: SdkSensorGateway) : HrSource {
 
     override fun stream(): Flow<HrSample> = shared.map { it.getOrThrow() }
 
+    override val isActive: Boolean get() = active != null
+
     /**
      * The tracker's flush() can block until it sends its next batch (minutes, with the screen off),
      * which no coroutine timeout can stop: it runs on a thread of its own and is waited for at most

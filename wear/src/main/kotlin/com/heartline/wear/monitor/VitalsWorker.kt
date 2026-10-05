@@ -24,6 +24,7 @@ import com.heartline.shared.vitals.TempSample
 import com.heartline.shared.vitals.VitalsBaseline
 import com.heartline.shared.vitals.VitalsMonitor
 import com.heartline.shared.vitals.VitalsQuality
+import com.heartline.wear.link.AppForeground
 import com.heartline.wear.quick.QuickSources
 import com.heartline.wear.quick.WatchProfileStore
 import com.heartline.wear.sensor.QuickEvent
@@ -99,6 +100,13 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
             HLog.i(TAG, "vitals skipped: not worn")
             return Result.success()
         }
+        // A Heartline screen is open, maybe measuring: the on-screen measurement and this one would
+        // take each other's tracker. Try again in 15 minutes.
+        if (AppForeground.resumed) {
+            BackgroundMonitoring.scheduleVitalsRetry(applicationContext)
+            HLog.i(TAG, "vitals put off: app open")
+            return Result.success()
+        }
         val minute = now / MINUTE * MINUTE
         // Without activity recognition, the usual sleep hours (from the monitoring setup) stand in.
         val context = store.activityAt(minute) ?: java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneId.systemDefault())
@@ -152,7 +160,7 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
                 val spo2Due = now - store.lastSpo2Ms >= 55 * MINUTE
                 val spo2Now = if (asleep) settings.spo2InSleep else battery() >= LOW_BATTERY
                 if (settings.spo2Active && spo2Due && !spo2Now) HLog.i(TAG, "SpO2 not measured: ${if (asleep) "off in sleep" else "battery ${battery()} %"}")
-        if (settings.spo2Active && spo2Due && spo2Now && allowed(Metric.SPO2)) {
+                if (settings.spo2Active && spo2Due && spo2Now && allowed(Metric.SPO2)) {
                     // Awake: watch the arm for a few seconds first.
                     if (!asleep && !moving) {
                         val watched = System.currentTimeMillis()

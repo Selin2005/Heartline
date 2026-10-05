@@ -179,6 +179,7 @@ val phoneModule = module {
             onLogs = { requestId, text -> get<RemoteLogs>().onLogs(requestId, text) },
             onLogSegment = { requestId, input -> get<RemoteLogs>().onSegment(requestId, input) },
             onArchive = { type, name, input -> get<WatchLogInbox>().receive(type, name, input) },
+            onError = { path, error -> HLog.w("Heartline/Sync", "could not handle $path", error) },
         )
     }
     single { PhoneStatusPublisher(get(), get(), get(), { get() }) }

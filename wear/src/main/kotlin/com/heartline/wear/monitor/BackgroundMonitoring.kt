@@ -33,6 +33,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.heartline.shared.hr.ActivityChange
 import com.heartline.shared.hr.BackgroundWindow
+import com.heartline.shared.hr.HrBatch
 import com.heartline.shared.hr.HrContext
 import com.heartline.shared.hr.HrSample
 import com.heartline.shared.hr.MonitorSettings
@@ -185,13 +186,19 @@ class BackgroundHeart(
 
     val trends = HeartMonitor(output, { false }, { settings().normalized().copy(irregularRhythmEnabled = false) }, activity, age, sex, zone)
 
-    /** Rhythm windows keep no alert history of their own (their heart-rate alerts are off). */
+    /**
+     * Rhythm windows keep no alert history of their own (their heart-rate alerts are off). Their
+     * limits come from that empty history, so their batches carry none: the personal limits are
+     * the all-day monitor's alone.
+     */
     private val irnOutput = object : MonitorOutput by output {
         override suspend fun loadMonitorState() = MonitorState()
 
         override suspend fun saveMonitorState(state: MonitorState) = Unit
 
         override fun latestMinute(bpm: Int) = Unit
+
+        override suspend fun enqueueBatch(batch: HrBatch) = output.enqueueBatch(batch.copy(limits = null))
     }
 
     /** Each window is a fresh check: no spacing inside the monitor, the worker does the scheduling. */
@@ -272,10 +279,12 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
         val settings = store.settings.value.normalized()
         if (!settings.rhythmActive && !settings.stressActive) return Result.success()
         // No recent background heart rate means the watch is very likely not being worn: don't listen
-        // to a sensor on a table or charger, whose noise looks like an irregular rhythm.
+        // to a sensor on a table or charger, whose noise looks like an irregular rhythm. None at all
+        // (just installed, or passive heart rate unavailable) leaves it to the off-body sensor below,
+        // as for blood oxygen: otherwise rhythm and stress would never run on such a watch.
         val lastWorn = store.lastPassiveHeartRateMs
-        if (settings.passiveHeartRate && (lastWorn == null || System.currentTimeMillis() - lastWorn > NOT_WORN_MS)) {
-            HLog.i(TAG, "IRN window skipped: no background heart rate since ${lastWorn?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDateTime().withNano(0) } ?: "install"}")
+        if (settings.passiveHeartRate && lastWorn != null && System.currentTimeMillis() - lastWorn > NOT_WORN_MS) {
+            HLog.i(TAG, "IRN window skipped: no background heart rate since ${Instant.ofEpochMilli(lastWorn).atZone(ZoneId.systemDefault()).toLocalDateTime().withNano(0)}")
             return Result.success()
         }
         val wrist = WristState(applicationContext).also { it.start() }

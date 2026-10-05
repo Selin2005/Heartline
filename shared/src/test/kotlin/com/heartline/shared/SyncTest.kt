@@ -180,6 +180,18 @@ class SyncTest {
     }
 
     @Test
+    fun aMessageThatCannotBeReadIsReported() = runTest {
+        val (watchSide, phoneSide) = InMemoryTransport.pair()
+        val failed = mutableListOf<String>()
+        val phone = PhoneSyncEngine(phoneSide, MemorySink(), onError = { path, _ -> failed += path })
+        val watch = WatchSyncEngine(watchSide, MemoryOutbox(emptyList()), onError = { path, _ -> failed += path })
+        // Not acknowledged, so it comes again: without a report it would be retried forever unseen.
+        phone.handle(Envelope(Protocol.HR_BATCH, "{not json".encodeToByteArray()))
+        watch.handle(Envelope(Protocol.SETTINGS, "{not json".encodeToByteArray()))
+        assertEquals(listOf(Protocol.HR_BATCH, Protocol.SETTINGS), failed)
+    }
+
+    @Test
     fun capabilitiesGateMetrics() {
         val watch4 =
             setOf(TrackerKind.ECG_ON_DEMAND, TrackerKind.HEART_RATE_CONTINUOUS, TrackerKind.PPG_ON_DEMAND, TrackerKind.SPO2_ON_DEMAND)
