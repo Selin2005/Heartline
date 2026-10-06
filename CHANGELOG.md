@@ -3,6 +3,12 @@
 All notable changes to Heartline. Each release's notes are written by the Build workflow when the
 release is made, and the app shows them under *What's new* after an update.
 
+## 0.0.2.116-beta.2 — 2026-10-06
+
+### Changes
+- Monitoring review: rhythm windows keep the personal limits, ECG notes kept, no sensor clashes
+- No false irregular rhythm in a smooth sleeping rhythm; watch readings grouped by stretch
+
 ## 0.0.2.116-beta.1 — 2026-10-05
 
 ### Changes
