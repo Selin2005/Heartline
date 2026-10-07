@@ -20,6 +20,7 @@ import com.heartline.shared.model.Metric
 import com.heartline.shared.model.RecordSummary
 import com.heartline.shared.sensor.PermissionPolicy
 import com.heartline.shared.vitals.Spo2Sample
+import com.heartline.shared.vitals.Spo2Schedule
 import com.heartline.shared.vitals.TempSample
 import com.heartline.shared.vitals.VitalsBaseline
 import com.heartline.shared.vitals.VitalsMonitor
@@ -74,8 +75,9 @@ object VitalsMeasurer {
 /**
  * Background blood oxygen and skin temperature (docs/algorithms/VITALS_MONITORING.md). Every 30
  * minutes: skin temperature in sleep (hourly by day), SpO2 every hour awake and asleep, only while
- * the watch is worn and the wearer still (a moving wearer is tried again 15 minutes later, twice).
- * A low SpO2 reading is checked again 2 minutes later, twice at most; three low in a row notify.
+ * the watch is worn and the wearer still ([Spo2Schedule]: a moving wearer is tried again 10
+ * minutes later, up to four times an hour). A low SpO2 reading is checked again 2 minutes later,
+ * twice at most; it counts only when the re-check agrees, and three low in a row notify.
  */
 class VitalsWorker(context: Context, params: WorkerParameters) :
     CoroutineWorker(context, params),
@@ -117,10 +119,9 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
         val context = store.activityAt(minute) ?: java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneId.systemDefault())
             .let { if (settings.isUsualSleep(it.hour * 60 + it.minute)) HrContext.SLEEP else HrContext.REST }
         if (context == HrContext.EXERCISE) return Result.success()
-        // Awake, even a few steps spoil a blood-oxygen reading (most by-day tries failed "moving").
-        val stepLimit = if (context == HrContext.SLEEP) 20.0 else 5.0
-        val moving = context == HrContext.ACTIVE || (0..2).any { store.activity.stepsPerMinute(minute - it * MINUTE) >= stepLimit }
         val asleep = context == HrContext.SLEEP
+        // Steps over the last minutes (awake, even a few spoil a blood-oxygen reading).
+        val steps = (0 until Spo2Schedule.STEP_MINUTES).maxOf { store.activity.stepsPerMinute(minute - it * MINUTE) }
         val monitor = VitalsMonitor { UUID.randomUUID().toString() }
         val spo2Samples = mutableListOf<Spo2Sample>()
         val temps = mutableListOf<TempSample>()
@@ -161,42 +162,52 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
                         store.lastTempMs = now
                     }
                 }
-                // Blood oxygen: every hour, awake and asleep; by day not on a low battery.
-                val spo2Due = now - store.lastSpo2Ms >= 55 * MINUTE
-                val spo2Now = if (asleep) settings.spo2InSleep else battery() >= LOW_BATTERY
-                if (settings.spo2Active && spo2Due && !spo2Now) HLog.i(TAG, "SpO2 not measured: ${if (asleep) "off in sleep" else "battery ${battery()} %"}")
-                if (settings.spo2Active && spo2Due && spo2Now && allowed(Metric.SPO2)) {
+                // Blood oxygen: once per interval, awake and asleep, by the rules of Spo2Schedule.
+                val every = 60
+                val retries = Spo2Schedule.retriesNow(store.spo2RetrySlot, store.spo2Retries, now, every)
+                fun decide(armMoved: Boolean) = Spo2Schedule.decide(
+                    now, store.lastSpo2Ms, every, asleep, settings.spo2InSleep, battery(), steps, context == HrContext.ACTIVE, armMoved, retries,
+                )
+                var decision = decide(armMoved = false)
+                if (settings.spo2Active && decision == Spo2Schedule.Decision.Measure && !asleep) {
                     // Awake: watch the arm for a few seconds first.
-                    if (!asleep && !moving) {
-                        val watched = System.currentTimeMillis()
-                        delay((STILL_CHECK_MS - (watched - wristOn)).coerceAtLeast(0))
+                    delay((Spo2Schedule.STILL_CHECK_MS - (System.currentTimeMillis() - wristOn)).coerceAtLeast(0))
+                    decision = decide(armMoved = wrist.movedBetween(wristOn, System.currentTimeMillis()))
+                }
+                if (settings.spo2Active) when (val d = decision) {
+                    is Spo2Schedule.Decision.Skip -> if (d.reason != "not due") HLog.i(TAG, "SpO2 not measured: ${d.reason}")
+                    is Spo2Schedule.Decision.PutOff -> {
+                        store.spo2RetrySlot = Spo2Schedule.slot(now, every)
+                        store.spo2Retries = retries + 1
+                        BackgroundMonitoring.scheduleVitalsRetry(applicationContext, d.retryMinutes.toLong())
+                        HLog.i(TAG, "SpO2 put off: ${d.reason} (try ${retries + 1})")
                     }
-                    val armMoved = !asleep && wrist.movedBetween(wristOn, System.currentTimeMillis())
-                    if (moving || armMoved) {
-                        if (store.spo2Retries < MAX_RETRIES) {
-                            store.spo2Retries += 1
-                            BackgroundMonitoring.scheduleVitalsRetry(applicationContext)
-                        }
-                        HLog.i(TAG, "SpO2 put off: ${if (moving) "steps" else "arm moving"} (try ${store.spo2Retries})")
-                    } else {
+                    Spo2Schedule.Decision.Measure -> if (allowed(Metric.SPO2)) {
                         sources[Metric.SPO2]?.let { source ->
-                            val first = spo2(source, context, now, wrist, confirmation = false)
+                            val first = spo2(source, context, now, confirmation = false)
                             store.lastSpo2Ms = now
                             store.spo2Retries = 0
                             if (first != null) {
-                                spo2Samples += first
                                 // Low: check again (twice at most, while it stays low).
                                 val rechecks = mutableListOf<Spo2Sample>()
                                 var last: Spo2Sample = first
                                 while (monitor.needsRecheck(last.percent, settings, history, last.tsMs) && rechecks.size < VitalsMonitor.RECHECKS) {
                                     delay(RECHECK_DELAY_MS)
-                                    last = spo2(source, context, System.currentTimeMillis(), wrist, confirmation = true) ?: break
+                                    last = spo2(source, context, System.currentTimeMillis(), confirmation = true) ?: break
                                     rechecks += last
-                                    spo2Samples += last
                                 }
-                                val (next, alert) = monitor.onSpo2(history, first, rechecks, settings)
-                                history = next
-                                alert?.let { alerts += it }
+                                // A low reading counts only when its re-check agrees.
+                                val kept = Spo2Schedule.confirmed(first, rechecks) { monitor.needsRecheck(it, settings, history, first.tsMs) }
+                                spo2Samples += kept
+                                if (kept.isEmpty()) {
+                                    HLog.i(TAG, "SpO2 ${first.percent} low not confirmed (no re-check result): not kept, trying again later")
+                                    BackgroundMonitoring.scheduleVitalsRetry(applicationContext, Spo2Schedule.RETRY_MINUTES.toLong())
+                                    store.lastSpo2Ms = 0
+                                } else {
+                                    val (next, alert) = monitor.onSpo2(history, kept.first(), kept.drop(1), settings)
+                                    history = next
+                                    alert?.let { alerts += it }
+                                }
                             }
                         }
                     }
@@ -221,16 +232,19 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
         return Result.success()
     }
 
-    private suspend fun spo2(source: QuickSource, context: HrContext, at: Long, wrist: WristState, confirmation: Boolean): Spo2Sample? {
-        val start = System.currentTimeMillis()
+    /**
+     * One SpO2 measurement. The sensor's own judgement of movement decides (its "hold still"
+     * hint): the wrist's accelerometer used to reject readings the sensor had accepted.
+     */
+    private suspend fun spo2(source: QuickSource, context: HrContext, at: Long, confirmation: Boolean): Spo2Sample? {
         val reading = VitalsMeasurer.measure(source)
         val r = reading.summary as? RecordSummary.Spo2 ?: run {
             HLog.i(TAG, "SpO2 no result after ${reading.tookMs / 1_000} s: ${reading.failure} (moved=${reading.moved})")
             return null
         }
-        val moved = reading.moved || wrist.movedSince(start)
-        if (!VitalsQuality.spo2(r.percent, r.heartRate, store.latestHeartRate, moved)) {
-            HLog.i(TAG, "SpO2 ${r.percent} rejected (moved=$moved hr=${r.heartRate}/${store.latestHeartRate})")
+        val recent = Spo2Schedule.recentBpm(store.latestHeartRate, store.lastPassiveHeartRateMs, System.currentTimeMillis())
+        if (!VitalsQuality.spo2(r.percent, r.heartRate, recent, reading.moved)) {
+            HLog.i(TAG, "SpO2 ${r.percent} rejected (moved=${reading.moved} hr=${r.heartRate}/${recent ?: "-"})")
             return null
         }
         return Spo2Sample(at, r.percent, context, confirmation)
@@ -247,11 +261,6 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
         const val MINUTE = 60_000L
         const val HOUR = 60 * MINUTE
         const val NOT_WORN_MS = 60 * MINUTE
-        const val LOW_BATTERY = 15
-        const val MAX_RETRIES = 2
         const val RECHECK_DELAY_MS = 2 * MINUTE
-
-        /** Awake, the arm is watched this long (from the start of the run) before blood oxygen. */
-        const val STILL_CHECK_MS = 15_000L
     }
 }

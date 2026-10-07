@@ -159,10 +159,13 @@ class WatchSettingsStore(context: Context, private val now: () -> Long = System:
         get() = prefs.getFloat(KEY_LAST_AMBIENT, Float.NaN).takeIf { !it.isNaN() }
         set(value) = prefs.edit().putFloat(KEY_LAST_AMBIENT, value ?: Float.NaN).apply()
 
-    /** SpO2 tries put off this hour because the wearer was moving. */
+    /** SpO2 tries put off in the slot [spo2RetrySlot] because the wearer was moving. */
     var spo2Retries: Int
         get() = prefs.getInt(KEY_SPO2_RETRIES, 0)
         set(value) = prefs.edit().putInt(KEY_SPO2_RETRIES, value).apply()
+    var spo2RetrySlot: Long
+        get() = prefs.getLong(KEY_SPO2_RETRY_SLOT, -1)
+        set(value) = prefs.edit().putLong(KEY_SPO2_RETRY_SLOT, value).apply()
 
     /** Since when the wearer has been asleep (null when not asleep). */
     fun asleepSince(nowMs: Long): Long? = activity.changes.lastOrNull { it.atMs <= nowMs }?.takeIf { it.activity == WatchActivity.ASLEEP }?.atMs
@@ -192,6 +195,7 @@ class WatchSettingsStore(context: Context, private val now: () -> Long = System:
         const val KEY_LAST_TEMP = "last_temp"
         const val KEY_LAST_AMBIENT = "last_ambient"
         const val KEY_SPO2_RETRIES = "spo2_retries"
+        const val KEY_SPO2_RETRY_SLOT = "spo2_retry_slot"
         const val KEY_LAST_PASSIVE = "last_passive_hr"
         const val KEY_HR = "latest_hr"
         const val KEY_HR_DAY = "hr_day"

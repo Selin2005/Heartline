@@ -45,20 +45,27 @@ It uses the same sources as a manual measurement, through `VitalsMeasurer`.
 - **Conditions,** the same as the rhythm windows:
   - The watch is worn: background heart rate in the last hour, and the off-body sensor.
   - The wearer is not exercising.
-  - The wearer is still: not marked active, and no steps in the last 3 minutes (20 a minute
-    asleep, 5 a minute awake).
-  - Awake, the arm is also watched for 15 s before SpO2, and any movement puts it off. In a real
+  - The wearer is still: not marked active, and under the step limit over the last 2 minutes
+    (20 a minute asleep, 5 a minute awake).
+  - Awake, the arm is also watched for 5 s before SpO2, and any movement puts it off. In a real
     two-day log most by-day tries ended "hold still" (status −4) after 30–40 s: only 2 of about
     16 gave a value.
+- **The decision** is one pure function, `Spo2Schedule.decide`: due (a few minutes early is
+  fine), sleep setting, battery, steps, arm. The worker only carries it out.
+- **Why it changed (10/04–10/07 log, Galaxy Watch8).** Asleep, 14 readings in 55 runs; awake,
+  one valid reading in three days. The arm had to be still for 15 s first, the accelerometer
+  then rejected readings the sensor had accepted, the pulse was compared with a passive reading
+  from minutes before, and after two put-offs the count never reset, so no retry was scheduled
+  for the rest of the day.
 - **Logged reasons.** A try without a result logs why (`SpO2 no result after 32 s: timed out
   (HOLD_STILL)`), as does a rejected temperature and SpO2 skipped for the battery or the sleep
   setting.
-- **Moving.** When the wearer is moving, SpO2 is tried again 15 minutes later, twice at most.
+- **Moving.** When the wearer is moving, SpO2 is tried again 10 minutes later, up to 4 times per
+  hour (`Spo2Schedule.slot`); the count starts again in the next hour.
 - **Charging.** On the charger (the sticky battery broadcast) nothing is measured: the watch is
   off the wrist, and the off-body sensor alone could be late.
 - **App open.** While a Heartline screen is open (it may be measuring SpO2, blood pressure or an
   ECG on the same sensors), the run is put off to 15 minutes later.
-  After that the hour is left out.
 - **One sensor at a time.** The worker and the rhythm windows share one lock
   (`BackgroundSensors.lock`), so they never measure at the same time.
 - **Permission.** Without the background sensor permission, the worker runs as a silent
@@ -70,9 +77,13 @@ It uses the same sources as a manual measurement, through `VitalsMeasurer`.
 
 **SpO2.** A reading is kept only when:
 - it completed (SDK status 2), within 70–100 %;
-- there was no movement during it;
-- the pulse it reports is within 15 % of the recent background heart rate. A mismatch means the
-  sensor locked onto noise.
+- the sensor itself saw no movement during it (its "hold still" hint). The watch's
+  accelerometer no longer rejects a reading the sensor accepted;
+- the pulse it reports is within 15 % of the background heart rate, compared only when that is
+  under 5 minutes old. A mismatch means the sensor locked onto noise;
+- if it is low, its re-check agrees (`Spo2Schedule.confirmed`). With no re-check result the low
+  value is not kept (the log had 80 % at rest kept that way) and another try follows 10 minutes
+  later; with a normal re-check, only the re-check counts.
 
 **Skin temperature.** A reading is kept only when:
 - it completed (status 0), with skin between 30 and 40 °C. A watch lying on a table cools to

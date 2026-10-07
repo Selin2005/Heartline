@@ -101,12 +101,14 @@ object BackgroundMonitoring {
         )
     }
 
-    /** One more SpO2 try 15 minutes later, when the wearer was moving at the hour. */
-    fun scheduleVitalsRetry(context: Context) {
+    /** One more SpO2 try [minutes] later, when the wearer was moving or a low reading wasn't confirmed. */
+    fun scheduleVitalsRetry(context: Context, minutes: Long = 15) {
+        // A retry can ask for the next one while it runs: KEEP dropped that, REPLACE would cancel
+        // the running one, so it is appended (a finished chain is replaced).
         WorkManager.getInstance(context).enqueueUniqueWork(
             VITALS_RETRY,
-            ExistingWorkPolicy.KEEP,
-            OneTimeWorkRequestBuilder<VitalsWorker>().setInitialDelay(15, TimeUnit.MINUTES).build(),
+            ExistingWorkPolicy.APPEND_OR_REPLACE,
+            OneTimeWorkRequestBuilder<VitalsWorker>().setInitialDelay(minutes, TimeUnit.MINUTES).build(),
         )
     }
 
