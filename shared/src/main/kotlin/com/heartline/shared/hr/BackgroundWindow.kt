@@ -52,9 +52,9 @@ object BackgroundWindow {
         if (offWrist) return "off the wrist"
         if (elapsedMs >= MAX_MS) return "time limit"
         val own = samples.filter { it.tsMs >= startMs }.sortedBy { it.tsMs }
-        if (own.size >= OFF_WRIST_READINGS && own.none { it.onBody && it.reliable } && own.takeLast(OFF_WRIST_READINGS).none { it.onBody }) {
-            return "off the wrist (tracker)"
-        }
+        val neverWorn = own.none { it.onBody && it.reliable }
+        val offNow = own.size >= OFF_WRIST_READINGS && own.takeLast(OFF_WRIST_READINGS).none { it.onBody }
+        if (neverWorn && offNow) return "off the wrist (tracker)"
         if (own.isNotEmpty() && own.last().tsMs - startMs >= LISTEN_MS) return "covered"
         return null
     }
