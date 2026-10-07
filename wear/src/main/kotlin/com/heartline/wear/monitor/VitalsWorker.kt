@@ -19,6 +19,8 @@ import com.heartline.shared.hr.HrContext
 import com.heartline.shared.model.Metric
 import com.heartline.shared.model.RecordSummary
 import com.heartline.shared.sensor.PermissionPolicy
+import com.heartline.shared.vitals.Spo2Attempt
+import com.heartline.shared.vitals.Spo2Outcome
 import com.heartline.shared.vitals.Spo2Sample
 import com.heartline.shared.vitals.Spo2Schedule
 import com.heartline.shared.vitals.TempSample
@@ -102,9 +104,12 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
             HLog.i(TAG, "vitals skipped: not worn")
             return Result.success()
         }
+        // Whether a SpO2 try is due now: then the phone hears why it didn't happen, if it doesn't.
+        val spo2Due = settings.spo2Active && now - store.lastSpo2Ms >= (settings.spo2Interval - 5) * MINUTE
         // On the charger the watch is off the wrist: no red light, no temperature reading.
         if (Charging.isCharging(applicationContext)) {
             HLog.i(TAG, "vitals skipped: charging")
+            if (spo2Due) reportAttempt(Spo2Attempt(now, Spo2Outcome.CHARGING))
             return Result.success()
         }
         // A Heartline screen is open, maybe measuring: the on-screen measurement and this one would
@@ -112,6 +117,7 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
         if (AppForeground.resumed) {
             BackgroundMonitoring.scheduleVitalsRetry(applicationContext)
             HLog.i(TAG, "vitals put off: app open")
+            if (spo2Due) reportAttempt(Spo2Attempt(now, Spo2Outcome.APP_OPEN, retryAtMs = now + 15 * MINUTE))
             return Result.success()
         }
         val minute = now / MINUTE * MINUTE
@@ -126,6 +132,7 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
         val spo2Samples = mutableListOf<Spo2Sample>()
         val temps = mutableListOf<TempSample>()
         val alerts = mutableListOf<HealthAlert>()
+        val attempts = mutableListOf<Spo2Attempt>()
         var history = store.vitals
 
         // Without the background sensor permission Android needs a (silent) foreground service.
@@ -139,6 +146,7 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
                 delay(1_500)
                 if (wrist.offBody) {
                     HLog.i(TAG, "vitals skipped: off the wrist")
+                    if (spo2Due) attempts += Spo2Attempt(now, Spo2Outcome.OFF_WRIST)
                     return@withLock
                 }
                 // Skin temperature: every 30 minutes asleep, hourly by day.
@@ -175,18 +183,28 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
                     decision = decide(armMoved = wrist.movedBetween(wristOn, System.currentTimeMillis()))
                 }
                 if (settings.spo2Active) when (val d = decision) {
-                    is Spo2Schedule.Decision.Skip -> if (d.reason != "not due") HLog.i(TAG, "SpO2 not measured: ${d.reason}")
+                    is Spo2Schedule.Decision.Skip -> if (d.reason != "not due") {
+                        HLog.i(TAG, "SpO2 not measured: ${d.reason}")
+                        val outcome = when {
+                            d.reason.startsWith("battery") -> Spo2Outcome.LOW_BATTERY
+                            d.reason == "off in sleep" -> Spo2Outcome.OFF_IN_SLEEP
+                            else -> Spo2Outcome.MOVING
+                        }
+                        attempts += Spo2Attempt(now, outcome)
+                    }
                     is Spo2Schedule.Decision.PutOff -> {
                         store.spo2RetrySlot = Spo2Schedule.slot(now, every)
                         store.spo2Retries = retries + 1
                         BackgroundMonitoring.scheduleVitalsRetry(applicationContext, d.retryMinutes.toLong())
                         HLog.i(TAG, "SpO2 put off: ${d.reason} (try ${retries + 1})")
+                        attempts += Spo2Attempt(now, Spo2Outcome.MOVING, retryAtMs = now + d.retryMinutes * MINUTE)
                     }
                     Spo2Schedule.Decision.Measure -> if (allowed(Metric.SPO2)) {
                         sources[Metric.SPO2]?.let { source ->
                             val first = spo2(source, context, now, confirmation = false)
                             store.lastSpo2Ms = now
                             store.spo2Retries = 0
+                            if (first == null) attempts += Spo2Attempt(now, lastFailure)
                             if (first != null) {
                                 // Low: check again (twice at most, while it stays low).
                                 val rechecks = mutableListOf<Spo2Sample>()
@@ -203,7 +221,9 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
                                     HLog.i(TAG, "SpO2 ${first.percent} low not confirmed (no re-check result): not kept, trying again later")
                                     BackgroundMonitoring.scheduleVitalsRetry(applicationContext, Spo2Schedule.RETRY_MINUTES.toLong())
                                     store.lastSpo2Ms = 0
+                                    attempts += Spo2Attempt(now, Spo2Outcome.LOW_UNCONFIRMED, retryAtMs = now + Spo2Schedule.RETRY_MINUTES * MINUTE)
                                 } else {
+                                    attempts += Spo2Attempt(now, Spo2Outcome.MEASURED, percent = kept.last().percent)
                                     val (next, alert) = monitor.onSpo2(history, kept.first(), kept.drop(1), settings)
                                     history = next
                                     alert?.let { alerts += it }
@@ -223,7 +243,7 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
         store.vitals = history
         val today = VitalsBaseline.dayOf(now, HrContext.REST, java.time.ZoneId.systemDefault())
         val limits = VitalsBaseline.limits(history, today, settings.alertSensitivity, profile.profile.value?.age(), settings.health.lung)
-        output.enqueueBatch(HrBatch(UUID.randomUUID().toString(), emptyList(), spo2 = spo2Samples, skinTemp = temps, vitals = limits))
+        output.enqueueBatch(HrBatch(UUID.randomUUID().toString(), emptyList(), spo2 = spo2Samples, skinTemp = temps, vitals = limits, spo2Attempts = attempts))
         alerts.forEach {
             output.enqueueAlert(it)
             output.notify(it)
@@ -231,6 +251,13 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
         HLog.i(TAG, "vitals: context=$context spo2=${spo2Samples.map { it.percent }} temp=${temps.map { it.skinC }} alerts=${alerts.map { it.vital }}")
         return Result.success()
     }
+
+    /** Why the last [spo2] call gave nothing (for the phone's "today" card). */
+    private var lastFailure = Spo2Outcome.NO_SIGNAL
+
+    /** A SpO2 try that ended before measuring anything (charging, app open): sent on its own. */
+    private suspend fun reportAttempt(attempt: Spo2Attempt) =
+        output.enqueueBatch(HrBatch(UUID.randomUUID().toString(), emptyList(), spo2Attempts = listOf(attempt)))
 
     /**
      * One SpO2 measurement. The sensor's own judgement of movement decides (its "hold still"
@@ -240,11 +267,13 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
         val reading = VitalsMeasurer.measure(source)
         val r = reading.summary as? RecordSummary.Spo2 ?: run {
             HLog.i(TAG, "SpO2 no result after ${reading.tookMs / 1_000} s: ${reading.failure} (moved=${reading.moved})")
+            lastFailure = if (reading.moved) Spo2Outcome.MOVING else Spo2Outcome.NO_SIGNAL
             return null
         }
         val recent = Spo2Schedule.recentBpm(store.latestHeartRate, store.lastPassiveHeartRateMs, System.currentTimeMillis())
         if (!VitalsQuality.spo2(r.percent, r.heartRate, recent, reading.moved)) {
             HLog.i(TAG, "SpO2 ${r.percent} rejected (moved=${reading.moved} hr=${r.heartRate}/${recent ?: "-"})")
+            lastFailure = if (reading.moved) Spo2Outcome.MOVING else Spo2Outcome.REJECTED
             return null
         }
         return Spo2Sample(at, r.percent, context, confirmation)

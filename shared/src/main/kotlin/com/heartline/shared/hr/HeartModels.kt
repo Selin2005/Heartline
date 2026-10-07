@@ -65,7 +65,9 @@ data class HrBatch(
     val vitals: com.heartline.shared.vitals.VitalsLimits? = null,
     /** Background stress readings (from the rhythm windows) and the wearer's stress normal. */
     val stress: List<com.heartline.shared.stress.StressSample> = emptyList(),
-    val stressLimits: com.heartline.shared.stress.StressLimits? = null
+    val stressLimits: com.heartline.shared.stress.StressLimits? = null,
+    /** Every background SpO2 try that was due, and how it ended (older phones ignore it). */
+    val spo2Attempts: List<com.heartline.shared.vitals.Spo2Attempt> = emptyList()
 )
 
 @Serializable

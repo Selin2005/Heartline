@@ -42,6 +42,8 @@ import com.heartline.shared.profile.StressIndex
 import com.heartline.shared.profile.StressLevel
 import com.heartline.phone.ui.model.MetricDetailUi
 import com.heartline.phone.ui.model.MetricReadingUi
+import com.heartline.phone.ui.model.Spo2TodayUi
+import com.heartline.shared.vitals.Spo2Outcome
 import com.heartline.phone.ui.theme.HeartlineTheme
 import com.heartline.shared.model.Metric
 
@@ -60,6 +62,46 @@ private val Metric.valueLabel: Int
         Metric.BODY_COMPOSITION -> R.string.value_body
         else -> R.string.value_stress
     }
+
+/** Today's background blood oxygen: how many readings, and what happened to the last try. */
+@Composable
+private fun Spo2TodayCard(t: Spo2TodayUi) {
+    val colors = HeartlineTheme.colors
+    RoundedCard(Modifier.gutter()) {
+        CardTitle(stringResource(R.string.spo2_today_title))
+        Spacer(Modifier.height(12.dp))
+        Row {
+            StatColumn(stringResource(R.string.spo2_today_awake), "${t.awake}", Modifier.weight(1f))
+            StatColumn(stringResource(R.string.spo2_today_asleep), "${t.asleep}", Modifier.weight(1f))
+        }
+        val outcome = t.lastOutcome
+        if (t.lastTime != null && outcome != null) {
+            Spacer(Modifier.height(12.dp))
+            val why = if (outcome == Spo2Outcome.MEASURED && t.lastPercent != null) {
+                stringResource(R.string.spo2_try_measured, t.lastPercent)
+            } else {
+                stringResource(spo2OutcomeText(outcome))
+            }
+            Text(stringResource(R.string.spo2_today_last, t.lastTime, why), style = MaterialTheme.typography.bodyMedium, color = colors.onBackground)
+        }
+        t.next?.let {
+            Text(stringResource(R.string.spo2_today_next, it), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+        }
+    }
+}
+
+private fun spo2OutcomeText(outcome: Spo2Outcome) = when (outcome) {
+    Spo2Outcome.MEASURED -> R.string.spo2_try_measured_plain
+    Spo2Outcome.MOVING -> R.string.spo2_try_moving
+    Spo2Outcome.LOW_BATTERY -> R.string.spo2_try_battery
+    Spo2Outcome.CHARGING -> R.string.spo2_try_charging
+    Spo2Outcome.OFF_WRIST -> R.string.spo2_try_off_wrist
+    Spo2Outcome.APP_OPEN -> R.string.spo2_try_app_open
+    Spo2Outcome.OFF_IN_SLEEP -> R.string.spo2_try_off_in_sleep
+    Spo2Outcome.NO_SIGNAL -> R.string.spo2_try_no_signal
+    Spo2Outcome.REJECTED -> R.string.spo2_try_rejected
+    Spo2Outcome.LOW_UNCONFIRMED -> R.string.spo2_try_low_unconfirmed
+}
 
 /** What the watch measured by itself: usual values, last night, 28 nights and today's readings. */
 @Composable
@@ -212,6 +254,7 @@ fun MetricDetailScreen(state: MetricDetailUi, onBack: (() -> Unit)? = null, onMe
         onMeasureOnWatch?.let { measure ->
             item { TonalPillButton(stringResource(R.string.action_measure_on_watch), onClick = measure, modifier = Modifier.gutter(), color = color) }
         }
+        state.spo2Today?.let { t -> item { Spo2TodayCard(t) } }
         state.background?.let { bg -> item { BackgroundCard(state.metric, bg) } }
         state.stress?.let { st -> item { StressCard(st) } }
         val latest = state.latest

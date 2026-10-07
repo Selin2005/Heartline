@@ -22,6 +22,17 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Spo2Sample(val tsMs: Long, val percent: Int, val context: HrContext, val confirmation: Boolean = false)
 
+/** How a background SpO2 try ended, for the phone's "today" card. */
+@Serializable
+enum class Spo2Outcome { MEASURED, MOVING, LOW_BATTERY, CHARGING, OFF_WRIST, APP_OPEN, OFF_IN_SLEEP, NO_SIGNAL, REJECTED, LOW_UNCONFIRMED }
+
+/**
+ * One background SpO2 try that was due: when, how it ended, the value kept ([percent], with
+ * [Spo2Outcome.MEASURED]) and, when it was put off, when the next try is planned ([retryAtMs]).
+ */
+@Serializable
+data class Spo2Attempt(val tsMs: Long, val outcome: Spo2Outcome, val percent: Int? = null, val retryAtMs: Long? = null)
+
 /**
  * One background skin-temperature reading. [counted]: it belongs to the night's value (asleep,
  * after the first hour, when the wrist has warmed up under the covers).

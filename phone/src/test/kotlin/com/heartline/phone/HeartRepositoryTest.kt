@@ -3,6 +3,8 @@
 
 package com.heartline.phone
 
+import com.heartline.shared.vitals.Spo2Outcome
+import com.heartline.shared.vitals.Spo2Attempt
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.heartline.phone.data.DemoData
@@ -188,5 +190,20 @@ class HeartRepositoryTest {
         val limits = HeartBaseline.limits(history, history.days.last().day, com.heartline.shared.hr.AlertSensitivity.STANDARD, 40, null)
         assertEquals(64, limits.restNormal)
         assertTrue(limits.high in 97..100)
+    }
+
+    @Test
+    fun bloodOxygenTriesAreKeptTwoWeeks() = runBlocking {
+        val day = 86_400_000L
+        val old = Spo2Attempt(day, Spo2Outcome.MOVING, retryAtMs = day + 600_000)
+        repo.saveBatch(HrBatch("a", emptyList(), spo2Attempts = listOf(old)))
+        val now = 20 * day
+        repo.saveBatch(HrBatch("b", emptyList(), spo2Attempts = listOf(Spo2Attempt(now, Spo2Outcome.MEASURED, percent = 97))))
+        val kept = repo.spo2AttemptsSince(0).first()
+        // Older than 14 days before the newest: gone.
+        assertEquals(listOf(now), kept.map { it.tsMs })
+        assertEquals(97, kept.single().percent)
+        repo.deleteAll()
+        assertTrue(repo.spo2AttemptsSince(0).first().isEmpty())
     }
 }

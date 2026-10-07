@@ -11,8 +11,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [RecordEntity::class, HrMinuteEntity::class, AlertEntity::class, Spo2SampleEntity::class, TempSampleEntity::class, StressSampleEntity::class, BpCalibrationEntity::class, BpValidationEntity::class],
-    version = 9,
+    entities = [RecordEntity::class, HrMinuteEntity::class, AlertEntity::class, Spo2SampleEntity::class, TempSampleEntity::class, StressSampleEntity::class, BpCalibrationEntity::class, BpValidationEntity::class, Spo2AttemptEntity::class],
+    version = 10,
     exportSchema = true,
 )
 abstract class HeartlineDatabase : RoomDatabase() {
@@ -110,9 +110,19 @@ abstract class HeartlineDatabase : RoomDatabase() {
             }
         }
 
+        /** v10: every background SpO2 try and how it ended. */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `spo2_attempts` (`tsMs` INTEGER NOT NULL, `outcome` TEXT NOT NULL, `percent` INTEGER, " +
+                        "`retryAtMs` INTEGER, PRIMARY KEY(`tsMs`))",
+                )
+            }
+        }
+
         fun create(context: Context): HeartlineDatabase =
             Room.databaseBuilder(context, HeartlineDatabase::class.java, "heartline.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                 .build()
 
         fun inMemory(context: Context): HeartlineDatabase =

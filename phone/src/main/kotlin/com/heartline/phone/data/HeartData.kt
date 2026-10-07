@@ -68,6 +68,15 @@ data class Spo2SampleEntity(
     val confirmation: Boolean,
 )
 
+/** A background SpO2 try and how it ended (v10), for the oxygen screen's "today" card. Kept 14 days. */
+@Entity(tableName = "spo2_attempts")
+data class Spo2AttemptEntity(
+    @PrimaryKey val tsMs: Long,
+    val outcome: com.heartline.shared.vitals.Spo2Outcome,
+    val percent: Int?,
+    val retryAtMs: Long?,
+)
+
 /** A background skin-temperature reading from the watch (v7); [counted] belongs to the night's value. */
 @Entity(tableName = "skin_temp_samples")
 data class TempSampleEntity(
@@ -88,6 +97,18 @@ interface HeartDao {
 
     @Query("SELECT * FROM spo2_samples WHERE tsMs >= :fromMs ORDER BY tsMs")
     fun spo2Since(fromMs: Long): Flow<List<Spo2SampleEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSpo2Attempts(attempts: List<Spo2AttemptEntity>)
+
+    @Query("SELECT * FROM spo2_attempts WHERE tsMs >= :fromMs ORDER BY tsMs")
+    fun spo2AttemptsSince(fromMs: Long): Flow<List<Spo2AttemptEntity>>
+
+    @Query("DELETE FROM spo2_attempts WHERE tsMs < :beforeMs")
+    suspend fun deleteSpo2AttemptsBefore(beforeMs: Long)
+
+    @Query("DELETE FROM spo2_attempts")
+    suspend fun deleteSpo2Attempts()
 
     @Query("SELECT * FROM skin_temp_samples WHERE tsMs >= :fromMs ORDER BY tsMs")
     fun tempsSince(fromMs: Long): Flow<List<TempSampleEntity>>

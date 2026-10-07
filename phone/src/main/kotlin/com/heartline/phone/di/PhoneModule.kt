@@ -213,7 +213,10 @@ val phoneModule = module {
     viewModel { DiagnosticsViewModel(get(), get(), get()) }
     viewModel { BpHomeViewModel(get(), get()) }
     viewModel { CalibrationViewModel(get(), openOnWatch = { get<WatchOpener>().open(it) }) }
-    viewModel { params -> MetricDetailViewModel(params.get(), get(), get(), get(), get<SettingsRepository>().vitalsLimits, get<SettingsRepository>().stressLimits) }
+    viewModel { params ->
+        val settings = get<SettingsRepository>()
+        MetricDetailViewModel(params.get(), get(), get(), get(), settings.vitalsLimits, settings.stressLimits, settings.monitor.map { it.spo2Interval })
+    }
     viewModel { BodyCompositionViewModel(get(), get(), get()) }
     viewModel { ProfileViewModel(get()) }
     viewModel { OpenOnWatchViewModel(get()) }

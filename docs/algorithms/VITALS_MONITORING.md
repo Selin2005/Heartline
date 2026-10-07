@@ -218,6 +218,15 @@ for two nights. Rest, and if you feel unwell, check your temperature with a ther
   phone ignores these fields.
 - **Storage.** The phone database (version 7, `MIGRATION_6_7`) keeps them in `spo2_samples` and
   `skin_temp_samples`. "Delete all" removes them too.
+- **Tries.** Every SpO2 try that was due goes with the batch too (`HrBatch.spo2Attempts`): when,
+  how it ended (`Spo2Outcome`: measured, moving, battery, charging, off the wrist, app open, off
+  in sleep, no signal, rejected, low not confirmed) and, when put off, when it comes back. The
+  phone keeps them 14 days in `spo2_attempts` (database version 10, `MIGRATION_9_10`). A try
+  that ends before measuring (charging, app open) is sent on its own.
+- **Blood oxygen screen, "Today on your watch".** Readings awake and asleep today, the last try
+  with its reason ("Last try 2:05 PM: you were moving, trying again soon") and the next try's
+  time. This is what shows the schedule: before, a day without readings showed nothing at all.
+  *Measure on the watch* opens the watch's own SpO2 measurement.
 - **Blood oxygen screen.** A *Measured by your watch* card:
   - usual awake and asleep;
   - last night (median and lowest);

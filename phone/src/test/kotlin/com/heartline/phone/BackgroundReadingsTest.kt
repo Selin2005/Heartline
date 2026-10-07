@@ -3,6 +3,9 @@
 
 package com.heartline.phone
 
+import com.heartline.shared.vitals.Spo2Outcome
+import com.heartline.phone.ui.model.Spo2Today
+import com.heartline.phone.data.Spo2AttemptEntity
 import com.heartline.phone.data.BackgroundAll
 import com.heartline.phone.data.BackgroundLatest
 import com.heartline.phone.data.Spo2SampleEntity
@@ -99,5 +102,28 @@ class BackgroundReadingsTest {
             ),
             rows,
         )
+    }
+
+    @Test
+    fun todaysBloodOxygenTriesShowTheLastOneAndTheNext() {
+        val samples = listOf(
+            Spo2SampleEntity(at(2), 96, HrContext.SLEEP, false),
+            Spo2SampleEntity(at(3), 95, HrContext.SLEEP, false),
+            Spo2SampleEntity(at(11), 97, HrContext.REST, false),
+        )
+        val tries = listOf(
+            Spo2AttemptEntity(at(11), Spo2Outcome.MEASURED, 97, null),
+            Spo2AttemptEntity(at(12), Spo2Outcome.MOVING, null, at(12, 10)),
+        )
+        val ui = Spo2Today.ui(tries, samples, day, 60, formatter)!!
+        assertEquals(1, ui.awake)
+        assertEquals(2, ui.asleep)
+        assertEquals(Spo2Outcome.MOVING, ui.lastOutcome)
+        assertEquals(formatter.time(at(12)), ui.lastTime)
+        // Put off: back in 10 minutes. Measured: an interval later.
+        assertEquals(formatter.time(at(12, 10)), ui.next)
+        assertEquals(formatter.time(at(11, 30)), Spo2Today.ui(tries.take(1), samples, day, 30, formatter)!!.next)
+        // Yesterday's don't count; nothing today, no card.
+        assertNull(Spo2Today.ui(tries, samples, at(13), 60, formatter))
     }
 }

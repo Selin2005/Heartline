@@ -186,6 +186,11 @@ object SampleData {
             }
             else -> emptyList()
         }
+        val spo2Today = if (metric == Metric.SPO2) {
+            com.heartline.phone.ui.model.Spo2TodayUi(4, 6, "2:05 PM", com.heartline.shared.vitals.Spo2Outcome.MOVING, null, "2:15 PM")
+        } else {
+            null
+        }
         val stress = if (metric == Metric.STRESS) {
             com.heartline.phone.ui.model.BackgroundStressUi(
                 weekDays = listOf("Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon"),
@@ -208,7 +213,7 @@ object SampleData {
         } else {
             null
         }
-        return MetricDetailUi(metric, watchDays + rows, background, stress)
+        return MetricDetailUi(metric, watchDays + rows, background, stress, spo2Today)
     }
 
     val vitalsLimits = com.heartline.shared.vitals.VitalsLimits(

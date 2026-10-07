@@ -34,6 +34,9 @@ class HeartRepository(
 
     fun tempsSince(fromMs: Long): Flow<List<TempSampleEntity>> = dao.tempsSince(fromMs)
 
+    /** The watch's background SpO2 tries since [fromMs]. */
+    fun spo2AttemptsSince(fromMs: Long): Flow<List<Spo2AttemptEntity>> = dao.spo2AttemptsSince(fromMs)
+
     /** The newest background reading of each kind (Home tiles, widgets). */
     val backgroundLatest: Flow<BackgroundLatest> =
         kotlinx.coroutines.flow.combine(dao.latestSpo2(), dao.latestTemp(), dao.latestStress()) { o, t, s -> BackgroundLatest(o, t, s) }
@@ -61,6 +64,10 @@ class HeartRepository(
         batch.vitals?.let { onVitalsLimits(it) }
         if (batch.stress.isNotEmpty()) dao.insertStress(batch.stress.map { StressSampleEntity(it.tsMs, it.rmssdMs, it.bpm, it.score, it.context) })
         batch.stressLimits?.let { onStressLimits(it) }
+        if (batch.spo2Attempts.isNotEmpty()) {
+            dao.insertSpo2Attempts(batch.spo2Attempts.map { Spo2AttemptEntity(it.tsMs, it.outcome, it.percent, it.retryAtMs) })
+            dao.deleteSpo2AttemptsBefore(batch.spo2Attempts.maxOf { it.tsMs } - ATTEMPTS_KEPT_MS)
+        }
     }
 
     /**
@@ -80,6 +87,9 @@ class HeartRepository(
     suspend fun markAlertsRead() = dao.markAlertsRead()
 
     companion object {
+        /** The SpO2 tries are for the "today" card and a look back; two weeks is plenty. */
+        const val ATTEMPTS_KEPT_MS = 14 * 86_400_000L
+
         fun merge(old: HrMinuteEntity, new: HrMinuteEntity) = new.copy(
             avgBpm = (old.avgBpm + new.avgBpm) / 2,
             minBpm = minOf(old.minBpm, new.minBpm),
@@ -92,6 +102,7 @@ class HeartRepository(
 
     suspend fun deleteAll() {
         dao.deleteSpo2()
+        dao.deleteSpo2Attempts()
         dao.deleteTemps()
         dao.deleteStress()
         dao.deleteMinutes()

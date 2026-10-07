@@ -127,6 +127,20 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate9To10AddsBloodOxygenTries() {
+        helper.createDatabase(DB, 9).use { db ->
+            db.execSQL("INSERT INTO spo2_samples (tsMs, percent, context, confirmation) VALUES (1, 96, 'SLEEP', 0)")
+        }
+        helper.runMigrationsAndValidate(DB, 10, true, HeartlineDatabase.MIGRATION_9_10).use { db ->
+            db.execSQL("INSERT INTO spo2_attempts (tsMs, outcome, percent, retryAtMs) VALUES (2, 'MOVING', NULL, 600002)")
+            db.query("SELECT COUNT(*) FROM spo2_samples").use { c ->
+                c.moveToFirst()
+                assertEquals(1, c.getInt(0))
+            }
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

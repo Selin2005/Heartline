@@ -62,6 +62,8 @@ data class MetricDetailUi(
     val readings: List<MetricReadingUi> = emptyList(),
     val background: BackgroundVitalsUi? = null,
     val stress: BackgroundStressUi? = null,
+    /** Blood oxygen only: today's background readings and tries. */
+    val spo2Today: Spo2TodayUi? = null,
 ) {
     /** The latest measurement of your own (the watch's days are summaries, shown in the history). */
     val latest get() = readings.firstOrNull { !it.fromWatch }
@@ -137,6 +139,45 @@ object BackgroundStress {
             weekDays = (6 downTo 0).map { formatter.weekday(today.minusDays(it.toLong())) },
             weekAboveUsual = limits?.weekAboveUsual,
             learning = (limits?.confidence ?: 0.0) < 0.8,
+        )
+    }
+}
+
+/**
+ * Today's background blood oxygen: readings awake and asleep, the last try with how it ended
+ * ([lastPercent] when measured) and when the next try is planned.
+ */
+data class Spo2TodayUi(
+    val awake: Int,
+    val asleep: Int,
+    val lastTime: String? = null,
+    val lastOutcome: com.heartline.shared.vitals.Spo2Outcome? = null,
+    val lastPercent: Int? = null,
+    val next: String? = null,
+)
+
+object Spo2Today {
+    /** Null when the watch neither measured nor tried today (or is too old to send its tries). */
+    fun ui(
+        attempts: List<com.heartline.phone.data.Spo2AttemptEntity>,
+        samples: List<Spo2SampleEntity>,
+        dayStartMs: Long,
+        everyMinutes: Int,
+        formatter: RecordFormatter,
+    ): Spo2TodayUi? {
+        val tries = attempts.filter { it.tsMs >= dayStartMs }
+        val readings = samples.filter { it.tsMs >= dayStartMs }
+        if (tries.isEmpty() && readings.isEmpty()) return null
+        val last = tries.maxByOrNull { it.tsMs }
+        // A put-off try says when it comes back; otherwise the next one is due an interval later.
+        val next = last?.let { it.retryAtMs ?: (it.tsMs + everyMinutes * 60_000L) }
+        return Spo2TodayUi(
+            awake = readings.count { it.context != com.heartline.shared.hr.HrContext.SLEEP },
+            asleep = readings.count { it.context == com.heartline.shared.hr.HrContext.SLEEP },
+            lastTime = last?.let { formatter.time(it.tsMs) },
+            lastOutcome = last?.outcome,
+            lastPercent = last?.percent,
+            next = next?.let { formatter.time(it) },
         )
     }
 }
@@ -342,6 +383,8 @@ class MetricDetailViewModel(
     heart: HeartRepository? = null,
     vitalsLimits: Flow<VitalsLimits?> = flowOf(null),
     stressLimits: Flow<StressLimits?> = flowOf(null),
+    /** Minutes between background SpO2 tries (the settings' interval), for the next try's time. */
+    spo2Every: Flow<Int> = flowOf(60),
     today: java.time.LocalDate = java.time.LocalDate.now(),
 ) : ViewModel() {
     private val kind = RecordKind.entries.first { it.metric == metric }
@@ -361,6 +404,13 @@ class MetricDetailViewModel(
         flowOf(null)
     }
 
+    private val spo2Today: Flow<Spo2TodayUi?> = if (heart != null && metric == Metric.SPO2) {
+        val dayStart = today.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        combine(heart.spo2AttemptsSince(dayStart), heart.spo2Since(dayStart), spo2Every) { a, s, e -> Spo2Today.ui(a, s, dayStart, e, formatter) }
+    } else {
+        flowOf(null)
+    }
+
     /** The watch's background readings as one history row per day. */
     private val watchDays: Flow<List<MetricReadingUi>> = when {
         heart == null -> flowOf(emptyList())
@@ -370,8 +420,8 @@ class MetricDetailViewModel(
         else -> flowOf(emptyList())
     }
 
-    val state: StateFlow<MetricDetailUi> = combine(repository.observe(kind), background, stress, watchDays) { records, bg, st, days ->
-        MetricDetailUi(metric, BackgroundReadings.merge(MetricFormat.readings(records, formatter), days), bg, st)
+    val state: StateFlow<MetricDetailUi> = combine(repository.observe(kind), background, stress, watchDays, spo2Today) { records, bg, st, days, today ->
+        MetricDetailUi(metric, BackgroundReadings.merge(MetricFormat.readings(records, formatter), days), bg, st, today)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MetricDetailUi(metric))
 }
 
