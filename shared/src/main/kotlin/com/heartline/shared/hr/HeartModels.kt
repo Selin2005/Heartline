@@ -222,6 +222,11 @@ data class MonitorSettings(
     val stressNotifications: Boolean = true,
     /** Blood oxygen in sleep too (its red light can be seen in the dark). */
     val spo2InSleep: Boolean = true,
+    /**
+     * Minutes between background blood-oxygen readings: 60, or 30 for breathing conditions such as
+     * asthma (proposed with a lung condition; more battery). Older versions ignore it and use 60.
+     */
+    val spo2EveryMinutes: Int = 60,
     /** The wearer's answers in the monitoring setup. */
     val health: HealthContext = HealthContext(),
     /** No stress or trend notices in these hours (minutes after midnight); heart and oxygen always notify. */
@@ -295,6 +300,9 @@ data class MonitorSettings(
     val heartActive: Boolean get() = heartMonitoring && heartAlerts
 
     val spo2Active: Boolean get() = heartMonitoring && spo2Monitoring
+
+    /** [spo2EveryMinutes] as one of the two intervals the watch knows. */
+    val spo2Interval: Int get() = if (spo2EveryMinutes <= 30) 30 else 60
 
     val skinTempActive: Boolean get() = heartMonitoring && skinTempMonitoring
 

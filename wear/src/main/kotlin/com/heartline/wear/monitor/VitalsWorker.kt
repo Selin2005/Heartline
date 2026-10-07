@@ -163,7 +163,7 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
                     }
                 }
                 // Blood oxygen: once per interval, awake and asleep, by the rules of Spo2Schedule.
-                val every = 60
+                val every = settings.spo2Interval
                 val retries = Spo2Schedule.retriesNow(store.spo2RetrySlot, store.spo2Retries, now, every)
                 fun decide(armMoved: Boolean) = Spo2Schedule.decide(
                     now, store.lastSpo2Ms, every, asleep, settings.spo2InSleep, battery(), steps, context == HrContext.ACTIVE, armMoved, retries,

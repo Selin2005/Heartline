@@ -42,6 +42,11 @@ It uses the same sources as a manual measurement, through `VitalsMeasurer`.
 - **Skin temperature** (about 10 s) is measured every 30 minutes asleep and hourly by day.
 - **SpO2** (about 30–40 s) is measured every hour, awake and asleep. By day it is skipped on a
   battery under 15 %; asleep it is always measured.
+- **Every 30 minutes** (`MonitorSettings.spo2EveryMinutes` = 30) for breathing conditions such as
+  asthma: the monitoring setup proposes it when the wearer says yes to a lung condition, and
+  Settings → Blood oxygen → *Every 30 minutes* turns it on or off. The worker then runs every 15
+  minutes, so each half hour gets a try; temperature keeps its own times. About twice the
+  battery of the hourly readings. Older watch versions ignore it and stay hourly.
 - **Conditions,** the same as the rhythm windows:
   - The watch is worn: background heart rate in the last hour, and the off-body sensor.
   - The wearer is not exercising.

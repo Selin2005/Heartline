@@ -105,6 +105,9 @@ sealed interface SettingChange {
     /** The parts of health monitoring, under the master switch. */
     data class HeartPart(val on: Boolean) : SettingChange
     data class Spo2Part(val on: Boolean) : SettingChange
+
+    /** Blood oxygen every 30 minutes instead of every hour. */
+    data class Spo2Often(val on: Boolean) : SettingChange
     data class TempPart(val on: Boolean) : SettingChange
     data class StressPart(val on: Boolean) : SettingChange
     data class StressNotifications(val on: Boolean) : SettingChange
@@ -127,6 +130,7 @@ sealed interface SettingChange {
         is AllDayHeartRate -> s.withAllDayHeartRate(on)
         is HeartPart -> s.withHeartAlerts(on)
         is Spo2Part -> s.copy(spo2Monitoring = on)
+        is Spo2Often -> s.copy(spo2EveryMinutes = if (on) 30 else 60)
         is TempPart -> s.copy(skinTempMonitoring = on)
         is StressPart -> s.copy(stressMonitoring = on)
         is StressNotifications -> s.copy(stressNotifications = on)
@@ -276,11 +280,23 @@ fun SettingsScreen(
                     )
                     CardRow(
                         stringResource(R.string.settings_part_spo2),
-                        subtitle = stringResource(R.string.settings_part_spo2_summary),
+                        subtitle = stringResource(
+                            if (monitor.spo2Interval == 30) R.string.settings_part_spo2_summary_often else R.string.settings_part_spo2_summary,
+                        ),
                         leading = { IconBadge(Icons.Rounded.WaterDrop, colors.spo2) },
                         trailing = { OneUiSwitch(monitor.spo2Monitoring) { onChange(SettingChange.Spo2Part(it)) } },
                         showDivider = true,
                     )
+                    if (monitor.spo2Monitoring) {
+                        CardRow(
+                            stringResource(R.string.settings_spo2_often),
+                            subtitle = stringResource(R.string.settings_spo2_often_text),
+                            leading = { Spacer(Modifier.size(40.dp)) },
+                            trailing = { OneUiSwitch(monitor.spo2Interval == 30) { onChange(SettingChange.Spo2Often(it)) } },
+                            showDivider = true,
+                            subtitleMaxLines = 3,
+                        )
+                    }
                     CardRow(
                         stringResource(R.string.settings_part_temp),
                         subtitle = stringResource(R.string.settings_part_temp_summary),

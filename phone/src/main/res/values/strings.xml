@@ -551,6 +551,9 @@
     <string name="settings_part_heart_summary">High and low heart rate, irregular rhythm, resting trend</string>
     <string name="settings_part_spo2">Blood oxygen</string>
     <string name="settings_part_spo2_summary">Measured every hour, awake and asleep</string>
+    <string name="settings_part_spo2_summary_often">Measured every 30 minutes, awake and asleep</string>
+    <string name="settings_spo2_often">Every 30 minutes</string>
+    <string name="settings_spo2_often_text">For asthma or another breathing condition. Uses more battery.</string>
     <string name="settings_part_temp">Skin temperature</string>
     <string name="settings_part_temp_summary">Measured in sleep and by day; nightly changes</string>
     <string name="settings_limits_spo2">Oxygen: checks again below %1$d%% · usual in sleep %2$d%%</string>
@@ -897,6 +900,8 @@
     <string name="setup_stress_notifications_text">A notice after about an hour of high stress, with a minute of breathing.</string>
     <string name="setup_spo2_sleep">Blood oxygen in sleep</string>
     <string name="setup_spo2_sleep_text">Turn off if the red light bothers you at night.</string>
+    <string name="setup_spo2_often">Blood oxygen every 30 minutes</string>
+    <string name="setup_spo2_often_text">More readings through the day, for example with asthma or another breathing condition. Uses more battery.</string>
     <string name="setup_sleep_hours">When you usually sleep</string>
     <string name="setup_quiet_hours">Quiet hours (no stress or trend notices)</string>
     <string name="setup_quiet_none">None</string>

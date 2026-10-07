@@ -68,6 +68,7 @@ object MonitoringSetup {
         stressMonitoring = draft.stressMonitoring,
         stressNotifications = draft.stressNotifications,
         spo2InSleep = draft.spo2InSleep,
+        spo2EveryMinutes = draft.spo2EveryMinutes,
         alertSensitivity = draft.alertSensitivity,
         health = draft.health,
         quietStartMinute = draft.quietStartMinute,
@@ -75,6 +76,13 @@ object MonitoringSetup {
         sleepStartMinute = draft.sleepStartMinute,
         sleepEndMinute = draft.sleepEndMinute,
     ).withMonitoring(monitoring)
+
+    /**
+     * New health answers on the draft. Saying yes to a lung condition proposes blood oxygen every 30
+     * minutes (the optional page can turn it back); other answers leave the interval alone.
+     */
+    fun withHealth(draft: MonitorSettings, health: HealthContext): MonitorSettings =
+        draft.copy(health = health, spo2EveryMinutes = if (health.lung && !draft.health.lung) 30 else draft.spo2EveryMinutes)
 
     /** What the answers changed, as string resources for the summary. */
     fun adjustments(s: MonitorSettings): List<Int> = buildList {
@@ -118,7 +126,7 @@ fun MonitoringSetupFlow(
             step = if (on) Step.PARTS.ordinal else Step.SUMMARY.ordinal
         }
         Step.PARTS -> PartsPage(draft, back, { draft = it }) { step = Step.HEALTH.ordinal }
-        Step.HEALTH -> HealthPage(draft.health, back, { draft = draft.copy(health = it) }) { step = Step.OPTIONAL.ordinal }
+        Step.HEALTH -> HealthPage(draft.health, back, { draft = MonitoringSetup.withHealth(draft, it) }) { step = Step.OPTIONAL.ordinal }
         Step.OPTIONAL -> OptionalPage(draft, back, { draft = it }) { step = Step.SUMMARY.ordinal }
         Step.SUMMARY -> {
             val result = MonitoringSetup.apply(initial, monitoring == true, draft)
@@ -270,6 +278,9 @@ private fun OptionalPage(draft: MonitorSettings, onBack: (() -> Unit)?, onDraft:
                 Switch(R.string.setup_pregnant, R.string.setup_pregnant_text, draft.health.pregnant) { onDraft(draft.copy(health = draft.health.copy(pregnant = it))) }
                 Switch(R.string.setup_stress_notifications, R.string.setup_stress_notifications_text, draft.stressNotifications) { onDraft(draft.copy(stressNotifications = it)) }
                 Switch(R.string.setup_spo2_sleep, R.string.setup_spo2_sleep_text, draft.spo2InSleep) { onDraft(draft.copy(spo2InSleep = it)) }
+                Switch(R.string.setup_spo2_often, R.string.setup_spo2_often_text, draft.spo2Interval == 30) {
+                    onDraft(draft.copy(spo2EveryMinutes = if (it) 30 else 60))
+                }
                 Hours(R.string.setup_sleep_hours, MonitoringSetup.SLEEP_CHOICES, MonitoringSetup.Hours(draft.sleepStartMinute, draft.sleepEndMinute)) {
                     onDraft(draft.copy(sleepStartMinute = it.start, sleepEndMinute = it.end))
                 }

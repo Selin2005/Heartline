@@ -42,6 +42,24 @@ class MonitoringSetupTest {
     }
 
     @Test
+    fun aLungConditionProposesBloodOxygenEveryHalfHour() {
+        val base = MonitorSettings()
+        assertEquals(60, base.spo2Interval)
+        // Yes to a lung condition proposes 30 minutes; the setup keeps it.
+        val lung = MonitoringSetup.withHealth(base, answered.copy(lungCondition = Answer.YES))
+        assertEquals(30, lung.spo2Interval)
+        assertEquals(30, MonitoringSetup.apply(base, true, lung).spo2EveryMinutes)
+        // Turned back on the optional page, other answers don't bring it back.
+        val back = MonitoringSetup.withHealth(lung.copy(spo2EveryMinutes = 60), lung.health.copy(heartDevice = Answer.NO))
+        assertEquals(60, back.spo2Interval)
+        // Other answers leave the interval alone.
+        assertEquals(60, MonitoringSetup.withHealth(base, answered).spo2Interval)
+        // Settings: the switch and its opposite.
+        assertEquals(30, com.heartline.phone.ui.settings.SettingChange.Spo2Often(true).applyTo(base).spo2Interval)
+        assertEquals(60, com.heartline.phone.ui.settings.SettingChange.Spo2Often(false).applyTo(lung).spo2Interval)
+    }
+
+    @Test
     fun stressCardShowsTodayInSlotsAndTheWeek() {
         val zone = ZoneOffset.UTC
         val today = LocalDate.of(2026, 10, 2)

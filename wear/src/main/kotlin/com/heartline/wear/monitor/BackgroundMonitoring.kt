@@ -155,14 +155,16 @@ object BackgroundMonitoring {
             work.cancelUniqueWork(IRN_WORK)
             work.cancelUniqueWork(IRN_FOLLOW_UP)
         }
-        // Blood oxygen and skin temperature: their own worker, every 30 minutes (they check their own permissions).
+        // Blood oxygen and skin temperature: their own worker, every 30 minutes, or every 15 for SpO2 every
+        // 30 minutes so each half hour gets a run (they check their own permissions).
         if (settings.spo2Active || settings.skinTempActive) {
-            work.enqueueUniquePeriodicWork(VITALS_WORK, ExistingPeriodicWorkPolicy.UPDATE, PeriodicWorkRequestBuilder<VitalsWorker>(30, TimeUnit.MINUTES).build())
+            val minutes = if (settings.spo2Active && settings.spo2Interval == 30) 15L else 30L
+            work.enqueueUniquePeriodicWork(VITALS_WORK, ExistingPeriodicWorkPolicy.UPDATE, PeriodicWorkRequestBuilder<VitalsWorker>(minutes, TimeUnit.MINUTES).build())
         } else {
             work.cancelUniqueWork(VITALS_WORK)
             work.cancelUniqueWork(VITALS_RETRY)
         }
-        HLog.i(TAG, "sync allowed=$allowed monitoring=${settings.heartMonitoring} rhythm=${settings.rhythmActive} stress=${settings.stressActive} spo2=${settings.spo2Active} temp=${settings.skinTempActive} sensitivity=${settings.alertSensitivity} background=${hasBackgroundPermission(context)}")
+        HLog.i(TAG, "sync allowed=$allowed monitoring=${settings.heartMonitoring} rhythm=${settings.rhythmActive} stress=${settings.stressActive} spo2=${settings.spo2Active}/${settings.spo2Interval}min temp=${settings.skinTempActive} sensitivity=${settings.alertSensitivity} background=${hasBackgroundPermission(context)}")
     }
 }
 
