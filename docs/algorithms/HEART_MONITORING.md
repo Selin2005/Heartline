@@ -181,11 +181,15 @@ personal limits on the watch and the phone every 15 minutes).
 - Every 15 minutes, WorkManager runs one window of about 75 s on the Samsung
   tracker. Without the background sensor permission, a silent notification shows for that minute.
 - **The window is skipped when the watch is not worn:**
+  - when the watch is on its charger (`Charging.isCharging`, the sticky battery broadcast).
+    A real log (Galaxy Watch8, 10/07) had three windows light the sensor on the charger in the
+    first hour, before the one-hour rule below took over;
   - when the all-day heart rate is on and the latest passive heart rate is more than an hour
     old. With none at all (just installed, or passive heart rate unavailable on the watch) the
     off-body sensor below decides, as for blood oxygen: otherwise rhythm and stress never ran;
   - when Android's off-body sensor says the watch is off the wrist (checked 1.5 s after it
-    starts, and during the window).
+    starts, and during the window). It can be late to report; the log then says
+    "off-body sensor no reading yet" and the tracker's own status decides (below).
 - If a readable window was irregular, one extra check runs 7 minutes later (`scheduleFollowUp`).
 - The rhythm state is read from storage for every window, so a regular ECG noted between two
   windows (`noteEcg`) is kept rather than overwritten by an older copy.
@@ -209,8 +213,21 @@ rhythm check and no stress reading in two days. The raw readings showed why:
   reason.
 - **Windows ran 7–13 minutes** with the sensor on, as the processor slept through the timers.
 
+- **Windows ran up to 29 minutes at night even after that** (the same 10/07 log: 353 minutes of
+  sensor in 24 hours instead of about 80). The wake lock did not keep the processor awake in
+  deep sleep, coroutine timers stood still, and a window ended only when a passive heart-rate
+  batch woke the watch. The readings counted every second of it.
+
 The window now works like this (`IrnWindowWorker.window`):
-1. **Listen** for 90 s, with a partial wake lock (at most 2.5 minutes in all).
+1. **Listen** until `BackgroundWindow.endReason` says stop, judged on every reading as it
+   arrives, from clocks that keep counting in deep sleep:
+   - `covered`: the readings, by their own time, span 90 s from the window's start (readings
+     from before it don't count). A sleeping watch now stops at the first batch after 90 s of
+     readings;
+   - `off the wrist (tracker)`: 8 readings and the last 8 all off-body (status -3), none good;
+   - `off the wrist`: the off-body sensor; `charging`: put on the charger (checked every 10 s);
+   - `time limit`: 2.5 minutes by the elapsed-realtime clock.
+   A 90 s coroutine timer and the partial wake lock stay as a backup for an awake watch.
 2. **Ask for the held readings** with the SDK's `HealthTracker.flush()`, and wait for
    `onFlushCompleted` (at most 10 s).
    - The call can block until the tracker's next batch, which can take minutes. A blocking call
@@ -234,10 +251,13 @@ The window now works like this (`IrnWindowWorker.window`):
 **One line per window** (`Heartline/Monitor`):
 
 ```
-IRN window done in 92 s: 598 readings: 598 good, 0 moving, 0 weak, 0 off-wrist, trusted beats 100 %,
+IRN window done in 92 s (awake 92 s, ended=covered): 598 readings: 598 good, 0 moving, 0 weak, 0 off-wrist, trusted beats 100 %,
 late median/max 95/187 s, flush=true in 0 s; rhythm read 74 s from 01:55:04, irregular=false;
 stress score 31 from 597 beat pairs (SLEEP)
 ```
+
+`awake` is how long the processor was awake during the window (`uptimeMillis`): well under the
+elapsed time means it slept and the timers stood still.
 
 **What to expect.** By day, wrist intervals are often untrusted: in that log, 57 % of the
 intervals of good readings were flagged.

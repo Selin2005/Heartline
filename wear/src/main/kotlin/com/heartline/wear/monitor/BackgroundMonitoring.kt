@@ -45,6 +45,7 @@ import java.time.ZoneId
 import com.heartline.shared.model.Metric
 import com.heartline.shared.sensor.PermissionPolicy
 import com.heartline.wear.sensor.HrSource
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -278,6 +279,12 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
         if (!BackgroundMonitoring.canRun(applicationContext)) return Result.success()
         val settings = store.settings.value.normalized()
         if (!settings.rhythmActive && !settings.stressActive) return Result.success()
+        // On the charger the watch is off the wrist: no sensor at all (the off-body sensor below
+        // can be late to report, and a real log had three windows light the sensor there).
+        if (Charging.isCharging(applicationContext)) {
+            HLog.i(TAG, "IRN window skipped: charging")
+            return Result.success()
+        }
         // No recent background heart rate means the watch is very likely not being worn: don't listen
         // to a sensor on a table or charger, whose noise looks like an irregular rhythm. None at all
         // (just installed, or passive heart rate unavailable) leaves it to the off-body sensor below,
@@ -295,6 +302,7 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
             HLog.i(TAG, "IRN window skipped: watch off the wrist")
             return Result.success()
         }
+        if (!wrist.offBodyReported) HLog.i(TAG, "IRN window: off-body sensor no reading yet, the tracker's own status decides")
         if (!BackgroundMonitoring.hasBackgroundPermission(applicationContext)) {
             runCatching { setForeground(foregroundInfo()) }.onFailure { HLog.w(TAG, "foreground window refused", it) }
         }
@@ -303,7 +311,8 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
     }
 
     /**
-     * Listens for [LISTEN_MS], then asks the tracker for the readings it still holds (it sends
+     * Listens until the readings cover [BackgroundWindow.LISTEN_MS] by their own time (or another
+     * [BackgroundWindow.endReason]), then asks the tracker for the readings it still holds (it sends
      * them in batches, minutes late while the screen is off) and judges every reading by its own
      * time: the rhythm on the best 60 s stretch, stress on the trusted beat pairs
      * (docs/algorithms/HEART_MONITORING.md, "Background windows").
@@ -318,12 +327,19 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
         // A background session of its own, unless a measurement is running (then it records there).
         val raw = RawCapture.begin("irn_window", background = true)
         val opened = SystemClock.elapsedRealtime()
+        val openedAwake = SystemClock.uptimeMillis()
+        val startMs = System.currentTimeMillis()
+        // Completed by the readings themselves: coroutine timers stand still while the watch sleeps.
+        val stop = CompletableDeferred<String>()
+        var ended = "listened"
+        var charging = false
+        var chargingCheckedAt = Long.MIN_VALUE
         // Keeps the processor awake for the timers: without it a window once ran 13 minutes.
         val wake = applicationContext.getSystemService(PowerManager::class.java)
             ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "heartline:rhythm-window")
-            ?.apply { acquire(MAX_MS + 10_000) }
+            ?.apply { acquire(BackgroundWindow.MAX_MS + 10_000) }
         try {
-            withTimeoutOrNull(MAX_MS) {
+            withTimeoutOrNull(BackgroundWindow.MAX_MS) {
                 coroutineScope {
                     val listening = launch {
                         source.stream()
@@ -338,9 +354,15 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
                                         activity == HrContext.ACTIVE || activity == HrContext.EXERCISE,
                                     onBody = sample.onBody && !wrist.offBody,
                                 )
+                                val elapsed = SystemClock.elapsedRealtime() - opened
+                                if (elapsed - chargingCheckedAt >= CHARGING_CHECK_MS) {
+                                    charging = Charging.isCharging(applicationContext)
+                                    chargingCheckedAt = elapsed
+                                }
+                                BackgroundWindow.endReason(samples, startMs, elapsed, charging, wrist.offBody)?.let { stop.complete(it) }
                             }
                     }
-                    delay(LISTEN_MS)
+                    withTimeoutOrNull(BackgroundWindow.LISTEN_MS) { stop.await() }?.let { ended = it }
                     val asked = SystemClock.elapsedRealtime()
                     flushed = source.flush()
                     flushMs = SystemClock.elapsedRealtime() - asked
@@ -356,6 +378,8 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
             wake?.takeIf { it.isHeld }?.release()
         }
         val tookS = (SystemClock.elapsedRealtime() - opened) / 1_000
+        // Less awake than elapsed: the processor slept during the window (timers stood still).
+        val awakeS = (SystemClock.uptimeMillis() - openedAwake) / 1_000
         val rhythm = BackgroundWindow.rhythm(samples)
         heart.onIrnWindow(samples, rhythm.samples)
         val irregular = heart.irn.lastWindowIrregular
@@ -374,7 +398,7 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
         val reason = if (rhythm.samples != null && irregular == null) " (${heart.irn.lastSkipReason})" else ""
         HLog.i(
             TAG,
-            "IRN window done in $tookS s: ${BackgroundWindow.statusMix(samples)}, trusted beats ${BackgroundWindow.trustedShare(samples)} %, " +
+            "IRN window done in $tookS s (awake $awakeS s, ended=$ended): ${BackgroundWindow.statusMix(samples)}, trusted beats ${BackgroundWindow.trustedShare(samples)} %, " +
                 "late median/max $late, flush=$flushed in ${flushMs / 1_000} s; rhythm $read$reason; stress $stress",
         )
         if (irregular == true) BackgroundMonitoring.scheduleFollowUp(applicationContext)
@@ -389,11 +413,8 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
 
     private companion object {
         const val TAG = "Heartline/Monitor"
-        /** How long the window listens before asking for the held readings. */
-        const val LISTEN_MS = 90_000L
-
-        /** The hard limit for a window: the sensor is always released by then. */
-        const val MAX_MS = 150_000L
+        /** How often a window looks whether the watch was put on its charger. */
+        const val CHARGING_CHECK_MS = 10_000L
 
         /** A reading counts as moving if the arm moved in the 30 seconds before it. */
         const val MOTION_LOOKBACK_MS = 30_000L

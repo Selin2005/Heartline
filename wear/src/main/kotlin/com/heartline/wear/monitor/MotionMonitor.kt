@@ -88,6 +88,10 @@ class WristState(context: Context) :
     @Volatile var offBody = false
         private set
 
+    /** Whether the off-body sensor has reported at all since [start] (it can be late, or missing). */
+    @Volatile var offBodyReported = false
+        private set
+
     private val moves = MoveTimes()
     private var average = Double.NaN
 
@@ -100,7 +104,10 @@ class WristState(context: Context) :
 
     override fun onSensorChanged(event: SensorEvent) {
         when (event.sensor.type) {
-            Sensor.TYPE_LOW_LATENCY_OFFBODY_DETECT -> offBody = event.values.firstOrNull() == 0f
+            Sensor.TYPE_LOW_LATENCY_OFFBODY_DETECT -> {
+                offBody = event.values.firstOrNull() == 0f
+                offBodyReported = true
+            }
             Sensor.TYPE_ACCELEROMETER -> {
                 val (x, y, z) = event.values
                 val magnitude = kotlin.math.sqrt((x * x + y * y + z * z).toDouble())

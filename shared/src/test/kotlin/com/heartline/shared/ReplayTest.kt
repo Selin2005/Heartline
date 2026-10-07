@@ -167,4 +167,46 @@ class ReplayTest {
         assertEquals(IrnThresholds.RULE, state.rule)
         assertEquals(1, state.windows.size)
     }
+
+    /** The first reading (as they arrive, oldest first) at which the window would stop, and why. */
+    private fun firstEnd(samples: List<HrSample>, startMs: Long = 0, elapsed: (HrSample) -> Long = { 0 }): Pair<Int, String>? {
+        val seen = mutableListOf<HrSample>()
+        samples.forEachIndexed { i, s ->
+            seen += s
+            BackgroundWindow.endReason(seen, startMs, elapsed(s), charging = false)?.let { return i to it }
+        }
+        return null
+    }
+
+    @Test
+    fun aWindowOnTheChargerStopsWithinSeconds() {
+        // 14:34, the watch on its charger: the tracker said off-body (-3) from the second reading
+        // on, yet the window listened for the full 90 s (three times in the first hour).
+        val (at, reason) = firstEnd(window("charging-1434"))!!
+        assertEquals("off the wrist (tracker)", reason)
+        assertTrue("stopped at reading $at", at <= BackgroundWindow.OFF_WRIST_READINGS)
+    }
+
+    @Test
+    fun aNightWindowEndsOnceItsReadingsCoverTheListeningTime() {
+        // 08:05 asleep: coroutine timers stood still and this window kept the sensor on for 29
+        // minutes. Judged by the readings' own time it has what it needs after 90 s of readings.
+        val samples = window("night-long-0805")
+        val (at, reason) = firstEnd(samples)!!
+        assertEquals("covered", reason)
+        assertTrue("${samples[at].tsMs}", samples[at].tsMs in BackgroundWindow.LISTEN_MS..BackgroundWindow.LISTEN_MS + 2_000)
+        // What it ends with is still read for the rhythm.
+        assertNotNull(BackgroundWindow.rhythm(samples.take(at + 1)).samples)
+    }
+
+    @Test
+    fun aWindowAlsoEndsOnTheChargerOffTheWristOrAtItsTimeLimit() {
+        val few = window("night-steady-0158").take(10)
+        assertNull(BackgroundWindow.endReason(few, few.first().tsMs, elapsedMs = 10_000, charging = false))
+        assertEquals("charging", BackgroundWindow.endReason(few, 0, 10_000, charging = true))
+        assertEquals("off the wrist", BackgroundWindow.endReason(few, 0, 10_000, charging = false, offWrist = true))
+        assertEquals("time limit", BackgroundWindow.endReason(few, 0, BackgroundWindow.MAX_MS, charging = false))
+        // Readings from before the window started (a new listener gets some) don't count.
+        assertNull(BackgroundWindow.endReason(few, few.last().tsMs + 1, 10_000, charging = false))
+    }
 }

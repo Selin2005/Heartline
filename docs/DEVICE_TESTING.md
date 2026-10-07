@@ -217,10 +217,16 @@ attach them to a bug report.
     - **Watch not worn:** leave the watch on a table or charger for two hours. The log shows
       `IRN window skipped` (no background heart rate, or off the wrist), never an irregular rhythm
       notification.
+    - **On the charger:** put the watch on its charger for an hour. The log shows
+      `IRN window skipped: charging` and `vitals skipped: charging`, the exported logs have no
+      `irn_window` session from that hour, and the sensor's green light stays off.
     - **Rhythm windows:** each `IRN window done in N s` line lists the readings (good, moving,
       weak, off-wrist), the share of trusted beats, how late the readings came, `flush=true`,
-      and `rhythm read …` or `rhythm not read: <reason>`, then the stress result. No window
-      takes more than about 2.5 minutes (`flush=true in N s`, N at most 10). After a night of
+      and `rhythm read …` or `rhythm not read: <reason>`, then the stress result. By day no
+      window takes more than about 2.5 minutes (`flush=true in N s`, N at most 10). Each line
+      says `(awake A s, ended=…)`: `covered` normally, `off the wrist (tracker)` when the tracker
+      saw no wrist. At night a window can last until the tracker's next batch (`awake` well below
+      the total); the sum of `done in` over a day stays far below the 353 minutes of 10/07. After a night of
       wearing, several lines show `rhythm read` and `stress score`, with `irregular=false` for
       a regular rhythm, even in sleep with high HRV.
     - **Background readings on the phone:** the morning after a night of wearing, Home's blood

@@ -27,7 +27,37 @@ object BackgroundWindow {
     /** A beat more than 20 % away from the one before is an extra beat or an artefact, not HRV. */
     private const val HRV_MAX_STEP = 0.2
 
+    /** How long a background window listens, by the readings' own time. */
+    const val LISTEN_MS = 90_000L
+
+    /** The hard limit for a window, by the watch's elapsed time (which counts deep sleep). */
+    const val MAX_MS = 150_000L
+
+    /** This many readings in a row off the wrist, with no good one, end a window. */
+    const val OFF_WRIST_READINGS = 8
+
     data class Rhythm(val samples: List<HrSample>?, val reason: String)
+
+    /**
+     * Why a window should stop listening now, or null to go on. Decided from the readings and
+     * clocks that keep counting while the watch sleeps, never from coroutine timers alone: those
+     * stand still in deep sleep, and a real night had windows that kept the sensor on for up to
+     * 29 minutes instead of 90 seconds (docs/algorithms/HEART_MONITORING.md, "Background windows").
+     *
+     * @param startMs when the window started listening (wall clock); earlier readings don't count.
+     * @param elapsedMs how long the window has run by the elapsed-realtime clock.
+     */
+    fun endReason(samples: List<HrSample>, startMs: Long, elapsedMs: Long, charging: Boolean, offWrist: Boolean = false): String? {
+        if (charging) return "charging"
+        if (offWrist) return "off the wrist"
+        if (elapsedMs >= MAX_MS) return "time limit"
+        val own = samples.filter { it.tsMs >= startMs }.sortedBy { it.tsMs }
+        if (own.size >= OFF_WRIST_READINGS && own.none { it.onBody && it.reliable } && own.takeLast(OFF_WRIST_READINGS).none { it.onBody }) {
+            return "off the wrist (tracker)"
+        }
+        if (own.isNotEmpty() && own.last().tsMs - startMs >= LISTEN_MS) return "covered"
+        return null
+    }
 
     data class HrvReading(val rmssdMs: Double, val bpm: Int, val pairs: Int, val startMs: Long)
 

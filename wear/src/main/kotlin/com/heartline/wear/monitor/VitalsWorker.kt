@@ -100,6 +100,11 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
             HLog.i(TAG, "vitals skipped: not worn")
             return Result.success()
         }
+        // On the charger the watch is off the wrist: no red light, no temperature reading.
+        if (Charging.isCharging(applicationContext)) {
+            HLog.i(TAG, "vitals skipped: charging")
+            return Result.success()
+        }
         // A Heartline screen is open, maybe measuring: the on-screen measurement and this one would
         // take each other's tracker. Try again in 15 minutes.
         if (AppForeground.resumed) {
