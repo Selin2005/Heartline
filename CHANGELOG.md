@@ -3,6 +3,16 @@
 All notable changes to Heartline. Each release's notes are written by the Build workflow when the
 release is made, and the app shows them under *What's new* after an update.
 
+## 0.0.2.116-beta.3 — 2026-10-08
+
+### Changes
+- Blood oxygen by day: wait for a still arm instead of trying and failing
+- Blood oxygen tries on the phone: "Today on your watch"
+- Blood oxygen every 30 minutes for breathing conditions
+- Blood oxygen by day too: retries that reset, low readings only when confirmed
+- BackgroundWindow.endReason: wrap the off-wrist rule within the line limit (ktlint)
+- No background sensor on the charger; rhythm windows end by their readings, not by timers
+
 ## 0.0.2.116-beta.2 — 2026-10-06
 
 ### Changes
