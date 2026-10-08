@@ -77,13 +77,18 @@ class StepMotionMonitor(context: Context) :
  * Whether the watch is on the wrist (Android's off-body sensor, where the watch has one) and when
  * the arm last moved (accelerometer). Steps alone miss typing or gesturing, which spoil the
  * beat-to-beat intervals as much as walking does.
+ *
+ * With [turns], the gyroscope is watched too: a slow turn of the wrist barely shows on the
+ * accelerometer but spoils a blood-oxygen reading. It only counts for [stillFor] (the oxygen
+ * wait), so the rhythm windows' movement marks stay as they were.
  */
-class WristState(context: Context) :
+class WristState(context: Context, private val turns: Boolean = false) :
     MotionMonitor,
     SensorEventListener {
     private val manager = context.getSystemService(SensorManager::class.java)
     private val offBodySensor = manager?.getDefaultSensor(Sensor.TYPE_LOW_LATENCY_OFFBODY_DETECT, true)
     private val accelerometer = manager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    private val gyroscope = if (turns) manager?.getDefaultSensor(Sensor.TYPE_GYROSCOPE) else null
 
     @Volatile var offBody = false
         private set
@@ -93,11 +98,13 @@ class WristState(context: Context) :
         private set
 
     private val moves = MoveTimes()
+    private val turnTimes = MoveTimes()
     private var average = Double.NaN
 
     fun start() {
         offBodySensor?.let { manager?.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }
         accelerometer?.let { manager?.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }
+        gyroscope?.let { manager?.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL) }
     }
 
     fun stop() = manager?.unregisterListener(this)
@@ -114,6 +121,10 @@ class WristState(context: Context) :
                 average = if (average.isNaN()) magnitude else average * 0.9 + magnitude * 0.1
                 if (kotlin.math.abs(magnitude - average) > MOVE_MS2) moves.add(MoveTimes.wallMs(event))
             }
+            Sensor.TYPE_GYROSCOPE -> {
+                val (x, y, z) = event.values
+                if (kotlin.math.sqrt((x * x + y * y + z * z).toDouble()) > TURN_RAD_S) turnTimes.add(MoveTimes.wallMs(event))
+            }
         }
     }
 
@@ -123,8 +134,14 @@ class WristState(context: Context) :
 
     override fun movedBetween(fromMs: Long, toMs: Long) = moves.any(fromMs, toMs)
 
+    /** How long the arm has been still at [nowMs] (moved or turned), counting from [sinceMs] at the most. */
+    fun stillFor(nowMs: Long, sinceMs: Long): Long = nowMs - maxOf(sinceMs, moves.latest(), turnTimes.latest())
+
     private companion object {
         /** A resting arm stays within about 0.15 m/s² of its average; this is a clear movement. */
         const val MOVE_MS2 = 1.0
+
+        /** A still wrist turns well under 0.2 rad/s (sensor noise); this is a deliberate turn. */
+        const val TURN_RAD_S = 0.5
     }
 }

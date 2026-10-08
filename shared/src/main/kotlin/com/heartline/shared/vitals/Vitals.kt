@@ -28,10 +28,17 @@ enum class Spo2Outcome { MEASURED, MOVING, LOW_BATTERY, CHARGING, OFF_WRIST, APP
 
 /**
  * One background SpO2 try that was due: when, how it ended, the value kept ([percent], with
- * [Spo2Outcome.MEASURED]) and, when it was put off, when the next try is planned ([retryAtMs]).
+ * [Spo2Outcome.MEASURED]), when it was put off, when the next try is planned ([retryAtMs]), and
+ * how long it waited for a still arm ([waitedS], awake only).
  */
 @Serializable
-data class Spo2Attempt(val tsMs: Long, val outcome: Spo2Outcome, val percent: Int? = null, val retryAtMs: Long? = null)
+data class Spo2Attempt(
+    val tsMs: Long,
+    val outcome: Spo2Outcome,
+    val percent: Int? = null,
+    val retryAtMs: Long? = null,
+    val waitedS: Int? = null
+)
 
 /**
  * One background skin-temperature reading. [counted]: it belongs to the night's value (asleep,

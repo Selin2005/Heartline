@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.BatteryManager
 import android.os.Build
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import android.content.pm.ServiceInfo
 import androidx.work.CoroutineWorker
@@ -140,7 +141,8 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
             runCatching { setForeground(foregroundInfo()) }.onFailure { HLog.w(TAG, "foreground refused", it) }
         }
         BackgroundSensors.lock.withLock {
-            val wrist = WristState(applicationContext).also { it.start() }
+            // With the gyroscope: a turning wrist spoils a blood-oxygen reading too.
+            val wrist = WristState(applicationContext, turns = true).also { it.start() }
             val wristOn = System.currentTimeMillis()
             try {
                 delay(1_500)
@@ -177,10 +179,22 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
                     now, store.lastSpo2Ms, every, asleep, settings.spo2InSleep, battery(), steps, context == HrContext.ACTIVE, armMoved, retries,
                 )
                 var decision = decide(armMoved = false)
+                var waitedS: Int? = null
                 if (settings.spo2Active && decision == Spo2Schedule.Decision.Measure && !asleep) {
-                    // Awake: watch the arm for a few seconds first.
-                    delay((Spo2Schedule.STILL_CHECK_MS - (System.currentTimeMillis() - wristOn)).coerceAtLeast(0))
-                    decision = decide(armMoved = wrist.movedBetween(wristOn, System.currentTimeMillis()))
+                    // Awake: wait for a still arm (up to 2 minutes) rather than giving up at the first movement.
+                    val waitStart = SystemClock.elapsedRealtime()
+                    while (true) {
+                        val waited = SystemClock.elapsedRealtime() - waitStart
+                        val step = Spo2Schedule.stillWait(wrist.stillFor(System.currentTimeMillis(), wristOn), waited)
+                        if (step == Spo2Schedule.Wait.KEEP_WAITING) {
+                            delay(1_000)
+                            continue
+                        }
+                        waitedS = (waited / 1_000).toInt()
+                        if (step == Spo2Schedule.Wait.GIVE_UP) decision = decide(armMoved = true)
+                        HLog.i(TAG, if (step == Spo2Schedule.Wait.MEASURE) "SpO2: arm still after ${waitedS}s" else "SpO2: no still moment in ${waitedS}s")
+                        break
+                    }
                 }
                 if (settings.spo2Active) when (val d = decision) {
                     is Spo2Schedule.Decision.Skip -> if (d.reason != "not due") {
@@ -190,21 +204,21 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
                             d.reason == "off in sleep" -> Spo2Outcome.OFF_IN_SLEEP
                             else -> Spo2Outcome.MOVING
                         }
-                        attempts += Spo2Attempt(now, outcome)
+                        attempts += Spo2Attempt(now, outcome, waitedS = waitedS)
                     }
                     is Spo2Schedule.Decision.PutOff -> {
                         store.spo2RetrySlot = Spo2Schedule.slot(now, every)
                         store.spo2Retries = retries + 1
                         BackgroundMonitoring.scheduleVitalsRetry(applicationContext, d.retryMinutes.toLong())
                         HLog.i(TAG, "SpO2 put off: ${d.reason} (try ${retries + 1})")
-                        attempts += Spo2Attempt(now, Spo2Outcome.MOVING, retryAtMs = now + d.retryMinutes * MINUTE)
+                        attempts += Spo2Attempt(now, Spo2Outcome.MOVING, retryAtMs = now + d.retryMinutes * MINUTE, waitedS = waitedS)
                     }
                     Spo2Schedule.Decision.Measure -> if (allowed(Metric.SPO2)) {
                         sources[Metric.SPO2]?.let { source ->
                             val first = spo2(source, context, now, confirmation = false)
                             store.lastSpo2Ms = now
                             store.spo2Retries = 0
-                            if (first == null) attempts += Spo2Attempt(now, lastFailure)
+                            if (first == null) attempts += Spo2Attempt(now, lastFailure, waitedS = waitedS)
                             if (first != null) {
                                 // Low: check again (twice at most, while it stays low).
                                 val rechecks = mutableListOf<Spo2Sample>()
@@ -223,7 +237,7 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
                                     store.lastSpo2Ms = 0
                                     attempts += Spo2Attempt(now, Spo2Outcome.LOW_UNCONFIRMED, retryAtMs = now + Spo2Schedule.RETRY_MINUTES * MINUTE)
                                 } else {
-                                    attempts += Spo2Attempt(now, Spo2Outcome.MEASURED, percent = kept.last().percent)
+                                    attempts += Spo2Attempt(now, Spo2Outcome.MEASURED, percent = kept.last().percent, waitedS = waitedS)
                                     val (next, alert) = monitor.onSpo2(history, kept.first(), kept.drop(1), settings)
                                     history = next
                                     alert?.let { alerts += it }

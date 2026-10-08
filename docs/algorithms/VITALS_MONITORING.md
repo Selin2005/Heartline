@@ -52,7 +52,13 @@ It uses the same sources as a manual measurement, through `VitalsMeasurer`.
   - The wearer is not exercising.
   - The wearer is still: not marked active, and under the step limit over the last 2 minutes
     (20 a minute asleep, 5 a minute awake).
-  - Awake, the arm is also watched for 5 s before SpO2, and any movement puts it off. In a real
+  - Awake, a due reading **waits for a still arm** rather than giving up at the first movement:
+    the accelerometer and the gyroscope (a slow wrist turn barely shows on the accelerometer but
+    spoils the reading) are watched for up to 2 minutes, and SpO2 starts as soon as the arm has
+    been still for 8 s (`Spo2Schedule.stillWait`). Only when no still moment comes is it put off.
+    Watching the sensors all day would keep the watch awake; a short window per due reading
+    finds most quiet moments (sitting, reading, a call) at little cost. The log says
+    `SpO2: arm still after N s` or `no still moment in 120 s`, and the try carries `waitedS`. In a real
     two-day log most by-day tries ended "hold still" (status −4) after 30–40 s: only 2 of about
     16 gave a value.
 - **The decision** is one pure function, `Spo2Schedule.decide`: due (a few minutes early is

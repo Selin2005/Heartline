@@ -21,8 +21,22 @@ object Spo2Schedule {
         data class Skip(val reason: String) : Decision
     }
 
-    /** Awake, the arm is watched this long before measuring. */
-    const val STILL_CHECK_MS = 5_000L
+    /**
+     * Awake, a due reading waits for a still arm instead of giving up at the first movement: it
+     * measures once the arm (accelerometer and gyroscope) has been still for [STILL_NEEDED_MS],
+     * waiting at most [STILL_WAIT_MS]. Only then is it put off.
+     */
+    const val STILL_NEEDED_MS = 8_000L
+    const val STILL_WAIT_MS = 120_000L
+
+    enum class Wait { MEASURE, KEEP_WAITING, GIVE_UP }
+
+    /** One look while waiting: [stillForMs] since the arm last moved, [waitedMs] so far. */
+    fun stillWait(stillForMs: Long, waitedMs: Long): Wait = when {
+        stillForMs >= STILL_NEEDED_MS -> Wait.MEASURE
+        waitedMs >= STILL_WAIT_MS -> Wait.GIVE_UP
+        else -> Wait.KEEP_WAITING
+    }
 
     /** Put off by movement: tried again this much later, at most [MAX_RETRIES] times per slot. */
     const val RETRY_MINUTES = 10

@@ -81,65 +81,66 @@ class Spo2ScheduleTest {
     }
 
     @Test
-    fun aRestlessDayGetsMoreReadingsThanWithTheOldRules() {
-        // 08:00–22:00 awake, the arm moving now and then: each 5 s it moves with chance 0.25,
-        // as typing and handling a phone do. The worker runs every 30 minutes plus retries.
-        val random = Random(7)
-        fun moves(seconds: Int) = (1..seconds / 5).any { random.nextDouble() < 0.25 }
+    fun waitingForAStillArmMeasuresOnceItHasBeenStillLongEnough() {
+        assertEquals(Spo2Schedule.Wait.KEEP_WAITING, Spo2Schedule.stillWait(stillForMs = 3_000, waitedMs = 30_000))
+        assertEquals(Spo2Schedule.Wait.MEASURE, Spo2Schedule.stillWait(Spo2Schedule.STILL_NEEDED_MS, 30_000))
+        // Still enough wins even at the end of the wait.
+        assertEquals(Spo2Schedule.Wait.MEASURE, Spo2Schedule.stillWait(Spo2Schedule.STILL_NEEDED_MS, Spo2Schedule.STILL_WAIT_MS))
+        assertEquals(Spo2Schedule.Wait.GIVE_UP, Spo2Schedule.stillWait(2_000, Spo2Schedule.STILL_WAIT_MS))
+    }
 
-        var newReadings = 0
+    /** One simulated day awake (08:00–22:00): readings, and tries put off for movement. */
+    private data class Day(val readings: Int, val putOffs: Int)
+
+    private fun day(armMovedAtTry: () -> Boolean): Day {
+        var readings = 0
+        var putOffs = 0
         var last = 0L
         var slot = -1L
         var retries = 0
-        var t = 8 * hour
-        val runs = mutableListOf<Long>()
-        while (t < 22 * hour) {
-            runs += t
-            t += 30 * min
-        }
-        val queue = runs.toMutableList()
+        val queue = generateSequence(8 * hour) { it + 30 * min }.takeWhile { it < 22 * hour }.toMutableList()
         while (queue.isNotEmpty()) {
             val now = queue.removeAt(0)
             retries = Spo2Schedule.retriesNow(slot, retries, now, 60)
-            val d = decide(now = now, last = last, armMoved = moves((Spo2Schedule.STILL_CHECK_MS / 1000).toInt()), retries = retries)
-            when (d) {
+            val d = decide(now = now, last = last, retries = retries)
+            if (d != Decision.Measure) continue
+            when (val after = decide(now = now, last = last, armMoved = armMovedAtTry(), retries = retries)) {
                 Decision.Measure -> {
                     last = now
-                    newReadings++
+                    readings++
                 }
                 is Decision.PutOff -> {
+                    putOffs++
                     slot = Spo2Schedule.slot(now, 60)
                     retries++
-                    queue += now + d.retryMinutes * min
+                    queue += now + after.retryMinutes * min
                     queue.sort()
                 }
                 is Decision.Skip -> Unit
             }
         }
+        return Day(readings, putOffs)
+    }
 
-        // The old rules: 15 s of stillness first, two retries 15 minutes apart, never reset.
-        var oldReadings = 0
-        var oldLast = 0L
-        var oldRetries = 0
-        val oldQueue = runs.toMutableList()
-        while (oldQueue.isNotEmpty()) {
-            val now = oldQueue.removeAt(0)
-            if (now - oldLast < 55 * min) continue
-            if (moves(15)) {
-                if (oldRetries < 2) {
-                    oldRetries++
-                    oldQueue += now + 15 * min
-                    oldQueue.sort()
-                }
-            } else {
-                oldLast = now
-                oldRetries = 0
-                oldReadings++
+    @Test
+    fun aBusyDayGetsItsReadingsWithFarFewerPointlessTries() {
+        // A busy arm: in each 5 s it moves with chance 0.6 (typing, a phone in hand).
+        val random = Random(7)
+        fun still5s() = random.nextDouble() >= 0.6
+
+        // Waiting: up to 2 minutes for 8 s (two 5 s stretches) of still arm.
+        val waiting = day {
+            var run = 0
+            val found = (1..(Spo2Schedule.STILL_WAIT_MS / 5_000).toInt()).any {
+                run = if (still5s()) run + 1 else 0
+                run * 5_000L >= Spo2Schedule.STILL_NEEDED_MS
             }
+            !found
         }
-        // The schedule alone; readings the accelerometer rejected during the measurement, and
-        // stale heart-rate comparisons, are gone too and not modelled here.
-        assertTrue("new $newReadings, old $oldReadings", newReadings >= 10)
-        assertTrue("new $newReadings, old $oldReadings", newReadings > oldReadings)
+        // The rule before: one 5 s look, then put off 10 minutes.
+        val looking = day { !still5s() }
+
+        assertTrue("$waiting vs $looking", waiting.readings >= looking.readings)
+        assertTrue("$waiting vs $looking", waiting.putOffs * 3 <= looking.putOffs)
     }
 }
