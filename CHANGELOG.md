@@ -3,6 +3,20 @@
 All notable changes to Heartline. Each release's notes are written by the Build workflow when the
 release is made, and the app shows them under *What's new* after an update.
 
+## 0.0.2.220-beta.1 — 2026-10-09
+
+### Changes
+- Measuring: percent instead of seconds, steady progress, a calm ECG and the globe on the phone
+- Watch: the particle globe replaces the bubble on every measuring screen
+- Phone: run measurements from the phone and follow them with the bubble
+- Watch: measurements started from the phone, and bubbles on every measuring screen
+- Protocol for measurements started from the phone
+- Measuring bubbles: a glossy 3D bubble for every metric
+- Large titles sit under the app bar; screens make room for the keyboard
+- Daytime SpO2: finer stillness, stop at the first movement, one more start
+- Rhythm windows: an alarm wakes the watch at 90 s to end the window
+- Documentation, terms and policy updates
+
 ## 0.0.2.116-beta.3 — 2026-10-08
 
 ### Changes
