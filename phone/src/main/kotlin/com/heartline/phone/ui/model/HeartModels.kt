@@ -38,6 +38,9 @@ import java.time.format.TextStyle
 import java.util.Locale
 
 data class HeartRateUi(
+    /** The last heart-rate check (measured from the phone): bpm, its range and when. */
+    val lastCheck: com.heartline.shared.model.RecordSummary.HeartRate? = null,
+    val lastCheckTime: String? = null,
     val latestBpm: Int? = null,
     val latestTime: String? = null,
     val restingBpm: Int? = null,
@@ -155,6 +158,8 @@ class HeartRateViewModel(
     profile: Flow<Pair<Int?, Sex?>> = flowOf(null to null),
     settings: Flow<MonitorSettings> = flowOf(MonitorSettings()),
     watchLimits: Flow<HeartLimits?> = flowOf(null),
+    /** Heart-rate checks as (time, result), newest first. */
+    checks: Flow<List<Pair<Long, com.heartline.shared.model.RecordSummary.HeartRate>>> = flowOf(emptyList()),
     private val zone: ZoneId = ZoneId.systemDefault(),
     private val locale: Locale = Locale.getDefault(),
     today: LocalDate = LocalDate.now(zone),
@@ -166,7 +171,7 @@ class HeartRateViewModel(
 
     private val todayKey = today.toEpochDay()
 
-    val state: StateFlow<HeartRateUi> = combine(
+    private val base = combine(
         repository.minutes(monthStart, dayEnd),
         repository.alerts,
         profile,
@@ -230,6 +235,11 @@ class HeartRateViewModel(
             restingWeek = days.map { day -> HeartSummaries.resting(week.filter { it.minuteStartMs in dayRange(day) })?.toFloat() },
             dayByActivity = todays.groupBy { it.activity }.mapValues { (_, list) -> dayBuckets(list) },
         )
+    }
+
+    val state: StateFlow<HeartRateUi> = combine(base, checks) { ui, list ->
+        val last = list.firstOrNull()
+        ui.copy(lastCheck = last?.second, lastCheckTime = last?.let { "${formatter.date(it.first)} ${formatter.time(it.first)}" })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HeartRateUi())
 }
 

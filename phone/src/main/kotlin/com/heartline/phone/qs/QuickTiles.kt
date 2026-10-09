@@ -95,6 +95,13 @@ abstract class HeartlineQsTile : TileService() {
                 it.state = Tile.STATE_ACTIVE
                 it.updateTile()
             }
+            if (metric.measuresOnPhone) {
+                // The phone runs the measurement and shows it; the watch measures and shows it too.
+                HLog.i(TAG, "measure ${metric.name} from Quick Settings on the phone")
+                openInApp(metric, WidgetRoutes.measure(metric))
+                refresh()
+                return@launch
+            }
             val result = runCatching { KoinPlatform.getKoin().get<WatchOpener>().open(WidgetRoutes.watch(metric)) }.getOrDefault(OpenResult.NO_WATCH)
             HLog.i(TAG, "measure ${metric.name} from Quick Settings: $result")
             when (result) {
@@ -107,8 +114,8 @@ abstract class HeartlineQsTile : TileService() {
     }
 
     @SuppressLint("StartActivityAndCollapseDeprecated")
-    private fun openInApp(metric: Metric) {
-        val intent = appIntent(this, WidgetRoutes.metric(metric), EntrySource.QUICK_SETTINGS)
+    private fun openInApp(metric: Metric, route: String = WidgetRoutes.metric(metric)) {
+        val intent = appIntent(this, route, EntrySource.QUICK_SETTINGS)
         if (Build.VERSION.SDK_INT >= 34) {
             startActivityAndCollapse(PendingIntent.getActivity(this, metric.ordinal, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
         } else {

@@ -76,10 +76,26 @@ fun HeartRateScreen(
         actions = { if (onShare != null && state.latestBpm != null) ShareAction(onShare) },
     ) {
         onMeasureOnWatch?.let { measure ->
-            item { TonalPillButton(stringResource(R.string.action_measure_on_watch), onClick = measure, modifier = Modifier.gutter(), color = colors.heartRate) }
+            item { TonalPillButton(stringResource(R.string.action_measure_now), onClick = measure, modifier = Modifier.gutter(), color = colors.heartRate) }
         }
-        if (state.latestBpm == null) {
+        state.lastCheck?.let { check ->
+            item(key = "last-check") {
+                RoundedCard(Modifier.gutter()) {
+                    CardTitle(stringResource(R.string.hr_last_check))
+                    Spacer(Modifier.height(8.dp))
+                    MetricValue("${check.bpm}", stringResource(R.string.unit_bpm))
+                    Text(
+                        listOfNotNull(stringResource(R.string.measure_hr_range, check.minBpm, check.maxBpm), state.lastCheckTime).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        if (state.latestBpm == null && state.lastCheck == null) {
             item { EmptyCard(stringResource(R.string.hr_empty_title), stringResource(R.string.hr_empty_body)) }
+        } else if (state.latestBpm == null) {
+            Unit
         } else {
             item {
                 RoundedCard(Modifier.gutter()) {

@@ -132,6 +132,11 @@ object Routes {
     const val UPDATES = PhoneNotifier.UPDATES_ROUTE
     const val DIAGNOSTICS = "diagnostics"
 
+    /** A measurement run from the phone (the watch measures, this screen follows it). */
+    const val MEASURE = "measure/{metric}"
+
+    fun measure(metric: Metric) = "measure/${metric.name}"
+
     fun doc(doc: BundledDoc) = "doc/${doc.route}"
 
     fun metric(metric: Metric) = "metric/${metric.name}"
@@ -166,7 +171,10 @@ fun HeartlineApp(
             Routes.UPDATES, PhoneNotifier.UPDATES_INSTALL_ROUTE -> link.route
             // Home-screen widgets open their metric.
             Routes.HEART_RATE, Routes.ECG, Routes.BLOOD_PRESSURE -> link.route
-            else -> link.route.takeIf { it.startsWith("metric/") && Metric.entries.any { m -> it == Routes.metric(m) } } ?: Routes.HOME
+            else -> link.route.takeIf { it.startsWith("metric/") && Metric.entries.any { m -> it == Routes.metric(m) } }
+                // Quick Settings tiles and widgets measure from the phone.
+                ?: link.route.takeIf { Metric.entries.any { m -> m.measuresOnPhone && it == Routes.measure(m) } }
+                ?: Routes.HOME
         }
         when {
             target == Routes.HOME || target == Routes.SETTINGS -> navController.navigateTab(target)
@@ -345,7 +353,7 @@ fun HeartlineApp(
                         state,
                         onBack = goBack,
                         onOpenAlerts = { navController.navigate(Routes.ALERTS) },
-                        onMeasureOnWatch = { openOnWatch(WatchRoutes.HEART_RATE) },
+                        onMeasureOnWatch = { navController.navigate(Routes.measure(Metric.HEART_RATE)) },
                         onShare = {
                             share(
                                 ShareRequest("HeartRate", text = { prompt, person ->
@@ -362,7 +370,7 @@ fun HeartlineApp(
                         state,
                         onBack = goBack,
                         onCalibrate = { navController.navigate(Routes.BP_CALIBRATION) },
-                        onMeasureOnWatch = { openOnWatch(WatchRoutes.BLOOD_PRESSURE) },
+                        onMeasureOnWatch = { navController.navigate(Routes.measure(Metric.BLOOD_PRESSURE)) },
                         onValidate = vm::validateLatest,
                         onProfileChange = vm::saveProfile,
                         onShare = {
@@ -397,6 +405,8 @@ fun HeartlineApp(
                         onProfileChange = vm::setProfile,
                         onAddStanding = { vm.addStandingRound() },
                         onFinish = { vm.finish() },
+                        onRetryRound = { vm.retryRound() },
+                        onOpenRoundOnWatch = { vm.openRoundOnWatch() },
                     )
                 }
                 composable(Routes.METRIC) { entry ->
@@ -408,8 +418,44 @@ fun HeartlineApp(
                     } else {
                         val vm: MetricDetailViewModel = koinViewModel(key = metric.name) { parametersOf(metric) }
                         val state by vm.state.collectAsStateWithLifecycle()
-                        MetricDetailScreen(state, onBack = goBack, onMeasureOnWatch = { openOnWatch(WatchRoutes.quick(metric)) })
+                        MetricDetailScreen(state, onBack = goBack, onMeasureOnWatch = { navController.navigate(Routes.measure(metric)) })
                     }
+                }
+                composable(Routes.MEASURE) { entry ->
+                    val metric = entry.arguments?.getString("metric")?.let { name -> Metric.entries.firstOrNull { it.name == name } }
+                        ?.takeIf { it.measuresOnPhone } ?: Metric.HEART_RATE
+                    val manager: com.heartline.phone.measure.MeasureSessionManager = koinInject()
+                    val ui by manager.state.collectAsStateWithLifecycle()
+                    // Starts once per visit (not again after rotation); a session already running for it continues.
+                    var started by rememberSaveable { mutableStateOf(false) }
+                    LaunchedEffect(Unit) {
+                        if (!started) {
+                            started = true
+                            manager.start(metric)
+                        }
+                    }
+                    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { manager.dismiss() } }
+                    val settings: com.heartline.phone.data.SettingsRepository = koinInject()
+                    val monitor by settings.monitor.collectAsStateWithLifecycle(null)
+                    com.heartline.phone.ui.measure.MeasureScreen(
+                        ui?.takeIf { it.metric == metric },
+                        metric,
+                        com.heartline.phone.ui.measure.MeasureActions(
+                            onCancel = manager::cancel,
+                            onRetry = manager::retry,
+                            onDone = goBack,
+                            onOpenOnWatch = {
+                                openOnWatch(com.heartline.phone.measure.MeasureSessionManager.watchRoute(metric))
+                                goBack()
+                            },
+                            onUpdates = { navController.navigate(Routes.UPDATES) },
+                            onCalibrate = { navController.navigate(Routes.BP_CALIBRATION) { popUpTo(Routes.MEASURE) { inclusive = true } } },
+                            onDevModeHelp = { navController.navigate(Routes.DEV_MODE_HELP) },
+                            onProfile = { navController.navigate(Routes.PROFILE) },
+                        ),
+                        onBack = goBack,
+                        fahrenheit = monitor?.temperatureFahrenheit == true,
+                    )
                 }
                 composable(Routes.PROFILE) {
                     val vm: ProfileViewModel = koinViewModel()

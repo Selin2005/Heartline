@@ -134,7 +134,7 @@ class PhoneScreenshotTest(private val theme: String) {
     @Test fun calibrationIntro() = shot("bp_calibration_intro") { BpCalibrationScreen(CalibrationUi(), onBack = {}) }
 
     @Test fun calibrationWaiting() = shot("bp_calibration_waiting") {
-        BpCalibrationScreen(CalibrationUi(round = 2, phase = CalibrationUi.Phase.WAITING_FOR_WATCH, completedRounds = 1), onBack = {})
+        BpCalibrationScreen(CalibrationUi(round = 2, phase = CalibrationUi.Phase.WAITING_FOR_WATCH, completedRounds = 1), onBack = {}, animate = false)
     }
 
     @Test fun calibrationCuff() = shot("bp_calibration_cuff") {
@@ -194,6 +194,53 @@ class PhoneScreenshotTest(private val theme: String) {
 
     @Test fun aboutLinks() = shot("about_links") {
         AboutScreen("0.1.0", onBack = {}, listState = rememberLazyListState(initialFirstVisibleItemIndex = 3))
+    }
+
+    private fun measuring(metric: Metric, step: com.heartline.phone.measure.MeasureStep, progress: Float = 0f, live: Int? = null, hint: com.heartline.shared.sync.MeasureHint = com.heartline.shared.sync.MeasureHint.NONE, summary: com.heartline.shared.model.RecordSummary? = null, issue: com.heartline.phone.measure.MeasureIssue? = null) =
+        com.heartline.phone.measure.MeasureUi(metric, "s", step, 0L, progress, secondsLeft = ((1 - progress) * 30).toInt(), hint = hint, live = live, summary = summary, issue = issue)
+
+    @Composable
+    private fun Measure(ui: com.heartline.phone.measure.MeasureUi) =
+        com.heartline.phone.ui.measure.MeasureScreen(ui, ui.metric, com.heartline.phone.ui.measure.MeasureActions(), onBack = {}, animate = false, frameMs = 1_350L)
+
+    @Test fun measureStarting() = shot("measure_starting") { Measure(measuring(Metric.SPO2, com.heartline.phone.measure.MeasureStep.WAITING_WATCH)) }
+
+    @Test fun measureSpo2() = shot("measure_spo2") { Measure(measuring(Metric.SPO2, com.heartline.phone.measure.MeasureStep.MEASURING, 0.55f)) }
+
+    @Test fun measureHoldStill() = shot("measure_hold_still") {
+        Measure(measuring(Metric.SPO2, com.heartline.phone.measure.MeasureStep.MEASURING, 0.4f, hint = com.heartline.shared.sync.MeasureHint.HOLD_STILL))
+    }
+
+    @Test fun measureHeartRate() = shot("measure_heart_rate") { Measure(measuring(Metric.HEART_RATE, com.heartline.phone.measure.MeasureStep.MEASURING, 0.6f, live = 68)) }
+
+    @Test fun measureStress() = shot("measure_stress") { Measure(measuring(Metric.STRESS, com.heartline.phone.measure.MeasureStep.MEASURING, 0.35f, live = 70)) }
+
+    @Test fun measureTemperature() = shot("measure_temperature") { Measure(measuring(Metric.SKIN_TEMPERATURE, com.heartline.phone.measure.MeasureStep.MEASURING, 0.7f)) }
+
+    @Test fun measureBloodPressure() = shot("measure_bp") { Measure(measuring(Metric.BLOOD_PRESSURE, com.heartline.phone.measure.MeasureStep.MEASURING, 0.45f, live = 66)) }
+
+    @Test fun measureResultHeartRate() = shot("measure_result_heart_rate") {
+        Measure(measuring(Metric.HEART_RATE, com.heartline.phone.measure.MeasureStep.RESULT, 1f, summary = com.heartline.shared.model.RecordSummary.HeartRate(66, 61, 74, 30)))
+    }
+
+    @Test fun measureResultBloodPressure() = shot("measure_result_bp") {
+        Measure(measuring(Metric.BLOOD_PRESSURE, com.heartline.phone.measure.MeasureStep.RESULT, 1f, summary = com.heartline.shared.model.RecordSummary.BloodPressure(118, 76, 64)))
+    }
+
+    @Test fun measureWatchOutdated() = shot("measure_watch_outdated") {
+        Measure(measuring(Metric.STRESS, com.heartline.phone.measure.MeasureStep.FAILED, issue = com.heartline.phone.measure.MeasureIssue.WATCH_OUTDATED))
+    }
+
+    @Test fun measureMoved() = shot("measure_moved") {
+        Measure(measuring(Metric.SPO2, com.heartline.phone.measure.MeasureStep.FAILED, issue = com.heartline.phone.measure.MeasureIssue.MOVING))
+    }
+
+    @Test fun calibrationRoundMeasuring() = shot("bp_calibration_round_measuring") {
+        BpCalibrationScreen(
+            CalibrationUi(round = 2, phase = CalibrationUi.Phase.WAITING_FOR_WATCH, completedRounds = 1, watch = measuring(Metric.BLOOD_PRESSURE, com.heartline.phone.measure.MeasureStep.MEASURING, 0.5f, live = 64).copy(round = 2)),
+            onBack = {},
+            animate = false,
+        )
     }
 
     @Test fun settings() = shot("settings") { SettingsScreen(watchConnected = true) }

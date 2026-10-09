@@ -158,6 +158,7 @@ val phoneModule = module {
                 // The watch says hello on start and on every link check: reply with everything it gates on.
                 HLog.i("Heartline/Link", "hello from watch: $hello")
                 get<UpdateRepository>().setWatchVersion(hello.appVersion)
+                get<com.heartline.phone.measure.WatchFeatures>().set(hello.features)
                 val sync = get<PhoneSyncEngine>()
                 // Settings changed on the watch while the phone was away may be newer than ours.
                 hello.settings?.let { get<SettingsRepository>().applyRemote(it) }
@@ -179,12 +180,31 @@ val phoneModule = module {
             onLogs = { requestId, text -> get<RemoteLogs>().onLogs(requestId, text) },
             onLogSegment = { requestId, input -> get<RemoteLogs>().onSegment(requestId, input) },
             onArchive = { type, name, input -> get<WatchLogInbox>().receive(type, name, input) },
+            onMeasureState = { get<com.heartline.phone.measure.MeasureSessionManager>().onState(it) },
+            onMeasureResult = { get<com.heartline.phone.measure.MeasureSessionManager>().onResult(it) },
             onError = { path, error -> HLog.w("Heartline/Sync", "could not handle $path", error) },
         )
     }
     single { PhoneStatusPublisher(get(), get(), get(), { get() }) }
     single { RemoteOpener(androidContext(), get()) }
     single { WatchOpener(get(), get()) { get() } }
+    single { com.heartline.phone.measure.WatchFeatures(androidContext()) }
+    single {
+        val records = get<RecordRepository>()
+        val transport = get<DataLayerTransport>()
+        com.heartline.phone.measure.MeasureSessionManager(
+            probe = { transport.probe() },
+            features = { get<com.heartline.phone.measure.WatchFeatures>().get() },
+            calibrated = { get<BpRepository>().calibration.first()?.isValid(System.currentTimeMillis()) == true },
+            open = { route -> get<RemoteOpener>().open(com.heartline.datalayer.DeepLinks.watch(route)) },
+            cancelOnWatch = { get<PhoneSyncEngine>().cancelMeasure(it) },
+            recordSince = { metric, since ->
+                val kind = com.heartline.shared.model.RecordKind.entries.firstOrNull { it.metric == metric }
+                kind?.let { k -> records.observe(k).first().firstOrNull { it.entity.startedAtMs >= since }?.let { it.id to it.summary } }
+            },
+            scope = get(APP_SCOPE),
+        )
+    }
     factory {
         val ctx = androidContext()
         RecordFormatter(
@@ -207,12 +227,15 @@ val phoneModule = module {
             profile = get<ProfileRepository>().profile.map { it?.age() to it?.calcSex },
             settings = get<SettingsRepository>().monitor,
             watchLimits = get<SettingsRepository>().heartLimits,
+            checks = get<RecordRepository>().observe(com.heartline.shared.model.RecordKind.HEART_RATE).map { list ->
+                list.mapNotNull { r -> (r.summary as? com.heartline.shared.model.RecordSummary.HeartRate)?.let { r.entity.startedAtMs to it } }
+            },
         )
     }
     viewModel { UpdatesViewModel(get(), get(), BuildConfig.VERSION_NAME, WorkManagerDownloads(androidContext()), get()) }
     viewModel { DiagnosticsViewModel(get(), get(), get()) }
     viewModel { BpHomeViewModel(get(), get()) }
-    viewModel { CalibrationViewModel(get(), openOnWatch = { get<WatchOpener>().open(it) }) }
+    viewModel { CalibrationViewModel(get(), openOnWatch = { get<WatchOpener>().open(it) }, measure = get()) }
     viewModel { params ->
         val settings = get<SettingsRepository>()
         MetricDetailViewModel(params.get(), get(), get(), get(), settings.vitalsLimits, settings.stressLimits, settings.monitor.map { it.spo2Interval })

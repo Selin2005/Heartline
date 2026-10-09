@@ -152,7 +152,7 @@ fun BpHomeScreen(
                 Spacer(Modifier.height(14.dp))
                 if (state.calibrated) {
                     onMeasureOnWatch?.let { measure ->
-                        PillButton(stringResource(R.string.action_measure_on_watch), onClick = measure, color = colors.bp)
+                        PillButton(stringResource(R.string.action_measure_now), onClick = measure, color = colors.bp)
                         Spacer(Modifier.height(8.dp))
                     }
                     TonalPillButton(stringResource(R.string.bp_recalibrate), onClick = onCalibrate)
@@ -427,6 +427,9 @@ fun BpCalibrationScreen(
     onProfileChange: (BpProfile) -> Unit = {},
     onAddStanding: () -> Unit = {},
     onFinish: () -> Unit = {},
+    onRetryRound: () -> Unit = {},
+    onOpenRoundOnWatch: () -> Unit = {},
+    animate: Boolean = true,
 ) {
     val colors = HeartlineTheme.colors
     ReachabilityScaffold(
@@ -476,12 +479,8 @@ fun BpCalibrationScreen(
                             Spacer(Modifier.height(8.dp))
                         }
                         Text(stringResource(R.string.bp_waiting_watch), style = MaterialTheme.typography.bodyMedium, color = colors.onBackground)
-                        Spacer(Modifier.height(16.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(Modifier.size(20.dp), color = colors.bp, strokeWidth = 2.dp)
-                            Spacer(Modifier.width(12.dp))
-                            Text(stringResource(R.string.bp_waiting_status), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-                        }
+                        Spacer(Modifier.height(8.dp))
+                        CalibrationRoundProgress(state.watch, animate, onRetryRound, onOpenRoundOnWatch)
                     }
                     CalibrationUi.Phase.ENTER_CUFF -> CuffEntry(state, onSubmit)
                     CalibrationUi.Phase.OFFER_STANDING -> {
@@ -609,4 +608,72 @@ private fun NumberField(label: String, value: String, onChange: (String) -> Unit
         ),
         modifier = modifier,
     )
+}
+
+/**
+ * The round as the watch measures it: the bubble gathers while the watch gets ready, fills and
+ * squeezes with the pulse while it records, and turns grey when the round has to be taken again.
+ * Without a session (an older watch app) only "waiting for the watch" shows.
+ */
+@Composable
+private fun CalibrationRoundProgress(
+    watch: com.heartline.phone.measure.MeasureUi?,
+    animate: Boolean,
+    onRetry: () -> Unit,
+    onOpenOnWatch: () -> Unit,
+) {
+    val colors = HeartlineTheme.colors
+    val step = watch?.step
+    val phase = when (step) {
+        com.heartline.phone.measure.MeasureStep.MEASURING ->
+            if (watch.hint != com.heartline.shared.sync.MeasureHint.NONE) com.heartline.bubbles.BubblePhase.HINT else com.heartline.bubbles.BubblePhase.MEASURING
+        com.heartline.phone.measure.MeasureStep.RESULT -> com.heartline.bubbles.BubblePhase.SUCCESS
+        com.heartline.phone.measure.MeasureStep.FAILED -> com.heartline.bubbles.BubblePhase.FAILED
+        else -> com.heartline.bubbles.BubblePhase.FORMING
+    }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+        com.heartline.bubbles.BubbleOrb(
+            com.heartline.bubbles.BubbleStyle.BLOOD_PRESSURE,
+            phase,
+            colors.bp,
+            colors.isDark,
+            Modifier.size(220.dp),
+            progress = watch?.progress ?: 0f,
+            bpm = watch?.live,
+            animate = animate,
+            frameMs = if (animate) null else 1_350L,
+            phaseFrameMs = if (animate) null else 1_350L,
+        ) {
+            val seconds = watch?.secondsLeft
+            if (step == com.heartline.phone.measure.MeasureStep.MEASURING && seconds != null) {
+                Text(
+                    "$seconds",
+                    style = MaterialTheme.typography.displayMedium.copy(
+                        color = androidx.compose.ui.graphics.Color.White,
+                        shadow = androidx.compose.ui.graphics.Shadow(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.45f), androidx.compose.ui.geometry.Offset(0f, 3f), 14f),
+                    ),
+                )
+            }
+        }
+        Text(
+            stringResource(
+                when {
+                    step == com.heartline.phone.measure.MeasureStep.FAILED -> R.string.bp_round_again
+                    step == com.heartline.phone.measure.MeasureStep.MEASURING && watch.hint != com.heartline.shared.sync.MeasureHint.NONE -> R.string.measure_hint_still
+                    step == com.heartline.phone.measure.MeasureStep.MEASURING -> R.string.measure_measuring
+                    step == com.heartline.phone.measure.MeasureStep.PREPARING -> R.string.measure_preparing
+                    else -> R.string.bp_waiting_status
+                },
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (step == com.heartline.phone.measure.MeasureStep.FAILED) colors.statusWarn else colors.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        if (step == com.heartline.phone.measure.MeasureStep.FAILED) {
+            Spacer(Modifier.height(12.dp))
+            PillButton(stringResource(R.string.measure_try_again), onClick = onRetry, color = colors.bp)
+            Spacer(Modifier.height(8.dp))
+            TonalPillButton(stringResource(R.string.measure_open_on_watch), onClick = onOpenOnWatch, color = colors.bp)
+        }
+    }
 }

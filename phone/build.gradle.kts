@@ -123,6 +123,7 @@ dependencies {
     // On-device PPG encoder (PaPaGei) for the personal blood-pressure model.
     implementation(libs.onnxruntime.android)
     implementation(project(":datalayer"))
+    implementation(project(":bubbles"))
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)

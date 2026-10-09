@@ -33,6 +33,17 @@ internal fun appIntent(context: Context, route: String, source: EntrySource = En
         .setPackage(context.packageName)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
 
+/** Opens the app's measurement screen [phoneRoute] (it starts the measurement on the watch and follows it). */
+fun measureOnPhone(phoneRoute: String): Action = actionRunCallback<MeasureOnPhoneAction>(actionParametersOf(MeasureOnWatchAction.PHONE to phoneRoute))
+
+class MeasureOnPhoneAction : ActionCallback {
+    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
+        val route = parameters[MeasureOnWatchAction.PHONE] ?: return
+        HLog.i("Heartline/Widget", "measure from the phone: $route")
+        withContext(Dispatchers.Main) { context.startActivity(appIntent(context, route)) }
+    }
+}
+
 /** Opens [watchRoute] on the watch; without a watch, opens [phoneRoute] in the app instead. */
 fun measureOnWatch(watchRoute: String, phoneRoute: String): Action = actionRunCallback<MeasureOnWatchAction>(
     actionParametersOf(MeasureOnWatchAction.WATCH to watchRoute, MeasureOnWatchAction.PHONE to phoneRoute),

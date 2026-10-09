@@ -252,7 +252,7 @@ fun MetricDetailScreen(state: MetricDetailUi, onBack: (() -> Unit)? = null, onMe
         onBack = onBack,
     ) {
         onMeasureOnWatch?.let { measure ->
-            item { TonalPillButton(stringResource(R.string.action_measure_on_watch), onClick = measure, modifier = Modifier.gutter(), color = color) }
+            item { TonalPillButton(stringResource(R.string.action_measure_now), onClick = measure, modifier = Modifier.gutter(), color = color) }
         }
         state.spo2Today?.let { t -> item { Spo2TodayCard(t) } }
         state.background?.let { bg -> item { BackgroundCard(state.metric, bg) } }

@@ -44,6 +44,9 @@ object WidgetRoutes {
     const val BLOOD_PRESSURE = "blood_pressure"
     val BP_CALIBRATION = PhoneRoutes.BP_CALIBRATION
 
+    /** The phone runs the measurement and follows it (all but ECG and body composition). */
+    fun measure(metric: Metric) = "measure/${metric.name}"
+
     fun metric(metric: Metric) = when (metric) {
         Metric.HEART_RATE -> HEART_RATE
         Metric.ECG -> ECG
@@ -73,8 +76,12 @@ private fun Context.px(dp: Float) = (dp * resources.displayMetrics.density).toIn
 
 private val Context.density get() = resources.displayMetrics.density
 
-/** Measures [metric] on the watch; without a watch, opens it in the app. */
-private fun measure(metric: Metric) = measureOnWatch(WidgetRoutes.watch(metric), WidgetRoutes.metric(metric))
+/**
+ * Measures [metric]: from the phone, which follows the watch measuring; ECG and body composition
+ * (fingers on the watch's keys) open on the watch, or without a watch in the app.
+ */
+private fun measure(metric: Metric) =
+    if (metric.measuresOnPhone) measureOnPhone(WidgetRoutes.measure(metric)) else measureOnWatch(WidgetRoutes.watch(metric), WidgetRoutes.metric(metric))
 
 /** The metric's small picture for a tile: its own chart where it has one, else the last readings' trend. */
 @Composable

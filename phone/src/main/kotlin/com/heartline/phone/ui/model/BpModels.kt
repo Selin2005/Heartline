@@ -188,6 +188,8 @@ data class CalibrationUi(
     val completedRounds: Int = 0,
     val inputError: Boolean = false,
     val profile: BpProfile = BpProfile.NONE,
+    /** How the watch is doing with the current round, when the phone runs it ([MeasureUi]). */
+    val watch: com.heartline.phone.measure.MeasureUi? = null,
 ) {
     enum class Phase { INTRO, WAITING_FOR_WATCH, ENTER_CUFF, OFFER_STANDING, DONE }
 
@@ -200,6 +202,8 @@ class CalibrationViewModel(
     private val openOnWatch: suspend (String) -> Unit = {},
     private val now: () -> Long = System::currentTimeMillis,
     private val newId: () -> String = { UUID.randomUUID().toString() },
+    /** Runs each round from the phone (the watch measures at once and reports every step). */
+    private val measure: com.heartline.phone.measure.MeasureSessionManager? = null,
 ) : ViewModel() {
     private val mutable = MutableStateFlow(CalibrationUi())
     val state: StateFlow<CalibrationUi> = mutable.asStateFlow()
@@ -225,10 +229,51 @@ class CalibrationViewModel(
                     capturedGravity = result.gravity
                     capturedChannels = result.capture
                     capturedSessionId = result.sessionId
-                    mutable.value = ui.copy(phase = CalibrationUi.Phase.ENTER_CUFF)
+                    mutable.value = ui.copy(phase = CalibrationUi.Phase.ENTER_CUFF, watch = null)
                 }
             }
         }
+    }
+
+    init {
+        measure?.let { manager ->
+            viewModelScope.launch {
+                manager.state.collect { session ->
+                    val ui = mutable.value
+                    val ours = session?.takeIf { it.metric == com.heartline.shared.model.Metric.BLOOD_PRESSURE && it.round == ui.round }
+                    if (ours?.issue == com.heartline.phone.measure.MeasureIssue.WATCH_OUTDATED) {
+                        // An older watch app runs the round itself once its calibration screen is open.
+                        openOnWatch(CALIBRATION_ROUTE)
+                        mutable.value = ui.copy(watch = null)
+                    } else {
+                        mutable.value = ui.copy(watch = ours)
+                    }
+                }
+            }
+        }
+    }
+
+    /** Asks the watch for round [round]: run from the phone when it can, else the watch's calibration screen. */
+    private suspend fun requestRound(round: Int) {
+        repository.requestCapture(CaptureRequest(captureId, round))
+        if (measure != null) measure.start(com.heartline.shared.model.Metric.BLOOD_PRESSURE, round) else openOnWatch(CALIBRATION_ROUTE)
+    }
+
+    /** The round didn't work out on the watch: ask for it again. */
+    fun retryRound() = viewModelScope.launch { requestRound(mutable.value.round) }
+
+    /** Measure this round the old way: open the calibration screen on the watch. */
+    fun openRoundOnWatch() = viewModelScope.launch {
+        measure?.cancel()
+        openOnWatch(CALIBRATION_ROUTE)
+        mutable.value = mutable.value.copy(watch = null)
+    }
+
+    /** Leaving the wizard stops a round still measuring. */
+    override fun onCleared() {
+        if (mutable.value.watch?.active == true) measure?.cancel()
+        measure?.dismiss()
+        super.onCleared()
     }
 
     fun setProfile(profile: BpProfile) {
@@ -239,8 +284,7 @@ class CalibrationViewModel(
     /** Asks the watch to record this round; the open calibration screen there starts measuring at once. */
     fun startRound() = viewModelScope.launch {
         mutable.value = mutable.value.copy(phase = CalibrationUi.Phase.WAITING_FOR_WATCH, inputError = false)
-        repository.requestCapture(CaptureRequest(captureId, mutable.value.round))
-        openOnWatch(CALIBRATION_ROUTE)
+        requestRound(mutable.value.round)
     }
 
     fun submitCuff(systolic: Int?, diastolic: Int?, pulse: Int?) = viewModelScope.launch {
@@ -265,9 +309,8 @@ class CalibrationViewModel(
         capturedSessionId = null
         when {
             points.size < BpCalibration.REQUIRED_POINTS -> {
-                mutable.value = ui.copy(round = ui.round + 1, phase = CalibrationUi.Phase.WAITING_FOR_WATCH, completedRounds = points.size, inputError = false)
-                repository.requestCapture(CaptureRequest(captureId, ui.round + 1))
-                openOnWatch(CALIBRATION_ROUTE)
+                mutable.value = ui.copy(round = ui.round + 1, phase = CalibrationUi.Phase.WAITING_FOR_WATCH, completedRounds = points.size, inputError = false, watch = null)
+                requestRound(ui.round + 1)
             }
             ui.standingRound -> save()
             else -> mutable.value = ui.copy(phase = CalibrationUi.Phase.OFFER_STANDING, completedRounds = points.size, inputError = false)
@@ -276,9 +319,8 @@ class CalibrationViewModel(
 
     /** The optional 4th round: standing, watch arm across the chest at heart level. */
     fun addStandingRound() = viewModelScope.launch {
-        mutable.value = mutable.value.copy(round = BpCalibration.STANDING_ROUND, phase = CalibrationUi.Phase.WAITING_FOR_WATCH, inputError = false)
-        repository.requestCapture(CaptureRequest(captureId, BpCalibration.STANDING_ROUND))
-        openOnWatch(CALIBRATION_ROUTE)
+        mutable.value = mutable.value.copy(round = BpCalibration.STANDING_ROUND, phase = CalibrationUi.Phase.WAITING_FOR_WATCH, inputError = false, watch = null)
+        requestRound(BpCalibration.STANDING_ROUND)
     }
 
     /** Saves the calibration without the standing round. */
