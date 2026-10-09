@@ -46,7 +46,7 @@ import com.heartline.wear.ui.components.isSmallRound
 import com.heartline.wear.ui.components.label
 import com.heartline.wear.ui.theme.WearColors
 import com.heartline.bubbles.BubblePhase
-import com.heartline.wear.ui.components.MeasureBubble
+import com.heartline.wear.ui.components.MeasureGlobe
 import com.heartline.wear.ui.components.onBubble
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -119,7 +119,7 @@ fun QuickMeasuringScreen(
     fromPhone: Boolean = false,
 ) {
     Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
-        MeasureBubble(
+        MeasureGlobe(
             metric,
             if (hint != null) BubblePhase.HINT else BubblePhase.MEASURING,
             Modifier.fillMaxSize(),

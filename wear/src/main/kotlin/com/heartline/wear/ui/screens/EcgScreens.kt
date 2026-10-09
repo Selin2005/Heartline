@@ -62,7 +62,7 @@ import com.heartline.wear.ui.components.label
 import com.heartline.wear.ui.theme.WearColors
 import androidx.compose.ui.graphics.Color
 import com.heartline.bubbles.BubblePhase
-import com.heartline.wear.ui.components.MeasureBubble
+import com.heartline.wear.ui.components.MeasureGlobe
 
 /** Step 1: how to hold the watch, with an original illustration of a finger on the top key. */
 @Composable
@@ -109,7 +109,7 @@ fun EcgMeasuringScreen(
     if (waitingForTouch || arming || struggling) {
         // Before the countdown: the bubble gathers and glows until the finger makes a real ECG.
         Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
-            MeasureBubble(
+            MeasureGlobe(
                 com.heartline.shared.model.Metric.ECG,
                 if (struggling) BubblePhase.HINT else BubblePhase.FORMING,
                 Modifier.fillMaxSize().padding(bottom = 26.dp),
@@ -164,7 +164,7 @@ fun EcgMeasuringScreen(
                 )
             } else {
                 // Live wave turned off in settings: the bubble beating with the heart instead.
-                MeasureBubble(
+                MeasureGlobe(
                     com.heartline.shared.model.Metric.ECG,
                     if (leadOff) BubblePhase.HINT else BubblePhase.MEASURING,
                     Modifier.fillMaxWidth().height(waveHeight + 20.dp),

@@ -8,6 +8,8 @@ The frames are recorded by BubbleScreenshotTest.frames, which only runs when ask
   HEARTLINE_BUBBLE_FRAMES=1 ./gradlew :bubbles:recordPaparazziDebug --tests '*BubbleScreenshotTest.frames'
   python3 tools/screenshots/bubble_gifs.py OUT_DIR [--keep]
 
+With HEARTLINE_GLOBE=1 as well, the frames are the watch's particle globe.
+
 The frames are deleted afterwards (they are not goldens) unless --keep is given.
 """
 import collections
@@ -19,7 +21,7 @@ from PIL import Image
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 FRAMES = ROOT / "bubbles/src/test/snapshots/images"
-PATTERN = re.compile(r"_frame_(light|dark)_([a-z0-9_]+)_(\d{4})\.png$")
+PATTERN = re.compile(r"_frame_(light|dark|globe)_([a-z0-9_]+)_(\d{4})\.png$")
 FPS = 15
 SIZE = 360
 

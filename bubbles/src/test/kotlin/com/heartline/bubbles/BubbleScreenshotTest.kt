@@ -22,7 +22,8 @@ import org.junit.Test
  * The bubble of every metric, light and dark, and every phase of the heart bubble.
  *
  * With HEARTLINE_BUBBLE_FRAMES=1, [frames] also records a few seconds of every bubble frame by
- * frame (for review GIFs, not kept as goldens): see tools/screenshots/bubble_gifs.py.
+ * frame (for review GIFs, not kept as goldens), or of the watch's globe with HEARTLINE_GLOBE=1:
+ * see tools/screenshots/bubble_gifs.py.
  */
 class BubbleScreenshotTest {
     @get:Rule
@@ -72,6 +73,20 @@ class BubbleScreenshotTest {
         }
     }
 
+    @Composable
+    private fun Globe(metric: Metric, phase: BubblePhase, timeMs: Long, phaseMs: Long, progress: Float) {
+        Box(Modifier.fillMaxSize().background(Color.Black)) {
+            ParticleGlobeOrb(BubbleStyle.of(metric), phase, accent(metric, true), Modifier.fillMaxSize(), progress = progress, bpm = 72, frameMs = timeMs, phaseFrameMs = phaseMs)
+        }
+    }
+
+    /** The watch's particle globe for every metric, and every phase of the heart's. */
+    @Test fun globe() {
+        for (metric in Metric.entries) paparazzi.snapshot("globe_${metric.name.lowercase()}") { Globe(metric, BubblePhase.MEASURING, 3_400, 2_000, 0.55f) }
+        val at = mapOf(BubblePhase.FORMING to 700L, BubblePhase.HINT to 400L, BubblePhase.SUCCESS to 450L, BubblePhase.FAILED to 1_200L, BubblePhase.IDLE to 2_000L)
+        for ((phase, ms) in at) paparazzi.snapshot("globe_heart_${phase.name.lowercase()}") { Globe(Metric.HEART_RATE, phase, 3_000 + ms, ms, 0.55f) }
+    }
+
     @Test fun light() {
         for (metric in Metric.entries) paparazzi.snapshot("light_${metric.name.lowercase()}") { Scene(metric, BubblePhase.MEASURING, false, 1_350, 1_350, 0.55f) }
     }
@@ -96,7 +111,8 @@ class BubbleScreenshotTest {
     @Test fun frames() {
         assumeTrue(System.getenv("HEARTLINE_BUBBLE_FRAMES") == "1")
         val fps = 15
-        val runs = Metric.entries.map { false to it } + listOf(true to Metric.HEART_RATE, true to Metric.SPO2)
+        val globe = System.getenv("HEARTLINE_GLOBE") == "1"
+        val runs = if (globe) Metric.entries.map { true to it } else Metric.entries.map { false to it } + listOf(true to Metric.HEART_RATE, true to Metric.SPO2)
         for ((dark, metric) in runs) {
             val story = listOf(
                 Triple(BubblePhase.FORMING, 1_600L, 0f to 0f),
@@ -111,9 +127,9 @@ class BubbleScreenshotTest {
                 var inPhase = 0L
                 while (inPhase < length) {
                     val p = range.first + (range.second - range.first) * inPhase / length
-                    val name = "frame_${if (dark) "dark" else "light"}_${metric.name.lowercase()}_${"%04d".format(index++)}"
+                    val name = "frame_${if (globe) "globe" else if (dark) "dark" else "light"}_${metric.name.lowercase()}_${"%04d".format(index++)}"
                     val (c, ip) = clock to inPhase
-                    paparazzi.snapshot(name) { Scene(metric, phase, dark, c, ip, p) }
+                    paparazzi.snapshot(name) { if (globe) Globe(metric, phase, c, ip, p) else Scene(metric, phase, dark, c, ip, p) }
                     clock += 1000L / fps
                     inPhase += 1000L / fps
                 }

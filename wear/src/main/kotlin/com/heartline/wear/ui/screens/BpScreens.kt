@@ -44,7 +44,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
 import com.heartline.wear.ui.components.BeatingHeart
-import com.heartline.wear.ui.components.MeasureBubble
+import com.heartline.wear.ui.components.MeasureGlobe
 import com.heartline.wear.ui.components.onBubble
 import com.heartline.bubbles.BubblePhase
 import com.heartline.wear.ui.components.SweepTrace
@@ -264,7 +264,7 @@ fun BpMeasuringScreen(
 ) {
     val color = WearColors.metric(Metric.BLOOD_PRESSURE)
     Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
-        MeasureBubble(
+        MeasureGlobe(
             Metric.BLOOD_PRESSURE,
             if (contact) BubblePhase.MEASURING else BubblePhase.HINT,
             Modifier.fillMaxSize().padding(bottom = 22.dp),

@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import com.heartline.wear.R
-import com.heartline.wear.ui.components.MeasureBubble
+import com.heartline.wear.ui.components.MeasureGlobe
 import com.heartline.wear.ui.components.onBubble
 import com.heartline.bubbles.BubblePhase
 import androidx.compose.foundation.clickable
@@ -44,7 +44,7 @@ fun HeartRateScreen(bpm: Int?, onBody: Boolean, animate: Boolean = true) {
             bpm == null -> BubblePhase.FORMING
             else -> BubblePhase.IDLE
         }
-        MeasureBubble(metric, phase, Modifier.fillMaxSize().padding(bottom = 26.dp), bpm = bpm.takeIf { onBody }, animate = animate) {
+        MeasureGlobe(metric, phase, Modifier.fillMaxSize().padding(bottom = 26.dp), bpm = bpm.takeIf { onBody }, animate = animate) {
             when {
                 !onBody -> Unit
                 bpm == null -> Text(stringResource(R.string.hr_measuring), style = onBubble(MaterialTheme.typography.titleSmall))
@@ -78,7 +78,7 @@ fun HeartRateScreen(bpm: Int?, onBody: Boolean, animate: Boolean = true) {
 fun HeartRateCheckScreen(progress: Float, secondsLeft: Int, bpm: Int?, hint: Boolean, fromPhone: Boolean = true, animate: Boolean = true) {
     val metric = com.heartline.shared.model.Metric.HEART_RATE
     Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
-        MeasureBubble(
+        MeasureGlobe(
             metric,
             when {
                 hint -> BubblePhase.HINT
@@ -122,7 +122,7 @@ fun HeartRateCheckResultScreen(bpm: Int, min: Int, max: Int, onDone: () -> Unit 
         Modifier.fillMaxSize().background(WearColors.background).clickable(onClick = onDone),
         contentAlignment = Alignment.Center,
     ) {
-        MeasureBubble(metric, BubblePhase.SUCCESS, Modifier.fillMaxSize(), progress = 1f, bpm = bpm, animate = animate) {
+        MeasureGlobe(metric, BubblePhase.SUCCESS, Modifier.fillMaxSize(), progress = 1f, bpm = bpm, animate = animate) {
             CenteredValue("$bpm", stringResource(R.string.unit_bpm), onBubble(MaterialTheme.typography.displayMedium), onBubble(MaterialTheme.typography.bodySmall))
         }
         Text(
