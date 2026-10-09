@@ -107,7 +107,7 @@ fun EcgMeasuringScreen(
 ) {
     val color = WearColors.ecg
     if (waitingForTouch || arming || struggling) {
-        // Before the countdown: the bubble gathers and glows until the finger makes a real ECG.
+        // Before the countdown: the globe gathers until the finger makes a real ECG.
         Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
             MeasureGlobe(
                 com.heartline.shared.model.Metric.ECG,
@@ -139,20 +139,19 @@ fun EcgMeasuringScreen(
         CircularProgressIndicator(
             progress = { progress },
             modifier = Modifier.fillMaxSize().padding(2.dp),
-            strokeWidth = 6.dp,
+            strokeWidth = 3.dp,
             colors = ProgressIndicatorDefaults.colors(indicatorColor = color, trackColor = WearColors.surfaceHigh),
         )
-        // A ripple comes in from the rim the moment the finger makes contact, then the rim beats.
-        if (!leadOff && !waitingForTouch) {
-            EdgeRipple("touch", color)
-            EdgePulse(bpm, color)
-        }
+        // While recording the screen stays calm: the live trace is the feedback (a lifted finger
+        // shows on it at once), and no decorative motion competes with it or with the 500 Hz
+        // processing.
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 18.dp),
         ) {
-            CenteredValue("$secondsLeft", stringResource(R.string.unit_sec), MaterialTheme.typography.displayMedium, MaterialTheme.typography.bodySmall)
+            val shown = if (animate) com.heartline.bubbles.rememberShownProgress(progress, paused = leadOff, done = false) else progress
+            CenteredValue(com.heartline.wear.ui.components.percent(shown), "%", MaterialTheme.typography.displayMedium, MaterialTheme.typography.bodySmall)
             val waveHeight = if (isSmallRound()) 58.dp else 70.dp
             if (showWave) {
                 SweepTrace(
@@ -163,7 +162,7 @@ fun EcgMeasuringScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp).height(waveHeight),
                 )
             } else {
-                // Live wave turned off in settings: the bubble beating with the heart instead.
+                // Live wave turned off in settings: the globe beating with the heart instead.
                 MeasureGlobe(
                     com.heartline.shared.model.Metric.ECG,
                     if (leadOff) BubblePhase.HINT else BubblePhase.MEASURING,
@@ -233,7 +232,7 @@ fun MeasuringScreen(
             modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 20.dp),
         ) {
             Text(title, style = MaterialTheme.typography.titleSmall, color = color)
-            CenteredValue("$secondsLeft", stringResource(R.string.unit_sec), MaterialTheme.typography.displayLarge, MaterialTheme.typography.bodySmall)
+            CenteredValue(com.heartline.wear.ui.components.percent(progress.coerceAtMost(0.99f)), "%", MaterialTheme.typography.displayLarge, MaterialTheme.typography.bodySmall)
             LiveWave(samples, color, Modifier.fillMaxWidth().padding(horizontal = 10.dp).height(44.dp), fixedRangeMv)
             Spacer(Modifier.height(6.dp))
             // Narrower than the wave so the text stays inside the round ring on small screens.

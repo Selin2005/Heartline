@@ -19,7 +19,7 @@ import com.heartline.bubbles.BubbleStyle
 import com.heartline.shared.model.Metric
 import com.heartline.wear.ui.theme.WearColors
 
-/** False when the system's "Remove animations" is on: the bubble then shows one still frame. */
+/** False when the system's "Remove animations" is on: the globe then shows one still frame. */
 @Composable
 fun motionEnabled(): Boolean {
     val context = LocalContext.current
@@ -65,3 +65,6 @@ fun onBubble(style: TextStyle): TextStyle = style.copy(
     color = Color.White,
     shadow = Shadow(Color.Black.copy(alpha = 0.55f), Offset(0f, 2f), blurRadius = 10f),
 )
+
+/** A progress (0…1) as the whole percentage shown on the measuring screens. */
+fun percent(progress: Float): String = "${(progress.coerceIn(0f, 1f) * 100f + 1e-3f).toInt()}"

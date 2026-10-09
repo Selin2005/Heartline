@@ -52,7 +52,19 @@ abstract class SdkQuickSource(
 
     @Volatile protected var sdkProgress: Float? = null
 
+    /** Quarter seconds measured without a hint, by the ticker (the progress when the sensor gives none). */
+    @Volatile private var good = 0
+
+    /** When the hint was last confirmed by the sensor; it clears itself [HINT_CLEAR_MS] later. */
+    @Volatile protected var hintAtMs = 0L
+
+    /** The progress now, for events sent between ticks. */
+    protected val currentFraction: Float get() = (sdkProgress ?: (good / (seconds * 4f))).coerceIn(0f, 0.98f)
+
     protected abstract fun create(profile: UserProfile?): HealthTracker?
+
+    /** True when the sensor only reports a hint while it lasts (SpO2), not when it ends. */
+    protected open val clearsItself: Boolean = false
 
     protected open fun onStart() = Unit
 
@@ -70,14 +82,16 @@ abstract class SdkQuickSource(
         if (state is GatewayState.Failed) throw SensorException(state.problem)
         if (tracker !in (state as GatewayState.Connected).trackers) throw SensorException(SensorProblem.NOT_SUPPORTED)
         val healthTracker = create(profile) ?: throw SensorException(SensorProblem.NOT_SUPPORTED)
+        good = 0
         val ticker = launch {
-            var good = 0
             for (tick in 1..timeoutSeconds * 4) {
                 delay(250)
+                // A hint the sensor stopped repeating (the wrist is still again) doesn't hold the
+                // progress until the sensor's next point, which can be seconds away.
+                if (clearsItself && problem != null && System.currentTimeMillis() - hintAtMs > HINT_CLEAR_MS) problem = null
                 val hint = problem
                 if (hint == null) good++
-                val fraction = sdkProgress ?: (good / (seconds * 4f))
-                trySend(QuickEvent.Progress(fraction.coerceIn(0f, 0.98f), hint))
+                trySend(QuickEvent.Progress(currentFraction, hint))
             }
             HLog.w(SdkSensorGateway.TAG, "$tracker: no result after $timeoutSeconds s (hint=$problem)")
             trySend(QuickEvent.Failed(null, problem ?: QuickHint.LOW_SIGNAL))
@@ -109,6 +123,9 @@ abstract class SdkQuickSource(
     }
 }
 
+/** A hint the sensor stopped repeating clears itself after this long. */
+internal const val HINT_CLEAR_MS = 2_500L
+
 /** Raw values of every point from the quick trackers (SpO2, skin temperature), for device debugging. */
 private const val QUICK_RAW_TAG = "Heartline/QuickRaw"
 
@@ -121,6 +138,8 @@ object Spo2Status {
 class SdkSpo2Source(private val gateway: SdkSensorGateway) :
     SdkQuickSource(gateway, TrackerKind.SPO2_ON_DEMAND, Metric.SPO2, RecordKind.SPO2, 30) {
     override fun create(profile: UserProfile?) = gateway.tracker(TrackerKind.SPO2_ON_DEMAND)
+
+    override val clearsItself = true
 
     override fun ProducerScope<QuickEvent>.onData(points: List<DataPoint>): Boolean {
         points.forEach {
@@ -138,9 +157,11 @@ class SdkSpo2Source(private val gateway: SdkSensorGateway) :
             }
             -4 -> {
                 problem = Spo2Status.hint(-4)
+                hintAtMs = System.currentTimeMillis()
                 // Right away, not from the progress ticker: its timers stand still while the watch
                 // sleeps, and background tries then logged moved=false for a wrist the sensor saw move.
-                trySendBlocking(QuickEvent.Progress(0f, problem))
+                // With the progress so far: the measurement waits, it doesn't start over.
+                trySendBlocking(QuickEvent.Progress(currentFraction, problem))
                 false
             }
             0 -> {

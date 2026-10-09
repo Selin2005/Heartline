@@ -29,7 +29,7 @@ import com.heartline.wear.ui.components.HeartMonitor
 import com.heartline.wear.ui.theme.WearColors
 
 /**
- * Live heart rate: a bubble beating at the measured rate with the number inside, over a
+ * Live heart rate: a globe beating at the measured rate with the number inside, over a
  * bedside-monitor style sweep. Grey while the watch is off the wrist.
  */
 @Composable
@@ -71,12 +71,13 @@ fun HeartRateScreen(bpm: Int?, onBody: Boolean, animate: Boolean = true) {
 }
 
 /**
- * A 30-second heart-rate check (started from the phone): the bubble fills with the good readings
+ * A 30-second heart-rate check (started from the phone): the globe lights up with the good readings
  * and beats at the live rate; then the result. [hint]: the sensor lost the wrist.
  */
 @Composable
 fun HeartRateCheckScreen(progress: Float, secondsLeft: Int, bpm: Int?, hint: Boolean, fromPhone: Boolean = true, animate: Boolean = true) {
     val metric = com.heartline.shared.model.Metric.HEART_RATE
+    val shown = if (animate) com.heartline.bubbles.rememberShownProgress(progress, paused = hint, done = false) else progress
     Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
         MeasureGlobe(
             metric,
@@ -86,7 +87,7 @@ fun HeartRateCheckScreen(progress: Float, secondsLeft: Int, bpm: Int?, hint: Boo
                 else -> BubblePhase.MEASURING
             },
             Modifier.fillMaxSize(),
-            progress = progress,
+            progress = shown,
             bpm = bpm,
             animate = animate,
         ) {
@@ -104,7 +105,7 @@ fun HeartRateCheckScreen(progress: Float, secondsLeft: Int, bpm: Int?, hint: Boo
                 when {
                     hint -> stringResource(R.string.hint_wrist_contact)
                     bpm == null -> stringResource(R.string.hr_measuring)
-                    else -> stringResource(R.string.hr_check_left, secondsLeft)
+                    else -> stringResource(R.string.hr_check_progress, com.heartline.wear.ui.components.percent(shown))
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = if (hint) WearColors.warn else WearColors.onSurfaceVariant,
@@ -114,7 +115,7 @@ fun HeartRateCheckScreen(progress: Float, secondsLeft: Int, bpm: Int?, hint: Boo
     }
 }
 
-/** The result of a heart-rate check: the bubble full and calm, the number and the range. */
+/** The result of a heart-rate check: the globe fully lit and calm, the number and the range. */
 @Composable
 fun HeartRateCheckResultScreen(bpm: Int, min: Int, max: Int, onDone: () -> Unit = {}, animate: Boolean = true) {
     val metric = com.heartline.shared.model.Metric.HEART_RATE

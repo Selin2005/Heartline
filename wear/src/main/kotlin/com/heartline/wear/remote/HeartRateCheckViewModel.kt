@@ -51,16 +51,18 @@ class HeartRateCheckViewModel(
         mutable.value = HeartRateCheckState.Measuring(0f, (HeartRateCheck.DURATION_MS / 1000).toInt(), null, offWrist = false)
         val raw = RawCapture.begin("heart_rate_check")
         job = viewModelScope.launch {
-            var last = startedAt
+            // The tracker may hand several readings over at once: count time by their own
+            // timestamps, not by when they arrive, so the progress neither stalls nor jumps.
+            var lastTs: Long? = null
             try {
                 source.stream()
                     .catch { }
                     .takeWhile { !check.done && now() - startedAt < HeartRateCheck.TIMEOUT_MS }
                     .collect { sample ->
-                        val t = now()
                         val good = sample.onBody && sample.bpm > 0 && sample.reliable
-                        check.add(sample.bpm, good, t - last)
-                        last = t
+                        val elapsed = lastTs?.let { sample.tsMs - it } ?: 1_000L
+                        check.add(sample.bpm, good, elapsed)
+                        lastTs = sample.tsMs
                         mutable.value = HeartRateCheckState.Measuring(
                             check.progress,
                             (((1 - check.progress) * HeartRateCheck.DURATION_MS) / 1000).toInt().coerceAtLeast(1),

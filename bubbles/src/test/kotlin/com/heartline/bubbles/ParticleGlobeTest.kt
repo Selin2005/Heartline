@@ -72,4 +72,10 @@ class ParticleGlobeTest {
         val scales = (0 until 20).map { ParticleGlobe(BubbleStyle.HEART).apply { frame(BubblePhase.MEASURING, it * 50L, 2_000, 0.5f, 60) }.scale }
         assertTrue(scales.max() - scales.min() > 0.03f)
     }
+
+    @Test fun beatScaleReturnsToRest() {
+        assertEquals(1f, beatScale(0f, 0.1f), 0.001f)
+        assertEquals(1f, beatScale(0.7f, 0.1f), 0.001f)
+        assertTrue(beatScale(0.12f, 0.1f) > 1.09f)
+    }
 }

@@ -46,6 +46,8 @@ import com.heartline.wear.ui.components.isSmallRound
 import com.heartline.wear.ui.components.label
 import com.heartline.wear.ui.theme.WearColors
 import com.heartline.bubbles.BubblePhase
+import com.heartline.bubbles.rememberShownProgress
+import com.heartline.wear.ui.components.percent
 import com.heartline.wear.ui.components.MeasureGlobe
 import com.heartline.wear.ui.components.onBubble
 import androidx.compose.material.icons.rounded.PhoneAndroid
@@ -102,8 +104,8 @@ fun QuickInstructionScreen(metric: Metric, onStart: () -> Unit = {}) {
 }
 
 /**
- * Measuring: a glossy bubble that fills with the progress and moves in the metric's own way (the
- * SpO2 bubble fizzes, the stress bubble breathes, the heart beats at the measured rate), the
+ * Measuring: the particle globe lights up with the progress and moves in the metric's own way (the
+ * stress globe breathes, the heart's beats at the measured rate), the percentage
  * seconds left inside it and the hint under it. [fromPhone]: started from the phone, which shows
  * the same steps.
  */
@@ -118,16 +120,18 @@ fun QuickMeasuringScreen(
     animate: Boolean = true,
     fromPhone: Boolean = false,
 ) {
+    // Shown as a percentage that glides, holds on a hint and never jumps back (see ProgressDisplay).
+    val shown = if (animate) rememberShownProgress(progress, paused = hint != null, done = false) else progress
     Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
         MeasureGlobe(
             metric,
             if (hint != null) BubblePhase.HINT else BubblePhase.MEASURING,
             Modifier.fillMaxSize(),
-            progress = progress,
+            progress = shown,
             bpm = bpm,
             animate = animate,
         ) {
-            CenteredValue("$secondsLeft", stringResource(R.string.unit_sec), onBubble(MaterialTheme.typography.displayMedium), onBubble(MaterialTheme.typography.bodySmall))
+            CenteredValue(percent(shown), "%", onBubble(MaterialTheme.typography.displayMedium), onBubble(MaterialTheme.typography.bodySmall))
         }
         val live = listOfNotNull(
             bpm?.let { stringResource(R.string.live_bpm, it) },
@@ -142,7 +146,7 @@ fun QuickMeasuringScreen(
             Text(
                 when {
                     hint != null -> stringResource(hint.text)
-                    progress >= 0.98f -> stringResource(R.string.hint_finishing)
+                    shown >= 0.97f -> stringResource(R.string.hint_finishing)
                     live.isNotEmpty() -> live
                     metric == Metric.STRESS -> stringResource(R.string.hint_breathe)
                     else -> stringResource(R.string.hint_measuring)

@@ -42,9 +42,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
-import com.heartline.bubbles.BubbleOrb
+import com.heartline.bubbles.ParticleGlobeOrb
 import com.heartline.bubbles.BubblePhase
 import com.heartline.bubbles.BubbleStyle
+import com.heartline.bubbles.rememberShownProgress
 import com.heartline.phone.R
 import com.heartline.phone.measure.MeasureIssue
 import com.heartline.phone.measure.MeasureStep
@@ -76,8 +77,9 @@ data class MeasureActions(
 
 /**
  * A measurement run from the phone. The watch measures (and shows the same steps); this screen
- * follows it with the measuring bubble: it gathers while the watch gets ready, fills with the
- * progress, beats or breathes with the metric, turns amber on a hint and bursts when done.
+ * follows it with the particle globe, as on the watch: the points gather while the watch gets
+ * ready, light up from the bottom with the progress, beat with the pulse, tremble in amber on a
+ * hint and swell once on the result.
  */
 @Composable
 fun MeasureScreen(
@@ -107,35 +109,49 @@ fun MeasureScreen(
         subtitle = stringResource(R.string.measure_subtitle),
         onBack = { if (active) confirmCancel = true else onBack() },
     ) {
-        item(key = "bubble") {
+        item(key = "globe") {
+            // The percentage glides between the watch's messages (predicted while Bluetooth holds
+            // one back), holds on a hint and never jumps back.
+            val paused = ui?.hint != null && ui.hint != MeasureHint.NONE
+            val shown = if (animate && frameMs == null) {
+                rememberShownProgress(ui?.progress ?: 0f, paused, done = step == MeasureStep.RESULT) { now -> ui?.progressAt(now) ?: 0f }
+            } else {
+                ui?.progress ?: 0f
+            }
             val phase = when (step) {
                 MeasureStep.CHECKING, MeasureStep.OPENING, MeasureStep.WAITING_WATCH, MeasureStep.PREPARING -> BubblePhase.FORMING
                 MeasureStep.MEASURING -> if (ui?.hint != null && ui.hint != MeasureHint.NONE) BubblePhase.HINT else BubblePhase.MEASURING
                 MeasureStep.RESULT -> BubblePhase.SUCCESS
                 MeasureStep.FAILED -> BubblePhase.FAILED
             }
-            BubbleOrb(
+            ParticleGlobeOrb(
                 style = BubbleStyle.of(metric),
                 phase = phase,
                 accent = accent,
-                dark = colors.isDark,
-                modifier = Modifier.fillMaxWidth().aspectRatio(1f).padding(horizontal = 12.dp),
-                progress = ui?.progress ?: 0f,
+                modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+                progress = shown,
                 bpm = ui?.live ?: (ui?.summary as? RecordSummary.HeartRate)?.bpm,
                 seed = metric.ordinal + 3,
                 animate = animate,
-                frameMs = frameMs,
-                phaseFrameMs = frameMs,
+                maxFps = 60,
+                // The phone has room around the globe: orbits, drifting dust and heartbeat ripples fill it.
+                fit = 2.55f,
+                dark = colors.isDark,
+                surroundings = true,
+                frameMs = frameMs?.let { 3_400L },
+                phaseFrameMs = frameMs?.let { 2_000L },
             ) {
+                // Animates only between kinds of content (measuring, result), not on every percent.
                 AnimatedContent(
-                    targetState = centerText(ui, fahrenheit),
+                    targetState = step == MeasureStep.RESULT,
                     transitionSpec = { (fadeIn() + scaleIn(initialScale = 0.7f)) togetherWith fadeOut() },
-                    label = "bubble-value",
-                ) { center ->
+                    label = "globe-value",
+                ) { _ ->
+                    val center = centerText(ui, fahrenheit, shown)
                     if (center != null) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(center.first, style = onBubble(MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.SemiBold)))
-                            center.second?.let { Text(it, style = onBubble(MaterialTheme.typography.titleMedium)) }
+                            Text(center.first, style = onGlobe(MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.SemiBold), colors.isDark, colors.onBackground))
+                            center.second?.let { Text(it, style = onGlobe(MaterialTheme.typography.titleMedium, colors.isDark, colors.onBackground)) }
                         }
                     }
                 }
@@ -229,18 +245,25 @@ private fun FailedCard(issue: MeasureIssue, accent: Color, actions: MeasureActio
     }
 }
 
-/** Text over the bubble: white with a soft shadow, so it reads on the brightest liquid. */
-private fun onBubble(style: TextStyle) = style.copy(color = Color.White, shadow = Shadow(Color.Black.copy(alpha = 0.45f), Offset(0f, 3f), 14f))
+/**
+ * Text over the globe, readable over its points: white with a dark shadow on a dark background,
+ * ink with a light halo on a light one.
+ */
+internal fun onGlobe(style: TextStyle, dark: Boolean, ink: Color) = if (dark) {
+    style.copy(color = Color.White, shadow = Shadow(Color.Black.copy(alpha = 0.6f), Offset(0f, 3f), 14f))
+} else {
+    style.copy(color = ink, shadow = Shadow(Color.White, Offset.Zero, 18f))
+}
 
-/** The number in the bubble and its unit: seconds left, the live pulse, or the result. */
+/** The number in the globe and its line under it: the percentage (with the live pulse for heart rate), or the result. */
 @Composable
-private fun centerText(ui: MeasureUi?, fahrenheit: Boolean): Pair<String, String?>? {
+private fun centerText(ui: MeasureUi?, fahrenheit: Boolean, shown: Float): Pair<String, String?>? {
     ui ?: return null
+    val percent = (shown.coerceIn(0f, 1f) * 100f + 1e-3f).toInt()
     return when (ui.step) {
         MeasureStep.MEASURING -> when {
-            ui.metric == Metric.HEART_RATE && ui.live != null -> "${ui.live}" to stringResource(R.string.unit_bpm)
-            ui.secondsLeft != null -> "${ui.secondsLeft}" to stringResource(R.string.unit_seconds)
-            else -> null
+            ui.metric == Metric.HEART_RATE && ui.live != null -> "${ui.live}" to stringResource(R.string.measure_bpm_percent, percent)
+            else -> "$percent" to stringResource(R.string.unit_percent)
         }
         MeasureStep.RESULT -> when (val s = ui.summary) {
             is RecordSummary.HeartRate -> "${s.bpm}" to stringResource(R.string.unit_bpm)
@@ -273,7 +296,6 @@ private fun statusText(ui: MeasureUi?, metric: Metric): String {
             MeasureHint.NONE -> when {
                 ui.progress >= 0.97f -> stringResource(R.string.measure_finishing)
                 metric == Metric.STRESS -> stringResource(R.string.measure_breathe)
-                metric == Metric.HEART_RATE && ui.secondsLeft != null -> stringResource(R.string.measure_seconds_left, ui.secondsLeft)
                 else -> stringResource(R.string.measure_measuring)
             }
         }

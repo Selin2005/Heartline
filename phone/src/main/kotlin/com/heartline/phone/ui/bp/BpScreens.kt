@@ -611,8 +611,9 @@ private fun NumberField(label: String, value: String, onChange: (String) -> Unit
 }
 
 /**
- * The round as the watch measures it: the bubble gathers while the watch gets ready, fills and
- * squeezes with the pulse while it records, and turns grey when the round has to be taken again.
+ * The round as the watch measures it: the particle globe gathers while the watch gets ready,
+ * lights up and beats with the pulse while it records, and turns grey when the round has to be
+ * taken again.
  * Without a session (an older watch app) only "waiting for the watch" shows.
  */
 @Composable
@@ -632,26 +633,30 @@ private fun CalibrationRoundProgress(
         else -> com.heartline.bubbles.BubblePhase.FORMING
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-        com.heartline.bubbles.BubbleOrb(
+        com.heartline.bubbles.ParticleGlobeOrb(
             com.heartline.bubbles.BubbleStyle.BLOOD_PRESSURE,
             phase,
             colors.bp,
-            colors.isDark,
-            Modifier.size(220.dp),
+            Modifier.size(280.dp),
             progress = watch?.progress ?: 0f,
             bpm = watch?.live,
             animate = animate,
-            frameMs = if (animate) null else 1_350L,
-            phaseFrameMs = if (animate) null else 1_350L,
+            maxFps = 60,
+            fit = 2.45f,
+            dark = colors.isDark,
+            surroundings = true,
+            frameMs = if (animate) null else 3_400L,
+            phaseFrameMs = if (animate) null else 2_000L,
         ) {
-            val seconds = watch?.secondsLeft
-            if (step == com.heartline.phone.measure.MeasureStep.MEASURING && seconds != null) {
+            if (step == com.heartline.phone.measure.MeasureStep.MEASURING) {
+                val shown = if (animate) {
+                    com.heartline.bubbles.rememberShownProgress(watch.progress, watch.hint != com.heartline.shared.sync.MeasureHint.NONE, done = false) { now -> watch.progressAt(now) }
+                } else {
+                    watch.progress
+                }
                 Text(
-                    "$seconds",
-                    style = MaterialTheme.typography.displayMedium.copy(
-                        color = androidx.compose.ui.graphics.Color.White,
-                        shadow = androidx.compose.ui.graphics.Shadow(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.45f), androidx.compose.ui.geometry.Offset(0f, 3f), 14f),
-                    ),
+                    "${(shown.coerceIn(0f, 1f) * 100f + 1e-3f).toInt()}%",
+                    style = com.heartline.phone.ui.measure.onGlobe(MaterialTheme.typography.displayMedium, colors.isDark, colors.onBackground),
                 )
             }
         }

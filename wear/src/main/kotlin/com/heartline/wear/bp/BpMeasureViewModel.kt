@@ -394,7 +394,7 @@ class BpMeasureViewModel(
                     lastUi = t
                     val settling = seconds >= minimum
                     mutable.value = BpState.Measuring(
-                        if (settling) 1f else green.size.toFloat() / (minimum * fs),
+                        bpProgress(green.size.toFloat() / fs, minimum, maximum),
                         if (settling) 0 else (minimum * fs - green.size + fs - 1) / fs,
                         live.recent(3.0),
                         chunk.contact,
@@ -748,4 +748,15 @@ class BpMeasureViewModel(
                 kotlin.math.abs(f.hrSlopeBpmPerS) <= com.heartline.shared.bp.HemodynamicStateClassifier.TRANSIENT_HR_SLOPE &&
                 kotlin.math.abs(f.amplitudeTrend) <= com.heartline.shared.bp.HemodynamicStateClassifier.TRANSIENT_AMPLITUDE
     }
+}
+
+/**
+ * The shown progress of a blood-pressure recording: up to 80 % over the minimum time, then on
+ * towards 98 % while it waits for a steady pulse (it may stop at any point after the minimum), so
+ * it never reads 100 % while still recording.
+ */
+internal fun bpProgress(seconds: Float, minimum: Int, maximum: Int): Float {
+    if (seconds < minimum) return 0.8f * seconds / minimum
+    val span = (maximum - minimum).coerceAtLeast(1)
+    return (0.8f + 0.18f * (1f - kotlin.math.exp(-2.5f * (seconds - minimum) / span))).coerceAtMost(0.98f)
 }

@@ -189,4 +189,22 @@ class MeasureSessionTest {
         assertEquals(MeasureIssue.OTHER, manager.state.value!!.issue)
         assertTrue(opened.isEmpty())
     }
+
+    @Test fun progressIsPredictedBetweenMessagesButNotFarAhead() {
+        manager.start(Metric.SPO2)
+        scope.runCurrent()
+        manager.onState(state(MeasureStage.MEASURING, 1, 0.10f))
+        scope.advanceTimeBy(1_000)
+        manager.onState(state(MeasureStage.MEASURING, 2, 0.13f))
+        val ui = manager.state.value!!
+        val at = ui.progressAtMs
+        // A message delayed by Bluetooth: the shown progress goes on at about 3 % a second.
+        assertEquals(0.16f, ui.progressAt(at + 1_000), 0.01f)
+        // …but never more than 8 % ahead of what the watch said.
+        assertEquals(0.13f + com.heartline.phone.measure.MeasureUi.MAX_LEAD, ui.progressAt(at + 60_000), 0.001f)
+        // A hint stops it.
+        manager.onState(state(MeasureStage.MEASURING, 3, 0.13f, MeasureHint.HOLD_STILL))
+        val held = manager.state.value!!
+        assertEquals(0.13f, held.progressAt(held.progressAtMs + 5_000), 0f)
+    }
 }

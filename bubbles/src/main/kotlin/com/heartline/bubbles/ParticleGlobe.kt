@@ -15,7 +15,7 @@ import kotlin.random.Random
  * gather from all around, a hint makes them tremble in amber, and a result makes the globe swell
  * once and settle, fully lit.
  *
- * A pure function of time, like [BubbleScene]: the same inputs give the same frame (screenshots,
+ * A pure function of time: the same inputs give the same frame (screenshots,
  * tests). The frame is written into arrays this object owns, so drawing 30 frames a second
  * allocates nothing; read them before asking for the next frame.
  *
@@ -91,7 +91,7 @@ class ParticleGlobe(val style: BubbleStyle, val count: Int = DEFAULT_COUNT, seed
         val p = phaseMs / 1000f
         val prog = progress.coerceIn(0f, 1f)
         val beatMs = 60_000f / (bpm ?: 72).coerceIn(35, 200)
-        val beat = BubbleScene.beatScale((timeMs % beatMs.toLong()) / beatMs, 1f) - 1f
+        val beat = beatScale((timeMs % beatMs.toLong()) / beatMs, 1f) - 1f
 
         var form = 1f
         var lift = 0f

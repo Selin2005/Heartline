@@ -243,8 +243,8 @@ private fun Note(text: String, color: Color) = Text(
 )
 
 /**
- * Blood pressure recording: a bubble that squeezes with every pulse and fills with the progress,
- * the seconds inside it, and the pulse wave (filtered, upright) sweeping under it.
+ * Blood pressure recording: the globe beating with every pulse and lighting up with the progress,
+ * the percentage inside it, and the pulse wave (filtered, upright) sweeping under it.
  * [fromPhone]: started from the phone, which shows the same steps.
  */
 @Composable
@@ -263,20 +263,17 @@ fun BpMeasuringScreen(
     fromPhone: Boolean = false,
 ) {
     val color = WearColors.metric(Metric.BLOOD_PRESSURE)
+    val shown = if (animate) com.heartline.bubbles.rememberShownProgress(progress, paused = !contact, done = false) else progress
     Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
         MeasureGlobe(
             Metric.BLOOD_PRESSURE,
             if (contact) BubblePhase.MEASURING else BubblePhase.HINT,
             Modifier.fillMaxSize().padding(bottom = 22.dp),
-            progress = progress,
+            progress = shown,
             bpm = bpm,
             animate = animate,
         ) {
-            if (settling) {
-                Text(stringResource(R.string.bp_settling), style = MaterialTheme.typography.titleSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 40.dp))
-            } else {
-                CenteredValue("$secondsLeft", stringResource(R.string.unit_sec), onBubble(MaterialTheme.typography.displayMedium), onBubble(MaterialTheme.typography.bodySmall))
-            }
+            CenteredValue(com.heartline.wear.ui.components.percent(shown), "%", onBubble(MaterialTheme.typography.displayMedium), onBubble(MaterialTheme.typography.bodySmall))
         }
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -302,6 +299,8 @@ fun BpMeasuringScreen(
                         when {
                             phase != null && !contact -> R.string.bp_touch_key
                             phase != null -> phase.prompt
+                            // Past the minimum: it records on until the pulse is steady.
+                            settling && contact -> R.string.bp_settling
                             contact -> R.string.bp_keep_still
                             else -> R.string.bp_adjust_watch
                         },

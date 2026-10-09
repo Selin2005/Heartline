@@ -39,6 +39,9 @@ import kotlin.math.min
  * @param animate false draws one still frame, for "Remove animations"
  * @param maxFps caps the frame rate (30 on the watch, to save battery)
  * @param fit how many globe radii either side of the centre fit in the box (larger: a smaller globe)
+ * @param dark on a dark background (the watch, the phone's dark theme): unlit points are faint white; on a light one, faint ink
+ * @param surroundings fills the room around the globe ([GlobeSurroundings]: orbits, dust, heartbeat ripples), for a
+ *   large box such as the phone's screen; give it a larger [fit] so there is room
  */
 @Composable
 fun ParticleGlobeOrb(
@@ -52,11 +55,14 @@ fun ParticleGlobeOrb(
     animate: Boolean = true,
     maxFps: Int = 30,
     fit: Float = 1.9f,
+    dark: Boolean = true,
+    surroundings: Boolean = false,
     frameMs: Long? = null,
     phaseFrameMs: Long? = null,
     content: @Composable BoxScope.() -> Unit = {},
 ) {
     val globe = remember(style, seed) { ParticleGlobe(style, seed = seed) }
+    val around = remember(style, seed, surroundings) { if (surroundings) GlobeSurroundings(style, seed) else null }
     val live = animate && frameMs == null && !LocalInspectionMode.current
     var now by remember { mutableLongStateOf(0L) }
     if (live) {
@@ -98,7 +104,13 @@ fun ParticleGlobeOrb(
     ) {
         Canvas(Modifier.fillMaxSize()) {
             globe.frame(phase, clock, inPhase, progressShown[0], bpm)
-            drawGlobe(globe, accent, fit)
+            val tone = toneOf(globe, accent)
+            if (around != null) {
+                around.frame(phase, clock, inPhase, progressShown[0], bpm, globe.scale)
+                drawAround(around, tone, fit, dark, front = false)
+            }
+            drawGlobe(globe, accent, tone, fit, dark)
+            if (around != null) drawAround(around, tone, fit, dark, front = true)
         }
         content()
     }
@@ -111,17 +123,48 @@ private val GREY = Color(0xFF9AA0A6)
 private val COOL = Color(0xFF4FA8FF)
 private val WATER = Color(0xFF4FC3F7)
 private val FAT = Color(0xFFFFC857)
+private val INK = Color(0xFF1C1C28)
 
-private fun DrawScope.drawGlobe(g: ParticleGlobe, accent: Color, fit: Float) {
-    val unit = min(size.width, size.height) * 0.5f / fit
-    val c = Offset(size.width / 2, size.height / 2)
+private fun toneOf(g: ParticleGlobe, accent: Color): Color {
     var tone = accent
     if (g.style == BubbleStyle.TEMPERATURE) tone = lerp(lerp(accent, COOL, 0.6f), accent, g.warmth)
-    tone = lerp(lerp(tone, AMBER, g.amber), GREY, g.grey)
+    return lerp(lerp(tone, AMBER, g.amber), GREY, g.grey)
+}
+
+/** The surroundings: ripples and dust and the far half of the orbits behind the globe ([front] false), the near half in front. */
+private fun DrawScope.drawAround(s: GlobeSurroundings, tone: Color, fit: Float, dark: Boolean, front: Boolean) {
+    val unit = min(size.width, size.height) * 0.5f / fit
+    val c = Offset(size.width / 2, size.height / 2)
+    val faint = if (dark) Color.White else INK
+    if (!front) {
+        for (k in 0 until GlobeSurroundings.RIPPLES) {
+            val a = s.rippleAlpha[k]
+            if (a <= 0.005f) continue
+            drawCircle(tone.copy(alpha = a), s.rippleRadius[k] * unit, c, style = Stroke(unit * 0.012f))
+        }
+        for (j in 0 until GlobeSurroundings.DUST) {
+            val a = s.dustAlpha[j]
+            if (a <= 0.01f) continue
+            val color = lerp(faint, tone, s.dustTint[j])
+            drawCircle(color.copy(alpha = a.coerceIn(0f, 1f)), s.dustSize[j] * unit, Offset(c.x + s.dustX[j] * unit, c.y + s.dustY[j] * unit))
+        }
+    }
+    for (i in 0 until GlobeSurroundings.ORBIT_POINTS) {
+        if (s.orbitFront[i] != front) continue
+        val a = s.orbitAlpha[i]
+        if (a <= 0.01f) continue
+        val color = if (s.orbitLit[i]) (if (dark) lerp(tone, Color.White, 0.25f) else tone) else faint
+        drawCircle(color.copy(alpha = a.coerceIn(0f, 1f)), s.orbitSize[i] * unit, Offset(c.x + s.orbitX[i] * unit, c.y + s.orbitY[i] * unit))
+    }
+}
+
+private fun DrawScope.drawGlobe(g: ParticleGlobe, accent: Color, tone: Color, fit: Float, dark: Boolean) {
+    val unit = min(size.width, size.height) * 0.5f / fit
+    val c = Offset(size.width / 2, size.height / 2)
 
     // A faint halo behind the globe, in its colour.
     drawCircle(
-        Brush.radialGradient(listOf(tone.copy(alpha = 0.18f), Color.Transparent), c, unit * 1.5f * g.scale),
+        Brush.radialGradient(listOf(tone.copy(alpha = if (dark) 0.18f else 0.12f), Color.Transparent), c, unit * 1.5f * g.scale),
         radius = unit * 1.5f * g.scale,
         center = c,
     )
@@ -139,15 +182,16 @@ private fun DrawScope.drawGlobe(g: ParticleGlobe, accent: Color, fit: Float) {
             } else {
                 tone
             }
-            lerp(base, Color.White, g.light[i])
+            // On a light background the highlights go darker, not whiter, so the points keep their edge.
+            if (dark) lerp(base, Color.White, g.light[i]) else lerp(base, INK, g.light[i] * 0.35f)
         } else {
-            Color.White
+            if (dark) Color.White else INK
         }
-        drawCircle(color.copy(alpha = a.coerceIn(0f, 1f)), g.size[i] * unit, Offset(c.x + g.x[i] * unit, c.y + g.y[i] * unit))
+        drawCircle(color.copy(alpha = (if (!dark && !g.lit[i]) a * 0.9f else a).coerceIn(0f, 1f)), g.size[i] * unit, Offset(c.x + g.x[i] * unit, c.y + g.y[i] * unit))
     }
     if (g.fillAlpha > 0f) {
         drawOval(
-            lerp(tone, Color.White, 0.5f).copy(alpha = g.fillAlpha),
+            (if (dark) lerp(tone, Color.White, 0.5f) else tone).copy(alpha = g.fillAlpha),
             topLeft = Offset(c.x - g.fillRx * unit, c.y + g.fillY * unit - g.fillRy * unit),
             size = Size(g.fillRx * unit * 2, g.fillRy * unit * 2),
             style = Stroke(unit * 0.02f),

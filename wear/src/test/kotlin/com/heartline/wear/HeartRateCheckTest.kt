@@ -43,7 +43,7 @@ class HeartRateCheckTest {
             var i = 0
             while (true) {
                 tick()
-                emit(HrSample(i.toLong(), bpm(i), emptyList(), onBody = onBody(i)))
+                emit(HrSample(i * 1_000L, bpm(i), emptyList(), onBody = onBody(i)))
                 i++
             }
         }
@@ -75,6 +75,28 @@ class HeartRateCheckTest {
         assertEquals(done.recordId, meta.id)
         assertEquals(done.summary, meta.summary as RecordSummary.HeartRate)
         assertEquals(1, scheduled)
+    }
+
+    @Test fun readingsHandedOverTogetherCountByTheirOwnTime() = runBlocking {
+        // Three readings a second apart arrive together every three seconds.
+        val batched = object : HrSource {
+            override fun stream(): Flow<HrSample> = flow {
+                var i = 0
+                while (true) {
+                    clock += 3_000
+                    repeat(3) {
+                        emit(HrSample(i * 1_000L, 70, emptyList()))
+                        i++
+                    }
+                }
+            }
+        }
+        val vm = HeartRateCheckViewModel(batched, store, { scheduled++ }) { clock }
+        vm.start()
+        val done = withTimeout(10_000) { vm.state.first { it is HeartRateCheckState.Done } } as HeartRateCheckState.Done
+        assertEquals(70, done.summary.bpm)
+        // 30 s of readings, not stretched by the batching.
+        assertEquals(30, done.summary.samples)
     }
 
     @Test fun offTheWristItGivesUp() = runBlocking {

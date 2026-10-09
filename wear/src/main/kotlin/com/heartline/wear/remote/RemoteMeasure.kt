@@ -79,6 +79,7 @@ class RemoteMeasureReporter(
     private var seq = 0
     private var last: MeasureState? = null
     private var lastSentAt = Long.MIN_VALUE
+    private var hintSince = 0L
     private val startedAt = now()
 
     @Volatile
@@ -96,6 +97,11 @@ class RemoteMeasureReporter(
         if (finished) return
         val previous = last
         val t = now()
+        // A hint stays at least HINT_HOLD_MS, so the phone doesn't flicker when the sensor
+        // alternates between "moved" and "fine" every few hundred milliseconds.
+        @Suppress("NAME_SHADOWING")
+        val hint = if (hint == MeasureHint.NONE && previous != null && previous.hint != MeasureHint.NONE && t - hintSince < HINT_HOLD_MS) previous.hint else hint
+        if (hint != MeasureHint.NONE && previous?.hint != hint) hintSince = t
         val changed = previous == null || previous.stage != stage || previous.hint != hint || previous.reason != reason
         if (!changed && t - lastSentAt < INTERVAL_MS) return
         val state = MeasureState(link.sessionId, link.metric, stage, ++seq, progress.coerceIn(0f, 1f), secondsLeft, hint, live, reason, link.round)
@@ -120,6 +126,9 @@ class RemoteMeasureReporter(
 
     companion object {
         const val INTERVAL_MS = 1_000L
+
+        /** The shortest time a hint is shown (on the watch and the phone). */
+        const val HINT_HOLD_MS = 1_500L
 
         fun hint(hint: QuickHint?): MeasureHint = when (hint) {
             null -> MeasureHint.NONE

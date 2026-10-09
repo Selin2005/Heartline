@@ -103,8 +103,26 @@ data class MeasureUi(
     val issue: MeasureIssue? = null,
     /** Blood-pressure calibration: the round. */
     val round: Int? = null,
+    /** When [progress] arrived and how fast it has been rising (per ms), to predict it between messages. */
+    val progressAtMs: Long = 0L,
+    val ratePerMs: Float = 0f,
 ) {
     val active: Boolean get() = step != MeasureStep.RESULT && step != MeasureStep.FAILED
+
+    /**
+     * The progress at [nowMs]: the watch reports about once a second and Bluetooth can hold a
+     * message for seconds, so between messages it goes on at the rate seen so far, at most
+     * [MAX_LEAD] ahead of the last one and never while a hint is up.
+     */
+    fun progressAt(nowMs: Long): Float {
+        if (step != MeasureStep.MEASURING || hint != MeasureHint.NONE || ratePerMs <= 0f) return progress
+        val ahead = (ratePerMs * (nowMs - progressAtMs).coerceAtLeast(0)).coerceAtMost(MAX_LEAD)
+        return (progress + ahead).coerceAtMost(0.99f)
+    }
+
+    companion object {
+        const val MAX_LEAD = 0.08f
+    }
 
     /** The watch screen that does the same the old way (the user starts it on the watch). */
     val watchRoute: String get() = MeasureSessionManager.watchRoute(metric, round)
@@ -186,7 +204,23 @@ class MeasureSessionManager(
             MeasureStage.ACCEPTED, MeasureStage.PREPARING -> MeasureStep.PREPARING
             else -> MeasureStep.MEASURING
         }
-        mutable.value = ui.copy(step = step, progress = state.progress, secondsLeft = state.secondsLeft, hint = state.hint, live = state.live ?: ui.live)
+        val t = now()
+        // How fast the progress rises, from the last two messages (smoothed), for [MeasureUi.progressAt].
+        val rate = if (ui.step == MeasureStep.MEASURING && step == MeasureStep.MEASURING && state.hint == MeasureHint.NONE && t > ui.progressAtMs + 200) {
+            val instant = ((state.progress - ui.progress) / (t - ui.progressAtMs)).coerceIn(0f, 0.001f)
+            if (ui.ratePerMs > 0f) ui.ratePerMs * 0.5f + instant * 0.5f else instant
+        } else {
+            ui.ratePerMs
+        }
+        mutable.value = ui.copy(
+            step = step,
+            progress = state.progress,
+            secondsLeft = state.secondsLeft,
+            hint = state.hint,
+            live = state.live ?: ui.live,
+            progressAtMs = t,
+            ratePerMs = rate,
+        )
         arm(ui.sessionId, if (step == MeasureStep.PREPARING) PREPARING_TIMEOUT_MS else SILENCE_TIMEOUT_MS)
     }
 

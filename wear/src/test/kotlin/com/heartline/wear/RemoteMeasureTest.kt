@@ -52,6 +52,21 @@ class RemoteMeasureTest {
         assertEquals(states.map { it.seq }.sorted(), states.map { it.seq })
     }
 
+    @Test fun aHintStaysAtLeastASecondAndAHalf() {
+        val r = coordinator.reporter(link)
+        r.report(MeasureStage.MEASURING, 0.3f)
+        clock = 100
+        r.report(MeasureStage.MEASURING, 0.3f, hint = MeasureHint.HOLD_STILL)
+        clock = 400
+        r.report(MeasureStage.MEASURING, 0.3f)
+        clock = 1_200
+        r.report(MeasureStage.MEASURING, 0.31f)
+        assertTrue("still held", states.last().hint == MeasureHint.HOLD_STILL)
+        clock = 1_700
+        r.report(MeasureStage.MEASURING, 0.35f)
+        assertEquals(MeasureHint.NONE, states.last().hint)
+    }
+
     @Test fun outcomeIsSentOnceAndNothingAfterIt() {
         val r = coordinator.reporter(link)
         r.finish(MeasureOutcome.OK, recordId = "rec", summary = RecordSummary.Spo2(97, 66, false))

@@ -136,8 +136,11 @@ class QuickMeasureViewModel(
                     when (event) {
                         is QuickEvent.Progress -> {
                             val current = mutable.value as? QuickState.Measuring
-                            // A restart (fingers lifted) may move the ring back; otherwise it only moves forward.
-                            val fraction = if (event.hint != null) event.fraction else maxOf(event.fraction, current?.progress ?: 0f)
+                            // Only a real restart moves the ring back (body composition starts over when
+                            // a finger is lifted); a hint holds it, it never jumps to the start.
+                            val previous = current?.progress ?: 0f
+                            val restart = source.metric == Metric.BODY_COMPOSITION && event.hint != null
+                            val fraction = if (restart) event.fraction else maxOf(event.fraction, previous)
                             mutable.value = QuickState.Measuring(
                                 fraction,
                                 ((1 - fraction) * source.seconds).toInt().coerceAtLeast(1),

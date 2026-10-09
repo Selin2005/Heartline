@@ -314,6 +314,14 @@ class BpMeasureTest {
         assertEquals("precise", log.header.mode)
         assertTrue(log.stream(BpSessionStreams.ECG)!!.size >= 34 * 500)
     }
+
+    @Test fun progressNeverReadsFullWhileRecording() {
+        assertEquals(0.4f, com.heartline.wear.bp.bpProgress(10f, 20, 60), 0.001f)
+        assertEquals(0.8f, com.heartline.wear.bp.bpProgress(20f, 20, 60), 0.001f)
+        val later = (21..60).map { com.heartline.wear.bp.bpProgress(it.toFloat(), 20, 60) }
+        assertTrue(later.zipWithNext().all { (a, b) -> b >= a })
+        assertTrue(later.all { it < 0.99f })
+    }
 }
 
 /** A measurement runs the full PPG pipeline; a loaded build machine (other test forks) needs headroom. */

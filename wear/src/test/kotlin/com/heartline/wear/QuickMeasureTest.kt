@@ -175,4 +175,34 @@ class QuickMeasureTest {
         val done = withTimeout(5_000) { vm.state.first { it is QuickState.Done } } as QuickState.Done
         assertEquals(null, (done.summary as RecordSummary.Stress).skinConductanceMicroSiemens)
     }
+
+    /** Progress events as a sensor sends them, then a result. */
+    private fun scripted(metric: Metric, events: List<com.heartline.wear.sensor.QuickEvent>) = object : com.heartline.wear.sensor.QuickSource {
+        override val metric = metric
+        override val kind = if (metric == Metric.SPO2) RecordKind.SPO2 else RecordKind.BODY_COMPOSITION
+        override val seconds = 30
+
+        override fun measure(profile: UserProfile?) = kotlinx.coroutines.flow.flow {
+            for (e in events) {
+                emit(e)
+                kotlinx.coroutines.delay(1)
+            }
+            kotlinx.coroutines.awaitCancellation()
+        }
+    }
+
+    @Test
+    fun aHintHoldsTheProgressInsteadOfStartingOver() = runBlocking {
+        // SpO2 reports "moved" with no progress of its own: the ring must hold, not go back to the start.
+        val events = listOf(
+            com.heartline.wear.sensor.QuickEvent.Progress(0.5f),
+            com.heartline.wear.sensor.QuickEvent.Progress(0f, QuickHint.HOLD_STILL),
+        )
+        val vm = QuickMeasureViewModel(scripted(Metric.SPO2, events), profiles, store, { scheduled++ })
+        vm.start()
+        val held = withTimeout(5_000) { vm.state.first { (it as? QuickState.Measuring)?.hint != null } } as QuickState.Measuring
+        assertEquals(0.5f, held.progress, 0f)
+        assertEquals(15, held.secondsLeft)
+        vm.cancel()
+    }
 }

@@ -954,7 +954,7 @@
     <string name="measure_preparing">Getting ready. Keep your arm still.</string>
     <string name="measure_measuring">Measuring. Keep your arm still.</string>
     <string name="measure_breathe">Breathe slowly and relax</string>
-    <string name="measure_seconds_left">%1$d seconds left. Keep still.</string>
+    <string name="measure_bpm_percent">bpm · %1$d%%</string>
     <string name="measure_finishing">Almost done…</string>
     <string name="measure_hint_still">Hold still</string>
     <string name="measure_hint_wrist">Wear your watch snugly, just above the wrist bone</string>
