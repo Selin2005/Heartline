@@ -14,7 +14,10 @@ enum class RecordKind(val metric: Metric) {
     SPO2(Metric.SPO2),
     SKIN_TEMPERATURE(Metric.SKIN_TEMPERATURE),
     BODY_COMPOSITION(Metric.BODY_COMPOSITION),
-    STRESS(Metric.STRESS)
+    STRESS(Metric.STRESS),
+
+    /** A 30-second heart-rate check (started from the phone). Last, so earlier ordinals stay put. */
+    HEART_RATE(Metric.HEART_RATE)
 }
 
 /** Per-kind summary values, sent alongside the raw waveform. */
@@ -67,6 +70,10 @@ sealed interface RecordSummary {
 
     @Serializable
     data class Stress(val score: Int, val rmssdMs: Double?, val skinConductanceMicroSiemens: Float? = null) : RecordSummary
+
+    /** A heart-rate check: the median of the good readings over about 30 s, and their range. */
+    @Serializable
+    data class HeartRate(val bpm: Int, val minBpm: Int, val maxBpm: Int, val samples: Int) : RecordSummary
 
     /**
      * Everything the watch's BIA reports (Samsung Health shows weight, skeletal muscle, fat mass,

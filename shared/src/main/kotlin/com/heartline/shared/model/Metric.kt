@@ -11,5 +11,11 @@ enum class Metric {
     SPO2,
     SKIN_TEMPERATURE,
     BODY_COMPOSITION,
-    STRESS
+    STRESS;
+
+    /**
+     * Measured from the phone: the phone runs the whole measurement while the watch shows it too.
+     * ECG and body composition need fingers on the watch's keys, so they start on the watch.
+     */
+    val measuresOnPhone: Boolean get() = this != ECG && this != BODY_COMPOSITION
 }

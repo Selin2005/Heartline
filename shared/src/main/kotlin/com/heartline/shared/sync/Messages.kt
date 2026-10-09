@@ -19,7 +19,9 @@ data class Hello(
     val role: Role = Role.WATCH,
     val deviceName: String? = null,
     /** The watch's settings: changed on the watch while the phone was away, they may be newer. */
-    val settings: com.heartline.shared.hr.MonitorSettings? = null
+    val settings: com.heartline.shared.hr.MonitorSettings? = null,
+    /** What this watch app can do beyond the protocol version ([Features]); older watches send none. */
+    val features: List<String> = emptyList()
 ) {
     fun isCompatible() = protocol == Protocol.VERSION
 }
@@ -119,3 +121,103 @@ data class CaptureResult(
     /** The raw session log of this round (BpSessionLog id), for the export. */
     val sessionId: String? = null
 )
+
+/** Optional abilities announced in [Hello.features], so newer phones can tell what an older watch lacks. */
+object Features {
+    /** Measurements started from the phone: the `remote/<METRIC>` watch route and the MEASURE_ messages. */
+    const val REMOTE_MEASURE = "remote_measure_v1"
+}
+
+/** Where a measurement started from the phone is. */
+@Serializable
+enum class MeasureStage {
+    /** The watch opened the measurement and is about to start. */
+    ACCEPTED,
+
+    /** Getting ready: connecting to the sensor, settling. */
+    PREPARING,
+    MEASURING,
+
+    /** Measured; computing and storing the result. */
+    SAVING,
+
+    /** The watch could not start it; see [MeasureState.reason]. */
+    REJECTED
+}
+
+/** Something the user can fix while measuring (the progress waits until it is fixed). */
+@Serializable
+enum class MeasureHint { NONE, HOLD_STILL, WRIST_CONTACT, LOW_SIGNAL, MOVING }
+
+/** Why the watch could not start, or why a measurement failed. */
+@Serializable
+enum class MeasureProblem {
+    /** Another measurement is running on the watch. */
+    BUSY,
+
+    /** The watch app is not set up (phone link, terms, profile). */
+    NEEDS_SETUP,
+    PERMISSION,
+
+    /** Health Platform's developer mode is off. */
+    SDK_POLICY,
+    NEEDS_CALIBRATION,
+    NEEDS_PROFILE,
+    UNSUPPORTED,
+
+    /** The sensor service is missing, outdated or failed. */
+    SENSOR,
+    LOW_SIGNAL,
+    WRIST_CONTACT,
+    MOVING,
+    TIMEOUT,
+
+    /** The user left the measurement on the watch. */
+    WATCH_LEFT,
+    OTHER
+}
+
+/**
+ * Watch → phone, about once a second and at every change: the measurement [sessionId] the phone
+ * started. Sent without retries; [seq] grows, so the phone ignores one that arrives late.
+ */
+@Serializable
+data class MeasureState(
+    val sessionId: String,
+    val metric: Metric,
+    val stage: MeasureStage,
+    val seq: Int,
+    val progress: Float = 0f,
+    val secondsLeft: Int? = null,
+    val hint: MeasureHint = MeasureHint.NONE,
+    /** A live value while measuring (the heart rate), if any. */
+    val live: Int? = null,
+    val reason: MeasureProblem? = null,
+    /** Blood-pressure calibration: the round being taken. */
+    val round: Int? = null
+)
+
+@Serializable
+enum class MeasureOutcome { OK, FAILED, CANCELLED }
+
+/**
+ * Watch → phone, once, through the outbox: how measurement [sessionId] ended. With [MeasureOutcome.OK],
+ * [recordId] is the stored record (it follows as usual) and [summary] lets the phone show the value
+ * at once. A calibration round has no record: its data goes as a [CaptureResult].
+ */
+@Serializable
+data class MeasureResult(
+    val id: String,
+    val sessionId: String,
+    val metric: Metric,
+    val outcome: MeasureOutcome,
+    val problem: MeasureProblem? = null,
+    val recordId: String? = null,
+    val summary: com.heartline.shared.model.RecordSummary? = null,
+    val startedAtMs: Long = 0,
+    val round: Int? = null
+)
+
+/** Phone → watch: stop measurement [sessionId]. */
+@Serializable
+data class MeasureCancel(val sessionId: String)

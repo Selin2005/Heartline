@@ -66,6 +66,8 @@ class WatchSyncEngine(
     private val onLogRequest: suspend (LogRequest) -> Unit = {},
     /** The phone stored a log file this watch sent to it ([sendArchive]). */
     private val onArchiveAck: suspend (ArchiveAck) -> Unit = {},
+    /** The phone stopped a measurement it started. */
+    private val onMeasureCancel: suspend (MeasureCancel) -> Unit = {},
     /** A message that could not be handled (it stays unacknowledged, so the phone sends it again). */
     private val onError: (path: String, error: Throwable) -> Unit = { _, _ -> }
 ) {
@@ -83,6 +85,10 @@ class WatchSyncEngine(
     /** Watch → phone: settings changed on the watch (the phone keeps the newer copy). */
     suspend fun sendSettings(settings: MonitorSettings): Boolean =
         transport.send(Protocol.SETTINGS, Protocol.json.encodeToString(settings).encodeToByteArray())
+
+    /** Watch → phone: progress of a measurement the phone started (not retried; the next one supersedes it). */
+    suspend fun sendMeasureState(state: MeasureState): Boolean =
+        transport.send(Protocol.MEASURE_STATE, Protocol.json.encodeToString(state).encodeToByteArray())
 
     /** @return number of records handed to the transport. */
     suspend fun flush(): Int {
@@ -134,6 +140,7 @@ class WatchSyncEngine(
             )
             Protocol.LOGS_REQUEST -> onLogRequest(Protocol.json.decodeFromString<LogRequest>(envelope.data.decodeToString()))
             Protocol.LOGS_ARCHIVE_ACK -> onArchiveAck(Protocol.json.decodeFromString<ArchiveAck>(envelope.data.decodeToString()))
+            Protocol.MEASURE_CANCEL -> onMeasureCancel(Protocol.json.decodeFromString<MeasureCancel>(envelope.data.decodeToString()))
         }
     }
 }
@@ -157,6 +164,10 @@ class PhoneSyncEngine(
     private val onLogSegment: suspend (requestId: String, input: InputStream) -> Unit = { _, _ -> },
     /** A log file the watch moved here (read as a stream in the app); [ackArchive] once stored. */
     private val onArchive: suspend (type: String, name: String, input: InputStream) -> Unit = { _, _, _ -> },
+    /** Progress of a measurement this phone started. */
+    private val onMeasureState: suspend (MeasureState) -> Unit = {},
+    /** How a measurement this phone started ended; acked after it returns. */
+    private val onMeasureResult: suspend (MeasureResult) -> Unit = {},
     /** A message that could not be handled (it stays unacknowledged, so the watch sends it again). */
     private val onError: (path: String, error: Throwable) -> Unit = { _, _ -> }
 ) {
@@ -206,6 +217,14 @@ class PhoneSyncEngine(
                 onCaptureResult(result)
                 ack(result.id)
             }
+            envelope.path == Protocol.MEASURE_STATE -> onMeasureState(
+                Protocol.json.decodeFromString<MeasureState>(envelope.data.decodeToString())
+            )
+            envelope.path == Protocol.MEASURE_RESULT -> {
+                val result = Protocol.json.decodeFromString<MeasureResult>(envelope.data.decodeToString())
+                onMeasureResult(result)
+                ack(result.id)
+            }
             envelope.path.startsWith(Protocol.LOGS_PREFIX) -> onLogs(envelope.path.removePrefix(Protocol.LOGS_PREFIX), envelope.data)
             envelope.path.startsWith(Protocol.LOGS_ARCHIVE_PREFIX) -> {
                 val (type, name) = envelope.path.removePrefix(Protocol.LOGS_ARCHIVE_PREFIX).split('/', limit = 2).let {
@@ -238,6 +257,10 @@ class PhoneSyncEngine(
 
     /** Asks the watch to open a measurement screen (it shows a tap-to-open notification). */
     suspend fun openOnWatch(route: String): Boolean = transport.send(Protocol.OPEN, route.encodeToByteArray())
+
+    /** Phone → watch: stop the measurement this phone started. */
+    suspend fun cancelMeasure(sessionId: String): Boolean =
+        transport.send(Protocol.MEASURE_CANCEL, Protocol.json.encodeToString(MeasureCancel(sessionId)).encodeToByteArray())
 
     suspend fun sendProfile(profile: UserProfile): Boolean =
         transport.send(Protocol.PROFILE, Protocol.json.encodeToString(profile).encodeToByteArray())

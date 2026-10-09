@@ -53,6 +53,7 @@ object CsvFormat {
                 ).joinToString(";") { (k, v) -> "$k=${v ?: ""}" },
             )
             is RecordSummary.Stress -> Triple("${summary.score}", "score", "rmssd_ms=${summary.rmssdMs ?: ""}")
+            is RecordSummary.HeartRate -> Triple("${summary.bpm}", "bpm", "min=${summary.minBpm};max=${summary.maxBpm};samples=${summary.samples}")
         }
         return listOf(Instant.ofEpochMilli(entity.startedAtMs).toString(), entity.kind.name, value, unit, details).joinToString(",") { escape(it) }
     }

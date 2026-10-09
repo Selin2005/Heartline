@@ -31,6 +31,9 @@ class RobustnessTest {
         Protocol.BP_CALIBRATION_CAPTURE,
         Protocol.DELETE,
         Protocol.OPEN,
+        Protocol.MEASURE_STATE,
+        Protocol.MEASURE_RESULT,
+        Protocol.MEASURE_CANCEL,
         "/hl/v1/unknown"
     )
 

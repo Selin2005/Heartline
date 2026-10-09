@@ -64,6 +64,7 @@ object PersonalBaseline {
         is RecordSummary.Ecg -> summary.averageBpm?.toFloat()
         is RecordSummary.SkinTemperature -> summary.skinCelsius
         is RecordSummary.BodyComposition -> summary.bodyFatPercent
+        is RecordSummary.HeartRate -> summary.bpm.toFloat()
     }
 
     /** Quartiles of [values]; null with fewer than [MIN_READINGS]. */

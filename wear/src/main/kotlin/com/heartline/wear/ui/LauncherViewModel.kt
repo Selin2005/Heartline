@@ -170,6 +170,7 @@ class LauncherViewModel(
             is RecordSummary.SkinTemperature -> "%.1f °C".format(s.skinCelsius)
             is RecordSummary.BodyComposition -> "%.1f%%".format(s.bodyFatPercent)
             is RecordSummary.Stress -> "${s.score}/100"
+            is RecordSummary.HeartRate -> "${s.bpm} bpm"
         }
 
         /** How the last reading turned out, for the row's dot (null: nothing to judge). */

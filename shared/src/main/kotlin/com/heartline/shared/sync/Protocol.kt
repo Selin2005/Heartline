@@ -27,6 +27,15 @@ object Protocol {
     const val OPEN = "$ROOT/open"
     const val STATUS = "$ROOT/status"
     const val SETUP_REQUEST = "$ROOT/setup-request"
+
+    /** Watch → phone: how a measurement started from the phone is going ([MeasureState]); may be lost. */
+    const val MEASURE_STATE = "$ROOT/measure/state"
+
+    /** Watch → phone: how it ended ([MeasureResult]), through the outbox and acked by id. */
+    const val MEASURE_RESULT = "$ROOT/measure/result"
+
+    /** Phone → watch: stop the measurement the phone started ([MeasureCancel]). */
+    const val MEASURE_CANCEL = "$ROOT/measure/cancel"
     const val LOGS_REQUEST = "$ROOT/logs/request"
     const val LOGS_PREFIX = "$ROOT/logs/data/"
 
