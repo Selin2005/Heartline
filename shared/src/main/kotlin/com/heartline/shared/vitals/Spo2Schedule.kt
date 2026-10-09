@@ -24,10 +24,17 @@ object Spo2Schedule {
     /**
      * Awake, a due reading waits for a still arm instead of giving up at the first movement: it
      * measures once the arm (accelerometer and gyroscope) has been still for [STILL_NEEDED_MS],
-     * waiting at most [STILL_WAIT_MS]. Only then is it put off.
+     * waiting at most [STILL_WAIT_MS]. Only then is it put off. 8 s wasn't enough: in the 10/09
+     * log 7 of 11 daytime tries were spoiled by movement during the 25 s that followed.
      */
-    const val STILL_NEEDED_MS = 8_000L
+    const val STILL_NEEDED_MS = 15_000L
     const val STILL_WAIT_MS = 120_000L
+
+    /** A measurement stopped by movement starts again once, within the same wait. */
+    const val MAX_STARTS = 2
+
+    /** Whether to start again after [starts] measurements stopped by movement, [waitedMs] into the wait. */
+    fun tryAgain(starts: Int, waitedMs: Long) = starts < MAX_STARTS && waitedMs < STILL_WAIT_MS
 
     enum class Wait { MEASURE, KEEP_WAITING, GIVE_UP }
 

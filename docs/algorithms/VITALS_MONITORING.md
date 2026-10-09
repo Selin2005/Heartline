@@ -55,7 +55,18 @@ It uses the same sources as a manual measurement, through `VitalsMeasurer`.
   - Awake, a due reading **waits for a still arm** rather than giving up at the first movement:
     the accelerometer and the gyroscope (a slow wrist turn barely shows on the accelerometer but
     spoils the reading) are watched for up to 2 minutes, and SpO2 starts as soon as the arm has
-    been still for 8 s (`Spo2Schedule.stillWait`). Only when no still moment comes is it put off.
+    been still for 15 s (`Spo2Schedule.stillWait`). Only when no still moment comes is it put off.
+  - **Finer than the rhythm windows.** For this wait an accelerometer change over 0.3 m/s² and a
+    turn over 0.2 rad/s count as movement (the rhythm windows keep 1.0 m/s²). The 10/09 log
+    (beta.3) showed why: after 8 s of "still" by the coarser rule, 7 of 11 daytime tries got
+    SDK status −4 (moved) again and again during the measurement, then −5 after 25 s.
+  - **Stop at the first movement, start once more.** A background try ends on the sensor's
+    first −4 (`VitalsMeasurer.measure(stopOnMove = true)`), so the red light doesn't stay on for
+    25 s for nothing, waits again for a still arm within the same 2 minutes, and starts once
+    more (`Spo2Schedule.tryAgain`, 2 starts at most). The sensor's −4 is passed on at once, not
+    by the progress ticker, whose timers stand still while the watch sleeps (the log had
+    `moved=false` for tries the sensor saw move). The log says `SpO2 start 1/2 after N s still`,
+    `SpO2 stopped: moved after N s` and `SpO2 start 2/2 …`.
     Watching the sensors all day would keep the watch awake; a short window per due reading
     finds most quiet moments (sitting, reading, a call) at little cost. The log says
     `SpO2: arm still after N s` or `no still moment in 120 s`, and the try carries `waitedS`. In a real

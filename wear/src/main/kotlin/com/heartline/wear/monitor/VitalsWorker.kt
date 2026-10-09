@@ -54,7 +54,8 @@ object VitalsMeasurer {
     /** [failure]: why there is no result ("hold still", "low signal", "timed out"), for the log. */
     data class Reading(val summary: RecordSummary?, val moved: Boolean, val failure: String? = null, val tookMs: Long = 0)
 
-    suspend fun measure(source: QuickSource, timeoutMs: Long = (source.seconds + 25) * 1_000L): Reading {
+    /** [stopOnMove]: end at the first "hold still" (background tries: the light needn't stay on for nothing). */
+    suspend fun measure(source: QuickSource, timeoutMs: Long = (source.seconds + 25) * 1_000L, stopOnMove: Boolean = false): Reading {
         var moved = false
         var lastHint: QuickHint? = null
         val start = System.currentTimeMillis()
@@ -64,15 +65,18 @@ object VitalsMeasurer {
                     if (it is QuickEvent.Progress) it.hint?.let { h -> lastHint = h }
                     if (it is QuickEvent.Progress && it.hint == QuickHint.HOLD_STILL) moved = true
                 }
-                .first { it is QuickEvent.Result || it is QuickEvent.Failed }
+                .first { it is QuickEvent.Result || it is QuickEvent.Failed || (stopOnMove && it is QuickEvent.Progress && it.hint == QuickHint.HOLD_STILL) }
         }
         val failure = when (end) {
             is QuickEvent.Result -> null
             is QuickEvent.Failed -> "failed: ${end.problem ?: end.hint ?: "unknown"}"
+            is QuickEvent.Progress -> STOPPED_MOVED
             else -> "timed out" + (lastHint?.let { " ($it)" } ?: "")
         }
         return Reading((end as? QuickEvent.Result)?.summary, moved, failure, System.currentTimeMillis() - start)
     }
+
+    const val STOPPED_MOVED = "moved"
 }
 
 /**
@@ -180,21 +184,26 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
                 )
                 var decision = decide(armMoved = false)
                 var waitedS: Int? = null
-                if (settings.spo2Active && decision == Spo2Schedule.Decision.Measure && !asleep) {
-                    // Awake: wait for a still arm (up to 2 minutes) rather than giving up at the first movement.
-                    val waitStart = SystemClock.elapsedRealtime()
+                val waitStart = SystemClock.elapsedRealtime()
+                var stillSince = wristOn
+
+                // Awake: wait for a still arm (within 2 minutes in all) rather than giving up at the first movement.
+                suspend fun waitStill(): Boolean {
                     while (true) {
                         val waited = SystemClock.elapsedRealtime() - waitStart
-                        val step = Spo2Schedule.stillWait(wrist.stillFor(System.currentTimeMillis(), wristOn), waited)
+                        val step = Spo2Schedule.stillWait(wrist.stillFor(System.currentTimeMillis(), stillSince), waited)
                         if (step == Spo2Schedule.Wait.KEEP_WAITING) {
                             delay(1_000)
                             continue
                         }
                         waitedS = (waited / 1_000).toInt()
-                        if (step == Spo2Schedule.Wait.GIVE_UP) decision = decide(armMoved = true)
-                        HLog.i(TAG, if (step == Spo2Schedule.Wait.MEASURE) "SpO2: arm still after ${waitedS}s" else "SpO2: no still moment in ${waitedS}s")
-                        break
+                        return step == Spo2Schedule.Wait.MEASURE
                     }
+                }
+                if (settings.spo2Active && decision == Spo2Schedule.Decision.Measure && !asleep) {
+                    val still = waitStill()
+                    if (!still) decision = decide(armMoved = true)
+                    HLog.i(TAG, if (still) "SpO2 start 1/${Spo2Schedule.MAX_STARTS} after ${waitedS}s still" else "SpO2: no still moment in ${waitedS}s")
                 }
                 if (settings.spo2Active) when (val d = decision) {
                     is Spo2Schedule.Decision.Skip -> if (d.reason != "not due") {
@@ -215,7 +224,16 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
                     }
                     Spo2Schedule.Decision.Measure -> if (allowed(Metric.SPO2)) {
                         sources[Metric.SPO2]?.let { source ->
-                            val first = spo2(source, context, now, confirmation = false)
+                            var first = spo2(source, context, now, confirmation = false, stopOnMove = !asleep)
+                            // Stopped by movement: wait for a still arm again and start once more.
+                            var starts = 1
+                            while (first == null && stoppedForMove && Spo2Schedule.tryAgain(starts, SystemClock.elapsedRealtime() - waitStart)) {
+                                stillSince = System.currentTimeMillis()
+                                if (!waitStill()) break
+                                starts++
+                                HLog.i(TAG, "SpO2 start $starts/${Spo2Schedule.MAX_STARTS} after ${waitedS}s")
+                                first = spo2(source, context, System.currentTimeMillis(), confirmation = false, stopOnMove = true)
+                            }
                             store.lastSpo2Ms = now
                             store.spo2Retries = 0
                             if (first == null) attempts += Spo2Attempt(now, lastFailure, waitedS = waitedS)
@@ -269,6 +287,9 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
     /** Why the last [spo2] call gave nothing (for the phone's "today" card). */
     private var lastFailure = Spo2Outcome.NO_SIGNAL
 
+    /** Whether the last [spo2] call was stopped because the wrist moved (it may start again). */
+    private var stoppedForMove = false
+
     /** A SpO2 try that ended before measuring anything (charging, app open): sent on its own. */
     private suspend fun reportAttempt(attempt: Spo2Attempt) =
         output.enqueueBatch(HrBatch(UUID.randomUUID().toString(), emptyList(), spo2Attempts = listOf(attempt)))
@@ -277,10 +298,18 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
      * One SpO2 measurement. The sensor's own judgement of movement decides (its "hold still"
      * hint): the wrist's accelerometer used to reject readings the sensor had accepted.
      */
-    private suspend fun spo2(source: QuickSource, context: HrContext, at: Long, confirmation: Boolean): Spo2Sample? {
-        val reading = VitalsMeasurer.measure(source)
+    private suspend fun spo2(source: QuickSource, context: HrContext, at: Long, confirmation: Boolean, stopOnMove: Boolean = false): Spo2Sample? {
+        val reading = VitalsMeasurer.measure(source, stopOnMove = stopOnMove)
+        stoppedForMove = reading.failure == VitalsMeasurer.STOPPED_MOVED
         val r = reading.summary as? RecordSummary.Spo2 ?: run {
-            HLog.i(TAG, "SpO2 no result after ${reading.tookMs / 1_000} s: ${reading.failure} (moved=${reading.moved})")
+            HLog.i(
+                TAG,
+                if (stoppedForMove) {
+                    "SpO2 stopped: moved after ${reading.tookMs / 1_000} s"
+                } else {
+                    "SpO2 no result after ${reading.tookMs / 1_000} s: ${reading.failure} (moved=${reading.moved})"
+                },
+            )
             lastFailure = if (reading.moved) Spo2Outcome.MOVING else Spo2Outcome.NO_SIGNAL
             return null
         }

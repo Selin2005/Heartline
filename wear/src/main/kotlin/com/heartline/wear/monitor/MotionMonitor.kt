@@ -78,9 +78,10 @@ class StepMotionMonitor(context: Context) :
  * the arm last moved (accelerometer). Steps alone miss typing or gesturing, which spoil the
  * beat-to-beat intervals as much as walking does.
  *
- * With [turns], the gyroscope is watched too: a slow turn of the wrist barely shows on the
- * accelerometer but spoils a blood-oxygen reading. It only counts for [stillFor] (the oxygen
- * wait), so the rhythm windows' movement marks stay as they were.
+ * With [turns], the gyroscope is watched too and smaller movements count: a slow turn of the
+ * wrist barely shows on the accelerometer but spoils a blood-oxygen reading, and the sensor
+ * reports "moved" for far less than our usual threshold. These finer marks only count for
+ * [stillFor] (the oxygen wait), so the rhythm windows' movement marks stay as they were.
  */
 class WristState(context: Context, private val turns: Boolean = false) :
     MotionMonitor,
@@ -119,7 +120,9 @@ class WristState(context: Context, private val turns: Boolean = false) :
                 val (x, y, z) = event.values
                 val magnitude = kotlin.math.sqrt((x * x + y * y + z * z).toDouble())
                 average = if (average.isNaN()) magnitude else average * 0.9 + magnitude * 0.1
-                if (kotlin.math.abs(magnitude - average) > MOVE_MS2) moves.add(MoveTimes.wallMs(event))
+                val change = kotlin.math.abs(magnitude - average)
+                if (change > MOVE_MS2) moves.add(MoveTimes.wallMs(event))
+                if (turns && change > FINE_MOVE_MS2) turnTimes.add(MoveTimes.wallMs(event))
             }
             Sensor.TYPE_GYROSCOPE -> {
                 val (x, y, z) = event.values
@@ -141,7 +144,10 @@ class WristState(context: Context, private val turns: Boolean = false) :
         /** A resting arm stays within about 0.15 m/s² of its average; this is a clear movement. */
         const val MOVE_MS2 = 1.0
 
-        /** A still wrist turns well under 0.2 rad/s (sensor noise); this is a deliberate turn. */
-        const val TURN_RAD_S = 0.5
+        /** For the oxygen wait: twice a resting arm's wobble (about 0.15 m/s²). */
+        const val FINE_MOVE_MS2 = 0.3
+
+        /** A still wrist turns under about 0.1 rad/s (sensor noise); more spoils an oxygen reading. */
+        const val TURN_RAD_S = 0.2
     }
 }

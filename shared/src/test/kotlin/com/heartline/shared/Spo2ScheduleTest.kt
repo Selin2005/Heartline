@@ -9,6 +9,7 @@ import com.heartline.shared.vitals.Spo2Schedule
 import com.heartline.shared.vitals.Spo2Schedule.Decision
 import kotlin.random.Random
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -89,6 +90,14 @@ class Spo2ScheduleTest {
         assertEquals(Spo2Schedule.Wait.GIVE_UP, Spo2Schedule.stillWait(2_000, Spo2Schedule.STILL_WAIT_MS))
     }
 
+    @Test
+    fun aMeasurementStoppedByMovementStartsOnceMoreWithinTheWait() {
+        assertTrue(Spo2Schedule.tryAgain(starts = 1, waitedMs = 40_000))
+        // Two starts at most, and only while the two minutes last.
+        assertFalse(Spo2Schedule.tryAgain(starts = 2, waitedMs = 40_000))
+        assertFalse(Spo2Schedule.tryAgain(starts = 1, waitedMs = Spo2Schedule.STILL_WAIT_MS))
+    }
+
     /** One simulated day awake (08:00–22:00): readings, and tries put off for movement. */
     private data class Day(val readings: Int, val putOffs: Int)
 
@@ -128,7 +137,7 @@ class Spo2ScheduleTest {
         val random = Random(7)
         fun still5s() = random.nextDouble() >= 0.6
 
-        // Waiting: up to 2 minutes for 8 s (two 5 s stretches) of still arm.
+        // Waiting: up to 2 minutes for 15 s (three 5 s stretches) of still arm.
         val waiting = day {
             var run = 0
             val found = (1..(Spo2Schedule.STILL_WAIT_MS / 5_000).toInt()).any {
@@ -141,6 +150,8 @@ class Spo2ScheduleTest {
         val looking = day { !still5s() }
 
         assertTrue("$waiting vs $looking", waiting.readings >= looking.readings)
-        assertTrue("$waiting vs $looking", waiting.putOffs * 3 <= looking.putOffs)
+        // 15 s of stillness is harder to find than 8 s, yet still half the put-offs or fewer
+        // (the second start after a movement isn't modelled here).
+        assertTrue("$waiting vs $looking", waiting.putOffs * 2 <= looking.putOffs)
     }
 }

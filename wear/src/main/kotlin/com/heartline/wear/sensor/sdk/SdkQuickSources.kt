@@ -112,6 +112,11 @@ abstract class SdkQuickSource(
 /** Raw values of every point from the quick trackers (SpO2, skin temperature), for device debugging. */
 private const val QUICK_RAW_TAG = "Heartline/QuickRaw"
 
+/** The hint an SPO2_ON_DEMAND status gives at once: -4, the wrist moved. */
+object Spo2Status {
+    fun hint(status: Int?): QuickHint? = if (status == -4) QuickHint.HOLD_STILL else null
+}
+
 /** SPO2_ON_DEMAND: status 0 calculating, 2 complete, -4 moved, -5 low signal, -6 timeout. */
 class SdkSpo2Source(private val gateway: SdkSensorGateway) :
     SdkQuickSource(gateway, TrackerKind.SPO2_ON_DEMAND, Metric.SPO2, RecordKind.SPO2, 30) {
@@ -132,7 +137,10 @@ class SdkSpo2Source(private val gateway: SdkSensorGateway) :
                 true
             }
             -4 -> {
-                problem = QuickHint.HOLD_STILL
+                problem = Spo2Status.hint(-4)
+                // Right away, not from the progress ticker: its timers stand still while the watch
+                // sleeps, and background tries then logged moved=false for a wrist the sensor saw move.
+                trySendBlocking(QuickEvent.Progress(0f, problem))
                 false
             }
             0 -> {
