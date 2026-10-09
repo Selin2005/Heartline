@@ -52,6 +52,12 @@ import com.heartline.wear.ui.theme.WearColors
 import org.koin.androidx.compose.koinViewModel
 import com.heartline.wear.monitor.WatchSettingsStore
 import org.koin.compose.koinInject
+import com.heartline.shared.sync.MeasureHint
+import com.heartline.shared.sync.MeasureOutcome
+import com.heartline.shared.sync.MeasureProblem
+import com.heartline.shared.sync.MeasureStage
+import com.heartline.wear.remote.RemoteMeasureCoordinator
+import com.heartline.wear.remote.RemoteMeasureReporter
 
 /**
  * Blood pressure on the watch. With [calibrationSession] the screen stays open for the whole
@@ -62,7 +68,8 @@ fun BpFlow(
     onExit: () -> Unit,
     calibrationSession: Boolean = false,
     onStartCalibration: () -> Unit = {},
-    vm: BpMeasureViewModel = koinViewModel(),
+    remote: RemoteMeasureReporter? = null,
+    vm: BpMeasureViewModel = koinViewModel(key = remote?.link?.sessionId),
     gateway: SensorGateway = koinInject(),
     phone: PhoneOpener = koinInject(),
     settingsStore: WatchSettingsStore = koinInject(),
@@ -86,12 +93,76 @@ fun BpFlow(
     }
 
     LaunchedEffect(Unit) { if (!calibrationSession) vm.checkReady() }
+    val coordinator: RemoteMeasureCoordinator = koinInject()
+    val recording = state is BpState.Preparing || state is BpState.Measuring
+    DisposableEffect(recording) {
+        coordinator.recording(recording)
+        onDispose { if (recording) coordinator.recording(false) }
+    }
+    if (remote != null) {
+        // Started from the phone: a measurement starts at once (a calibration round starts when
+        // its request is here, below), and every step goes to the phone.
+        LaunchedEffect(Unit) {
+            remote.report(MeasureStage.ACCEPTED)
+            if (!calibrationSession) start()
+        }
+        LaunchedEffect(remote) {
+            coordinator.cancels.collect { id ->
+                if (id == remote.link.sessionId) {
+                    vm.cancel()
+                    remote.finish(MeasureOutcome.CANCELLED)
+                    onExit()
+                }
+            }
+        }
+        LaunchedEffect(state) {
+            when (val s = state) {
+                BpState.Idle -> Unit
+                BpState.Preparing -> remote.report(MeasureStage.PREPARING)
+                is BpState.Measuring -> remote.report(
+                    MeasureStage.MEASURING,
+                    s.progress,
+                    s.secondsLeft,
+                    if (s.contact) MeasureHint.NONE else MeasureHint.WRIST_CONTACT,
+                    live = s.bpm,
+                )
+                is BpState.Done -> {
+                    val record = vm.lastRecord
+                    remote.finish(MeasureOutcome.OK, recordId = record?.id, summary = record?.summary)
+                    kotlinx.coroutines.delay(com.heartline.wear.quick.REMOTE_RESULT_MS)
+                    vm.reset()
+                    onExit()
+                }
+                is BpState.CalibrationRecorded -> {
+                    remote.finish(MeasureOutcome.OK)
+                    kotlinx.coroutines.delay(com.heartline.wear.quick.REMOTE_RESULT_MS / 2)
+                    vm.reset()
+                    onExit()
+                }
+                BpState.NeedsCalibration -> remote.reject(MeasureProblem.NEEDS_CALIBRATION)
+                BpState.OutOfRange, BpState.PoorSignal -> remote.finish(MeasureOutcome.FAILED, MeasureProblem.LOW_SIGNAL)
+                BpState.Moving -> remote.finish(MeasureOutcome.FAILED, MeasureProblem.MOVING)
+                is BpState.CalibrationRetry -> remote.finish(MeasureOutcome.FAILED, MeasureProblem.LOW_SIGNAL)
+                is BpState.Failed -> remote.finish(MeasureOutcome.FAILED, RemoteMeasureReporter.problem(s.problem))
+            }
+        }
+    }
     // A round requested by the phone starts right away while this screen is open.
     LaunchedEffect(calibrationSession, capture, state is BpState.Idle || state is BpState.CalibrationRecorded) {
         if (calibrationSession && capture != null && (state is BpState.Idle || state is BpState.CalibrationRecorded)) start(if (capture?.precise == true) BpMode.PRECISE else BpMode.QUICK)
     }
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { if (state is BpState.Measuring) vm.cancel() }
-    DisposableEffect(Unit) { onDispose { vm.cancel() } }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        if (state is BpState.Measuring) {
+            vm.cancel()
+            remote?.finish(MeasureOutcome.CANCELLED, MeasureProblem.WATCH_LEFT)
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            vm.cancel()
+            remote?.finish(MeasureOutcome.CANCELLED, MeasureProblem.WATCH_LEFT)
+        }
+    }
     val measuring = state as? BpState.Measuring
     val view = LocalView.current
     DisposableEffect(measuring != null) {
@@ -145,6 +216,7 @@ fun BpFlow(
             showWave = prefs.liveWave,
             settling = s.settling,
             phase = s.phase,
+            fromPhone = remote != null,
         )
         BpState.Preparing -> CheckingScreen(Icons.Rounded.Sensors, stringResource(R.string.metric_bp), stringResource(R.string.bp_preparing))
         is BpState.Done -> BpResultScreen(

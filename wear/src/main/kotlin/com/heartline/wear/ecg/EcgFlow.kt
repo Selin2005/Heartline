@@ -73,6 +73,13 @@ fun EcgFlow(
     DisposableEffect(Unit) { onDispose { vm.cancel() } }
 
     val measuring = state as? EcgMeasureState.Measuring
+    // While recording, the phone is told the watch is busy, and background windows wait.
+    val coordinator: com.heartline.wear.remote.RemoteMeasureCoordinator = koinInject()
+    DisposableEffect(measuring != null) {
+        val on = measuring != null
+        coordinator.recording(on)
+        onDispose { if (on) coordinator.recording(false) }
+    }
     val vibrate = rememberBuzz(buzz)
     val view = LocalView.current
     DisposableEffect(measuring != null) {

@@ -37,9 +37,23 @@ import org.koin.androidx.compose.koinViewModel
 import com.heartline.wear.monitor.WatchSettingsStore
 import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
+import com.heartline.shared.sync.MeasureOutcome
+import com.heartline.shared.sync.MeasureProblem
+import com.heartline.shared.sync.MeasureStage
+import com.heartline.wear.remote.RemoteMeasureCoordinator
+import com.heartline.wear.remote.RemoteMeasureReporter
 
+/**
+ * One SpO2 / skin temperature / body composition / stress measurement. With [remote] the phone
+ * started it: it begins at once and every step goes to the phone, which shows the same.
+ */
 @Composable
-fun QuickFlow(metric: Metric, onExit: () -> Unit, vm: QuickMeasureViewModel = koinViewModel(key = metric.name) { parametersOf(metric) }) {
+fun QuickFlow(
+    metric: Metric,
+    onExit: () -> Unit,
+    remote: RemoteMeasureReporter? = null,
+    vm: QuickMeasureViewModel = koinViewModel(key = remote?.link?.sessionId ?: metric.name) { parametersOf(metric) },
+) {
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
@@ -50,8 +64,60 @@ fun QuickFlow(metric: Metric, onExit: () -> Unit, vm: QuickMeasureViewModel = ko
         if (missing.isEmpty()) vm.start() else launcher.launch(missing.toTypedArray())
     }
 
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { if (state is QuickState.Measuring) vm.cancel() }
-    DisposableEffect(Unit) { onDispose { vm.cancel() } }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        if (state is QuickState.Measuring) {
+            vm.cancel()
+            remote?.finish(MeasureOutcome.CANCELLED, MeasureProblem.WATCH_LEFT)
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            vm.cancel()
+            remote?.finish(MeasureOutcome.CANCELLED, MeasureProblem.WATCH_LEFT)
+        }
+    }
+    val coordinator: RemoteMeasureCoordinator = koinInject()
+    val recording = state is QuickState.Measuring
+    DisposableEffect(recording) {
+        coordinator.recording(recording)
+        onDispose { if (recording) coordinator.recording(false) }
+    }
+    if (remote != null) {
+        LaunchedEffect(Unit) {
+            remote.report(MeasureStage.ACCEPTED)
+            start()
+        }
+        LaunchedEffect(remote) {
+            coordinator.cancels.collect { id ->
+                if (id == remote.link.sessionId) {
+                    vm.cancel()
+                    remote.finish(MeasureOutcome.CANCELLED)
+                    onExit()
+                }
+            }
+        }
+        LaunchedEffect(state) {
+            when (val s = state) {
+                QuickState.Idle, is QuickState.ConfirmWeight -> Unit
+                QuickState.NeedsProfile -> remote.reject(MeasureProblem.NEEDS_PROFILE)
+                is QuickState.Measuring -> remote.report(
+                    MeasureStage.MEASURING,
+                    s.progress,
+                    s.secondsLeft,
+                    RemoteMeasureReporter.hint(s.hint),
+                    live = s.bpm,
+                )
+                is QuickState.Done -> {
+                    remote.finish(MeasureOutcome.OK, recordId = s.recordId, summary = s.summary)
+                    // The phone has the result too: leave the watch screen by itself after a while.
+                    kotlinx.coroutines.delay(REMOTE_RESULT_MS)
+                    vm.reset()
+                    onExit()
+                }
+                is QuickState.Failed -> remote.finish(MeasureOutcome.FAILED, RemoteMeasureReporter.problem(s.problem, s.hint))
+            }
+        }
+    }
     val view = LocalView.current
     DisposableEffect(state is QuickState.Measuring) {
         view.keepScreenOn = state is QuickState.Measuring
@@ -66,9 +132,9 @@ fun QuickFlow(metric: Metric, onExit: () -> Unit, vm: QuickMeasureViewModel = ko
         onExit()
     }
     when (val s = state) {
-        QuickState.Idle -> QuickInstructionScreen(metric, onStart = ::start)
+        QuickState.Idle -> if (remote != null) QuickMeasuringScreen(metric, 0f, vm.seconds, null, fromPhone = true) else QuickInstructionScreen(metric, onStart = ::start)
         QuickState.NeedsProfile -> ProfileNeededScreen(onDone = done)
-        is QuickState.Measuring -> QuickMeasuringScreen(metric, s.progress, s.secondsLeft, s.hint, s.bpm, s.hrvMs)
+        is QuickState.Measuring -> QuickMeasuringScreen(metric, s.progress, s.secondsLeft, s.hint, s.bpm, s.hrvMs, fromPhone = remote != null)
         is QuickState.ConfirmWeight -> WeightConfirmScreen(s.weightKg, onConfirm = vm::confirmWeight)
         is QuickState.Done -> {
             val body = s.summary as? RecordSummary.BodyComposition
@@ -85,3 +151,6 @@ fun QuickFlow(metric: Metric, onExit: () -> Unit, vm: QuickMeasureViewModel = ko
         is QuickState.Failed -> SensorErrorScreen(s.problem ?: SensorProblem.OFF_BODY, onAction = { vm.reset() })
     }
 }
+
+/** How long a result the phone asked for stays on the watch before the screen closes by itself. */
+internal const val REMOTE_RESULT_MS = 8_000L

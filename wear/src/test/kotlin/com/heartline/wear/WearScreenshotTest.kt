@@ -114,15 +114,15 @@ class WearScreenshotTest(private val size: String) {
         EcgMeasuringScreen(0.4f, 18, WearSample.liveEcg, leadOff = false, bpm = 72, endIndex = 1500L * 3 + 900)
     }
 
-    @Test fun ecgWaitingForTouch() = shot("ecg_waiting") { EcgMeasuringScreen(0f, 30, FloatArray(0), leadOff = true, waitingForTouch = true) }
+    @Test fun ecgWaitingForTouch() = shot("ecg_waiting") { EcgMeasuringScreen(0f, 30, FloatArray(0), leadOff = true, waitingForTouch = true, animate = false) }
 
     @Test fun ecgLeadOff() = shot("ecg_lead_off") { EcgMeasuringScreen(0.55f, 14, WearSample.liveEcg.copyOf(900), leadOff = true) }
 
     @Test fun ecgAnalyzing() = shot("ecg_analyzing") { EcgAnalyzingScreen() }
 
-    @Test fun ecgArming() = shot("ecg_arming") { EcgMeasuringScreen(0f, 30, WearSample.liveEcg.copyOf(900), leadOff = true, arming = true) }
+    @Test fun ecgArming() = shot("ecg_arming") { EcgMeasuringScreen(0f, 30, WearSample.liveEcg.copyOf(900), leadOff = true, arming = true, animate = false) }
 
-    @Test fun ecgStruggling() = shot("ecg_struggling") { EcgMeasuringScreen(0f, 30, WearSample.liveEcg.copyOf(900), leadOff = true, arming = true, struggling = true) }
+    @Test fun ecgStruggling() = shot("ecg_struggling") { EcgMeasuringScreen(0f, 30, WearSample.liveEcg.copyOf(900), leadOff = true, arming = true, struggling = true, animate = false) }
 
     @Test fun ecgResultInconclusiveWithNote() = shot("ecg_result_inconclusive_note") {
         EcgResultScreen(
@@ -224,6 +224,17 @@ class WearScreenshotTest(private val size: String) {
     @Test fun spo2Instruction() = shot("spo2_instruction") { QuickInstructionScreen(Metric.SPO2) }
 
     @Test fun bodyInstruction() = shot("body_instruction") { QuickInstructionScreen(Metric.BODY_COMPOSITION) }
+
+    @Test fun spo2FromPhone() = shot("spo2_from_phone") { QuickMeasuringScreen(Metric.SPO2, 0.55f, 14, null, bpm = 70, animate = false, fromPhone = true) }
+
+    @Test fun heartRateCheck() = shot("heart_rate_check") { com.heartline.wear.ui.screens.HeartRateCheckScreen(0.4f, 18, 67, hint = false, animate = false) }
+
+    @Test fun heartRateCheckResult() = shot("heart_rate_check_result") { com.heartline.wear.ui.screens.HeartRateCheckResultScreen(66, 61, 74, animate = false) }
+
+    @Test fun bpFromPhone() = shot("bp_from_phone") {
+        val ppg = com.heartline.shared.sample.SyntheticPpg.generate(4.0, 68.0, 0.5)
+        com.heartline.wear.ui.screens.BpMeasuringScreen(0.6f, 9, ppg.copyOfRange(0, 300), contact = true, bpm = 68, endIndex = 300L * 4 + 180, animate = false, fromPhone = true)
+    }
 
     @Test fun spo2Measuring() = shot("spo2_measuring") { QuickMeasuringScreen(Metric.SPO2, 0.45f, 17, QuickHint.HOLD_STILL, animate = false) }
 

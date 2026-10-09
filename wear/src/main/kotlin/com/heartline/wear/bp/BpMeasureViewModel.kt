@@ -180,6 +180,11 @@ class BpMeasureViewModel(
     val state: StateFlow<BpState> = mutable.asStateFlow()
     private var job: Job? = null
 
+    /** The last reading stored (for the phone, when it started the measurement). */
+    @Volatile
+    var lastRecord: RecordMeta? = null
+        private set
+
     /** Calibration capture requested by the phone, if any. */
     val pendingCapture: StateFlow<CaptureRequest?> get() = bpStore.pendingCapture
 
@@ -585,6 +590,7 @@ class BpMeasureViewModel(
                 // The raw pulse wave goes to the phone too: it lets the phone's personal model refine
                 // the reading and lets the algorithm be re-evaluated on real data later.
                 records.add(meta, wave)
+                lastRecord = meta
                 finish(log) { header().copy(recordId = recordId) }
                 BpState.Done(
                     e.systolic,

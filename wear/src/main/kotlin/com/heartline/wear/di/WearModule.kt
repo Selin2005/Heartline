@@ -139,6 +139,7 @@ val wearModule = module {
                 }
             },
             onArchiveAck = { get<LogOffload>().onAck(it) },
+            onMeasureCancel = { get<com.heartline.wear.remote.RemoteMeasureCoordinator>().onCancel(it.sessionId) },
             onError = { path, error -> HLog.w("Heartline/Sync", "could not handle $path", error) },
         )
     }
@@ -154,6 +155,21 @@ val wearModule = module {
         )
     }
     single { WatchLinkStore(androidContext()) }
+    single {
+        com.heartline.wear.remote.RemoteMeasureCoordinator(
+            sendState = { get<WatchSyncEngine>().sendMeasureState(it) },
+            sendResult = { result ->
+                // Through the outbox: it reaches the phone even after a moment out of range.
+                get<com.heartline.wear.data.WatchRecordStore>().enqueueMessage(
+                    result.id,
+                    Protocol.MEASURE_RESULT,
+                    Protocol.json.encodeToString(result).encodeToByteArray(),
+                )
+                get<SyncScheduler>().schedule()
+            },
+            scope = get(APP_SCOPE),
+        )
+    }
     single { WatchCommandBus() }
     single { RemoteOpener(androidContext(), get()) }
     single { PhoneOpener(get(), get()) }
@@ -162,7 +178,14 @@ val wearModule = module {
             get<DataLayerTransport>(),
             get(),
             get<WatchLinkStore>().latest,
-            hello = { Hello(appVersion = BuildConfig.VERSION_NAME, deviceName = Build.MODEL, settings = get<WatchSettingsStore>().settings.value) },
+            hello = {
+                Hello(
+                    appVersion = BuildConfig.VERSION_NAME,
+                    deviceName = Build.MODEL,
+                    settings = get<WatchSettingsStore>().settings.value,
+                    features = listOf(com.heartline.shared.sync.Features.REMOTE_MEASURE),
+                )
+            },
             log = { HLog.i("Heartline/Link", it) },
         )
     }
@@ -208,6 +231,7 @@ val wearModule = module {
     }
     viewModel { HistoryViewModel(get()) }
     viewModel { HeartRateViewModel(get()) }
+    viewModel { com.heartline.wear.remote.HeartRateCheckViewModel(get(), get(), get()) }
     viewModel {
         WatchSettingsViewModel(get(), get()) { changed ->
             BackgroundMonitoring.sync(androidContext(), changed)

@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
@@ -67,6 +68,9 @@ fun BubbleOrb(
 ) {
     val scene = remember(style, seed) { BubbleScene(style, seed) }
     var now by remember { mutableLongStateOf(0L) }
+    // Previews and screenshot tests get one representative still frame.
+    @Suppress("NAME_SHADOWING")
+    val animate = animate && !LocalInspectionMode.current
     if (frameMs == null && animate) {
         LaunchedEffect(maxFps) {
             val start = withFrameMillis { it }

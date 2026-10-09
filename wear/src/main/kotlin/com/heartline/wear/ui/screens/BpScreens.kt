@@ -44,6 +44,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
 import com.heartline.wear.ui.components.BeatingHeart
+import com.heartline.wear.ui.components.MeasureBubble
+import com.heartline.wear.ui.components.onBubble
+import com.heartline.bubbles.BubblePhase
 import com.heartline.wear.ui.components.SweepTrace
 import com.heartline.wear.ui.components.ActionScreen
 import com.heartline.wear.ui.components.isSmallRound
@@ -240,8 +243,9 @@ private fun Note(text: String, color: Color) = Text(
 )
 
 /**
- * Blood pressure recording: the pulse wave sweeps across the screen (filtered, upright) with the
- * live pulse rate, inside the progress ring.
+ * Blood pressure recording: a bubble that squeezes with every pulse and fills with the progress,
+ * the seconds inside it, and the pulse wave (filtered, upright) sweeping under it.
+ * [fromPhone]: started from the phone, which shows the same steps.
  */
 @Composable
 fun BpMeasuringScreen(
@@ -256,57 +260,59 @@ fun BpMeasuringScreen(
     animate: Boolean = true,
     settling: Boolean = false,
     phase: BpPhase? = null,
+    fromPhone: Boolean = false,
 ) {
     val color = WearColors.metric(Metric.BLOOD_PRESSURE)
     Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
-        androidx.wear.compose.material3.CircularProgressIndicator(
-            progress = { progress },
-            modifier = Modifier.fillMaxSize().padding(2.dp),
-            strokeWidth = 6.dp,
-            colors = androidx.wear.compose.material3.ProgressIndicatorDefaults.colors(indicatorColor = color, trackColor = WearColors.surfaceHigh),
-        )
+        MeasureBubble(
+            Metric.BLOOD_PRESSURE,
+            if (contact) BubblePhase.MEASURING else BubblePhase.HINT,
+            Modifier.fillMaxSize().padding(bottom = 22.dp),
+            progress = progress,
+            bpm = bpm,
+            animate = animate,
+        ) {
+            if (settling) {
+                Text(stringResource(R.string.bp_settling), style = MaterialTheme.typography.titleSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 40.dp))
+            } else {
+                CenteredValue("$secondsLeft", stringResource(R.string.unit_sec), onBubble(MaterialTheme.typography.displayMedium), onBubble(MaterialTheme.typography.bodySmall))
+            }
+        }
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 8.dp),
         ) {
-            Text(
-                calibrationRound?.let { calibrationTitle(it) } ?: stringResource(R.string.metric_bp),
-                style = MaterialTheme.typography.labelMedium,
-                color = color,
-            )
-            if (settling) {
-                Text(stringResource(R.string.bp_settling), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
-            } else {
-                CenteredValue("$secondsLeft", stringResource(R.string.unit_sec), MaterialTheme.typography.displayMedium, MaterialTheme.typography.bodySmall)
+            when {
+                calibrationRound != null -> Text(calibrationTitle(calibrationRound), style = MaterialTheme.typography.labelMedium, color = color)
+                fromPhone -> FromPhoneLabel()
+                else -> Text(stringResource(R.string.metric_bp), style = MaterialTheme.typography.labelMedium, color = color)
             }
-            val waveHeight = if (isSmallRound()) 44.dp else 54.dp
-            if (showWave) {
-                SweepTrace(trace, endIndex, windowSamples = 300, color = color, paper = false, centered = false, minRange = 0f, modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp).height(waveHeight))
-            } else {
-                Box(Modifier.height(waveHeight), contentAlignment = Alignment.Center) { BeatingHeart(bpm, color, 30.dp, animate) }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(18.dp).padding(top = 2.dp)) {
-                if (bpm != null && contact) {
-                    BeatingHeart(bpm, color, 12.dp, animate)
-                    Text(stringResource(R.string.live_pulse, bpm), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 4.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                if (showWave) {
+                    SweepTrace(trace, endIndex, windowSamples = 300, color = color, paper = false, centered = false, minRange = 0f, modifier = Modifier.fillMaxWidth().padding(horizontal = 34.dp).height(22.dp))
+                } else if (bpm != null && contact) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(18.dp)) {
+                        BeatingHeart(bpm, color, 12.dp, animate)
+                        Text(stringResource(R.string.live_pulse, bpm), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 4.dp))
+                    }
                 }
+                Text(
+                    stringResource(
+                        when {
+                            phase != null && !contact -> R.string.bp_touch_key
+                            phase != null -> phase.prompt
+                            contact -> R.string.bp_keep_still
+                            else -> R.string.bp_adjust_watch
+                        },
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (contact) WearColors.onSurfaceVariant else WearColors.warn,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    modifier = Modifier.padding(horizontal = 40.dp),
+                )
             }
-            Text(
-                stringResource(
-                    when {
-                        phase != null && !contact -> R.string.bp_touch_key
-                        phase != null -> phase.prompt
-                        contact -> R.string.bp_keep_still
-                        else -> R.string.bp_adjust_watch
-                    },
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = if (contact) WearColors.onSurfaceVariant else WearColors.warn,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                modifier = Modifier.padding(horizontal = 18.dp),
-            )
         }
     }
 }

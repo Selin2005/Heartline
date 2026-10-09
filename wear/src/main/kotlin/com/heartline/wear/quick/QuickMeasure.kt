@@ -67,7 +67,7 @@ sealed interface QuickState {
     data class ConfirmWeight(val weightKg: Float) : QuickState
 
     /** [previous]: the last result of the same kind (for changes); [profile]: for reference ranges. */
-    data class Done(val summary: RecordSummary, val previous: RecordSummary? = null, val profile: UserProfile? = null) : QuickState
+    data class Done(val summary: RecordSummary, val previous: RecordSummary? = null, val profile: UserProfile? = null, val recordId: String? = null) : QuickState
 
     data class Failed(val problem: SensorProblem?, val hint: QuickHint?) : QuickState
 }
@@ -85,6 +85,9 @@ class QuickMeasureViewModel(
     private var job: Job? = null
 
     val metric get() = source.metric
+
+    /** How long the measurement takes, for the countdown before it starts. */
+    val seconds: Int get() = source.seconds
 
     fun start() {
         if (job?.isActive == true) return
@@ -152,7 +155,7 @@ class QuickMeasureViewModel(
                             val meta = RecordMeta(UUID.randomUUID().toString(), source.kind, startedAt, now() - startedAt, 0, 0, event.summary)
                             store.add(meta, null)
                             sync.schedule()
-                            mutable.value = QuickState.Done(event.summary, previous, profile)
+                            mutable.value = QuickState.Done(event.summary, previous, profile, meta.id)
                         }
                     }
                 }

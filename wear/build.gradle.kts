@@ -102,6 +102,7 @@ tasks.matching { it.name == "testPlayUnitTest" }.configureEach { enabled = false
 dependencies {
     implementation(project(":shared"))
     implementation(project(":datalayer"))
+    implementation(project(":bubbles"))
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)

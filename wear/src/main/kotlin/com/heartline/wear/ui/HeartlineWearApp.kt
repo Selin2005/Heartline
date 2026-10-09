@@ -119,9 +119,13 @@ private object Routes {
         else -> quick(metric)
     }
 
+    /** A measurement the phone started: `remote/<METRIC>?session=<id>[&round=<n>]`. */
+    const val REMOTE = "remote/{metric}?session={session}&round={round}"
+
     /** Screens the phone, notifications, tiles and complications may open. */
     fun isExternal(route: String) = route in setOf(ECG, HEART_RATE, BLOOD_PRESSURE, BP_CALIBRATION, HISTORY) ||
-        (route.startsWith("quick/") && Metric.entries.any { route == quick(it) })
+        (route.startsWith("quick/") && Metric.entries.any { route == quick(it) }) ||
+        com.heartline.shared.measure.RemoteMeasureLink.parse(route) != null
 }
 
 /**
@@ -169,6 +173,23 @@ fun HeartlineWearApp(startRoute: String? = null) {
     var pendingRoute by rememberSaveable { mutableStateOf(startRoute) }
     LaunchedEffect(bus) { bus.navigate.collect { pendingRoute = it } }
     val ready = gateState is GateState.Ready
+    val coordinator: com.heartline.wear.remote.RemoteMeasureCoordinator = koinInject()
+    LaunchedEffect(pendingRoute, gateState) {
+        // A measurement the phone started can't wait for setup: tell the phone why, and drop it.
+        val link = pendingRoute?.let { com.heartline.shared.measure.RemoteMeasureLink.parse(EntryLinks.parse(it).route) } ?: return@LaunchedEffect
+        val problem = when (val g = gateState) {
+            is GateState.PhoneProblem, is GateState.SetupIncomplete -> com.heartline.shared.sync.MeasureProblem.NEEDS_SETUP
+            GateState.NeedsPermissions -> com.heartline.shared.sync.MeasureProblem.PERMISSION
+            is GateState.SensorIssue -> when (g.problem) {
+                SensorProblem.SDK_POLICY -> com.heartline.shared.sync.MeasureProblem.SDK_POLICY
+                SensorProblem.PERMISSION -> com.heartline.shared.sync.MeasureProblem.PERMISSION
+                else -> com.heartline.shared.sync.MeasureProblem.SENSOR
+            }
+            else -> null
+        } ?: return@LaunchedEffect
+        coordinator.reject(link, problem)
+        pendingRoute = null
+    }
     LaunchedEffect(pendingRoute, ready) {
         val route = pendingRoute ?: return@LaunchedEffect
         if (route == MainActivity.ROUTE_SETUP) {
@@ -294,6 +315,26 @@ private fun AppNavHost(nav: NavHostController, gate: SetupGateViewModel) {
             }
         }
         composable(Routes.ECG) { EcgFlow(onExit = exit) }
+        composable(
+            Routes.REMOTE,
+            arguments = listOf(
+                androidx.navigation.navArgument("session") { type = androidx.navigation.NavType.StringType },
+                androidx.navigation.navArgument("round") {
+                    type = androidx.navigation.NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { entry ->
+            val metric = entry.arguments?.getString("metric")?.let { name -> Metric.entries.firstOrNull { it.name == name } }
+            val session = entry.arguments?.getString("session")
+            if (metric != null && session != null && metric.measuresOnPhone) {
+                val link = com.heartline.shared.measure.RemoteMeasureLink(metric, session, entry.arguments?.getString("round")?.toIntOrNull())
+                com.heartline.wear.remote.RemoteMeasureFlow(link, onExit = exit)
+            } else {
+                LaunchedEffect(Unit) { exit() }
+            }
+        }
         composable(Routes.BLOOD_PRESSURE) {
             BpFlow(onExit = exit, onStartCalibration = { nav.openExternal(Routes.BP_CALIBRATION) })
         }

@@ -39,17 +39,21 @@ import com.heartline.wear.R
 import com.heartline.wear.ui.components.GoodResult
 import com.heartline.wear.ui.components.PersonalNote
 import kotlin.math.roundToInt
-import com.heartline.wear.ui.components.BeatingHeart
-import com.heartline.wear.ui.components.BreathingCircle
-import com.heartline.wear.ui.components.KeysContact
-import com.heartline.wear.ui.components.ThermometerFill
-import com.heartline.wear.ui.components.PulseRipple
 import com.heartline.wear.sensor.QuickHint
 import com.heartline.wear.ui.components.ActionScreen
 import com.heartline.wear.ui.components.icon
 import com.heartline.wear.ui.components.isSmallRound
 import com.heartline.wear.ui.components.label
 import com.heartline.wear.ui.theme.WearColors
+import com.heartline.bubbles.BubblePhase
+import com.heartline.wear.ui.components.MeasureBubble
+import com.heartline.wear.ui.components.onBubble
+import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.material.icons.Icons
 
 private val Metric.instruction: Int
     get() = when (this) {
@@ -98,8 +102,10 @@ fun QuickInstructionScreen(metric: Metric, onStart: () -> Unit = {}) {
 }
 
 /**
- * Measuring: progress ring, countdown and a metric-specific animation driven by live data where
- * the sensor gives it (the SpO2 ripple and the stress heart beat at the measured heart rate).
+ * Measuring: a glossy bubble that fills with the progress and moves in the metric's own way (the
+ * SpO2 bubble fizzes, the stress bubble breathes, the heart beats at the measured rate), the
+ * seconds left inside it and the hint under it. [fromPhone]: started from the phone, which shows
+ * the same steps.
  */
 @Composable
 fun QuickMeasuringScreen(
@@ -110,35 +116,29 @@ fun QuickMeasuringScreen(
     bpm: Int? = null,
     hrvMs: Double? = null,
     animate: Boolean = true,
+    fromPhone: Boolean = false,
 ) {
-    val color = WearColors.metric(metric)
     Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator(
-            progress = { progress },
-            modifier = Modifier.fillMaxSize().padding(2.dp),
-            strokeWidth = 6.dp,
-            colors = ProgressIndicatorDefaults.colors(indicatorColor = color, trackColor = WearColors.surfaceHigh),
-        )
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.padding(horizontal = 26.dp)) {
-            val visual = if (isSmallRound()) 50.dp else 62.dp
-            when (metric) {
-                Metric.SPO2 -> PulseRipple(bpm, color, Modifier.size(visual), animate) {
-                    Icon(metric.icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
-                }
-                Metric.SKIN_TEMPERATURE -> ThermometerFill(color, Modifier.size(width = visual * 0.6f, height = visual), animate)
-                Metric.BODY_COMPOSITION -> KeysContact(color, Modifier.size(visual), animate) {
-                    Icon(metric.icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
-                }
-                Metric.STRESS -> BreathingCircle(color, Modifier.size(visual), animate) {
-                    BeatingHeart(bpm, color, 20.dp, animate)
-                }
-                else -> Icon(metric.icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
-            }
-            CenteredValue("$secondsLeft", stringResource(R.string.unit_sec), MaterialTheme.typography.displayMedium, MaterialTheme.typography.bodySmall)
-            val live = listOfNotNull(
-                bpm?.let { stringResource(R.string.live_bpm, it) },
-                hrvMs?.takeIf { metric == Metric.STRESS }?.let { stringResource(R.string.live_hrv, it.roundToInt()) },
-            ).joinToString(" · ")
+        MeasureBubble(
+            metric,
+            if (hint != null) BubblePhase.HINT else BubblePhase.MEASURING,
+            Modifier.fillMaxSize(),
+            progress = progress,
+            bpm = bpm,
+            animate = animate,
+        ) {
+            CenteredValue("$secondsLeft", stringResource(R.string.unit_sec), onBubble(MaterialTheme.typography.displayMedium), onBubble(MaterialTheme.typography.bodySmall))
+        }
+        val live = listOfNotNull(
+            bpm?.let { stringResource(R.string.live_bpm, it) },
+            hrvMs?.takeIf { metric == Metric.STRESS }?.let { stringResource(R.string.live_hrv, it.roundToInt()) },
+        ).joinToString(" · ")
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxSize().padding(horizontal = 30.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            if (fromPhone) FromPhoneLabel() else Spacer(Modifier.height(1.dp))
             Text(
                 when {
                     hint != null -> stringResource(hint.text)
@@ -151,8 +151,23 @@ fun QuickMeasuringScreen(
                 color = if (hint != null) WearColors.warn else WearColors.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
         }
+    }
+}
+
+/** A small "Started from your phone" chip at the top of a measurement the phone started. */
+@Composable
+fun FromPhoneLabel() {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Rounded.PhoneAndroid, contentDescription = null, tint = WearColors.onSurfaceVariant, modifier = Modifier.size(12.dp))
+        Text(
+            stringResource(R.string.from_phone),
+            style = MaterialTheme.typography.labelSmall,
+            color = WearColors.onSurfaceVariant,
+            modifier = Modifier.padding(start = 3.dp),
+        )
     }
 }
 

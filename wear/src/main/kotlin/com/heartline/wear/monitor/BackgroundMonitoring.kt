@@ -278,11 +278,18 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
 
     private val store: WatchSettingsStore by inject()
     private val output: WatchMonitorOutput by inject()
+    private val measurements: com.heartline.wear.remote.RemoteMeasureCoordinator by inject()
 
     override suspend fun doWork(): Result {
         if (!BackgroundMonitoring.canRun(applicationContext)) return Result.success()
         val settings = store.settings.value.normalized()
         if (!settings.rhythmActive && !settings.stressActive) return Result.success()
+        // A measurement on screen (started on the watch or from the phone) has the sensors: a
+        // window now would share its heart-rate tracker. The next window comes in 15 minutes.
+        if (measurements.busy) {
+            HLog.i(TAG, "IRN window skipped: a measurement is running")
+            return Result.success()
+        }
         // On the charger the watch is off the wrist: no sensor at all (the off-body sensor below
         // can be late to report, and a real log had three windows light the sensor there).
         if (Charging.isCharging(applicationContext)) {
