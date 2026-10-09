@@ -10,8 +10,9 @@ Regenerate with `./gradlew recordPaparazziDebug` and `python3 tools/screenshots/
 |---|:-:|:-:|
 | [**Onboarding**](phone/onboarding/README.md) | [<img src="phone/onboarding/terms_light.png" width="120" alt="">](phone/onboarding/README.md) | 8 |
 | [**Home**](phone/home/README.md) | [<img src="phone/home/home_light.png" width="120" alt="">](phone/home/README.md) | 7 |
+| [**Measuring from the phone**](phone/measure/README.md) | [<img src="phone/measure/measure_starting_light.png" width="120" alt="">](phone/measure/README.md) | 11 |
 | [**ECG**](phone/ecg/README.md) | [<img src="phone/ecg/ecg_home_light.png" width="120" alt="">](phone/ecg/README.md) | 8 |
-| [**Blood pressure**](phone/blood-pressure/README.md) | [<img src="phone/blood-pressure/bp_home_light.png" width="120" alt="">](phone/blood-pressure/README.md) | 7 |
+| [**Blood pressure**](phone/blood-pressure/README.md) | [<img src="phone/blood-pressure/bp_home_light.png" width="120" alt="">](phone/blood-pressure/README.md) | 8 |
 | [**Heart rate and alerts**](phone/heart-rate/README.md) | [<img src="phone/heart-rate/heart_rate_light.png" width="120" alt="">](phone/heart-rate/README.md) | 5 |
 | [**SpO₂, temperature and stress**](phone/more-measurements/README.md) | [<img src="phone/more-measurements/spo2_light.png" width="120" alt="">](phone/more-measurements/README.md) | 3 |
 | [**Body composition**](phone/body-composition/README.md) | [<img src="phone/body-composition/body_composition_light.png" width="120" alt="">](phone/body-composition/README.md) | 3 |
@@ -26,9 +27,9 @@ Regenerate with `./gradlew recordPaparazziDebug` and `python3 tools/screenshots/
 | [**Setup**](wear/setup/README.md) | [<img src="wear/setup/setup_checking_phone_small.png" width="160" alt="">](wear/setup/README.md) | 14 |
 | [**Launcher and history**](wear/launcher/README.md) | [<img src="wear/launcher/launcher_small.png" width="160" alt="">](wear/launcher/README.md) | 6 |
 | [**ECG**](wear/ecg/README.md) | [<img src="wear/ecg/ecg_instruction_small.png" width="160" alt="">](wear/ecg/README.md) | 11 |
-| [**Blood pressure**](wear/blood-pressure/README.md) | [<img src="wear/blood-pressure/bp_instruction_small.png" width="160" alt="">](wear/blood-pressure/README.md) | 17 |
-| [**Heart rate**](wear/heart-rate/README.md) | [<img src="wear/heart-rate/heart_rate_small.png" width="160" alt="">](wear/heart-rate/README.md) | 2 |
-| [**SpO₂, temperature and stress**](wear/more-measurements/README.md) | [<img src="wear/more-measurements/spo2_instruction_small.png" width="160" alt="">](wear/more-measurements/README.md) | 8 |
+| [**Blood pressure**](wear/blood-pressure/README.md) | [<img src="wear/blood-pressure/bp_instruction_small.png" width="160" alt="">](wear/blood-pressure/README.md) | 18 |
+| [**Heart rate**](wear/heart-rate/README.md) | [<img src="wear/heart-rate/heart_rate_small.png" width="160" alt="">](wear/heart-rate/README.md) | 4 |
+| [**SpO₂, temperature and stress**](wear/more-measurements/README.md) | [<img src="wear/more-measurements/spo2_instruction_small.png" width="160" alt="">](wear/more-measurements/README.md) | 9 |
 | [**Body composition**](wear/body-composition/README.md) | [<img src="wear/body-composition/body_weight_small.png" width="160" alt="">](wear/body-composition/README.md) | 6 |
 | [**Settings**](wear/settings/README.md) | [<img src="wear/settings/settings_small.png" width="160" alt="">](wear/settings/README.md) | 8 |
 | [**Other**](wear/other/README.md) | [<img src="wear/other/breathing_done_small.png" width="160" alt="">](wear/other/README.md) | 2 |

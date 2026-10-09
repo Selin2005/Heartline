@@ -12,4 +12,5 @@ Cuff calibration, trends and the accuracy of the watch estimate.
 | **Calibration: introduction** | <img src="bp_calibration_intro_light.png" width="240" alt=""> | <img src="bp_calibration_intro_dark.png" width="240" alt=""> |
 | **Calibration: enter the cuff reading** | <img src="bp_calibration_cuff_light.png" width="240" alt=""> | <img src="bp_calibration_cuff_dark.png" width="240" alt=""> |
 | **Calibration: waiting for the watch** | <img src="bp_calibration_waiting_light.png" width="240" alt=""> | <img src="bp_calibration_waiting_dark.png" width="240" alt=""> |
+| **Calibration: the watch measuring a round** | <img src="bp_calibration_round_measuring_light.png" width="240" alt=""> | <img src="bp_calibration_round_measuring_dark.png" width="240" alt=""> |
 | **Calibration done** | <img src="bp_calibration_done_light.png" width="240" alt=""> | <img src="bp_calibration_done_dark.png" width="240" alt=""> |

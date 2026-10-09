@@ -9,6 +9,7 @@ Calibrated blood pressure estimates from the PPG sensor.
 | **How to measure** | <img src="bp_instruction_small.png" width="200" alt=""> | <img src="bp_instruction_large.png" width="200" alt=""> |
 | **Measuring** | <img src="bp_measuring_small.png" width="200" alt=""> | <img src="bp_measuring_large.png" width="200" alt=""> |
 | **Measuring, live pulse** | <img src="bp_measuring_live_small.png" width="200" alt=""> | <img src="bp_measuring_live_large.png" width="200" alt=""> |
+| **Measuring, started from the phone** | <img src="bp_from_phone_small.png" width="200" alt=""> | <img src="bp_from_phone_large.png" width="200" alt=""> |
 | **Keep your arm still** | <img src="bp_moving_small.png" width="200" alt=""> | <img src="bp_moving_large.png" width="200" alt=""> |
 | **Result** | <img src="bp_result_small.png" width="200" alt=""> | <img src="bp_result_large.png" width="200" alt=""> |
 | **Result beyond the calibration range** | <img src="bp_result_beyond_small.png" width="200" alt=""> | <img src="bp_result_beyond_large.png" width="200" alt=""> |
