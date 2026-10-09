@@ -23,4 +23,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Heartline"
 
-include(":shared", ":datalayer", ":phone", ":wear")
+include(":shared", ":datalayer", ":bubbles", ":phone", ":wear")
