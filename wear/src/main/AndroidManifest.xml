@@ -477,6 +477,11 @@
                 android:value="0" />
         </service>
 
+        <!-- Wakes the watch to end a rhythm window on time (an allow-while-idle alarm). -->
+        <receiver
+            android:name=".monitor.WindowAlarmReceiver"
+            android:exported="false" />
+
         <receiver
             android:name=".monitor.BootReceiver"
             android:exported="false">

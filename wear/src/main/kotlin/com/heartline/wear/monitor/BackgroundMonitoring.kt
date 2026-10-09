@@ -338,6 +338,9 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
         var ended = "listened"
         var charging = false
         var chargingCheckedAt = Long.MIN_VALUE
+        // The watch can sleep through the wake lock below: an alarm wakes it at the window's end.
+        WindowAlarm.begin(stop)
+        WindowAlarm.schedule(applicationContext, BackgroundWindow.LISTEN_MS)
         // Keeps the processor awake for the timers: without it a window once ran 13 minutes.
         val wake = applicationContext.getSystemService(PowerManager::class.java)
             ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "heartline:rhythm-window")
@@ -376,6 +379,8 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
                 }
             }
         } finally {
+            WindowAlarm.end(stop)
+            WindowAlarm.cancel(applicationContext)
             motion.stop()
             wrist.stop()
             RawCapture.end(raw, mapOf("samples" to samples.size.toDouble()))

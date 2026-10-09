@@ -228,6 +228,15 @@ The window now works like this (`IrnWindowWorker.window`):
    - `off the wrist`: the off-body sensor; `charging`: put on the charger (checked every 10 s);
    - `time limit`: 2.5 minutes by the elapsed-realtime clock.
    A 90 s coroutine timer and the partial wake lock stay as a backup for an awake watch.
+   - **An alarm ends the window at 90 s** (`WindowAlarm`). The 10/09 log (beta.3) showed the
+     readings rule wasn't enough: windows of 6–12 minutes were awake for only 3–48 s, so they
+     ended at the tracker's next batch, about every 10 minutes (250 minutes of sensor in 26
+     hours). Each window now sets an allow-while-idle alarm (no permission; at most about one
+     per 9 minutes in deep sleep, and windows are 15 minutes apart). It wakes the watch, holds
+     it awake for 15 s and ends the window with `ended=alarm`: the held readings are flushed and
+     the sensor stops. The alarm is cancelled when the window ends otherwise. It is inexact; if
+     logs still show long windows, an exact alarm (the "Alarms & reminders" permission) is the
+     next step.
 2. **Ask for the held readings** with the SDK's `HealthTracker.flush()`, and wait for
    `onFlushCompleted` (at most 10 s).
    - The call can block until the tracker's next batch, which can take minutes. A blocking call
