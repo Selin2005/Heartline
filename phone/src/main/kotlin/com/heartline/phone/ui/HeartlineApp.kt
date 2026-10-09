@@ -4,6 +4,8 @@
 package com.heartline.phone.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -224,7 +226,10 @@ fun HeartlineApp(
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = { if (tabs.any { it.route == route }) OneUiBottomBar(route) { navController.navigateTab(it) } },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
+        // Only the bottom is applied (screens draw under the status bar themselves); consume it so a
+        // screen's imePadding doesn't add the navigation and bottom bars on top of the keyboard.
+        val bottom = PaddingValues(bottom = padding.calculateBottomPadding())
+        Box(Modifier.fillMaxSize().padding(bottom).consumeWindowInsets(bottom)) {
             CompositionLocalProvider(LocalOpenAppHome provides if (standalone) openHome else null) {
             NavHost(navController, startDestination = Routes.HOME) {
                 composable(Routes.HOME) {

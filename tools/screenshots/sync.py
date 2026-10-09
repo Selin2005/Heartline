@@ -47,6 +47,7 @@ PHONE = [
         ("profile", "Your profile"),
         ("profile_errors", "Profile with errors shown under each field"),
         ("profile_prefer_not_to_say", "Profile: sex not given"),
+        ("tall_profile", "Profile on a tall 20:9 phone"),
         ("connect_watch_found", "Connect your watch: watch found"),
         ("connect_watch_app_missing", "Connect your watch: Heartline not installed on the watch"),
     ]),
@@ -55,6 +56,7 @@ PHONE = [
         ("home_scrolled", "Home, scrolled"),
         ("home_empty", "Home before the first measurement"),
         ("home_no_watch", "Home without a connected watch"),
+        ("tall_home", "Home on a tall 20:9 phone"),
     ]),
     ("ecg", "ECG", "30-second ECG history, the waveform on ECG paper, symptoms and the PDF report.", [
         ("ecg_home", "ECG overview"),
@@ -94,6 +96,7 @@ PHONE = [
     ]),
     ("settings", "Settings, updates and sharing", "Settings, updates, what's new, diagnostics, sharing, help and about.", [
         ("settings", "Settings"),
+        ("tall_settings", "Settings on a tall 20:9 phone"),
         ("settings_monitoring", "Background monitoring"),
         ("settings_sharing", "Sharing"),
         ("settings_help", "Help & diagnostics, community on Telegram and source code"),

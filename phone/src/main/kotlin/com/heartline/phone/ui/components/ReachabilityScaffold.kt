@@ -12,9 +12,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -53,8 +56,11 @@ import com.heartline.phone.ui.theme.HeartlineTheme
 val LocalOpenAppHome = compositionLocalOf<(() -> Unit)?> { null }
 
 /**
- * One UI "reachability" layout: a tall header holding a large title in the top third of the
+ * One UI "reachability" layout: a tall header holding a large title in the upper part of the
  * screen that scrolls away, leaving a compact app bar whose title fades in.
+ *
+ * The header is capped so tall (20:9 and longer) phones don't open on a block of empty space,
+ * and the list shrinks above the keyboard so a focused text field is scrolled into view.
  */
 @Composable
 fun ReachabilityScaffold(
@@ -69,7 +75,11 @@ fun ReachabilityScaffold(
 ) {
     val colors = HeartlineTheme.colors
     BoxWithConstraints(modifier.fillMaxSize().background(colors.background)) {
-        val headerHeight = maxHeight * 0.30f
+        val appBarBottom = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + AppBarHeight
+        // The large title (and subtitle) sits just under the app bar, with a small gap that grows a
+        // little on taller screens; it never meets the back button.
+        val titleRoom = if (subtitle != null) 100.dp else 72.dp
+        val headerHeight = appBarBottom + titleRoom + (maxHeight * 0.03f).coerceAtMost(24.dp)
         val headerPx = with(LocalDensity.current) { headerHeight.toPx() }
         val collapse by remember(listState, headerPx) {
             derivedStateOf {
@@ -85,15 +95,16 @@ fun ReachabilityScaffold(
             state = listState,
             contentPadding = contentPadding,
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().imePadding(),
         ) {
             item(key = "reachability-header") {
                 Column(
                     verticalArrangement = Arrangement.Bottom,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(headerHeight)
-                        .padding(horizontal = 28.dp, vertical = 20.dp)
+                        // Grows rather than running under the app bar when the title wraps or the font is large.
+                        .heightIn(min = headerHeight)
+                        .padding(start = 28.dp, end = 28.dp, top = appBarBottom, bottom = 20.dp)
                         .alpha(1f - collapse),
                 ) {
                     Text(
@@ -118,7 +129,7 @@ fun ReachabilityScaffold(
                 .fillMaxWidth()
                 .background(colors.background.copy(alpha = collapse))
                 .windowInsetsPadding(WindowInsets.statusBars)
-                .height(56.dp)
+                .height(AppBarHeight)
                 .padding(horizontal = 4.dp),
         ) {
             if (onBack != null) {
@@ -149,6 +160,8 @@ fun ReachabilityScaffold(
         }
     }
 }
+
+private val AppBarHeight = 56.dp
 
 /** Standard horizontal inset for items placed in a [ReachabilityScaffold]. */
 fun Modifier.gutter(): Modifier = padding(horizontal = Dimens.gutter)

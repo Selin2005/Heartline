@@ -7,6 +7,7 @@ Settings, updates, what's new, diagnostics, sharing, help and about.
 | | Light | Dark |
 |---|:-:|:-:|
 | **Settings** | <img src="settings_light.png" width="240" alt=""> | <img src="settings_dark.png" width="240" alt=""> |
+| **Settings on a tall 20:9 phone** | <img src="tall_settings.png" width="240" alt=""> | — |
 | **Background monitoring** | <img src="settings_monitoring_light.png" width="240" alt=""> | <img src="settings_monitoring_dark.png" width="240" alt=""> |
 | **Sharing** | <img src="settings_sharing_light.png" width="240" alt=""> | <img src="settings_sharing_dark.png" width="240" alt=""> |
 | **Help & diagnostics, community on Telegram and source code** | <img src="settings_help_light.png" width="240" alt=""> | <img src="settings_help_dark.png" width="240" alt=""> |
