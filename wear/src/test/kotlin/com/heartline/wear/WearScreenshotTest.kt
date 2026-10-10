@@ -165,7 +165,7 @@ class WearScreenshotTest(private val size: String) {
         HeartRateScreen(66, onBody = true, animate = false)
     }
 
-    @Test fun heartRateOffBody() = shot("heart_rate_off_body") { HeartRateScreen(null, onBody = false) }
+    @Test fun heartRateOffBody() = shot("heart_rate_off_body") { HeartRateScreen(null, onBody = false, animate = false) }
 
     @Test fun bpInstruction() = shot("bp_instruction") { BpInstructionScreen() }
 

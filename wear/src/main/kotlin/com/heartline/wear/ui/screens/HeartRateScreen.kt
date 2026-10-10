@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import com.heartline.wear.R
-import com.heartline.wear.ui.components.MeasureGlobe
+import com.heartline.wear.ui.components.MeasureFace
 import com.heartline.wear.ui.components.onBubble
 import com.heartline.bubbles.BubblePhase
 import androidx.compose.foundation.clickable
@@ -36,37 +37,34 @@ import com.heartline.wear.ui.theme.WearColors
 fun HeartRateScreen(bpm: Int?, onBody: Boolean, animate: Boolean = true) {
     val metric = com.heartline.shared.model.Metric.HEART_RATE
     val color = WearColors.metric(metric)
-    Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
-        // The rim glows with each beat.
-        if (animate && onBody) com.heartline.wear.ui.components.EdgePulse(bpm, color)
-        val phase = when {
-            !onBody -> BubblePhase.FAILED
-            bpm == null -> BubblePhase.FORMING
-            else -> BubblePhase.IDLE
-        }
-        MeasureGlobe(metric, phase, Modifier.fillMaxSize().padding(bottom = 26.dp), bpm = bpm.takeIf { onBody }, animate = animate) {
+    val phase = when {
+        !onBody -> BubblePhase.FAILED
+        bpm == null -> BubblePhase.FORMING
+        else -> BubblePhase.IDLE
+    }
+    Box(Modifier.fillMaxSize()) {
+        MeasureFace(
+            metric,
+            phase,
+            progress = 1f,
+            bpm = bpm.takeIf { onBody },
+            animate = animate,
+            ring = false,
+            bottom = if (onBody) null else stringResource(R.string.hr_off_body),
+            below = if (onBody) {
+                { HeartMonitor(bpm, color, Modifier.width(84.dp).height(18.dp), animate) }
+            } else {
+                null
+            },
+        ) {
             when {
                 !onBody -> Unit
                 bpm == null -> Text(stringResource(R.string.hr_measuring), style = onBubble(MaterialTheme.typography.titleSmall))
                 else -> CenteredValue("$bpm", stringResource(R.string.unit_bpm), onBubble(MaterialTheme.typography.displayMedium), onBubble(MaterialTheme.typography.bodySmall))
             }
         }
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Bottom,
-            modifier = Modifier.fillMaxSize().padding(horizontal = 34.dp, vertical = 16.dp),
-        ) {
-            if (!onBody) {
-                Text(
-                    stringResource(R.string.hr_off_body),
-                    style = MaterialTheme.typography.bodySmall,
-                    textAlign = TextAlign.Center,
-                    color = WearColors.onSurfaceVariant,
-                )
-            } else {
-                HeartMonitor(bpm, color, Modifier.fillMaxWidth().height(26.dp), animate)
-            }
-        }
+        // The rim glows with each beat.
+        if (animate && onBody) com.heartline.wear.ui.components.EdgePulse(bpm, color)
     }
 }
 
@@ -78,39 +76,26 @@ fun HeartRateScreen(bpm: Int?, onBody: Boolean, animate: Boolean = true) {
 fun HeartRateCheckScreen(progress: Float, secondsLeft: Int, bpm: Int?, hint: Boolean, fromPhone: Boolean = true, animate: Boolean = true) {
     val metric = com.heartline.shared.model.Metric.HEART_RATE
     val shown = if (animate) com.heartline.bubbles.rememberShownProgress(progress, paused = hint, done = false) else progress
-    Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
-        MeasureGlobe(
-            metric,
-            when {
-                hint -> BubblePhase.HINT
-                bpm == null -> BubblePhase.FORMING
-                else -> BubblePhase.MEASURING
-            },
-            Modifier.fillMaxSize(),
-            progress = shown,
-            bpm = bpm,
-            animate = animate,
-        ) {
-            if (bpm != null) {
-                CenteredValue("$bpm", stringResource(R.string.unit_bpm), onBubble(MaterialTheme.typography.displayMedium), onBubble(MaterialTheme.typography.bodySmall))
-            }
-        }
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier.fillMaxSize().padding(horizontal = 30.dp, vertical = 14.dp),
-        ) {
-            if (fromPhone) FromPhoneLabel() else androidx.compose.foundation.layout.Spacer(Modifier.height(1.dp))
-            Text(
-                when {
-                    hint -> stringResource(R.string.hint_wrist_contact)
-                    bpm == null -> stringResource(R.string.hr_measuring)
-                    else -> stringResource(R.string.hr_check_progress, com.heartline.wear.ui.components.percent(shown))
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = if (hint) WearColors.warn else WearColors.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
+    MeasureFace(
+        metric,
+        when {
+            hint -> BubblePhase.HINT
+            bpm == null -> BubblePhase.FORMING
+            else -> BubblePhase.MEASURING
+        },
+        shown,
+        bpm = bpm,
+        animate = animate,
+        top = if (fromPhone) stringResource(R.string.from_phone) else null,
+        bottom = when {
+            hint -> stringResource(R.string.hint_wrist_contact)
+            bpm == null -> stringResource(R.string.hr_measuring)
+            else -> stringResource(R.string.hr_check_progress, com.heartline.wear.ui.components.percent(shown))
+        },
+        warn = hint,
+    ) {
+        if (bpm != null) {
+            CenteredValue("$bpm", stringResource(R.string.unit_bpm), onBubble(MaterialTheme.typography.displayMedium), onBubble(MaterialTheme.typography.bodySmall))
         }
     }
 }
@@ -123,15 +108,15 @@ fun HeartRateCheckResultScreen(bpm: Int, min: Int, max: Int, onDone: () -> Unit 
         Modifier.fillMaxSize().background(WearColors.background).clickable(onClick = onDone),
         contentAlignment = Alignment.Center,
     ) {
-        MeasureGlobe(metric, BubblePhase.SUCCESS, Modifier.fillMaxSize(), progress = 1f, bpm = bpm, animate = animate) {
+        MeasureFace(
+            metric,
+            BubblePhase.SUCCESS,
+            progress = 1f,
+            bpm = bpm,
+            animate = animate,
+            bottom = stringResource(R.string.hr_check_range, min, max),
+        ) {
             CenteredValue("$bpm", stringResource(R.string.unit_bpm), onBubble(MaterialTheme.typography.displayMedium), onBubble(MaterialTheme.typography.bodySmall))
         }
-        Text(
-            stringResource(R.string.hr_check_range, min, max),
-            style = MaterialTheme.typography.bodySmall,
-            color = WearColors.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp),
-        )
     }
 }

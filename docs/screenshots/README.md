@@ -10,7 +10,7 @@ Regenerate with `./gradlew recordPaparazziDebug` and `python3 tools/screenshots/
 |---|:-:|:-:|
 | [**Onboarding**](phone/onboarding/README.md) | [<img src="phone/onboarding/terms_light.png" width="120" alt="">](phone/onboarding/README.md) | 8 |
 | [**Home**](phone/home/README.md) | [<img src="phone/home/home_light.png" width="120" alt="">](phone/home/README.md) | 7 |
-| [**Measuring from the phone**](phone/measure/README.md) | [<img src="phone/measure/measure_starting_light.png" width="120" alt="">](phone/measure/README.md) | 11 |
+| [**Measuring from the phone**](phone/measure/README.md) | [<img src="phone/measure/measure_starting_light.png" width="120" alt="">](phone/measure/README.md) | 12 |
 | [**ECG**](phone/ecg/README.md) | [<img src="phone/ecg/ecg_home_light.png" width="120" alt="">](phone/ecg/README.md) | 8 |
 | [**Blood pressure**](phone/blood-pressure/README.md) | [<img src="phone/blood-pressure/bp_home_light.png" width="120" alt="">](phone/blood-pressure/README.md) | 8 |
 | [**Heart rate and alerts**](phone/heart-rate/README.md) | [<img src="phone/heart-rate/heart_rate_light.png" width="120" alt="">](phone/heart-rate/README.md) | 5 |

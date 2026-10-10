@@ -13,6 +13,7 @@ import com.heartline.phone.R
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -23,6 +24,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import com.heartline.phone.ui.theme.Dimens
@@ -34,9 +36,10 @@ fun PillButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
         onClick = onClick,
         shape = RoundedCornerShape(50),
         colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = Color.White),
-        modifier = modifier.fillMaxWidth().height(Dimens.buttonHeight),
+        // At least the usual height; taller rather than cut when a large font wraps the text.
+        modifier = modifier.fillMaxWidth().heightIn(min = Dimens.buttonHeight),
     ) {
-        Text(text, style = MaterialTheme.typography.labelLarge)
+        Text(text, style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
     }
 }
 
@@ -46,9 +49,10 @@ fun TonalPillButton(text: String, onClick: () -> Unit, modifier: Modifier = Modi
         onClick = onClick,
         shape = RoundedCornerShape(50),
         colors = ButtonDefaults.buttonColors(containerColor = HeartlineTheme.colors.surfaceVariant, contentColor = color),
-        modifier = modifier.fillMaxWidth().height(Dimens.buttonHeight),
+        // At least the usual height; taller rather than cut when a large font wraps the text.
+        modifier = modifier.fillMaxWidth().heightIn(min = Dimens.buttonHeight),
     ) {
-        Text(text, style = MaterialTheme.typography.labelLarge)
+        Text(text, style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
     }
 }
 
@@ -68,7 +72,7 @@ fun OutlinedPill(text: String, onClick: () -> Unit, modifier: Modifier = Modifie
         shape = RoundedCornerShape(50),
         border = BorderStroke(1.dp, colors.divider),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.onBackground),
-        modifier = modifier.height(Dimens.buttonHeight),
+        modifier = modifier.heightIn(min = Dimens.buttonHeight),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             leading?.invoke()

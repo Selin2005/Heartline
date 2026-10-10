@@ -44,6 +44,7 @@ import com.heartline.wear.ui.components.ActionScreen
 import com.heartline.wear.ui.components.icon
 import com.heartline.wear.ui.components.isSmallRound
 import com.heartline.wear.ui.components.label
+import com.heartline.wear.ui.components.MeasureFace
 import com.heartline.wear.ui.theme.WearColors
 import com.heartline.bubbles.BubblePhase
 import com.heartline.bubbles.rememberShownProgress
@@ -105,8 +106,8 @@ fun QuickInstructionScreen(metric: Metric, onStart: () -> Unit = {}) {
 
 /**
  * Measuring: the particle globe lights up with the progress and moves in the metric's own way (the
- * stress globe breathes, the heart's beats at the measured rate), the percentage
- * seconds left inside it and the hint under it. [fromPhone]: started from the phone, which shows
+ * stress globe breathes, the heart's beats at the measured rate), the percentage inside it, the
+ * ring at the rim and the guide curved along the bottom of the screen. [fromPhone]: started from the phone, which shows
  * the same steps.
  */
 @Composable
@@ -122,49 +123,34 @@ fun QuickMeasuringScreen(
 ) {
     // Shown as a percentage that glides, holds on a hint and never jumps back (see ProgressDisplay).
     val shown = if (animate) rememberShownProgress(progress, paused = hint != null, done = false) else progress
-    Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
-        MeasureGlobe(
-            metric,
-            if (hint != null) BubblePhase.HINT else BubblePhase.MEASURING,
-            Modifier.fillMaxSize(),
-            progress = shown,
-            bpm = bpm,
-            animate = animate,
-        ) {
-            CenteredValue(percent(shown), "%", onBubble(MaterialTheme.typography.displayMedium), onBubble(MaterialTheme.typography.bodySmall))
-        }
-        val live = listOfNotNull(
-            bpm?.let { stringResource(R.string.live_bpm, it) },
-            hrvMs?.takeIf { metric == Metric.STRESS }?.let { stringResource(R.string.live_hrv, it.roundToInt()) },
-        ).joinToString(" · ")
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxSize().padding(horizontal = 30.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            if (fromPhone) FromPhoneLabel() else Spacer(Modifier.height(1.dp))
-            Text(
-                when {
-                    hint != null -> stringResource(hint.text)
-                    shown >= 0.97f -> stringResource(R.string.hint_finishing)
-                    live.isNotEmpty() -> live
-                    metric == Metric.STRESS -> stringResource(R.string.hint_breathe)
-                    else -> stringResource(R.string.hint_measuring)
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = if (hint != null) WearColors.warn else WearColors.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            )
-        }
+    val live = listOfNotNull(
+        bpm?.let { stringResource(R.string.live_bpm, it) },
+        hrvMs?.takeIf { metric == Metric.STRESS }?.let { stringResource(R.string.live_hrv, it.roundToInt()) },
+    ).joinToString(" · ")
+    MeasureFace(
+        metric,
+        if (hint != null) BubblePhase.HINT else BubblePhase.MEASURING,
+        shown,
+        bpm = bpm,
+        animate = animate,
+        top = if (fromPhone) stringResource(R.string.from_phone) else null,
+        bottom = when {
+            hint != null -> stringResource(hint.text)
+            shown >= 0.97f -> stringResource(R.string.hint_finishing)
+            live.isNotEmpty() -> live
+            metric == Metric.STRESS -> stringResource(R.string.hint_breathe)
+            else -> stringResource(R.string.hint_measuring)
+        },
+        warn = hint != null,
+    ) {
+        CenteredValue(percent(shown), "%", onBubble(MaterialTheme.typography.displayMedium), onBubble(MaterialTheme.typography.bodySmall))
     }
 }
 
 /** A small "Started from your phone" chip at the top of a measurement the phone started. */
 @Composable
-fun FromPhoneLabel() {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+fun FromPhoneLabel(modifier: Modifier = Modifier) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
         Icon(Icons.Rounded.PhoneAndroid, contentDescription = null, tint = WearColors.onSurfaceVariant, modifier = Modifier.size(12.dp))
         Text(
             stringResource(R.string.from_phone),

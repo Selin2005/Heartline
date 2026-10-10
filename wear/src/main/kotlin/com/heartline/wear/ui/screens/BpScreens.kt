@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -44,7 +45,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
 import com.heartline.wear.ui.components.BeatingHeart
-import com.heartline.wear.ui.components.MeasureGlobe
+import com.heartline.wear.ui.components.MeasureFace
 import com.heartline.wear.ui.components.onBubble
 import com.heartline.bubbles.BubblePhase
 import com.heartline.wear.ui.components.SweepTrace
@@ -264,55 +265,45 @@ fun BpMeasuringScreen(
 ) {
     val color = WearColors.metric(Metric.BLOOD_PRESSURE)
     val shown = if (animate) com.heartline.bubbles.rememberShownProgress(progress, paused = !contact, done = false) else progress
-    Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
-        MeasureGlobe(
-            Metric.BLOOD_PRESSURE,
-            if (contact) BubblePhase.MEASURING else BubblePhase.HINT,
-            Modifier.fillMaxSize().padding(bottom = 22.dp),
-            progress = shown,
-            bpm = bpm,
-            animate = animate,
-        ) {
-            CenteredValue(com.heartline.wear.ui.components.percent(shown), "%", onBubble(MaterialTheme.typography.displayMedium), onBubble(MaterialTheme.typography.bodySmall))
-        }
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 8.dp),
-        ) {
+    MeasureFace(
+        Metric.BLOOD_PRESSURE,
+        if (contact) BubblePhase.MEASURING else BubblePhase.HINT,
+        shown,
+        bpm = bpm,
+        animate = animate,
+        top = when {
+            calibrationRound != null -> calibrationTitle(calibrationRound)
+            fromPhone -> stringResource(R.string.from_phone)
+            else -> stringResource(R.string.metric_bp)
+        },
+        topColor = if (fromPhone && calibrationRound == null) WearColors.onSurfaceVariant else color,
+        bottom = stringResource(
             when {
-                calibrationRound != null -> Text(calibrationTitle(calibrationRound), style = MaterialTheme.typography.labelMedium, color = color)
-                fromPhone -> FromPhoneLabel()
-                else -> Text(stringResource(R.string.metric_bp), style = MaterialTheme.typography.labelMedium, color = color)
+                phase != null && !contact -> R.string.bp_touch_key
+                phase != null -> phase.prompt
+                // Past the minimum: it records on until the pulse is steady.
+                settling && contact -> R.string.bp_settling
+                contact -> R.string.bp_keep_still
+                else -> R.string.bp_adjust_watch
+            },
+        ),
+        warn = !contact,
+        below = when {
+            showWave -> {
+                { SweepTrace(trace, endIndex, windowSamples = 300, color = color, paper = false, centered = false, minRange = 0f, modifier = Modifier.width(84.dp).height(18.dp)) }
             }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                if (showWave) {
-                    SweepTrace(trace, endIndex, windowSamples = 300, color = color, paper = false, centered = false, minRange = 0f, modifier = Modifier.fillMaxWidth().padding(horizontal = 34.dp).height(22.dp))
-                } else if (bpm != null && contact) {
+            bpm != null && contact -> {
+                {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(18.dp)) {
                         BeatingHeart(bpm, color, 12.dp, animate)
                         Text(stringResource(R.string.live_pulse, bpm), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 4.dp))
                     }
                 }
-                Text(
-                    stringResource(
-                        when {
-                            phase != null && !contact -> R.string.bp_touch_key
-                            phase != null -> phase.prompt
-                            // Past the minimum: it records on until the pulse is steady.
-                            settling && contact -> R.string.bp_settling
-                            contact -> R.string.bp_keep_still
-                            else -> R.string.bp_adjust_watch
-                        },
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (contact) WearColors.onSurfaceVariant else WearColors.warn,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    modifier = Modifier.padding(horizontal = 40.dp),
-                )
             }
-        }
+            else -> null
+        },
+    ) {
+        CenteredValue(com.heartline.wear.ui.components.percent(shown), "%", onBubble(MaterialTheme.typography.displayMedium), onBubble(MaterialTheme.typography.bodySmall))
     }
 }
 

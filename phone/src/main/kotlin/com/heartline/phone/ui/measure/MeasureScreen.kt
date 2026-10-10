@@ -10,7 +10,6 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -175,10 +174,10 @@ fun MeasureScreen(
                         Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
                     }
                     Spacer(Modifier.height(16.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        TonalPillButton(stringResource(R.string.measure_again), onClick = actions.onRetry, modifier = Modifier.weight(1f), color = accent)
-                        PillButton(stringResource(R.string.action_done), onClick = actions.onDone, modifier = Modifier.weight(1f), color = accent)
-                    }
+                    // Stacked, full width: side by side, a large font cut "Measure again" in two.
+                    PillButton(stringResource(R.string.action_done), onClick = actions.onDone, color = accent)
+                    Spacer(Modifier.height(10.dp))
+                    TonalPillButton(stringResource(R.string.measure_again), onClick = actions.onRetry, color = accent)
                 }
             }
             MeasureStep.FAILED -> item(key = "failed") {

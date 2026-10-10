@@ -79,9 +79,14 @@ class PhoneScreenshotTest(private val theme: String) {
         maxPercentDifference = 0.1,
     )
 
-    private fun shot(name: String, content: @Composable () -> Unit) {
+    private fun shot(name: String, fontScale: Float = 1f, content: @Composable () -> Unit) {
         paparazzi.snapshot(name = name) {
-            HeartlineTheme(darkTheme = dark) { content() }
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(density.density, density.fontScale * fontScale),
+            ) {
+                HeartlineTheme(darkTheme = dark) { content() }
+            }
         }
     }
 
@@ -221,6 +226,11 @@ class PhoneScreenshotTest(private val theme: String) {
 
     @Test fun measureResultHeartRate() = shot("measure_result_heart_rate") {
         Measure(measuring(Metric.HEART_RATE, com.heartline.phone.measure.MeasureStep.RESULT, 1f, summary = com.heartline.shared.model.RecordSummary.HeartRate(66, 61, 74, 30)))
+    }
+
+    /** A large system font (1.3×): the buttons grow instead of cutting their text. */
+    @Test fun measureResultLargeFont() = shot("measure_result_large_font", fontScale = 1.3f) {
+        Measure(measuring(Metric.HEART_RATE, com.heartline.phone.measure.MeasureStep.RESULT, 1f, summary = com.heartline.shared.model.RecordSummary.HeartRate(77, 74, 80, 30)))
     }
 
     @Test fun measureResultBloodPressure() = shot("measure_result_bp") {

@@ -17,3 +17,4 @@ The phone starts the measurement on the watch and follows it with the particle g
 | **Blood pressure: result** | <img src="measure_result_bp_light.png" width="240" alt=""> | <img src="measure_result_bp_dark.png" width="240" alt=""> |
 | **An older watch app: update it or measure on the watch** | <img src="measure_watch_outdated_light.png" width="240" alt=""> | <img src="measure_watch_outdated_dark.png" width="240" alt=""> |
 | **The arm moved: try again** | <img src="measure_moved_light.png" width="240" alt=""> | <img src="measure_moved_dark.png" width="240" alt=""> |
+| **Measure result large font** | <img src="measure_result_large_font_light.png" width="240" alt=""> | <img src="measure_result_large_font_dark.png" width="240" alt=""> |

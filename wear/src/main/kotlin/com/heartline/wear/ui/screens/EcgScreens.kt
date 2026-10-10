@@ -60,9 +60,6 @@ import com.heartline.wear.ui.components.SweepTrace
 import com.heartline.wear.ui.components.isSmallRound
 import com.heartline.wear.ui.components.label
 import com.heartline.wear.ui.theme.WearColors
-import androidx.compose.ui.graphics.Color
-import com.heartline.bubbles.BubblePhase
-import com.heartline.wear.ui.components.MeasureGlobe
 
 /** Step 1: how to hold the watch, with an original illustration of a finger on the top key. */
 @Composable
@@ -106,51 +103,25 @@ fun EcgMeasuringScreen(
     animate: Boolean = true,
 ) {
     val color = WearColors.ecg
-    if (waitingForTouch || arming || struggling) {
-        // Before the countdown: the globe gathers until the finger makes a real ECG.
-        Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
-            MeasureGlobe(
-                com.heartline.shared.model.Metric.ECG,
-                if (struggling) BubblePhase.HINT else BubblePhase.FORMING,
-                Modifier.fillMaxSize().padding(bottom = 26.dp),
-                bpm = bpm,
-                animate = animate,
-            ) {
-                Icon(Icons.Rounded.Favorite, contentDescription = null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(26.dp))
-            }
-            Text(
-                stringResource(
-                    when {
-                        struggling -> R.string.ecg_touch_lighter
-                        arming -> R.string.ecg_hold_starting
-                        else -> R.string.ecg_touch_to_start
-                    },
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = if (struggling) WearColors.warn else WearColors.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 44.dp, vertical = 14.dp),
-            )
-        }
-        return
-    }
     Box(Modifier.fillMaxSize().background(WearColors.background), contentAlignment = Alignment.Center) {
         CircularProgressIndicator(
             progress = { progress },
             modifier = Modifier.fillMaxSize().padding(2.dp),
-            strokeWidth = 3.dp,
+            strokeWidth = 6.dp,
             colors = ProgressIndicatorDefaults.colors(indicatorColor = color, trackColor = WearColors.surfaceHigh),
         )
-        // While recording the screen stays calm: the live trace is the feedback (a lifted finger
-        // shows on it at once), and no decorative motion competes with it or with the 500 Hz
-        // processing.
+        // A ripple comes in from the rim the moment the finger makes contact, then the rim beats.
+        if (!leadOff && !waitingForTouch) {
+            EdgeRipple("touch", color)
+            EdgePulse(bpm, color)
+        }
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 18.dp),
         ) {
-            val shown = if (animate) com.heartline.bubbles.rememberShownProgress(progress, paused = leadOff, done = false) else progress
+            // A percentage that glides and never jumps back (seconds used to stall and jump).
+            val shown = if (animate) com.heartline.bubbles.rememberShownProgress(progress, paused = leadOff || waitingForTouch, done = false) else progress
             CenteredValue(com.heartline.wear.ui.components.percent(shown), "%", MaterialTheme.typography.displayMedium, MaterialTheme.typography.bodySmall)
             val waveHeight = if (isSmallRound()) 58.dp else 70.dp
             if (showWave) {
@@ -162,15 +133,10 @@ fun EcgMeasuringScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp).height(waveHeight),
                 )
             } else {
-                // Live wave turned off in settings: the globe beating with the heart instead.
-                MeasureGlobe(
-                    com.heartline.shared.model.Metric.ECG,
-                    if (leadOff) BubblePhase.HINT else BubblePhase.MEASURING,
-                    Modifier.fillMaxWidth().height(waveHeight + 20.dp),
-                    progress = progress,
-                    bpm = bpm,
-                    animate = animate,
-                )
+                // Live wave turned off in settings: a quiet heart instead.
+                Box(Modifier.height(waveHeight), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Favorite, contentDescription = null, tint = color.copy(alpha = if (leadOff) 0.35f else 1f), modifier = Modifier.size(34.dp))
+                }
             }
             Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(18.dp)) {
