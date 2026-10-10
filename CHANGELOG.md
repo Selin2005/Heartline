@@ -3,6 +3,11 @@
 All notable changes to Heartline. Each release's notes are written by the Build workflow when the
 release is made, and the app shows them under *What's new* after an update.
 
+## 0.0.2.220-beta.2 — 2026-10-10
+
+### Changes
+- Watch: curved guide text and a clearer globe, the ECG screen as before, crown scrolling
+
 ## 0.0.2.220-beta.1 — 2026-10-09
 
 ### Changes
