@@ -105,6 +105,29 @@ class BpRealLog2Test {
     }
 
     @Test
+    fun theModelIsMeasuredAgainstShowingTheCalibrationsMean() {
+        // This user's cuff systolic stayed between 133 and 146: showing the mean of the cuff
+        // readings before each check meets the validation limits too. The report says how much
+        // of that baseline's error the model removes (algorithm 6.6); with this little movement
+        // in the pressure it can't show much, which is the honest result.
+        val model = errors(BpTuning.DEFAULT, withRhoGh = true)
+        val baseline = checked.map { s ->
+            val (sys, dia) = BpExportEvaluation.baseline(calibrationBefore(s))
+            (sys - s.cuffSystolic!!) to (dia - s.cuffDiastolic!!)
+        }
+        val modelSys = BpExportEvaluation.stats(model.map { it.first })
+        val baseSys = BpExportEvaluation.stats(baseline.map { it.first })
+        val modelDia = BpExportEvaluation.stats(model.map { it.second })
+        val baseDia = BpExportEvaluation.stats(baseline.map { it.second })
+        val skillSys = BpExportEvaluation.skill(modelSys, baseSys)!!
+        val skillDia = BpExportEvaluation.skill(modelDia, baseDia)!!
+        println("systolic model $modelSys | calibration mean $baseSys | skill ${"%.2f".format(skillSys)}")
+        println("diastolic model $modelDia | calibration mean $baseDia | skill ${"%.2f".format(skillDia)}")
+        assertTrue("$baseSys", abs(baseSys.mean) <= 5 && baseSys.sd <= 8)
+        assertTrue("$skillSys $skillDia", skillSys < 1 && skillDia < 1)
+    }
+
+    @Test
     fun lyingInBedNoLongerTakesThirtySevenMmHgOff() {
         // Shown 111/39 (forearm −58°, 37 mmHg of ρgh taken off); the user's cuff readings that day were about 142/87.
         assertTrue(lying.shownSystolic < 115 && lying.hydrostaticMmHg > 30)

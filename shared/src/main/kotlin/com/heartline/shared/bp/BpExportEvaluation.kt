@@ -14,8 +14,9 @@ import kotlinx.serialization.decodeFromString
 /**
  * Replays the blood-pressure sessions of an unpacked diagnostic export (Settings → Help &
  * diagnostics → Export logs) through the current algorithm and compares each with the cuff reading
- * taken with it, in the terms validation studies use (ISO 81060-2, IEEE 1708). Every algorithm
- * change can be measured on real recordings this way; nothing of the user's data is kept.
+ * taken with it, in the terms validation studies use (ISO 81060-2, IEEE 1708), next to the
+ * error of simply showing the calibration's mean cuff reading ([baseline], [skill]). Every
+ * algorithm change can be measured on real recordings this way; nothing of the user's data is kept.
  *
  * Run with `./gradlew :shared:bpEval -Pdir=<unpacked export>`.
  */
@@ -41,7 +42,10 @@ object BpExportEvaluation {
         val pitchDeg: Double?,
         val posture: Boolean,
         val state: String,
-        val outcome: String
+        val outcome: String,
+        /** What showing the calibration's mean cuff reading would have said ([baseline]). */
+        val baselineSystolic: Double? = null,
+        val baselineDiastolic: Double? = null
     ) {
         val errSys: Int? get() = systolic?.minus(cuffSystolic)
         val errDia: Int? get() = diastolic?.minus(cuffDiastolic)
@@ -60,7 +64,34 @@ object BpExportEvaluation {
             "n=$n mean=${f(mean)} sd=${f(sd)} mae=${f(mae)} ≤5:${pct(within5)} ≤10:${pct(within10)} ≤15:${pct(within15)}"
     }
 
-    data class Report(val rows: List<Row>, val systolic: Stats, val diastolic: Stats, val diaCovered: Int)
+    /**
+     * [baselineSystolic] / [baselineDiastolic]: the errors of always showing the calibration's mean
+     * cuff reading, on the same cases. A model is only worth its number when it beats that (see
+     * [skill]); on a user whose pressure barely moves both can meet the validation limits.
+     */
+    data class Report(
+        val rows: List<Row>,
+        val systolic: Stats,
+        val diastolic: Stats,
+        val diaCovered: Int,
+        val baselineSystolic: Stats = Stats(0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+        val baselineDiastolic: Stats = Stats(0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    ) {
+        val skillSystolic: Double? get() = skill(systolic, baselineSystolic)
+        val skillDiastolic: Double? get() = skill(diastolic, baselineDiastolic)
+    }
+
+    /** The mean cuff reading (systolic to diastolic) of every point of [calibration]: the number a watch without a model would show. */
+    fun baseline(calibration: BpCalibration): Pair<Double, Double> = calibration.timedPoints().map { it.first }.let { p ->
+        p.map { it.cuffSystolic }.average() to p.map { it.cuffDiastolic }.average()
+    }
+
+    /**
+     * How much of the [baseline]'s error a model removes: 1 − SD(model) / SD(baseline). 0 means no
+     * better than showing the calibration's mean, below 0 worse; null with fewer than 2 cases.
+     */
+    fun skill(model: Stats, baseline: Stats): Double? =
+        if (model.n < 2 || baseline.n < 2 || baseline.sd <= 0) null else 1 - model.sd / baseline.sd
 
     /** The measurement sessions of an export that have a cuff reading, each with its calibration of the time. */
     fun load(dir: File, mode: Mode = Mode.ONLINE, withoutCuff: Boolean = false): List<Case> {
@@ -100,6 +131,7 @@ object BpExportEvaluation {
             val result = BpPipeline.run(c.calibration, BpSessionReplay.input(c.log), c.log.header.startedAtMs, tuning = tuning)
             val e = (result.outcome as? BpOutcome.Ok)?.estimate
             val values = c.log.header.values
+            val (baseSys, baseDia) = baseline(c.calibration)
             Row(
                 c.log.header.id.take(8),
                 c.log.header.startedAtMs,
@@ -115,12 +147,21 @@ object BpExportEvaluation {
                 values["arm.pitchDeg"],
                 e?.postureDiffers ?: false,
                 e?.state?.state?.name ?: "-",
-                result.outcome::class.simpleName.orEmpty()
+                result.outcome::class.simpleName.orEmpty(),
+                baseSys,
+                baseDia
             )
         }
         val ok = rows.filter { it.systolic != null }
         val covered = ok.count { r -> r.sdDia != null && abs(r.errDia!!) <= 2 * r.sdDia }
-        return Report(rows, stats(ok.map { it.errSys!!.toDouble() }), stats(ok.map { it.errDia!!.toDouble() }), covered)
+        return Report(
+            rows,
+            stats(ok.map { it.errSys!!.toDouble() }),
+            stats(ok.map { it.errDia!!.toDouble() }),
+            covered,
+            stats(ok.mapNotNull { r -> r.baselineSystolic?.let { it - r.cuffSystolic } }),
+            stats(ok.mapNotNull { r -> r.baselineDiastolic?.let { it - r.cuffDiastolic } })
+        )
     }
 
     fun stats(errors: List<Double>): Stats {
@@ -135,6 +176,8 @@ object BpExportEvaluation {
         appendLine("== $name")
         appendLine("systolic:  ${report.systolic}")
         appendLine("diastolic: ${report.diastolic}  (± covers 2·sd: ${report.diaCovered}/${report.rows.count { it.systolic != null }})")
+        appendLine("calibration mean, systolic:  ${report.baselineSystolic}  skill ${report.skillSystolic?.let { f(it) } ?: "-"}")
+        appendLine("calibration mean, diastolic: ${report.baselineDiastolic}  skill ${report.skillDiastolic?.let { f(it) } ?: "-"}")
         for (r in report.rows) {
             appendLine(
                 "  ${r.id} cuff ${r.cuffSystolic}/${r.cuffDiastolic}  logged ${r.loggedSystolic}/${r.loggedDiastolic}  " +
