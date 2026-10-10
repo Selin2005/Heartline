@@ -229,6 +229,12 @@ class WearScreenshotTest(private val size: String) {
 
     @Test fun heartRateCheck() = shot("heart_rate_check") { com.heartline.wear.ui.screens.HeartRateCheckScreen(0.4f, 18, 67, hint = false, animate = false) }
 
+    /** Before the first pulse: the percentage in the middle. */
+    @Test fun heartRateCheckStarting() = shot("heart_rate_check_starting") { com.heartline.wear.ui.screens.HeartRateCheckScreen(0.1f, 27, null, hint = false, animate = false) }
+
+    /** No reading counted for a few seconds: asked to keep still, in amber. */
+    @Test fun heartRateCheckWeak() = shot("heart_rate_check_weak") { com.heartline.wear.ui.screens.HeartRateCheckScreen(0.3f, 21, 70, hint = false, animate = false, weak = true) }
+
     @Test fun heartRateCheckResult() = shot("heart_rate_check_result") { com.heartline.wear.ui.screens.HeartRateCheckResultScreen(66, 61, 74, animate = false) }
 
     @Test fun bpFromPhone() = shot("bp_from_phone") {

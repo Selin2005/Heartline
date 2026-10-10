@@ -13,12 +13,8 @@ import com.heartline.shared.sync.SetupRequest
 import com.heartline.shared.sync.SetupTarget
 import com.heartline.shared.sync.StampedStatus
 import com.heartline.shared.sync.SyncTransport
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.encodeToString
 
@@ -55,13 +51,29 @@ object AppForeground {
     var resumed: Boolean = false
 }
 
-/** Routes pushed by the phone while the app is open; the nav graph follows them immediately. */
+/**
+ * Screens the phone (or a notification) asks the app to open. A route waits here until the UI
+ * takes it ([take]): one that arrives before the UI is listening (the activity was just
+ * recreated) is kept, not dropped, and each is opened once.
+ */
 class WatchCommandBus {
-    private val routes = MutableSharedFlow<String>(extraBufferCapacity = 4, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-    val navigate: SharedFlow<String> = routes.asSharedFlow()
+    private val routes = MutableStateFlow<String?>(null)
+
+    /** The route waiting to be opened, if any. */
+    val pending: StateFlow<String?> = routes.asStateFlow()
 
     fun post(route: String) {
-        routes.tryEmit(route)
+        HLog.i(TAG, "route queued: $route")
+        routes.value = route
+    }
+
+    /** Takes [route] if it is still the one waiting (a newer one stays). */
+    fun take(route: String) {
+        routes.compareAndSet(route, null)
+    }
+
+    private companion object {
+        const val TAG = "Heartline/Open"
     }
 }
 

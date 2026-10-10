@@ -3,6 +3,7 @@
 
 package com.heartline.wear.remote
 
+import com.heartline.datalayer.diag.HLog
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.heartline.shared.measure.HeartRateCheck
@@ -25,8 +26,11 @@ import kotlinx.coroutines.launch
 sealed interface HeartRateCheckState {
     data object Idle : HeartRateCheckState
 
-    /** [offWrist]: the sensor lost the wrist (the progress waits). */
-    data class Measuring(val progress: Float, val secondsLeft: Int, val bpm: Int?, val offWrist: Boolean) : HeartRateCheckState
+    /**
+     * [offWrist]: the sensor lost the wrist. [weak]: on the wrist, but no reading good enough to
+     * count for a few seconds (moving, a loose band); the progress waits in both cases.
+     */
+    data class Measuring(val progress: Float, val secondsLeft: Int, val bpm: Int?, val offWrist: Boolean, val weak: Boolean = false) : HeartRateCheckState
 
     data class Done(val recordId: String, val summary: RecordSummary.HeartRate) : HeartRateCheckState
 
@@ -54,22 +58,32 @@ class HeartRateCheckViewModel(
             // The tracker may hand several readings over at once: count time by their own
             // timestamps, not by when they arrive, so the progress neither stalls nor jumps.
             var lastTs: Long? = null
+            var firstTs: Long? = null
+            var lastGoodTs: Long? = null
+            var good = 0
+            var total = 0
             try {
                 source.stream()
                     .catch { }
                     .takeWhile { !check.done && now() - startedAt < HeartRateCheck.TIMEOUT_MS }
                     .collect { sample ->
-                        val good = sample.onBody && sample.bpm > 0 && sample.reliable
+                        val counts = sample.onBody && sample.bpm > 0 && sample.reliable
                         val elapsed = lastTs?.let { sample.tsMs - it } ?: 1_000L
-                        check.add(sample.bpm, good, elapsed)
+                        check.add(sample.bpm, counts, elapsed)
                         lastTs = sample.tsMs
+                        if (firstTs == null) firstTs = sample.tsMs
+                        if (counts) lastGoodTs = sample.tsMs
+                        total++
+                        if (counts) good++
                         mutable.value = HeartRateCheckState.Measuring(
                             check.progress,
                             (((1 - check.progress) * HeartRateCheck.DURATION_MS) / 1000).toInt().coerceAtLeast(1),
                             check.latest,
                             offWrist = !sample.onBody,
+                            weak = sample.onBody && sample.tsMs - (lastGoodTs ?: firstTs ?: sample.tsMs) >= WEAK_AFTER_MS,
                         )
                     }
+                HLog.i(TAG, "heart rate check: $good of $total readings counted, progress ${(check.progress * 100).toInt()}%")
                 val result = check.result()
                 if (result == null || !check.done) {
                     mutable.value = HeartRateCheckState.TooFewReadings
@@ -89,5 +103,11 @@ class HeartRateCheckViewModel(
     fun cancel() {
         job?.cancel()
         mutable.value = HeartRateCheckState.Idle
+    }
+
+    companion object {
+        /** No reading counted for this long (on the wrist): ask to keep still. */
+        const val WEAK_AFTER_MS = 4_000L
+        private const val TAG = "Heartline/Measure"
     }
 }

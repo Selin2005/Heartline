@@ -65,9 +65,12 @@ fun QuickFlow(
     }
 
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
-        if (state is QuickState.Measuring) {
+        // Started from the phone, it goes on while the watch screen is off (the wrist lowered to
+        // look at the phone); leaving the screen (back) still cancels it, below.
+        if (remote != null) {
+            com.heartline.wear.remote.RemoteMeasureCoordinator.logHidden(remote.link)
+        } else if (state is QuickState.Measuring) {
             vm.cancel()
-            remote?.finish(MeasureOutcome.CANCELLED, MeasureProblem.WATCH_LEFT)
         }
     }
     DisposableEffect(Unit) {
@@ -96,8 +99,10 @@ fun QuickFlow(
                 }
             }
         }
-        LaunchedEffect(state) {
-            when (val s = state) {
+        // From the view model, not the screen's state: the phone hears every step even while the
+        // watch screen is off and the screen doesn't update.
+        LaunchedEffect(remote) {
+            vm.state.collect { s -> when (s) {
                 QuickState.Idle, is QuickState.ConfirmWeight -> Unit
                 QuickState.NeedsProfile -> remote.reject(MeasureProblem.NEEDS_PROFILE)
                 is QuickState.Measuring -> remote.report(
@@ -115,7 +120,7 @@ fun QuickFlow(
                     onExit()
                 }
                 is QuickState.Failed -> remote.finish(MeasureOutcome.FAILED, RemoteMeasureReporter.problem(s.problem, s.hint))
-            }
+            } }
         }
     }
     val view = LocalView.current

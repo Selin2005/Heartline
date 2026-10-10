@@ -105,4 +105,27 @@ class HeartRateCheckTest {
         withTimeout(10_000) { vm.state.first { it is HeartRateCheckState.TooFewReadings } }
         assertEquals(0, store.pending().size)
     }
+
+    /** On the wrist but no reading good enough (the sensor's status -10): asked to keep still. */
+    @Test fun unreliableReadingsAskToKeepStill() = runBlocking {
+        var vm: HeartRateCheckViewModel? = null
+        var seen: HeartRateCheckState? = null
+        val weak = object : HrSource {
+            override fun stream(): Flow<HrSample> = flow {
+                for (i in 0 until 8) {
+                    clock += 1_000
+                    emit(HrSample(i * 1_000L, 70, emptyList(), reliable = false))
+                    // What the screen and the phone see after six seconds of it.
+                    if (i == 6) seen = vm?.state?.value
+                }
+            }
+        }
+        vm = HeartRateCheckViewModel(weak, store, { scheduled++ }) { clock }
+        vm.start()
+        withTimeout(10_000) { vm.state.first { it is HeartRateCheckState.TooFewReadings } }
+        val measuring = seen as HeartRateCheckState.Measuring
+        assertEquals(true, measuring.weak)
+        assertEquals(false, measuring.offWrist)
+        assertEquals(0f, measuring.progress)
+    }
 }

@@ -119,6 +119,25 @@ class MeasureSessionTest {
         assertEquals(MeasureIssue.NO_RESPONSE, manager.state.value!!.issue)
     }
 
+    /** The first request was lost (the watch app was restarting): asked once more, then given up. */
+    @Test fun aWatchThatDoesntAnswerIsAskedOnceMore() {
+        manager.start(Metric.SPO2)
+        scope.runCurrent()
+        scope.advanceTimeBy(MeasureSessionManager.REOPEN_AFTER_MS + 1)
+        assertEquals(listOf("remote/SPO2?session=s1", "remote/SPO2?session=s1"), opened)
+        scope.advanceTimeBy(MeasureSessionManager.ACCEPT_TIMEOUT_MS)
+        assertEquals(2, opened.size)
+        assertEquals(MeasureIssue.NO_RESPONSE, manager.state.value!!.issue)
+    }
+
+    @Test fun anAnsweringWatchIsNotAskedAgain() {
+        manager.start(Metric.SPO2)
+        scope.runCurrent()
+        manager.onState(state(MeasureStage.ACCEPTED, 1))
+        scope.advanceTimeBy(MeasureSessionManager.REOPEN_AFTER_MS + 1)
+        assertEquals(1, opened.size)
+    }
+
     @Test fun openingFailureIsNoResponse() {
         opens = false
         manager.start(Metric.SPO2)

@@ -428,6 +428,7 @@
     <string name="hint_breathe">Breathe slowly and relax</string>
     <string name="from_phone">From your phone</string>
     <string name="hr_check_progress">%1$s%% · Keep still</string>
+    <string name="hr_check_hold_still">%1$s%% · Hold still</string>
     <string name="hr_check_range">Range %1$d–%2$d bpm</string>
     <string name="live_pulse">%1$d bpm</string>
     <string name="source_code">Source code</string>

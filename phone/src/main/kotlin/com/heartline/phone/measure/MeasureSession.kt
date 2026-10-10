@@ -189,9 +189,17 @@ class MeasureSessionManager(
         if (known != null && Features.REMOTE_MEASURE !in known) return fail(ui.sessionId, MeasureIssue.WATCH_OUTDATED)
         if (ui.metric == Metric.BLOOD_PRESSURE && ui.round == null && !calibrated()) return fail(ui.sessionId, MeasureIssue.NEEDS_CALIBRATION)
         update(ui.sessionId) { it.copy(step = MeasureStep.OPENING) }
-        if (!open(RemoteMeasureLink(ui.metric, ui.sessionId, ui.round).route)) return fail(ui.sessionId, MeasureIssue.NO_RESPONSE)
+        val route = RemoteMeasureLink(ui.metric, ui.sessionId, ui.round).route
+        if (!open(route)) return fail(ui.sessionId, MeasureIssue.NO_RESPONSE)
         update(ui.sessionId) { it.copy(step = MeasureStep.WAITING_WATCH) }
         arm(ui.sessionId, ACCEPT_TIMEOUT_MS)
+        // No answer yet: the request may have been lost on its way (the watch app was being
+        // restarted). Asking once more is harmless, the watch ignores a session it already runs.
+        delay(REOPEN_AFTER_MS)
+        if (mutable.value?.let { it.sessionId == ui.sessionId && it.step == MeasureStep.WAITING_WATCH } == true) {
+            HLog.i(TAG, "no answer from the watch after ${REOPEN_AFTER_MS / 1000} s: asking again (${ui.sessionId})")
+            open(route)
+        }
     }
 
     /** From the watch: a step of the session (late or foreign ones are ignored). */
@@ -262,6 +270,7 @@ class MeasureSessionManager(
             val ui = mutable.value ?: return@launch
             if (ui.sessionId != sessionId || !ui.active) return@launch
             // The outcome may have been delayed while the record itself came through.
+            HLog.i(TAG, "no word from the watch for ${timeoutMs / 1000} s (${ui.step}, $sessionId)")
             val record = recordSince(ui.metric, ui.startedAtMs)
             if (record != null && ui.round == null) {
                 finish(sessionId, record.first, record.second)
@@ -293,6 +302,9 @@ class MeasureSessionManager(
 
         /** Opening plus the watch starting its app (a cold start takes a few seconds). */
         const val ACCEPT_TIMEOUT_MS = 15_000L
+
+        /** Without an answer by then, the watch is asked once more. */
+        const val REOPEN_AFTER_MS = 6_000L
 
         /** Blood pressure reads skin temperature and conductance first, without progress. */
         const val PREPARING_TIMEOUT_MS = 30_000L

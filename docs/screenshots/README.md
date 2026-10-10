@@ -28,7 +28,7 @@ Regenerate with `./gradlew recordPaparazziDebug` and `python3 tools/screenshots/
 | [**Launcher and history**](wear/launcher/README.md) | [<img src="wear/launcher/launcher_small.png" width="160" alt="">](wear/launcher/README.md) | 6 |
 | [**ECG**](wear/ecg/README.md) | [<img src="wear/ecg/ecg_instruction_small.png" width="160" alt="">](wear/ecg/README.md) | 11 |
 | [**Blood pressure**](wear/blood-pressure/README.md) | [<img src="wear/blood-pressure/bp_instruction_small.png" width="160" alt="">](wear/blood-pressure/README.md) | 18 |
-| [**Heart rate**](wear/heart-rate/README.md) | [<img src="wear/heart-rate/heart_rate_small.png" width="160" alt="">](wear/heart-rate/README.md) | 4 |
+| [**Heart rate**](wear/heart-rate/README.md) | [<img src="wear/heart-rate/heart_rate_small.png" width="160" alt="">](wear/heart-rate/README.md) | 6 |
 | [**SpO₂, temperature and stress**](wear/more-measurements/README.md) | [<img src="wear/more-measurements/spo2_instruction_small.png" width="160" alt="">](wear/more-measurements/README.md) | 9 |
 | [**Body composition**](wear/body-composition/README.md) | [<img src="wear/body-composition/body_weight_small.png" width="160" alt="">](wear/body-composition/README.md) | 6 |
 | [**Settings**](wear/settings/README.md) | [<img src="wear/settings/settings_small.png" width="160" alt="">](wear/settings/README.md) | 8 |

@@ -85,6 +85,15 @@ class RemoteMeasureTest {
         assertEquals(MeasureOutcome.FAILED, results.single().outcome)
     }
 
+    /** The phone repeats its request when it hears nothing: the session already measuring is known. */
+    @Test fun aSessionIsOpenUntilItEnds() {
+        assertFalse(coordinator.isOpen(link.sessionId))
+        val r = coordinator.reporter(link)
+        assertTrue(coordinator.isOpen(link.sessionId))
+        r.finish(MeasureOutcome.OK)
+        assertFalse(coordinator.isOpen(link.sessionId))
+    }
+
     @Test fun busyCountsRecordingScreens() {
         assertFalse(coordinator.busy)
         coordinator.recording(true)

@@ -73,13 +73,15 @@ fun HeartRateScreen(bpm: Int?, onBody: Boolean, animate: Boolean = true) {
  * and beats at the live rate; then the result. [hint]: the sensor lost the wrist.
  */
 @Composable
-fun HeartRateCheckScreen(progress: Float, secondsLeft: Int, bpm: Int?, hint: Boolean, fromPhone: Boolean = true, animate: Boolean = true) {
+fun HeartRateCheckScreen(progress: Float, secondsLeft: Int, bpm: Int?, hint: Boolean, fromPhone: Boolean = true, animate: Boolean = true, weak: Boolean = false) {
     val metric = com.heartline.shared.model.Metric.HEART_RATE
-    val shown = if (animate) com.heartline.bubbles.rememberShownProgress(progress, paused = hint, done = false) else progress
+    val waiting = hint || weak
+    val shown = if (animate) com.heartline.bubbles.rememberShownProgress(progress, paused = waiting, done = false) else progress
+    val percent = com.heartline.wear.ui.components.percent(shown)
     MeasureFace(
         metric,
         when {
-            hint -> BubblePhase.HINT
+            waiting -> BubblePhase.HINT
             bpm == null -> BubblePhase.FORMING
             else -> BubblePhase.MEASURING
         },
@@ -87,15 +89,19 @@ fun HeartRateCheckScreen(progress: Float, secondsLeft: Int, bpm: Int?, hint: Boo
         bpm = bpm,
         animate = animate,
         top = if (fromPhone) stringResource(R.string.from_phone) else null,
+        // The percentage is always there: in the middle until the first pulse, then below it.
         bottom = when {
             hint -> stringResource(R.string.hint_wrist_contact)
+            weak -> stringResource(R.string.hr_check_hold_still, percent)
             bpm == null -> stringResource(R.string.hr_measuring)
-            else -> stringResource(R.string.hr_check_progress, com.heartline.wear.ui.components.percent(shown))
+            else -> stringResource(R.string.hr_check_progress, percent)
         },
-        warn = hint,
+        warn = waiting,
     ) {
         if (bpm != null) {
             CenteredValue("$bpm", stringResource(R.string.unit_bpm), onBubble(MaterialTheme.typography.displayMedium), onBubble(MaterialTheme.typography.bodySmall))
+        } else {
+            CenteredValue(percent, "%", onBubble(MaterialTheme.typography.displayMedium), onBubble(MaterialTheme.typography.bodySmall))
         }
     }
 }

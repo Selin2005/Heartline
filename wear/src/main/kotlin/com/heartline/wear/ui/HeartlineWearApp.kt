@@ -72,6 +72,8 @@ import com.heartline.wear.ui.screens.LauncherScreen
 import com.heartline.wear.ui.screens.MetricOptionsScreen
 import com.heartline.wear.ui.screens.SensorErrorScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.collectAsState
+import com.heartline.datalayer.diag.HLog
 import org.koin.androidx.compose.koinViewModel
 import com.heartline.wear.ui.theme.HeartlineWearTheme
 
@@ -157,8 +159,10 @@ private fun NavHostController.exit(activity: android.app.Activity?) {
     if (previousBackStackEntry == null) activity?.finish() else popBackStack()
 }
 
+private const val OPEN_TAG = "Heartline/Open"
+
 @Composable
-fun HeartlineWearApp(startRoute: String? = null) {
+fun HeartlineWearApp() {
     val gate: SetupGateViewModel = koinViewModel()
     val gateState by gate.state.collectAsStateWithLifecycle()
     val openedOnPhone by gate.openedOnPhone.collectAsStateWithLifecycle()
@@ -170,8 +174,9 @@ fun HeartlineWearApp(startRoute: String? = null) {
     // Every start re-checks the phone link; once set up this runs quietly in the background.
     LifecycleEventEffect(Lifecycle.Event.ON_START) { gate.check() }
 
-    var pendingRoute by rememberSaveable { mutableStateOf(startRoute) }
-    LaunchedEffect(bus) { bus.navigate.collect { pendingRoute = it } }
+    // Screens the phone or a notification asked for wait in the bus until they are opened (or
+    // turned down), so one that arrives while the activity is being recreated is not lost.
+    val pendingRoute by bus.pending.collectAsState()
     val ready = gateState is GateState.Ready
     val coordinator: com.heartline.wear.remote.RemoteMeasureCoordinator = koinInject()
     LaunchedEffect(pendingRoute, gateState) {
@@ -187,18 +192,27 @@ fun HeartlineWearApp(startRoute: String? = null) {
             }
             else -> null
         } ?: return@LaunchedEffect
+        HLog.i(OPEN_TAG, "turned down ${link.metric} ${link.sessionId}: $problem")
         coordinator.reject(link, problem)
-        pendingRoute = null
+        bus.take(pendingRoute ?: return@LaunchedEffect)
     }
     LaunchedEffect(pendingRoute, ready) {
         val route = pendingRoute ?: return@LaunchedEffect
         if (route == MainActivity.ROUTE_SETUP) {
             // "Open the check on my watch" from the phone's help page.
-            pendingRoute = null
+            bus.take(route)
             gate.recheckSensors()
         } else if (ready) {
-            pendingRoute = null
+            bus.take(route)
+            val link = com.heartline.shared.measure.RemoteMeasureLink.parse(EntryLinks.parse(route).route)
+            if (link != null && coordinator.isOpen(link.sessionId)) {
+                HLog.i(OPEN_TAG, "already measuring ${link.sessionId}")
+                return@LaunchedEffect
+            }
+            HLog.i(OPEN_TAG, "opening $route")
             nav.openExternal(route)
+        } else {
+            HLog.i(OPEN_TAG, "waiting for setup checks ($gateState) to open $route")
         }
     }
 

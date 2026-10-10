@@ -83,26 +83,29 @@ private fun HeartRateCheckFlow(remote: RemoteMeasureReporter, onExit: () -> Unit
             }
         }
     }
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
-        if (state is HeartRateCheckState.Measuring) {
-            vm.cancel()
-            remote.finish(MeasureOutcome.CANCELLED, MeasureProblem.WATCH_LEFT)
-        }
-    }
+    // Started from the phone, the check goes on while the watch screen is off (the wrist lowered
+    // to look at the phone); leaving the screen (back) still cancels it, below.
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { RemoteMeasureCoordinator.logHidden(remote.link) }
     DisposableEffect(Unit) {
         onDispose {
             vm.cancel()
             remote.finish(MeasureOutcome.CANCELLED, MeasureProblem.WATCH_LEFT)
         }
     }
-    LaunchedEffect(state) {
-        when (val s = state) {
+    // From the view model, not the screen's state: the phone hears every step even while the
+    // watch screen is off and the screen doesn't update.
+    LaunchedEffect(remote) {
+        vm.state.collect { s -> when (s) {
             HeartRateCheckState.Idle -> Unit
             is HeartRateCheckState.Measuring -> remote.report(
                 MeasureStage.MEASURING,
                 s.progress,
                 s.secondsLeft,
-                if (s.offWrist) MeasureHint.WRIST_CONTACT else MeasureHint.NONE,
+                when {
+                    s.offWrist -> MeasureHint.WRIST_CONTACT
+                    s.weak -> MeasureHint.HOLD_STILL
+                    else -> MeasureHint.NONE
+                },
                 live = s.bpm,
             )
             is HeartRateCheckState.Done -> {
@@ -117,11 +120,11 @@ private fun HeartRateCheckFlow(remote: RemoteMeasureReporter, onExit: () -> Unit
                 delay(REMOTE_RESULT_MS / 2)
                 onExit()
             }
-        }
+        } }
     }
     when (val s = state) {
         is HeartRateCheckState.Done -> HeartRateCheckResultScreen(s.summary.bpm, s.summary.minBpm, s.summary.maxBpm, onDone = onExit)
-        is HeartRateCheckState.Measuring -> HeartRateCheckScreen(s.progress, s.secondsLeft, s.bpm, s.offWrist)
+        is HeartRateCheckState.Measuring -> HeartRateCheckScreen(s.progress, s.secondsLeft, s.bpm, s.offWrist, weak = s.weak)
         else -> HeartRateCheckScreen(0f, 30, null, hint = state is HeartRateCheckState.TooFewReadings)
     }
 }

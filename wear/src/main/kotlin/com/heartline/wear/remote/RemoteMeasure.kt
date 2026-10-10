@@ -34,6 +34,7 @@ class RemoteMeasureCoordinator(
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     private val measuring = AtomicInteger(0)
+    private val open = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val cancelled = MutableSharedFlow<String>(extraBufferCapacity = 8)
 
     /** Session ids the phone cancelled. */
@@ -52,7 +53,16 @@ class RemoteMeasureCoordinator(
         cancelled.tryEmit(sessionId)
     }
 
-    fun reporter(link: RemoteMeasureLink): RemoteMeasureReporter = RemoteMeasureReporter(link, sendState, sendResult, scope, now)
+    fun reporter(link: RemoteMeasureLink): RemoteMeasureReporter {
+        open += link.sessionId
+        return RemoteMeasureReporter(link, sendState, sendResult, scope, now) { open -= link.sessionId }
+    }
+
+    /**
+     * True while [sessionId] is being measured: the phone asks again when it hears nothing for a
+     * few seconds, and that repeat must not start a second measurement.
+     */
+    fun isOpen(sessionId: String): Boolean = sessionId in open
 
     /** Tells the phone at once that [link] cannot start (the watch app isn't ready or is busy). */
     fun reject(link: RemoteMeasureLink, problem: MeasureProblem) {
@@ -62,6 +72,9 @@ class RemoteMeasureCoordinator(
 
     companion object {
         const val TAG = "Heartline/Measure"
+
+        /** The watch screen went off (or another app came up) during a phone's measurement, which goes on. */
+        fun logHidden(link: RemoteMeasureLink) = HLog.i(TAG, "${link.metric} ${link.sessionId}: watch screen hidden, still measuring")
     }
 }
 
@@ -75,6 +88,7 @@ class RemoteMeasureReporter(
     private val sendResult: suspend (MeasureResult) -> Unit,
     private val scope: CoroutineScope,
     private val now: () -> Long,
+    private val onFinished: () -> Unit = {},
 ) {
     private var seq = 0
     private var last: MeasureState? = null
@@ -119,6 +133,7 @@ class RemoteMeasureReporter(
     fun finish(outcome: MeasureOutcome, problem: MeasureProblem? = null, recordId: String? = null, summary: RecordSummary? = null) {
         if (finished) return
         finished = true
+        onFinished()
         HLog.i(RemoteMeasureCoordinator.TAG, "${link.metric} ${link.sessionId} ended: $outcome${problem?.let { " ($it)" } ?: ""}")
         val result = MeasureResult(UUID.randomUUID().toString(), link.sessionId, link.metric, outcome, problem, recordId, summary, startedAt, link.round)
         scope.launch { sendResult(result) }

@@ -115,8 +115,10 @@ fun BpFlow(
                 }
             }
         }
-        LaunchedEffect(state) {
-            when (val s = state) {
+        // From the view model, not the screen's state: the phone hears every step even while the
+        // watch screen is off and the screen doesn't update.
+        LaunchedEffect(remote) {
+            vm.state.collect { s -> when (s) {
                 BpState.Idle -> Unit
                 BpState.Preparing -> remote.report(MeasureStage.PREPARING)
                 is BpState.Measuring -> remote.report(
@@ -144,7 +146,7 @@ fun BpFlow(
                 BpState.Moving -> remote.finish(MeasureOutcome.FAILED, MeasureProblem.MOVING)
                 is BpState.CalibrationRetry -> remote.finish(MeasureOutcome.FAILED, MeasureProblem.LOW_SIGNAL)
                 is BpState.Failed -> remote.finish(MeasureOutcome.FAILED, RemoteMeasureReporter.problem(s.problem))
-            }
+            } }
         }
     }
     // A round requested by the phone starts right away while this screen is open.
@@ -152,9 +154,12 @@ fun BpFlow(
         if (calibrationSession && capture != null && (state is BpState.Idle || state is BpState.CalibrationRecorded)) start(if (capture?.precise == true) BpMode.PRECISE else BpMode.QUICK)
     }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
-        if (state is BpState.Measuring) {
+        // Started from the phone, it goes on while the watch screen is off (the wrist lowered to
+        // look at the phone); leaving the screen (back) still cancels it, below.
+        if (remote != null) {
+            com.heartline.wear.remote.RemoteMeasureCoordinator.logHidden(remote.link)
+        } else if (state is BpState.Measuring) {
             vm.cancel()
-            remote?.finish(MeasureOutcome.CANCELLED, MeasureProblem.WATCH_LEFT)
         }
     }
     DisposableEffect(Unit) {
