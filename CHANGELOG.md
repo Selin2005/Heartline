@@ -3,6 +3,16 @@
 All notable changes to Heartline. Each release's notes are written by the Build workflow when the
 release is made, and the app shows them under *What's new* after an update.
 
+## 0.0.2.221-beta.1 — 2026-10-10
+
+### Changes
+- Watch: opening a screen that is already open no longer restarts it
+- Blood-pressure evaluation: compared with showing the calibration's mean
+- Blood pressure: the diastolic ± keeps the calibration's own diastolic misfit
+- Blood pressure on a watch without green: the infrared becomes the pulse wave
+- Measuring from the phone: the watch no longer loses the request or stops when its screen goes off
+- Documentation, terms and policy updates
+
 ## 0.0.2.220-beta.2 — 2026-10-10
 
 ### Changes
