@@ -542,6 +542,7 @@ object BpEstimator {
                         parts = mapOf(
                             "base" to BASE_SD,
                             "residual" to model.residualSys,
+                            "residualDia" to model.residualDia,
                             "drift" to DRIFT_SD_PER_DAY * days,
                             "extrapolation" to extrapolation,
                             "doubt" to sqrt(doubt.sumOf { it * it })

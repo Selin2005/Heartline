@@ -100,7 +100,7 @@ object BpFusion {
             widened.map { it.diastolic },
             widened.map { it.noiseDia },
             widened.map { it.scaleDia },
-            COMMON_SD * 0.7
+            commonDia(channels)
         )
         return Fused(
             sys,
@@ -120,6 +120,18 @@ object BpFusion {
      * below this (algorithm 6.3; a real reading showed ±3 and missed the cuff by 4).
      */
     const val COMMON_SD = 5.0
+
+    /**
+     * The diastolic's floor: [COMMON_SD]'s share plus the calibration's own diastolic misfit (the
+     * pulse-wave model's "residualDia"). That misfit is how far this user's cuff diastolic strays
+     * from what the model follows, and every channel is anchored to the same cuff readings, so
+     * averaging channels doesn't shrink it (algorithm 6.6). On a real user's 9 cuff checks the
+     * diastolic missed by SD 7.7 mmHg while three channels fused to ±5.
+     */
+    internal fun commonDia(channels: List<ChannelEstimate>): Double {
+        val misfit = channels.mapNotNull { it.parts["residualDia"] }.maxOrNull() ?: 0.0
+        return sqrt((COMMON_SD * 0.7).pow(2) + misfit.pow(2))
+    }
 
     /**
      * [chi2]: how much more the channels' systolic values disagree than their noise allows
