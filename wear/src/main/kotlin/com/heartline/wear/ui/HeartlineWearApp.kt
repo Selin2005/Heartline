@@ -144,6 +144,13 @@ private fun NavHostController.openExternal(link: String) {
         }
         return
     }
+    // Already open (the phone asks for its calibration screen again with every round): popUpTo
+    // would take the screen down before launchSingleTop is checked, and the new one would cancel
+    // the round just started. Seen in real logs: start, cancelled 28 ms later, start again.
+    if (currentBackStackEntry?.destination?.route == route) {
+        HLog.i(OPEN_TAG, "already open: $route")
+        return
+    }
     val launcherBelow = runCatching { getBackStackEntry(Routes.LAUNCHER) }.isSuccess
     navigate(route) {
         when {
