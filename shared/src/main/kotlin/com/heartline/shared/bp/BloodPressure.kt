@@ -48,7 +48,9 @@ data class CalibrationPoint(
      */
     val ppgFs: Int = BpCalibration.PPG_FS,
     /** The round's raw session log (every sensor), so the cuff value can be matched to its data. */
-    val sessionId: String? = null
+    val sessionId: String? = null,
+    /** The wavelength of [features] and [ppg]: infrared on a watch that gives no green (algorithm 6.6). */
+    val wave: PpgWave = PpgWave.GREEN
 ) {
     /**
      * [ppgFs], with precise rounds saved before the field existed recognised by their pulse
@@ -86,7 +88,8 @@ data class CalibrationPoint(
             capture.skinTempC,
             capture.edaMicroSiemens,
             capture.fs,
-            sessionId
+            sessionId,
+            capture.wave
         )
     }
 
@@ -142,6 +145,15 @@ data class BpCalibration(
         val votes = timedPoints().map { it.first }.filter { !it.standing && it.featureFs == fs }.mapNotNull { base(it)?.inverted }
         if (votes.isEmpty()) return null
         return votes.count { it } * 2 >= votes.size
+    }
+
+    /**
+     * The wavelength of this calibration's pulse wave: that of most of its seated quick rounds
+     * (green without any). A measurement on another wave needs a new calibration (algorithm 6.6).
+     */
+    fun wave(): PpgWave {
+        val waves = points.filter { !it.standing && it.featureFs == PPG_FS }.map { it.wave }
+        return if (waves.count { it == PpgWave.IR } * 2 > waves.size) PpgWave.IR else PpgWave.GREEN
     }
 
     /** Rounds read the other way up than the majority, read again from their raw wave with the majority's polarity. */

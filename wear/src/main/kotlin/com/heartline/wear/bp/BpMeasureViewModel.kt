@@ -22,6 +22,8 @@ import com.heartline.shared.bp.BpWindowSelector
 import com.heartline.shared.bp.HemodynamicState
 import com.heartline.shared.bp.PpgFeatureVector
 import com.heartline.shared.bp.PpgFeatures
+import com.heartline.shared.bp.PpgWave
+import com.heartline.shared.bp.PpgWaveChoice
 import com.heartline.shared.bp.PreciseInput
 import com.heartline.shared.bp.PulseRate
 import com.heartline.shared.bp.RecentRhythm
@@ -349,6 +351,11 @@ class BpMeasureViewModel(
         val green = FloatList()
         val ir = FloatList()
         val times = LongList()
+        // Green statuses of the samples, for the choice of pulse wave (algorithm 6.6).
+        var greenPoints = 0
+        var greenOffPoints = 0
+        var wave = PpgWave.GREEN
+        var liveIr: Boolean? = null
         val ppgLog = log.stream(BpSessionStreams.PPG, *BpSessionStreams.PPG_COLUMNS)
         val live = LivePpg(fs)
         var lastUi = 0L
@@ -361,7 +368,11 @@ class BpMeasureViewModel(
             .catch { e -> failure = (e as? SensorException)?.problem ?: SensorProblem.NOT_SUPPORTED }
             .takeWhile { !stop }
             .collect { chunk ->
-                live.add(chunk.samples)
+                // The live wave and pulse from the infrared on a watch that gives no green.
+                if (liveIr == null && chunk.points.isNotEmpty()) {
+                    liveIr = chunk.ir != null && chunk.points.filter { !it.green.isNaN() }.all { it.greenStatus == PpgWaveChoice.STATUS_OFF }
+                }
+                live.add(if (liveIr == true) chunk.ir ?: chunk.samples else chunk.samples)
                 // Every point exactly as the SDK gave it goes to the log, contact or not.
                 if (chunk.points.isNotEmpty()) {
                     chunk.points.forEach { p ->
@@ -376,6 +387,8 @@ class BpMeasureViewModel(
                     val base = times.size
                     // The samples are the points with a green value: their times, index by index.
                     val sampled = chunk.points.filter { !it.green.isNaN() }
+                    greenPoints += sampled.size
+                    greenOffPoints += sampled.count { it.greenStatus == PpgWaveChoice.STATUS_OFF }
                     chunk.samples.forEachIndexed { i, v ->
                         green.add(v)
                         ir.add(chunk.ir?.getOrNull(i) ?: Float.NaN)
@@ -385,7 +398,17 @@ class BpMeasureViewModel(
                 val seconds = green.size / fs
                 if (seconds >= minimum && seconds >= lastCheck + CHECK_EVERY_SECONDS) {
                     lastCheck = seconds
-                    val snapshot = green.toArray()
+                    val offShare = if (greenPoints == 0) 0.0 else greenOffPoints.toDouble() / greenPoints
+                    if (wave == PpgWave.GREEN && offShare >= PpgWaveChoice.GREEN_OFF_SHARE) {
+                        val g = green.toArray()
+                        val i = ir.toArray()
+                        wave = withContext(Dispatchers.Default) { PpgWaveChoice.choose(g, i, fs, offShare) }
+                        if (wave == PpgWave.IR) {
+                            HLog.i(TAG, "BP pulse wave: infrared (green status -1 on ${"%.0f".format(offShare * 100)} % of points)")
+                            log.event("wave", "IR")
+                        }
+                    }
+                    val snapshot = if (wave == PpgWave.IR) ir.toArray() else green.toArray()
                     stop = seconds >= maximum || withContext(Dispatchers.Default) { BpWindowSelector.shouldStop(snapshot, fs, minimum) }
                     if (stop) log.event("stop", "after ${seconds}s")
                 }
@@ -410,7 +433,12 @@ class BpMeasureViewModel(
             return Recorded.Failure(BpState.Failed(it))
         }
         val irArray = ir.toArray().takeIf { a -> a.count { it.isFinite() } > a.size * 0.9 }
-        return Recorded.Session(BpSessionInput(green.toArray(), fs, times.toArray(), irArray))
+        val offShare = if (greenPoints == 0) 0.0 else greenOffPoints.toDouble() / greenPoints
+        // Decided again on the whole recording, exactly as the phone's replay of this session does.
+        val input = PpgWaveChoice.apply(BpSessionInput(green.toArray(), fs, times.toArray(), irArray), offShare)
+        log.capability("ppg.wave", input.wave.name)
+        log.value("ppg.greenOffShare", offShare)
+        return Recorded.Session(input)
     }
 
     /** ECG with its PPG (500 Hz) for [BpPhase.TOTAL_SECONDS] of finger contact, through the maneuver. */
@@ -509,7 +537,7 @@ class BpMeasureViewModel(
         // A summary: the raw waves are in the session log (a whole capture made 4 000-character lines).
         HLog.i(
             TAG,
-            "BP calibration round ${capture.round}: green=${channels?.features?.let { summary(it) }} ir=${channels?.irFeatures?.let { summary(it) }} " +
+            "BP calibration round ${capture.round}: wave=${input.wave} green=${channels?.features?.let { summary(it) }} ir=${channels?.irFeatures?.let { summary(it) }} " +
                 "bcgPttMs=${channels?.bcgPttMs} patMs=${channels?.patMs} fs=${channels?.fs}",
         )
         val features = channels?.features

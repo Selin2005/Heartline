@@ -4,6 +4,7 @@
 package com.heartline.wear.sensor.sdk
 
 import com.heartline.datalayer.diag.HLog
+import com.heartline.shared.bp.PpgWaveChoice
 import com.heartline.shared.sensor.TrackerKind
 import com.heartline.wear.sensor.GatewayState
 import com.heartline.wear.sensor.PpgChunk
@@ -62,8 +63,10 @@ class SdkPpgSource(private val gateway: SdkSensorGateway) : PpgSource {
                     // Points without a green value are skipped: a substituted 0 would be a huge fake pulse.
                     val kept = raw.filter { !it.green.isNaN() }
                     if (kept.isEmpty()) return
-                    // Status 0 is a normal reading; anything else means poor contact.
-                    val contact = kept.all { it.greenStatus <= 0 }
+                    // Status 0 is a normal reading; anything else means poor contact. A watch that
+                    // gives no green (status -1 throughout, algorithm 6.6) tells contact by the infrared.
+                    val greenOff = PpgType.IR in types && kept.all { it.greenStatus == PpgWaveChoice.STATUS_OFF }
+                    val contact = if (greenOff) kept.all { it.irStatus <= 0 } else kept.all { it.greenStatus <= 0 }
                     trySendBlocking(
                         PpgChunk(
                             kept.map { it.green }.toFloatArray(),

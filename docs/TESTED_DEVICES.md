@@ -39,6 +39,7 @@ has a value in only 1 of 5 samples.
 
 | Watch | PPG channels (quick) | Accelerometer rate | PPG inside ECG | Skin temp. | EDA | BIA progress scale | BCG quality at rest |
 |---|---|---|---|---|---|---|---|
+| Galaxy Watch7 (SM-L310) | IR, red (green status −1, no signal; IR is the pulse wave, algorithm 6.6) | ~100 Hz | real values | yes | — | — | — |
 | Galaxy Watch8 Classic | green, IR, red | ~100 Hz | 1 of 5 samples, jumps on gain changes | yes | yes | 0–1 | 0.61–0.68 |
 
 ## Adding a device

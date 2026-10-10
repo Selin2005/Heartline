@@ -325,7 +325,11 @@ object BpSessionReplay {
             it.isFinite()
         }?.takeIf { it.isNotEmpty() }?.average()
         val eda = log.stream(BpSessionStreams.EDA)?.column("microSiemens")?.filter { it.isFinite() }?.takeIf { it.isNotEmpty() }?.average()
-        return BpSessionInput(
+        val statusColumn = ppg?.columns?.indexOf("greenStatus") ?: -1
+        val greenStatus = ppg?.takeIf { statusColumn >= 0 }?.let { s ->
+            FloatArray(rows.size) { s.values[rows[it] * s.columns.size + statusColumn] }
+        } ?: FloatArray(0)
+        val input = BpSessionInput(
             green = green,
             fs = ppg?.rateHz()?.roundToIntSafe(BpCalibration.PPG_FS) ?: BpCalibration.PPG_FS,
             greenTimesNs = times,
@@ -336,6 +340,8 @@ object BpSessionReplay {
             edaMicroSiemens = eda,
             heightCm = log.header.values[BpSessionStreams.VALUE_HEIGHT]
         )
+        // The same choice of pulse wave as on the watch, from the same points (algorithm 6.6).
+        return PpgWaveChoice.apply(input, PpgWaveChoice.greenOffShare(greenStatus))
     }
 
     fun replay(log: BpSessionLog, calibration: BpCalibration?, nowMs: Long = log.header.startedAtMs): BpResult =

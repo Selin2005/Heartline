@@ -12,7 +12,8 @@ import kotlin.math.sqrt
  * Everything one session measured, as [BpPipeline] needs it.
  *
  * Quick mode: [green] (and [ir] when the watch gives it) from PPG_ON_DEMAND at [fs], sample
- * times [greenTimesNs] (wall clock), plus the motion sensors. Precise mode adds [precise]: ECG and
+ * times [greenTimesNs] (wall clock), plus the motion sensors. [green] is the pulse wave: the
+ * infrared ([wave] IR, [ir] null then) on a watch that gives no green. Precise mode adds [precise]: ECG and
  * the PPG that comes with it on one clock, with the arm-raise maneuver inside it.
  */
 data class BpSessionInput(
@@ -26,7 +27,9 @@ data class BpSessionInput(
     val edaMicroSiemens: Double? = null,
     val heightCm: Double? = null,
     /** The rhythm of the user's latest ECG (ECG AI result, last 30 days), as a prior. */
-    val recentEcg: RecentRhythm? = null
+    val recentEcg: RecentRhythm? = null,
+    /** The wavelength [green] holds: infrared on a watch that gives no green (see [PpgWaveChoice]). */
+    val wave: PpgWave = PpgWave.GREEN
 )
 
 /**
@@ -127,6 +130,12 @@ object BpPipeline {
         }
         if (stored == null || !stored.isValid(nowMs)) {
             log?.note("needsCalibration", stored?.let { needsCalibrationReason(it, nowMs) } ?: "no calibration")
+            return done(BpOutcome.NeedsCalibration)
+        }
+        // A pulse wave of another wavelength than the calibration's has another shape (algorithm 6.6).
+        log?.note("wave", input.wave.name)
+        if (input.precise == null && input.wave != stored.wave()) {
+            log?.note("needsCalibration", "pulse wave ${input.wave}, calibrated on ${stored.wave()}")
             return done(BpOutcome.NeedsCalibration)
         }
         // Rounds read the other way up are read again with the calibration's polarity (algorithm 6.2).
@@ -421,7 +430,8 @@ object BpPipeline {
             pttMs = transit?.pttMs,
             gravity = gravity,
             skinTempC = input.skinTempC,
-            edaMicroSiemens = input.edaMicroSiemens
+            edaMicroSiemens = input.edaMicroSiemens,
+            wave = if (precise != null) PpgWave.GREEN else input.wave
         )
     }
 
@@ -469,5 +479,7 @@ data class ChannelCapture(
     val pttMs: Double? = null,
     val gravity: List<Double>? = null,
     val skinTempC: Double? = null,
-    val edaMicroSiemens: Double? = null
+    val edaMicroSiemens: Double? = null,
+    /** The wavelength of [features] and [ppg] (algorithm 6.6). */
+    val wave: PpgWave = PpgWave.GREEN
 )

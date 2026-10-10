@@ -315,6 +315,57 @@ class BpMeasureTest {
         assertTrue(log.stream(BpSessionStreams.ECG)!!.size >= 34 * 500)
     }
 
+    /**
+     * PPG_ON_DEMAND as a real Galaxy Watch7 gave it: every green point status -1 with a value
+     * around 0, a clean infrared pulse with status 0.
+     */
+    private class NoGreenSource(private val seconds: Double = 40.0) : PpgSource {
+        override fun stream(): Flow<PpgChunk> = flow {
+            val pulse = SyntheticPpg.generate(seconds, 72.0, 0.5, seed = 7)
+            val noise = java.util.Random(3)
+            var t = 1_000_000L
+            for (start in 0 until pulse.size - 5 step 5) {
+                val points = (start until start + 5).map { i ->
+                    com.heartline.wear.sensor.PpgPoint(t++ * 10, (noise.nextGaussian() * 25).toFloat(), 780_000f - pulse[i] * 8_000f, 540_000f, -1, 0, 0)
+                }
+                emit(
+                    PpgChunk(
+                        points.map { it.green }.toFloatArray(),
+                        contact = true,
+                        ir = points.map { it.ir }.toFloatArray(),
+                        red = points.map { it.red }.toFloatArray(),
+                        points = points,
+                    ),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun aWatchWithoutGreenCalibratesOnTheInfrared() = runBlocking {
+        // Galaxy Watch7: six calibration rounds waited for a steady green pulse that never came.
+        bp.setPendingCapture(CaptureRequest("cap-ir", 1))
+        val vm = vm(NoGreenSource())
+        vm.start(calibrationSession = true)
+        val done = withTimeout(BP_TIMEOUT_MS) {
+            vm.state.first { it !is BpState.Measuring && it !is BpState.Idle && it !is BpState.Preparing }
+        }
+        assertTrue("$done", done is BpState.CalibrationRecorded)
+        val result = Protocol.json.decodeFromString<com.heartline.shared.sync.CaptureResult>(records.pendingMessages().single().payload.decodeToString())
+        assertEquals(com.heartline.shared.bp.PpgWave.IR, result.capture!!.wave)
+        val log = BpSessionLog.decode(records.pendingSessions().single().second)
+        assertEquals("IR", log.header.capabilities["ppg.wave"])
+        // It stopped once the infrared pulse was steady, not at the 60 s limit.
+        assertTrue("${log.header.events}", log.header.events.any { it.type == "stop" && !it.detail.contains("60") })
+    }
+
+    @Test
+    fun aGreenCalibrationIsNotComparedWithAnInfraredMeasurement() = runBlocking {
+        calibrate()
+        val end = vm(NoGreenSource()).measure()
+        assertEquals(BpState.NeedsCalibration, end)
+    }
+
     @Test fun progressNeverReadsFullWhileRecording() {
         assertEquals(0.4f, com.heartline.wear.bp.bpProgress(10f, 20, 60), 0.001f)
         assertEquals(0.8f, com.heartline.wear.bp.bpProgress(20f, 20, 60), 0.001f)

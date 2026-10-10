@@ -245,7 +245,8 @@ class BpRepository(
             val wave = records.wave(record) ?: return
             val features = withContext(Dispatchers.Default) { PpgFeatures.extract(wave, record.entity.sampleRateHz.takeIf { it > 0 } ?: BpCalibration.PPG_FS, cal.polarity(BpChannel.PWA_GREEN)) }
                 ?: return
-            CalibrationPoint(features, validation.cuffSystolic, validation.cuffDiastolic, null, null, at)
+            // The reading was compared with this calibration, so its wave is the calibration's.
+            CalibrationPoint(features, validation.cuffSystolic, validation.cuffDiastolic, null, null, at, wave = cal.wave())
         }
         saveCalibration(upgradeIfNeeded(cal).withExtraPoint(point))
     }
