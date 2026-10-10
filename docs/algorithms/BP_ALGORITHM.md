@@ -1,4 +1,4 @@
-# Blood pressure on the watch: technical specification (algorithm 6.5)
+# Blood pressure on the watch: technical specification (algorithm 6.6)
 
 This is the complete specification of how Heartline estimates blood pressure (BP) today. It
 contains every step, formula, threshold and constant, so the algorithm can be checked, reproduced
@@ -48,11 +48,11 @@ readings; there is no absolute, population-only model.
 
 | Item | Value | Where |
 |---|---|---|
-| Algorithm (stored with each reading) | 6 (6.5 behaviour) | `wear/.../bp/BpMeasureViewModel.kt` → `ALGORITHM` |
+| Algorithm (stored with each reading) | 6 (6.6 behaviour) | `wear/.../bp/BpMeasureViewModel.kt` → `ALGORITHM` |
 | Phone-refined reading | 4 (hybrid model applied) | `phone/.../data/BpData.kt` → `ALGORITHM_HYBRID` |
 | Feature extractor | `PpgFeatureVector.VERSION = 5` | `bp/PpgFeatures.kt` |
 | Oldest features the estimator accepts | `MIN_MODEL_VERSION = 2` | `bp/PpgFeatures.kt` |
-| Tunable choices | `BpTuning.DEFAULT` (6.4 tuning, unchanged in 6.5); `BpTuning.ALGORITHM_6_3` for comparison | `bp/BpTuning.kt` |
+| Tunable choices | `BpTuning.DEFAULT` (6.4 tuning, unchanged in 6.5 and 6.6); `BpTuning.ALGORITHM_6_3` for comparison | `bp/BpTuning.kt` |
 | Session log format | `BpSessionLog.FORMAT = 1`, magic `HLBP` | `bp/BpSessionLog.kt` |
 
 **Notation.**
@@ -128,7 +128,7 @@ Precise mode (finger on the key, experimental) replaces the PPG recording with E
 
 | Stream | Rate | Notes | Source |
 |---|---|---|---|
-| PPG green, IR, red (`PPG_ON_DEMAND`) | 100 Hz | every SDK point logged with its timestamp and status; IR used when ≥ 90 % of samples are finite | `wear/.../sensor/sdk/SdkPpgSource.kt`, `BpMeasureViewModel.recordQuick` |
+| PPG green, IR, red (`PPG_ON_DEMAND`) | 100 Hz | every SDK point logged with its timestamp and status; IR used when ≥ 90 % of samples are finite; IR is the pulse wave on a watch that gives no green (§2.2.1) | `wear/.../sensor/sdk/SdkPpgSource.kt`, `BpMeasureViewModel.recordQuick` |
 | Accelerometer, gyroscope, rotation vector | `SENSOR_DELAY_FASTEST` | stops itself after `ImuRecorder.MAX_SAMPLES = 40 000` samples | `wear/.../sensor/ImuRecorder.kt` |
 | Skin temperature | once, before recording | object and ambient °C | `BpAuxSensors.skinTemp` |
 | Skin conductance (EDA, Watch8+) | `EDA_SECONDS = 5` s before recording | µS | `BpAuxSensors.skinConductance` |
@@ -150,6 +150,34 @@ index by index; otherwise $t_k = t_0 + k/f_s$.
   $\lVert\mathbf a\rVert$ over the last 20 s of PPG time (`ImuStreams.motionSd`, population SD,
   ≥ 20 samples) must be ≤ `MotionMeter.MAX_STILL = 0.6` m/s²; otherwise the result is "Keep your arm
   still" and no number.
+
+### 2.2.1 Pulse wave on a watch without green (algorithm 6.6, `bp/PpgWave.kt`)
+
+A real Galaxy Watch7 (SM-L310) gave green, IR and red from `PPG_ON_DEMAND`, but every green point
+had status −1 and a value around 0 (noise of ±100, no offset), while the IR had a clean pulse.
+The green LED worked (the PPG inside ECG had real values). Every calibration round waited for a
+steady green pulse that never came, and no calibration could be made.
+
+`PpgWaveChoice.choose` makes the IR the pulse wave (the wave `BpSessionInput.green` holds, read by
+the PWA_GREEN channel, window selection, stopping and BCG feet) only when all three hold:
+
+1. green status −1 (`STATUS_OFF`) on ≥ `GREEN_OFF_SHARE = 0.9` of the points,
+2. the green has no usable pulse (`PpgFeatures.extract` null, quality < `MIN_QUALITY` or fewer
+   than `MIN_BEATS` beats),
+3. there is an IR wave (≥ 90 % of samples finite).
+
+A watch with a working green never changes wave. With the IR as the wave there is no separate
+PWA_IR channel (it would be the same signal twice). While recording, the choice is made at each
+stop check and then kept, so the recording stops on a steady IR pulse; the final input is decided
+again on the whole recording by `PpgWaveChoice.apply`, exactly as the phone's replay
+(`BpSessionReplay.input`) decides it from the logged statuses. Contact is then told by the IR
+status. The wave is logged (`capabilities["ppg.wave"]`, `ppg.greenOffShare`, note `wave`).
+
+Each calibration round keeps its wave (`ChannelCapture.wave`, `CalibrationPoint.wave`, green for
+older data); `BpCalibration.wave()` is the wave of most seated quick rounds. A quick measurement
+whose wave differs from the calibration's gives *needs calibration*
+(`needsCalibration = "pulse wave IR, calibrated on GREEN"`): a green and an IR pulse wave have
+different shapes and are never compared.
 
 ### 2.3 PPG repair (`dsp/PpgRepair.kt`)
 
@@ -779,12 +807,16 @@ and its scale parts $(c_{S,c}, c_{D,c})$.
 
 ```math
 \sigma_S = \max\!\Big(\sqrt{\nu^2 + \big(\textstyle\sum_c \beta_c c_{S,c}\big)^2},\ 5\Big), \qquad
-\sigma_D = \max\!\Big(\sqrt{\nu_D^2 + \big(\textstyle\sum_c \beta_{D,c} c_{D,c}\big)^2},\ 3.5\Big).
+\sigma_D = \max\!\Big(\sqrt{\nu_D^2 + \big(\textstyle\sum_c \beta_{D,c} c_{D,c}\big)^2},\ \sqrt{3.5^2 + r_D^2}\Big).
 ```
 
    The floor (`COMMON_SD = 5`, diastolic 0.7 × 5) is there because every channel is anchored to the
    same cuff calibration: the reference's error and the beat-to-beat variation are shared, so
-   combining channels cannot remove them.
+   combining channels cannot remove them. Algorithm 6.6 adds the PWA model's diastolic misfit
+   $r_D$ (§6.2, logged as `channel.PWA_GREEN.sd.residualDia`) to the diastolic floor
+   (`BpFusion.commonDia`): how far this user's cuff diastolic strays from what the model follows
+   is shared by every channel for the same reason. On the real user of §15.1 the diastolic missed
+   the cuff by SD 7.7 while three channels fused to ±5.
 
 6. **Conflict:** the systolic $\chi^2$ (computed from the noise parts) > 4 (`CONFLICT_CHI2`) → the
    reading is shown with the wider ± and flagged for a cuff check, never averaged into a confident
@@ -1048,6 +1080,12 @@ Metrics per variant (errors $e$ = watch − cuff): $n$, mean, sample SD, MAE, sh
 $|e| \le 5, 10, 15$ mmHg (ISO 81060-2 asks mean ≤ 5 and SD ≤ 8 across many people; IEEE 1708
 grades by MAE), and how many diastolic errors fall within 2σ of the shown diastolic ±.
 
+Next to them (algorithm 6.6): the same metrics for always showing the mean cuff reading of the
+case's calibration (`BpExportEvaluation.baseline`), and the *skill*
+$1 - \mathrm{SD}_\text{model}/\mathrm{SD}_\text{baseline}$ (`skill`; 0 = no better than that
+mean, below 0 worse). On a user whose pressure barely moves both can meet the ISO limits, so a
+tuning is judged by its skill on cuff checks that span a real change in pressure.
+
 The replay reproduces the numbers the watch logged at the time, so any change can be measured on
 real recordings before it ships. Older dataset exports (`BpDataset`, `BpEvaluation`) are replayed
 the same way and also report the proportional-bias slope of $e$ against the cuff value.
@@ -1086,6 +1124,11 @@ within 5 mmHg in 6 of 9 readings and within 10 in 9 of 9; the diastolic ± cover
 The reading taken lying in bed (no cuff; cuff ≈ 142/87 sitting the same afternoon) now gives
 142/84 ± 11/10, flagged for posture. The diastolic remains the weaker estimate: one reading at
 146/99 is still 19 mmHg low.
+
+Always showing the mean of the cuff readings taken before each check (§14.2 baseline) would have
+missed by +0.8 / 4.7 / 3.7 systolic and −3.2 / 8.2 / 6.4 diastolic (mean / SD / MAE, watch − cuff): the model's
+skill over it is about 0.15 systolic and 0.06 diastolic (on the green channel alone, `BpRealLog2Test`: 0.35 and 0.06). In this narrow range, the model has not
+yet shown that it follows the pressure better than the calibration's mean.
 
 **This is not a validation.** Nine readings from one person in a narrow range cannot show how the
 algorithm follows large changes (for example a fall to 90/60) or how it behaves on other people
@@ -1276,7 +1319,8 @@ Every constant the algorithm uses, from the code. Files are under `shared/.../bp
 | Constant | Value | File |
 |---|---|---|
 | `stateFactor` | table in §9 | Fusion.kt |
-| `COMMON_SD` | 5 mmHg (diastolic 3.5) | Fusion.kt |
+| `COMMON_SD` | 5 mmHg (diastolic $\sqrt{3.5^2 + r_D^2}$ since 6.6) | Fusion.kt |
+| `GREEN_OFF_SHARE` | 0.9 of the points with green status −1 (IR becomes the wave) | PpgWave.kt |
 | `CONFLICT_CHI2` | 4 | Fusion.kt |
 | `POSTURE_PITCH_DEG` / `POSTURE_ANGLE_DEG` | 30° / 45° | BpPipeline.kt |
 | `POSTURE_SD` | 8 mmHg (diastolic 5.6) | BpPipeline.kt |

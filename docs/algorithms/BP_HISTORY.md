@@ -1,4 +1,4 @@
-# Blood pressure on the watch: change history (algorithms 3 to 6.4)
+# Blood pressure on the watch: change history (algorithms 3 to 6.6)
 
 This file is the history of the blood-pressure algorithm: what each version changed, why, and
 what the real data showed at the time. Older sections describe behaviour that has since been
@@ -8,6 +8,33 @@ PpgFeatures v3, now v5). **The current algorithm is specified completely in
 
 Heartline estimates blood pressure (BP) from the watch's green PPG pulse wave. It uses the same
 approach as Samsung Health Monitor: calibrated pulse-wave analysis (PWA).
+
+## Algorithm 6.6: a watch without green, an honest diastolic ±, a baseline to beat
+
+Two diagnostic exports from two people and watches showed three things:
+
+1. **Galaxy Watch7 (SM-L310): no calibration was ever possible.** `PPG_ON_DEMAND` gave green, IR
+   and red, but every green point had status −1 and a value around 0, while the IR had a clean
+   pulse (78 bpm, matching the heart-rate tracker's beat intervals) with the arm still on a table.
+   Recording waits for a steady green pulse, so each round ran towards the 60 s limit and the user
+   cancelled six rounds at about 45 s; even at 60 s the green window would have been refused. Now
+   the IR becomes the pulse wave when the watch says the green is missing and the green has no
+   pulse ([BP_ALGORITHM.md](BP_ALGORITHM.md) §2.2.1); the calibration keeps its wave and a
+   measurement on another wave asks for a new calibration.
+2. **The diastolic ± was too narrow.** On the Galaxy Watch6 Classic user of 6.4 the diastolic
+   missed the cuff by SD 7.7, but three fused channels showed ±5: the calibration's diastolic
+   misfit is shared by every channel (all are anchored to the same cuff readings) and was averaged
+   away. It is now part of the diastolic floor of the fusion (§9).
+3. **No skill over the calibration's mean yet.** That user's cuff systolic only ranged 133–146.
+   Showing the mean of the cuff readings taken before each check would have missed by SD 4.7
+   systolic and 8.2 diastolic, against the model's 4.0 and 7.7: both meet the ISO limits, and the
+   model's advantage is small. `bpEval` now reports that baseline and the skill
+   $1 - \mathrm{SD}_\text{model}/\mathrm{SD}_\text{baseline}$ next to every variant, and a tuning
+   is judged on cuff checks that span a real change in pressure.
+
+The same export showed the phone reopening the watch's calibration screen while a round had just
+started: navigating to the open screen took it down and cancelled the round (start, cancelled
+28 ms later, start again). Opening a screen that is already open now does nothing.
 
 ## Algorithm 6.5: five corrections found by writing the full specification
 
