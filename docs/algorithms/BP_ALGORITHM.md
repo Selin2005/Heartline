@@ -669,7 +669,8 @@ On the 500 Hz ECG and its repaired PPG (same clock, ≥ 8 s):
 3. For each R peak $r$: the steepest slope in $[r + 120\text{ ms},\ \min(r + 450\text{ ms}, r_\text{next} + 120\text{ ms})]$;
    rejected at a window edge or with a non-positive slope.
 4. Foot = minimum of $x$ in $[\max(r + 60\text{ ms}, u - 250\text{ ms}),\ u]$; arrival = tangent onset (§3.3) − $r$.
-5. PAT = median; spread = interquartile range.
+5. PAT = median; spread = interquartile range. A spread over 60 ms (`MAX_SPREAD_MS`) gives no PAT:
+   the upstroke was found on noise (real recordings spread 6–37 ms; one at 258 ms was kept before).
 
 ### 7.4 Transit estimator (`bp/Fusion.kt` → `TransitEstimator`)
 

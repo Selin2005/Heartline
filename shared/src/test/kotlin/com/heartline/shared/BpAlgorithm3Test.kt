@@ -102,6 +102,26 @@ class BpAlgorithm3Test {
         assertNull(PulseArrival.compute(ecg, FloatArray(ecg.size), efs))
     }
 
+    @Test
+    fun scatteredArrivalTimesAreNotKept() {
+        val efs = SyntheticEcg.SAMPLE_RATE_HZ
+        val ecg = SyntheticEcg.generate(20.0, 70.0, seed = 3)
+        val peaks = RPeakDetector.detect(ecg, efs)
+        // Every other pulse 150 ms, the rest 380 ms after its R peak: no single arrival time.
+        val ppg = FloatArray(ecg.size)
+        peaks.forEachIndexed { k, r ->
+            val up = r + ((if (k % 2 == 0) 0.15 else 0.38) * efs).toInt()
+            for (i in ppg.indices) {
+                val t = (i - up).toDouble() / efs
+                if (t < -0.3 || t > 0.5) continue
+                ppg[i] += (1.0 / (1.0 + exp(-t / 0.02)) * exp(-maxOf(0.0, t) / 0.25)).toFloat()
+            }
+        }
+        val raw = FloatArray(ppg.size) { 200_000f - 3_000f * ppg[it] }
+        assertTrue(PulseArrival.perBeat(ecg, raw, efs).orEmpty().size >= PulseArrival.MIN_BEATS)
+        assertNull(PulseArrival.compute(ecg, raw, efs))
+    }
+
     /** A user whose pressure follows stiffness: 110 at 0.3 → 150 at 0.8, plus cuff noise. */
     private fun dataset(): BpDataset {
         val random = Random(5)

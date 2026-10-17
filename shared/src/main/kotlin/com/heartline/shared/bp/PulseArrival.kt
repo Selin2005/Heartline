@@ -27,12 +27,19 @@ object PulseArrival {
     const val MAX_MS = 450.0
     const val MIN_BEATS = 8
 
+    /**
+     * Beats this far apart (interquartile range) don't share one arrival time: the upstroke was
+     * found on noise. Real recordings spread 6–37 ms; one at 258 ms (median 346 ms) was kept.
+     */
+    const val MAX_SPREAD_MS = 60.0
+
     fun compute(ecg: FloatArray, ppg: FloatArray, fs: Int): PulseArrivalTime? {
         val pats = perBeat(ecg, ppg, fs)?.map { it.second } ?: return null
         if (pats.size < MIN_BEATS) return null
         val sorted = pats.sorted()
         val q1 = sorted[sorted.size / 4]
         val q3 = sorted[sorted.size * 3 / 4]
+        if (q3 - q1 > MAX_SPREAD_MS) return null
         return PulseArrivalTime(sorted[sorted.size / 2], pats.size, q3 - q1)
     }
 
