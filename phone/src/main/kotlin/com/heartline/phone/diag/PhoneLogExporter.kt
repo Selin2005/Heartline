@@ -247,7 +247,8 @@ class PhoneLogExporter(
                 continue
             }
             val name = (if (kind == null) file.name else RawSessions.fileName(log.header.startedAtMs, kind, log.header.id)).removeSuffix(".hlbp")
-            zip.entry("sessions/$name/header.json") { it.write(SessionCsv.header(log.header).toByteArray()) }
+            // Sessions saved before their notes were redacted can still hold the user's names and birth date.
+            zip.entry("sessions/$name/header.json") { it.write(HLog.redact(SessionCsv.header(log.header)).toByteArray()) }
             log.streams.forEach { stream -> zip.entry("sessions/$name/${SessionCsv.fileName(stream)}") { SessionCsv.write(stream, it) } }
         }
     }

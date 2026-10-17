@@ -72,6 +72,9 @@ sealed interface QuickState {
     data class Failed(val problem: SensorProblem?, val hint: QuickHint?) : QuickState
 }
 
+/** This state for a session file: without the user profile (names, birth date, height, weight). */
+internal fun QuickState.forLog(): QuickState = if (this is QuickState.Done) copy(profile = null) else this
+
 /** Runs one SpO2 / skin temperature / body composition / stress measurement and stores it. */
 class QuickMeasureViewModel(
     private val source: QuickSource,
@@ -123,7 +126,7 @@ class QuickMeasureViewModel(
                 collect(profile, startedAt)
             } finally {
                 // Every value of every sensor in this measurement, whatever the outcome.
-                RawCapture.end(raw, notes = mapOf("result" to mutable.value.toString().take(4000)))
+                RawCapture.end(raw, notes = mapOf("result" to mutable.value.forLog().toString().take(4000)))
             }
         }
     }

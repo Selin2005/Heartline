@@ -66,6 +66,9 @@ object HLog {
         redactor = value
     }
 
+    /** [text] with the user's names and birth date replaced, for anything written outside the log (raw session notes, exports). */
+    fun redact(text: String): String = redactor.redact(text)
+
     val isKeeping: Boolean get() = persistent
 
     fun d(tag: String, message: String, error: Throwable? = null): Int = Log.d(tag, message, error).also { record('D', tag, message, error) }

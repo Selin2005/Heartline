@@ -154,6 +154,39 @@ class DiagnosticsTest {
     }
 
     @Test
+    fun exportedSessionHeadersHaveNoNameOrBirthDate() = runTest {
+        // A session saved by an older watch app, whose notes held the whole profile.
+        val root = File(context.cacheDir, "zip-redact").apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        val t = 1_790_000_000_000
+        val r = BpSessionRecorder("spo20001-x", "spo2", t) { t }
+        r.note("result", "Done(summary=Spo2(percent=97), profile=UserProfile(firstName=Sara, lastName=Karimi, birthDate=1990-04-12, heightCm=170.0))")
+        val log = r.build()
+        val file = File(root, RawSessions.fileName(t, "spo2", log.header.id)).apply { writeBytes(log.encode()) }
+        HLog.setRedactor(Redactor(listOf("Sara", "Karimi", "Sara Karimi"), "1990-04-12"))
+        val exporter = PhoneLogExporter(context, SettingsRepository(context), UpdateRepository(context, "1.0.0"), RemoteLogs(send = { false }))
+        val bytes = ByteArrayOutputStream()
+        java.util.zip.ZipOutputStream(bytes).use { zip ->
+            exporter.writeAll(
+                zip,
+                PhoneLogExporter.LogParts("phone head\n", emptyList(), null),
+                PhoneLogExporter.WatchParts(PhoneLogExporter.LogParts("watch head\n", emptyList(), null), listOf(file)),
+            )
+        }
+        val header = java.util.zip.ZipInputStream(bytes.toByteArray().inputStream()).use { zip ->
+            generateSequence { zip.nextEntry }.first { it.name.endsWith("header.json") }.let { zip.readBytes().decodeToString() }
+        }
+        HLog.setRedactor(Redactor.NONE)
+        assertTrue(header.contains("percent=97"))
+        assertFalse(header.contains("Sara"))
+        assertFalse(header.contains("Karimi"))
+        assertFalse(header.contains("1990-04-12"))
+        root.deleteRecursively()
+    }
+
+    @Test
     fun betaOnByDefaultStableAskedAndSettingsFollow() = runTest {
         val settings = SettingsRepository(context)
         val sent = java.util.concurrent.CopyOnWriteArrayList<MonitorSettings>()

@@ -50,11 +50,14 @@ object RawCapture {
      * [background] one (a monitoring window) doesn't interrupt a measurement that is running.
      */
     fun begin(kind: String, notes: Map<String, String> = emptyMap(), background: Boolean = false): String =
-        sessions?.begin(kind, notes, background).orEmpty()
+        sessions?.begin(kind, notes.redacted(), background).orEmpty()
 
     fun end(id: String, values: Map<String, Double?> = emptyMap(), notes: Map<String, String> = emptyMap()) {
-        sessions?.end(id, values, notes)
+        sessions?.end(id, values, notes.redacted())
     }
+
+    /** Notes are free text (a state's toString()): the user's names and birth date never reach a session file. */
+    private fun Map<String, String>.redacted() = mapValues { (_, v) -> HLog.redact(v) }
 
     /** Ends measurement [id] without keeping it (the blood-pressure flow keeps its own, complete log). */
     fun discard(id: String) {

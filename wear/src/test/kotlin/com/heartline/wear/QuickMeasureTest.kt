@@ -15,6 +15,7 @@ import com.heartline.wear.data.WatchRecordStore
 import com.heartline.wear.quick.QuickMeasureViewModel
 import com.heartline.wear.quick.QuickState
 import com.heartline.wear.quick.WatchProfileStore
+import com.heartline.wear.quick.forLog
 import com.heartline.wear.sensor.FakeHrSource
 import com.heartline.wear.sensor.HrSource
 import com.heartline.wear.sensor.QuickHint
@@ -89,6 +90,10 @@ class QuickMeasureTest {
         assertEquals(78.5f * 0.42f, body.skeletalMuscleKg!!, 0.01f)
         assertEquals(78.5f, body.weightKg!!, 1e-6f)
         assertEquals(78.5f, profiles.profile.value!!.weightKg, 1e-6f)
+        // The session file gets the result without the profile (names, birth date, body size).
+        val logged = done.forLog().toString()
+        assertTrue(logged.contains("skeletalMuscleKg"))
+        assertTrue(!logged.contains("Sam") && !logged.contains("Lee") && !logged.contains("1988-05-04"))
 
         // Weighed a moment ago: no question the second time.
         vm.cancel()
