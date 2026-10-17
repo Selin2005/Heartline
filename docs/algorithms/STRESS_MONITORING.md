@@ -112,8 +112,10 @@ window can't hide one. The simulation chose this over "three high windows in a r
 - before 100 learnt windows;
 - in the quiet hours (default 22:00–7:00, chosen in the setup);
 - more than once in 3 hours or twice a day;
-- when illness explains it, that is, a night at least +0.5 °C warmer or a raised heart rate in
-  sleep (`HeartBaseline.nightRaised`). The combined notice covers that, and the day is not learnt;
+- when illness explains it, that is, a night at least +0.5 °C warmer (against at least 4 usual
+  nights, as for the temperature notice; against 2, a quarter of the windows of a real log read
+  as ill) or a raised heart rate in sleep (`HeartBaseline.nightRaised`). The combined notice
+  covers that, and the day is not learnt;
 - with the stress notifications switch off.
 
 **The notice:** "For about an hour your heart rate and its variability have looked stressed. A

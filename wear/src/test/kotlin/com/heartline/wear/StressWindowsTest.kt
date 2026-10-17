@@ -4,11 +4,15 @@
 package com.heartline.wear
 
 import com.heartline.shared.hr.BackgroundWindow
+import com.heartline.shared.hr.HeartHistory
 import com.heartline.shared.hr.HrContext
 import com.heartline.shared.hr.HrSample
 import com.heartline.shared.hr.MonitorSettings
+import com.heartline.shared.vitals.VitalsDay
+import com.heartline.shared.vitals.VitalsHistory
 import com.heartline.wear.monitor.StressWindows
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -27,6 +31,19 @@ class StressWindowsTest {
             t += beat
             HrSample(t, 60_000 / ibi, listOf(beat), moving = moving)
         }
+    }
+
+    @Test
+    fun aWarmerNightCountsAsIllnessOnlyAgainstEnoughUsualNights() {
+        val today = 20_010L
+        fun night(d: Long, c: Float) = VitalsDay(d, temps = List(6) { c })
+        val warm = night(today, 34.5f)
+        // Two usual nights at 33.5 °C: too few to call last night warmer.
+        val two = VitalsHistory(listOf(night(today - 2, 33.5f), night(today - 1, 33.5f), warm))
+        assertFalse(StressWindows.illness(two, HeartHistory(), MonitorSettings(), today))
+        // Four, as for the temperature notice: +1 °C is.
+        val four = VitalsHistory((1..4).map { night(today - it, 33.5f) } + warm)
+        assertTrue(StressWindows.illness(four, HeartHistory(), MonitorSettings(), today))
     }
 
     @Test

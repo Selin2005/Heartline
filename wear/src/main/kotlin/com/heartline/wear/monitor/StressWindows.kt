@@ -49,9 +49,15 @@ object StressWindows {
         }
     }
 
-    /** Illness explains a low HRV today: a warmer night (+0.5 °C) or a raised heart rate in sleep. */
+    /**
+     * Illness explains a low HRV today: a warmer night (+0.5 °C) or a raised heart rate in sleep.
+     * The warmer night needs as many usual nights as the temperature notice ([VitalsBaseline.TEMP_ALERT_NIGHTS]):
+     * against two, a quarter of the windows read as ill, which held back stress notices and left those days out of the baselines.
+     */
     fun illness(vitals: VitalsHistory, heart: HeartHistory, settings: MonitorSettings, today: Long): Boolean {
-        val warmer = VitalsBaseline.limits(vitals, today, settings.alertSensitivity, null).lastNightDeviation?.let { it >= VitalsBaseline.COMBINED_RISE } == true
+        val limits = VitalsBaseline.limits(vitals, today, settings.alertSensitivity, null)
+        val warmer = limits.tempNights >= VitalsBaseline.TEMP_ALERT_NIGHTS &&
+            limits.lastNightDeviation?.let { it >= VitalsBaseline.COMBINED_RISE } == true
         return warmer || HeartBaseline.nightRaised(heart, today)
     }
 
