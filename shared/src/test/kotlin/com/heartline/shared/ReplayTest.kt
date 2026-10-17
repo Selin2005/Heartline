@@ -122,6 +122,26 @@ class ReplayTest {
     }
 
     @Test
+    fun aHeldBatchOnTheFirstReadingIsReadWhenTheTrackerTrustedItsBeats() {
+        // 07:32 and 03:31: the batch came on a status-0 first reading with 93–98 % of its beats
+        // trusted, and every beat was thrown away ("weak signal"). Over all 779 windows of that log
+        // this reads 6 more, all regular, and changes no other verdict.
+        listOf("packed-first-0732", "packed-first-0331").forEach { name ->
+            val picked = BackgroundWindow.rhythm(window(name)).samples
+            assertNotNull(name, picked)
+            IrnSensitivity.entries.forEach { sensitivity ->
+                val (state, alert) = IrregularRhythmDetector().onWindow(IrnState(), picked!!, { "x" }, sensitivity)
+                assertNull("$name $sensitivity", alert)
+                assertTrue("$name $sensitivity", state.windows.none { it.irregular })
+            }
+        }
+        // A status −10 batch stays untrusted whatever its beats say.
+        assertTrue(HrSamples.isPackedFirstReading(0, List(30) { 900 }, List(30) { 0 }))
+        assertTrue(!HrSamples.isPackedFirstReading(-10, List(30) { 900 }, List(30) { 0 }))
+        assertTrue(!HrSamples.isPackedFirstReading(0, List(30) { 900 }, List(30) { if (it < 5) -1 else 0 }))
+    }
+
+    @Test
     fun beatsTheTrackerDidNotTrustAreNotUsed() {
         // 13:05: every reading "good", but every beat interval flagged: nothing to read.
         val samples = window("day-untrusted-beats-1305")

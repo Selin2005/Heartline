@@ -252,6 +252,11 @@ The window now works like this (`IrnWindowWorker.window`):
      beats, 10 minutes, in a real nap). Its beats are first put at their own times, counting
      forward from the reading's time, and each takes the worn and still state of the reading
      at that time.
+   - **Held batch on the first reading.** The batch often comes on the window's first reading,
+     status 0 with no rate yet. It counts like a good reading when the tracker trusted at least
+     90 % of its 20 or more beats (`HrSamples.isPackedFirstReading`), with the rate from their
+     median. Status −10 batches never count. In a 14-day log this read 6 more windows (all
+     regular) and changed no other verdict.
    - **One window per run.** About 60 s of beats is judged, never the whole batch: the limits are
      made for that much, and one batch must not count as several windows.
 5. **Stress** (`BackgroundWindow.hrv`): see
