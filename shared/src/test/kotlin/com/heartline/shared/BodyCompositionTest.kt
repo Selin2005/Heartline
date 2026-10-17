@@ -74,4 +74,11 @@ class BodyCompositionTest {
         assertFalse(UserProfile(weightKg = 70f, weightUpdatedAtMs = now - 10 * 86_400_000L).weightIsStale(now))
         assertTrue(UserProfile(weightKg = 70f, weightUpdatedAtMs = now - 40 * 86_400_000L).weightIsStale(now))
     }
+
+    @Test
+    fun theSensorsLowestFatMassMeansTheProfileDoesNotFit() {
+        assertTrue(com.heartline.shared.body.BodyCompositionCheck.atSensorFloor(2.0f))
+        assertFalse(com.heartline.shared.body.BodyCompositionCheck.atSensorFloor(8.4f))
+        assertFalse(com.heartline.shared.body.BodyCompositionCheck.atSensorFloor(null))
+    }
 }

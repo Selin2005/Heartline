@@ -118,6 +118,7 @@
     <string name="bp_crisis">Very high</string>
     <string name="bp_calibrate_notification">Tap to take calibration round %1$d</string>
     <string name="spo2_instruction">Rest your arm on a table, watch face up, and keep still.</string>
+    <string name="spo2_low_confidence">Measure again, sitting still, to confirm</string>
     <string name="temp_instruction">Wear your watch snugly for a few minutes, then keep still.</string>
     <string name="body_instruction">Middle and ring fingers on the two keys. Touch nothing else.</string>
     <string name="stress_instruction">Sit still and breathe normally for one minute.</string>

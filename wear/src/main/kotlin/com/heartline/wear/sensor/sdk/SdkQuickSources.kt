@@ -4,9 +4,11 @@
 package com.heartline.wear.sensor.sdk
 
 import com.heartline.datalayer.diag.HLog
+import com.heartline.shared.body.BodyCompositionCheck
 import com.heartline.shared.model.Metric
 import com.heartline.shared.model.RecordKind
 import com.heartline.shared.model.RecordSummary
+import com.heartline.shared.vitals.VitalsQuality
 import com.heartline.shared.profile.Sex
 import com.heartline.shared.profile.UserProfile
 import com.heartline.shared.sensor.TrackerKind
@@ -141,8 +143,16 @@ class SdkSpo2Source(private val gateway: SdkSensorGateway) :
 
     override val clearsItself = true
 
+    /** The sensor asked to hold still at some point in this measurement. */
+    @Volatile private var movedDuring = false
+
+    override fun onStart() {
+        movedDuring = false
+    }
+
     override fun ProducerScope<QuickEvent>.onData(points: List<DataPoint>): Boolean {
         points.forEach {
+            if (it.getValue(ValueKey.SpO2Set.STATUS) == -4) movedDuring = true
             HLog.i(
                 QUICK_RAW_TAG,
                 "SpO2 status=${it.getValue(ValueKey.SpO2Set.STATUS)} spo2=${it.getValue(ValueKey.SpO2Set.SPO2)} " +
@@ -152,7 +162,9 @@ class SdkSpo2Source(private val gateway: SdkSensorGateway) :
         val p = points.last()
         return when (p.getValue(ValueKey.SpO2Set.STATUS)) {
             2 -> {
-                trySendBlocking(QuickEvent.Result(RecordSummary.Spo2(p.getValue(ValueKey.SpO2Set.SPO2) ?: 0, p.getValue(ValueKey.SpO2Set.HEART_RATE), false)))
+                val percent = p.getValue(ValueKey.SpO2Set.SPO2) ?: 0
+                val low = VitalsQuality.spo2SpotLowConfidence(percent, movedDuring)
+                trySendBlocking(QuickEvent.Result(RecordSummary.Spo2(percent, p.getValue(ValueKey.SpO2Set.HEART_RATE), low)))
                 true
             }
             -4 -> {
@@ -260,6 +272,12 @@ class SdkBiaSource(private val gateway: SdkSensorGateway) :
                     problem = null
                     sdkProgress = fraction
                     false
+                } else if (BodyCompositionCheck.atSensorFloor(p.getValue(ValueKey.BiaSet.BODY_FAT_MASS))) {
+                    // The sensor's lowest fat mass: the profile doesn't fit the body (143 cm / 30 kg typed by
+                    // mistake gave exactly 2.0 kg twice, then status 18). Not kept: the profile is checked first.
+                    HLog.i(SdkSensorGateway.TAG, "BIA fat mass at the sensor's floor: check the profile")
+                    trySendBlocking(QuickEvent.Failed(null, QuickHint.CHECK_PROFILE))
+                    true
                 } else {
                     trySendBlocking(
                         QuickEvent.Result(

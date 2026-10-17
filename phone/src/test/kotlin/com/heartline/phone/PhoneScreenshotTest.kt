@@ -186,6 +186,15 @@ class PhoneScreenshotTest(private val theme: String) {
         )
     }
 
+    @Test fun profileUnusualBodySize() = shot("profile_unusual_body_size") {
+        ProfileScreen(
+            UserProfile("Sam", "Rahimi", "Sam", "1994-03-02", Gender.MAN, heightCm = 143f, weightKg = 30f),
+            onBack = {},
+            today = profileToday,
+            listState = rememberLazyListState(initialFirstVisibleItemIndex = 3)
+        )
+    }
+
     @Test fun profilePreferNotToSay() = shot("profile_prefer_not_to_say") {
         ProfileScreen(
             UserProfile("Alex", "Moradi", "Lex", "1995-01-30", Gender.PREFER_NOT_TO_SAY, heightCm = 172f, weightKg = 66f),

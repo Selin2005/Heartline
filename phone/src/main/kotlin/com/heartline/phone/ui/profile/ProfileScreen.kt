@@ -57,6 +57,7 @@ import com.heartline.phone.ui.theme.HeartlineTheme
 import com.heartline.shared.profile.Gender
 import com.heartline.shared.profile.ProfileError
 import com.heartline.shared.profile.ProfileField
+import com.heartline.shared.profile.ProfileValidator
 import com.heartline.shared.profile.Sex
 import com.heartline.shared.profile.UserProfile
 import kotlinx.coroutines.launch
@@ -142,7 +143,14 @@ fun ProfileScreen(
         item(key = "body") {
             RoundedCard(Modifier.gutter()) {
                 SectionTitle(stringResource(R.string.profile_section_body))
-                BodySection(form, error(ProfileField.HEIGHT), error(ProfileField.WEIGHT), { form = it }, ::touch)
+                BodySection(
+                    form,
+                    error(ProfileField.HEIGHT),
+                    error(ProfileField.WEIGHT),
+                    unusual = ProfileValidator.bodySizeUnusual(form.toProfile()),
+                    onChange = { form = it },
+                    touch = ::touch,
+                )
             }
         }
         item(key = "save") {
@@ -256,6 +264,7 @@ private fun BodySection(
     form: ProfileForm,
     heightError: ProfileError?,
     weightError: ProfileError?,
+    unusual: Boolean,
     onChange: (ProfileForm) -> Unit,
     touch: (ProfileField) -> Unit
 ) {
@@ -309,6 +318,14 @@ private fun BodySection(
         onBlur = { touch(ProfileField.WEIGHT) },
         keyboard = number
     )
+    if (unusual && heightError == null && weightError == null) {
+        Text(
+            stringResource(R.string.profile_warn_body_size),
+            style = MaterialTheme.typography.bodySmall,
+            color = HeartlineTheme.colors.statusWarn,
+            modifier = Modifier.padding(start = 4.dp)
+        )
+    }
 }
 
 @Composable

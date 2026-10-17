@@ -261,6 +261,8 @@ class WearScreenshotTest(private val size: String) {
 
     @Test fun spo2Result() = shot("spo2_result") { QuickResultScreen(Metric.SPO2, RecordSummary.Spo2(97, 64, false)) }
 
+    @Test fun spo2ResultLowConfidence() = shot("spo2_result_low_confidence") { QuickResultScreen(Metric.SPO2, RecordSummary.Spo2(75, 86, true)) }
+
     @Test fun tempResult() = shot("temp_result") { QuickResultScreen(Metric.SKIN_TEMPERATURE, RecordSummary.SkinTemperature(33.6f, 24.5f)) }
 
     private val body = RecordSummary.BodyComposition(

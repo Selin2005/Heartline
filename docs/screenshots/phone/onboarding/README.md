@@ -14,3 +14,4 @@ First launch: terms, welcome, profile and connecting the watch.
 | **Profile on a tall 20:9 phone** | <img src="tall_profile.png" width="240" alt=""> | — |
 | **Connect your watch: watch found** | <img src="connect_watch_found_light.png" width="240" alt=""> | <img src="connect_watch_found_dark.png" width="240" alt=""> |
 | **Connect your watch: Heartline not installed on the watch** | <img src="connect_watch_app_missing_light.png" width="240" alt=""> | <img src="connect_watch_app_missing_dark.png" width="240" alt=""> |
+| **Profile unusual body size** | <img src="profile_unusual_body_size_light.png" width="240" alt=""> | <img src="profile_unusual_body_size_dark.png" width="240" alt=""> |

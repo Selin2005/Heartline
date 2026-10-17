@@ -157,3 +157,14 @@ object BodyComposition {
         )
     }
 }
+
+/** Results the body-composition sensor gives when its input doesn't fit the body. */
+object BodyCompositionCheck {
+    /**
+     * The Samsung sensor clamps fat mass at 2.0 kg: a result there (about 3 % of a 70 kg body,
+     * below essential fat) comes from a profile that doesn't fit, not from the body.
+     */
+    const val FLOOR_FAT_MASS_KG = 2.0f
+
+    fun atSensorFloor(fatMassKg: Float?): Boolean = fatMassKg != null && fatMassKg <= FLOOR_FAT_MASS_KG + 0.01f
+}

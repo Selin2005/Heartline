@@ -117,6 +117,15 @@ object VitalsQuality {
     const val SPO2_BPM_MIN_GAP = 12.0
 
     /**
+     * A measured-on-request SpO2 is shown but marked low confidence when the sensor saw the wrist
+     * move during it ([movedDuring], its "hold still" hint) or it is under [SPOT_CONFIRM_BELOW] %:
+     * a real log kept 75 % from a measurement the sensor had flagged moving, and 92 % two minutes later.
+     */
+    fun spo2SpotLowConfidence(percent: Int, movedDuring: Boolean): Boolean = movedDuring || percent < SPOT_CONFIRM_BELOW
+
+    const val SPOT_CONFIRM_BELOW = 90
+
+    /**
      * Skin 30–40 °C, and the "ambient" reading not changed by more than 5 °C since the last
      * reading (a shower, going outside). Whether the watch is on the wrist comes from the
      * off-body sensor (checked by the worker).

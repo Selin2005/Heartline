@@ -173,6 +173,7 @@ fun QuickResultScreen(metric: Metric, summary: RecordSummary, onDone: () -> Unit
             is RecordSummary.Spo2 -> {
                 BigValue("${summary.percent}", "%")
                 summary.heartRate?.let { Detail(stringResource(R.string.bp_pulse, it)) }
+                if (summary.lowConfidence) Detail(stringResource(R.string.spo2_low_confidence))
                 com.heartline.wear.ui.components.BaselineNote(Metric.SPO2, summary.percent.toFloat())
                 if (summary.percent >= 95 && !summary.lowConfidence) PersonalNote(GoodResult.SPO2)
             }

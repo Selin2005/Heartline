@@ -50,6 +50,20 @@ object ProfileValidator {
         }
         return out
     }
+
+    /**
+     * Height and weight that are each allowed but together unlikely for an adult (BMI outside
+     * [PLAUSIBLE_BMI]), usually a typing slip. Not an error: the form asks to check them, and
+     * body composition is computed from them (143 cm and 30 kg, typed by mistake, gave the
+     * sensor's lowest fat mass every time, then "check your profile").
+     */
+    fun bodySizeUnusual(profile: UserProfile): Boolean {
+        if (profile.heightCm !in UserProfile.HEIGHT_CM || profile.weightKg !in UserProfile.WEIGHT_KG) return false
+        val m = profile.heightCm / 100f
+        return profile.weightKg / (m * m) !in PLAUSIBLE_BMI
+    }
+
+    val PLAUSIBLE_BMI = 16f..45f
 }
 
 /** Lenient number parsing for typed values: Persian/Arabic digits and ',' / '٫' decimal separators. */

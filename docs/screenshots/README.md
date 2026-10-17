@@ -8,7 +8,7 @@ Regenerate with `./gradlew recordPaparazziDebug` and `python3 tools/screenshots/
 
 | Section | Preview | Screens |
 |---|:-:|:-:|
-| [**Onboarding**](phone/onboarding/README.md) | [<img src="phone/onboarding/terms_light.png" width="120" alt="">](phone/onboarding/README.md) | 8 |
+| [**Onboarding**](phone/onboarding/README.md) | [<img src="phone/onboarding/terms_light.png" width="120" alt="">](phone/onboarding/README.md) | 9 |
 | [**Home**](phone/home/README.md) | [<img src="phone/home/home_light.png" width="120" alt="">](phone/home/README.md) | 7 |
 | [**Measuring from the phone**](phone/measure/README.md) | [<img src="phone/measure/measure_starting_light.png" width="120" alt="">](phone/measure/README.md) | 12 |
 | [**ECG**](phone/ecg/README.md) | [<img src="phone/ecg/ecg_home_light.png" width="120" alt="">](phone/ecg/README.md) | 8 |
@@ -29,7 +29,7 @@ Regenerate with `./gradlew recordPaparazziDebug` and `python3 tools/screenshots/
 | [**ECG**](wear/ecg/README.md) | [<img src="wear/ecg/ecg_instruction_small.png" width="160" alt="">](wear/ecg/README.md) | 11 |
 | [**Blood pressure**](wear/blood-pressure/README.md) | [<img src="wear/blood-pressure/bp_instruction_small.png" width="160" alt="">](wear/blood-pressure/README.md) | 18 |
 | [**Heart rate**](wear/heart-rate/README.md) | [<img src="wear/heart-rate/heart_rate_small.png" width="160" alt="">](wear/heart-rate/README.md) | 6 |
-| [**SpO₂, temperature and stress**](wear/more-measurements/README.md) | [<img src="wear/more-measurements/spo2_instruction_small.png" width="160" alt="">](wear/more-measurements/README.md) | 9 |
+| [**SpO₂, temperature and stress**](wear/more-measurements/README.md) | [<img src="wear/more-measurements/spo2_instruction_small.png" width="160" alt="">](wear/more-measurements/README.md) | 10 |
 | [**Body composition**](wear/body-composition/README.md) | [<img src="wear/body-composition/body_weight_small.png" width="160" alt="">](wear/body-composition/README.md) | 6 |
 | [**Settings**](wear/settings/README.md) | [<img src="wear/settings/settings_small.png" width="160" alt="">](wear/settings/README.md) | 8 |
 | [**Other**](wear/other/README.md) | [<img src="wear/other/breathing_done_small.png" width="160" alt="">](wear/other/README.md) | 2 |

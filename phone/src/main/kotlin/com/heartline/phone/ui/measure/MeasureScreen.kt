@@ -307,7 +307,11 @@ private fun statusText(ui: MeasureUi?, metric: Metric): String {
 private fun resultDetail(summary: RecordSummary?): String? = when (summary) {
     is RecordSummary.HeartRate -> stringResource(R.string.measure_hr_range, summary.minBpm, summary.maxBpm)
     is RecordSummary.BloodPressure -> summary.pulse?.let { stringResource(R.string.measure_bp_pulse, it) }
-    is RecordSummary.Spo2 -> summary.heartRate?.let { stringResource(R.string.measure_bp_pulse, it) }
+    is RecordSummary.Spo2 -> if (summary.lowConfidence) {
+        stringResource(R.string.measure_spo2_low_confidence)
+    } else {
+        summary.heartRate?.let { stringResource(R.string.measure_bp_pulse, it) }
+    }
     else -> null
 }
 

@@ -15,3 +15,4 @@ Quick measurements.
 | **Skin temperature: result** | <img src="temp_result_small.png" width="200" alt=""> | <img src="temp_result_large.png" width="200" alt=""> |
 | **Stress: measuring** | <img src="stress_measuring_small.png" width="200" alt=""> | <img src="stress_measuring_large.png" width="200" alt=""> |
 | **Stress: result** | <img src="stress_result_small.png" width="200" alt=""> | <img src="stress_result_large.png" width="200" alt=""> |
+| **Spo2 result low confidence** | <img src="spo2_result_low_confidence_small.png" width="200" alt=""> | <img src="spo2_result_low_confidence_large.png" width="200" alt=""> |

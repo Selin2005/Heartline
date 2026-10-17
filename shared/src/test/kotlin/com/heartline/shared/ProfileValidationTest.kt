@@ -14,6 +14,7 @@ import com.heartline.shared.profile.UserProfile
 import com.heartline.shared.sync.Protocol
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -26,6 +27,16 @@ class ProfileValidationTest {
     fun validProfileHasNoErrors() {
         assertTrue(ProfileValidator.errors(valid, today).isEmpty())
         assertEquals(34, valid.age(today))
+    }
+
+    @Test
+    fun anUnlikelyHeightAndWeightTogetherAreFlaggedButAllowed() {
+        // Typed by mistake in a real profile: each value is allowed, together a BMI of 14.7.
+        val slip = valid.copy(heightCm = 143f, weightKg = 30f)
+        assertTrue(ProfileValidator.errors(slip, today).isEmpty())
+        assertTrue(ProfileValidator.bodySizeUnusual(slip))
+        assertFalse(ProfileValidator.bodySizeUnusual(valid))
+        assertFalse(ProfileValidator.bodySizeUnusual(UserProfile()))
     }
 
     @Test

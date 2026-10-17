@@ -387,6 +387,7 @@
     <string name="profile_err_height_range">Height must be between 100 and 250 cm (3 ft 4 in – 8 ft 2 in).</string>
     <string name="profile_err_weight_missing">Enter your weight.</string>
     <string name="profile_err_weight_range">Weight must be between 25 and 300 kg (55 – 660 lb).</string>
+    <string name="profile_warn_body_size">This height and weight are unusual together. Please check both: body composition is worked out from them.</string>
     <plurals name="profile_fix_fields">
         <item quantity="one">%d field needs your attention before saving.</item>
         <item quantity="other">%d fields need your attention before saving.</item>
@@ -964,6 +965,7 @@
     <string name="measure_saved">Saved to your history.</string>
     <string name="measure_hr_range">Range during the check: %1$d–%2$d bpm</string>
     <string name="measure_bp_pulse">Pulse %1$d bpm</string>
+    <string name="measure_spo2_low_confidence">Your wrist moved or the reading was low. Measure again, sitting still, to confirm it.</string>
     <string name="measure_stress_unit">of 100</string>
     <string name="measure_again">Measure again</string>
     <string name="measure_try_again">Try again</string>
