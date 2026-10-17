@@ -37,6 +37,12 @@ class DiagnosticsTest {
     private fun lines(n: IntRange) = n.joinToString("") { "line %05d\n".format(it) } // 11 bytes per line
 
     @Test
+    fun momentsInMessagesReadInLocalTimeWithTheirOffset() {
+        val tehran = java.time.ZoneId.of("Asia/Tehran")
+        assertEquals("2026-10-17T11:09:24+03:30", LogLine.at(1_792_222_764_546, tehran))
+    }
+
+    @Test
     fun segmentedLogCompressesSegmentsInOrder() {
         val dir = Files.createTempDirectory("logs").toFile()
         val log = SegmentedLog(dir, budgetBytes = Long.MAX_VALUE, segmentBytes = 1_100, freeBytes = { Long.MAX_VALUE })

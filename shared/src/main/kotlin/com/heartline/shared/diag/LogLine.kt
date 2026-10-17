@@ -31,4 +31,11 @@ object LogLine {
         val trace = error?.let { "\n" + it.stackTraceToString().trimEnd() }.orEmpty()
         return "$stamp  $level $tag: $text$trace\n"
     }
+
+    /**
+     * A moment inside a message, in local time with its offset ("2026-10-17T10:56:04+03:30"), so
+     * every time in a log reads alike: epoch milliseconds, UTC and zoneless times were all mixed.
+     */
+    fun at(timeMs: Long, zone: ZoneId = ZoneId.systemDefault()): String =
+        Instant.ofEpochMilli(timeMs).atZone(zone).toOffsetDateTime().withNano(0).toString()
 }

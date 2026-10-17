@@ -32,6 +32,7 @@ import androidx.work.ForegroundInfo
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.heartline.shared.diag.LogLine
 import com.heartline.shared.hr.ActivityChange
 import com.heartline.shared.hr.BackgroundWindow
 import com.heartline.shared.hr.HrBatch
@@ -264,7 +265,7 @@ class PassiveHeartRateService :
             UserActivityState.USER_ACTIVITY_PASSIVE -> WatchActivity.PASSIVE
             else -> WatchActivity.UNKNOWN
         }
-        HLog.i("Heartline/Monitor", "activity: $activity since ${info.stateChangeTime}")
+        HLog.i("Heartline/Monitor", "activity: $activity since ${LogLine.at(info.stateChangeTime.toEpochMilli())}")
         store.recordActivity(ActivityChange(info.stateChangeTime.toEpochMilli(), activity))
     }
 }
@@ -307,7 +308,7 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
         // as for blood oxygen: otherwise rhythm and stress would never run on such a watch.
         val lastWorn = store.lastPassiveHeartRateMs
         if (settings.passiveHeartRate && lastWorn != null && System.currentTimeMillis() - lastWorn > NOT_WORN_MS) {
-            HLog.i(TAG, "IRN window skipped: no background heart rate since ${Instant.ofEpochMilli(lastWorn).atZone(ZoneId.systemDefault()).toLocalDateTime().withNano(0)}")
+            HLog.i(TAG, "IRN window skipped: no background heart rate since ${LogLine.at(lastWorn)}")
             return Result.success()
         }
         val wrist = WristState(applicationContext).also { it.start() }

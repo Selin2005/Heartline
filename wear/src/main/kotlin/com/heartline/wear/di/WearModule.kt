@@ -183,6 +183,8 @@ val wearModule = module {
             hello = {
                 Hello(
                     appVersion = BuildConfig.VERSION_NAME,
+                    capabilities = (get<SensorGateway>().state.value as? GatewayState.Connected)?.trackers
+                        ?.let { com.heartline.shared.sensor.MetricRequirements.supportedMetrics(it) }.orEmpty(),
                     sensorServiceVersion = (get<SensorGateway>().state.value as? GatewayState.Connected)?.serviceVersion,
                     deviceName = Build.MODEL,
                     settings = get<WatchSettingsStore>().settings.value,

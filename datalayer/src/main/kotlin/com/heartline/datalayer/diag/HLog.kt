@@ -135,7 +135,11 @@ object HLog {
     /** This process's logcat buffer (apps may only read their own), redacted. */
     fun processLogcat(): String = runCatching {
         val process = ProcessBuilder("logcat", "-d", "-v", "threadtime", "--pid=${Process.myPid()}").redirectErrorStream(true).start()
-        val text = process.inputStream.bufferedReader().use { r -> r.lineSequence().filterNot(::isUiNoise).joinToString("\n", postfix = "\n") }
+        // With the log kept, Heartline's own lines are already above: only the system's are added.
+        val keeping = persistent
+        val text = process.inputStream.bufferedReader().use { r ->
+            r.lineSequence().filterNot { isUiNoise(it) || (keeping && isOwnLine(it)) }.joinToString("\n", postfix = "\n")
+        }
         process.waitFor(5, TimeUnit.SECONDS)
         redactor.redact(text)
     }.getOrElse { "(logcat unavailable: ${it.message})" }
@@ -144,4 +148,9 @@ object HLog {
     private val uiNoise = Regex("""^\S+ \S+\s+\d+\s+\d+ [VDI] (View|VRI\[[^\]]*]@\w+|ViewRootImpl|InsetsController|InsetsSourceConsumer|BLASTBufferQueue\w*|InputTransport|InputMethodManager\w*|ImeTracker|ImeFocusController|WindowOnBackDispatcher|HWUI|AdrenoVK-\d+|SurfaceComposerClient|BufferQueueProducer|DecorView|qdgralloc|vulkan|NativeCustomFrequencyManager|HardwareRenderer|IDS_TAG|SnapAlloc|BBA2)\s*:""")
 
     internal fun isUiNoise(line: String) = uiNoise.containsMatchIn(line)
+
+    /** A logcat line this app logged through [HLog] (crashes too, which [e] keeps). */
+    private val ownLine = Regex("""^\S+ \S+\s+\d+\s+\d+ [VDIWEF] Heartline/""")
+
+    internal fun isOwnLine(line: String) = ownLine.containsMatchIn(line)
 }

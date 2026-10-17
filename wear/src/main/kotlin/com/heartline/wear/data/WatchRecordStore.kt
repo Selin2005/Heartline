@@ -50,8 +50,9 @@ class WatchRecordStore(
 
     suspend fun enqueueMessage(id: String, path: String, payload: ByteArray) {
         messages?.insert(MessageEntity(id, path, payload, now()))
-        val dropped = messages?.deleteOlderThan(now() - 7 * 24 * 3_600_000L) ?: 0
-        if (dropped > 0) HLog.w("Heartline/Sync", "outbox: $dropped messages older than 7 days dropped (the phone was away)")
+        // Heart-rate batches go after 7 days; an alert the phone never got is kept for 30.
+        val dropped = messages?.deleteOlderThan(now() - 7 * DAY_MS, Protocol.ALERT, now() - 30 * DAY_MS) ?: 0
+        if (dropped > 0) HLog.w("Heartline/Sync", "outbox: $dropped old messages dropped (the phone was away)")
     }
 
     override suspend fun pendingMessages(): List<PendingMessage> =
@@ -98,5 +99,6 @@ class WatchRecordStore(
         const val HISTORY = 400
         const val SESSIONS = "bp-sessions"
         const val MAX_SESSION_BYTES = 64L * 1024 * 1024
+        private const val DAY_MS = 86_400_000L
     }
 }
