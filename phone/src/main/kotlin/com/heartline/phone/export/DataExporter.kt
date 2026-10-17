@@ -49,7 +49,8 @@ object CsvFormat {
                     "fat_free_pct" to summary.fatFreePercent,
                     "bmr" to summary.bmrKcal,
                     "impedance_ohm" to summary.impedanceOhm,
-                    "phase_angle_deg" to summary.phaseAngleDeg,
+                    // The SDK's impedance angle (−90…0°): the phase angle is its magnitude, as the app shows it.
+                    "phase_angle_deg" to summary.phaseAngleDeg?.let { kotlin.math.abs(it) },
                 ).joinToString(";") { (k, v) -> "$k=${v ?: ""}" },
             )
             is RecordSummary.Stress -> Triple("${summary.score}", "score", "rmssd_ms=${summary.rmssdMs ?: ""}")
