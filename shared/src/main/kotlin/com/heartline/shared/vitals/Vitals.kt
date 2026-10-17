@@ -105,13 +105,16 @@ data class VitalsLimits(
 object VitalsQuality {
     /**
      * A completed SpO2 reading (status 2) between 70 and 100 %, taken still, whose own pulse is
-     * within 15 % of the recent background heart rate (when known).
+     * within 15 % (and at least [SPO2_BPM_MIN_GAP] bpm) of the recent background heart rate (when
+     * known). 15 % alone was 7–9 bpm asleep: 96 % with pulse 68 against 57 was rejected.
      */
     fun spo2(percent: Int, sensorBpm: Int?, recentBpm: Int?, moved: Boolean): Boolean {
         if (moved || percent !in 70..100) return false
-        if (sensorBpm != null && sensorBpm > 0 && recentBpm != null && abs(sensorBpm - recentBpm) > recentBpm * 0.15) return false
-        return true
+        if (sensorBpm == null || sensorBpm <= 0 || recentBpm == null) return true
+        return abs(sensorBpm - recentBpm) <= maxOf(recentBpm * 0.15, SPO2_BPM_MIN_GAP)
     }
+
+    const val SPO2_BPM_MIN_GAP = 12.0
 
     /**
      * Skin 30–40 °C, and the "ambient" reading not changed by more than 5 °C since the last

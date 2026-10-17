@@ -101,11 +101,14 @@ It uses the same sources as a manual measurement, through `VitalsMeasurer`.
 - it completed (SDK status 2), within 70–100 %;
 - the sensor itself saw no movement during it (its "hold still" hint). The watch's
   accelerometer no longer rejects a reading the sensor accepted;
-- the pulse it reports is within 15 % of the background heart rate, compared only when that is
-  under 5 minutes old. A mismatch means the sensor locked onto noise;
-- if it is low, its re-check agrees (`Spo2Schedule.confirmed`). With no re-check result the low
-  value is not kept (the log had 80 % at rest kept that way) and another try follows 10 minutes
-  later; with a normal re-check, only the re-check counts.
+- the pulse it reports is within 15 % (and at least 12 bpm) of the background heart rate,
+  compared only when that is under 5 minutes old. A mismatch means the sensor locked onto noise.
+  15 % alone allowed 7–9 bpm asleep (96 % with pulse 68 against 57 was rejected). A rejected
+  reading is tried again 10 minutes later, at most twice per slot, instead of an hour later;
+- if it is low, its re-check agrees (`Spo2Schedule.confirmed`). A re-check without a result gets
+  one more go, 2 minutes later. With still no re-check result the low value is not kept (the log
+  had 80 % at rest kept that way) and another try follows 10 minutes later; with a normal
+  re-check, only the re-check counts.
 
 **Skin temperature.** A reading is kept only when:
 - it completed (status 0), with skin between 30 and 40 °C. A watch lying on a table cools to

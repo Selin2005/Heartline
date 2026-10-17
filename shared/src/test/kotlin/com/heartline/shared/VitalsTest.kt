@@ -37,6 +37,9 @@ class VitalsTest {
         assertTrue(VitalsQuality.spo2(97, 62, 60, moved = false))
         assertFalse(VitalsQuality.spo2(97, 62, 60, moved = true))
         assertFalse(VitalsQuality.spo2(97, 90, 60, moved = false)) // its pulse doesn't match the wrist's
+        // A slow pulse asleep: 15 % is under 9 bpm, so the gap allowed is at least 12 (real log: 96 % at 68 against 57).
+        assertTrue(VitalsQuality.spo2(96, 68, 57, moved = false))
+        assertFalse(VitalsQuality.spo2(100, 63, 90, moved = false))
         assertFalse(VitalsQuality.spo2(65, null, null, moved = false))
         assertTrue(VitalsQuality.temperature(34.2f, 24f, 24.5f))
         // Real Galaxy Watch8 Classic readings: the case's "ambient" is warmer than skin when worn.

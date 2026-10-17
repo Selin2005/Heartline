@@ -236,14 +236,28 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
                             }
                             store.lastSpo2Ms = now
                             store.spo2Retries = 0
-                            if (first == null) attempts += Spo2Attempt(now, lastFailure, waitedS = waitedS)
+                            if (first == null) {
+                                val again = lastFailure == Spo2Outcome.REJECTED && retries < MAX_REJECTED_RETRIES
+                                attempts += Spo2Attempt(now, lastFailure, retryAtMs = if (again) now + Spo2Schedule.RETRY_MINUTES * MINUTE else null, waitedS = waitedS)
+                                if (again) {
+                                    // A completed reading that didn't match the heart rate: the arm was still, so a try
+                                    // soon is likely to work; it used to wait for the next slot, an hour later.
+                                    store.lastSpo2Ms = 0
+                                    store.spo2RetrySlot = Spo2Schedule.slot(now, every)
+                                    store.spo2Retries = retries + 1
+                                    BackgroundMonitoring.scheduleVitalsRetry(applicationContext, Spo2Schedule.RETRY_MINUTES.toLong())
+                                    HLog.i(TAG, "SpO2 trying again in ${Spo2Schedule.RETRY_MINUTES} min")
+                                }
+                            }
                             if (first != null) {
                                 // Low: check again (twice at most, while it stays low).
                                 val rechecks = mutableListOf<Spo2Sample>()
                                 var last: Spo2Sample = first
+                                var missed = 0
                                 while (monitor.needsRecheck(last.percent, settings, history, last.tsMs) && rechecks.size < VitalsMonitor.RECHECKS) {
                                     delay(RECHECK_DELAY_MS)
-                                    last = spo2(source, context, System.currentTimeMillis(), confirmation = true) ?: break
+                                    // One re-check without a result gets one more go: low readings were dropped unconfirmed.
+                                    last = spo2(source, context, System.currentTimeMillis(), confirmation = true) ?: if (++missed <= 1) continue else break
                                     rechecks += last
                                 }
                                 // A low reading counts only when its re-check agrees.
@@ -334,5 +348,8 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
         const val HOUR = 60 * MINUTE
         const val NOT_WORN_MS = 60 * MINUTE
         const val RECHECK_DELAY_MS = 2 * MINUTE
+
+        /** Rejected readings tried again within one slot (put-offs count too). */
+        const val MAX_REJECTED_RETRIES = 2
     }
 }
