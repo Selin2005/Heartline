@@ -10,6 +10,7 @@ import com.google.android.gms.wearable.ChannelClient
 import com.google.android.gms.wearable.Node
 import com.google.android.gms.wearable.Wearable
 import com.heartline.shared.sync.Envelope
+import com.heartline.shared.sync.PeerBackoff
 import com.heartline.shared.sync.PeerDirectory
 import com.heartline.shared.sync.PeerProbe
 import com.heartline.shared.sync.SyncTransport
@@ -30,8 +31,10 @@ import kotlinx.coroutines.withContext
  * Everything is logged under [TAG] (successes too) so a device log shows exactly where a link breaks.
  *
  * @param peerCapability capability advertised by the other app (see Protocol.CAPABILITY_*).
+ * @param backoff when set, routine sends stop looking the other app up for a while after it
+ *   wasn't reachable (the watch: it sends on every background heart-rate delivery).
  */
-class DataLayerTransport(context: Context, private val peerCapability: String) :
+class DataLayerTransport(context: Context, private val peerCapability: String, private val backoff: PeerBackoff? = null) :
     SyncTransport,
     PeerDirectory {
     private val appContext = context.applicationContext
@@ -44,12 +47,21 @@ class DataLayerTransport(context: Context, private val peerCapability: String) :
     override val incoming: Flow<Envelope> = inbox.asSharedFlow()
 
     suspend fun deliver(envelope: Envelope) {
+        backoff?.reset()
         HLog.i(TAG, "received ${envelope.path} (${envelope.data.size} B)")
         inbox.emit(envelope)
     }
 
-    /** Nodes running the other Heartline app. */
-    suspend fun peers(): Set<Node> = runCatching {
+    /** Nodes running the other Heartline app (looked up now, whatever the [backoff]). */
+    suspend fun peers(): Set<Node> = lookup(routine = false).orEmpty()
+
+    /** null: a [routine] lookup while the [backoff] waits (nothing asked, nothing logged). */
+    private suspend fun lookup(routine: Boolean): Set<Node>? {
+        if (routine && backoff?.shouldTry() == false) return null
+        return find().also { backoff?.onLookup(it.isNotEmpty()) }
+    }
+
+    private suspend fun find(): Set<Node> = runCatching {
         capabilities.getCapability(peerCapability, CapabilityClient.FILTER_REACHABLE).await().nodes
     }.onFailure { HLog.w(TAG, "capability lookup '$peerCapability' failed", it) }
         .getOrDefault(emptySet())
@@ -78,9 +90,9 @@ class DataLayerTransport(context: Context, private val peerCapability: String) :
     suspend fun peerNodeId(): String? = peers().firstOrNull()?.id
 
     override suspend fun send(path: String, data: ByteArray): Boolean {
-        val targets = peers()
+        val targets = lookup(routine = true) ?: return false
         if (targets.isEmpty()) {
-            HLog.w(TAG, "send $path: no peer")
+            HLog.w(TAG, "send $path: no peer${nextLookup()}")
             return false
         }
         return targets.map { node ->
@@ -92,7 +104,7 @@ class DataLayerTransport(context: Context, private val peerCapability: String) :
     }
 
     override suspend fun sendLarge(path: String, data: ByteArray): Boolean {
-        val node = peers().firstOrNull() ?: return false.also { HLog.w(TAG, "sendLarge $path: no peer") }
+        val node = (lookup(routine = true) ?: return false).firstOrNull() ?: return false.also { HLog.w(TAG, "sendLarge $path: no peer${nextLookup()}") }
         return runCatching {
             val channel = channels.openChannel(node.id, path).await()
             try {
@@ -109,9 +121,10 @@ class DataLayerTransport(context: Context, private val peerCapability: String) :
 
     /** Streams [input] on a channel without holding it in memory (the watch's log segments). */
     override suspend fun sendStream(path: String, input: InputStream): Boolean {
-        val node = peers().firstOrNull() ?: return false.also {
+        val found = lookup(routine = true) ?: return false.also { input.close() }
+        val node = found.firstOrNull() ?: return false.also {
             input.close()
-            HLog.w(TAG, "sendStream $path: no peer")
+            HLog.w(TAG, "sendStream $path: no peer${nextLookup()}")
         }
         var sent = 0L
         return runCatching {
@@ -143,6 +156,7 @@ class DataLayerTransport(context: Context, private val peerCapability: String) :
      * .onChannelOpened for large transfers that shouldn't be held in memory), then closes it.
      */
     suspend fun readChannelStream(channel: ChannelClient.Channel, read: suspend (InputStream) -> Unit) {
+        backoff?.reset()
         try {
             val input = channels.getInputStream(channel).await()
             HLog.i(TAG, "receiving stream ${channel.path}")
@@ -154,11 +168,14 @@ class DataLayerTransport(context: Context, private val peerCapability: String) :
 
     /** Reads a whole inbound channel (called from WearableListenerService.onChannelOpened). */
     suspend fun readChannel(channel: ChannelClient.Channel): ByteArray = withContext(Dispatchers.IO) {
+        backoff?.reset()
         channels.getInputStream(channel).await().use { it.readBytes() }.also {
             channels.close(channel)
             HLog.i(TAG, "received stream ${channel.path} (${it.size} B)")
         }
     }
+
+    private fun nextLookup(): String = backoff?.waitLeftMs()?.takeIf { it > 0 }?.let { ", next look in ${it / 1000} s" }.orEmpty()
 
     companion object {
         const val TAG = "Heartline/Sync"

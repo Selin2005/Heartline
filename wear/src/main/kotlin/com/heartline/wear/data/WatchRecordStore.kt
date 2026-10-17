@@ -3,6 +3,7 @@
 
 package com.heartline.wear.data
 
+import com.heartline.datalayer.diag.HLog
 import com.heartline.shared.bp.BpSessionLog
 import com.heartline.shared.model.RecordMeta
 import com.heartline.shared.sync.Outbox
@@ -49,7 +50,8 @@ class WatchRecordStore(
 
     suspend fun enqueueMessage(id: String, path: String, payload: ByteArray) {
         messages?.insert(MessageEntity(id, path, payload, now()))
-        messages?.deleteOlderThan(now() - 7 * 24 * 3_600_000L)
+        val dropped = messages?.deleteOlderThan(now() - 7 * 24 * 3_600_000L) ?: 0
+        if (dropped > 0) HLog.w("Heartline/Sync", "outbox: $dropped messages older than 7 days dropped (the phone was away)")
     }
 
     override suspend fun pendingMessages(): List<PendingMessage> =

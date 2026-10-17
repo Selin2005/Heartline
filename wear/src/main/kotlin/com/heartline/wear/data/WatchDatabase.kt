@@ -72,7 +72,7 @@ interface MessageDao {
 
     /** Keeps the queue bounded if the phone is away for days. */
     @Query("DELETE FROM messages WHERE createdAtMs < :beforeMs")
-    suspend fun deleteOlderThan(beforeMs: Long)
+    suspend fun deleteOlderThan(beforeMs: Long): Int
 }
 
 @Database(entities = [WatchRecordEntity::class, MessageEntity::class], version = 2, exportSchema = true)

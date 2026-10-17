@@ -5,6 +5,7 @@ package com.heartline.shared
 
 import com.heartline.shared.bp.BpSessionLog
 import com.heartline.shared.bp.SensorStream
+import com.heartline.shared.diag.IdleTimeoutInputStream
 import com.heartline.shared.diag.LogFiles
 import com.heartline.shared.diag.LogOffload
 import com.heartline.shared.diag.RawSessions
@@ -176,6 +177,53 @@ class RawLogsTest {
         assertEquals(1, a.rawSessions().size)
         a.clear()
         assertEquals(0L, a.sizeBytes())
+    }
+
+    @Test
+    fun aStalledStreamTimesOutWithoutHoldingUpOthersOrLeavingAnything() {
+        val archive = WatchLogArchive(dir(), Long.MAX_VALUE, freeBytes = { Long.MAX_VALUE })
+        // A channel that sends a few bytes, then nothing (the stream that held the phone for 29 minutes).
+        // Like a channel's stream on Android, closing it wakes a read that is waiting.
+        val channel = object : java.io.InputStream() {
+            private val closed = java.util.concurrent.CountDownLatch(1)
+            private var sent = 0
+
+            override fun read(): Int {
+                if (sent < 7) return "partial"[sent++].code
+                closed.await()
+                throw java.io.IOException("closed")
+            }
+
+            override fun close() = closed.countDown()
+        }
+        val stalled = IdleTimeoutInputStream(channel, idleMs = 300)
+        var failure: Throwable? = null
+        val name = "20260929-173755-123-irn_window-abcd1234.hlbp"
+        val reader = Thread {
+            failure = runCatching { archive.receive(LogFiles.RAW, name, stalled) }.exceptionOrNull()
+        }
+        reader.start()
+        Thread.sleep(50)
+        // Meanwhile another file arrives and is stored at once.
+        assertEquals(5L, archive.receive(LogFiles.RAW, "20260929-173800-000-other-bcde2345.hlbp", "12345".byteInputStream()))
+        reader.join(5_000)
+        assertFalse(reader.isAlive)
+        assertTrue(failure is java.io.IOException)
+        assertTrue(stalled.timedOut)
+        assertEquals(listOf("20260929-173800-000-other-bcde2345.hlbp"), archive.rawSessions().map { it.name })
+    }
+
+    @Test
+    fun aBrokenStreamLeavesNoTemporaryFile() {
+        val root = dir()
+        val archive = WatchLogArchive(root, Long.MAX_VALUE, freeBytes = { Long.MAX_VALUE })
+        val broken = object : java.io.InputStream() {
+            var n = 0
+
+            override fun read(): Int = if (n++ < 10) 'x'.code else throw java.io.IOException("Channel closed unexpectedly")
+        }
+        assertTrue(runCatching { archive.receive(LogFiles.RAW, "20260929-173755-123-ecg-abcd1234.hlbp", broken) }.isFailure)
+        assertEquals(emptyList<String>(), File(root, LogFiles.RAW).list().orEmpty().toList())
     }
 
     private class NoRecords : RecordSink {

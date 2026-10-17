@@ -38,7 +38,9 @@ class SyncWorker(context: Context, params: WorkerParameters) :
         engine.flush()
         // Log segments and raw sensor sessions that haven't reached the phone yet.
         logs.run()
-        return if (store.pending().isEmpty() && !logs.stalled) Result.success() else Result.retry()
+        // Heart-rate batches and alerts wait in the outbox too: retried like records, not left for the next delivery.
+        val waiting = store.pending().isNotEmpty() || store.pendingMessages().isNotEmpty()
+        return if (!waiting && !logs.stalled) Result.success() else Result.retry()
     }
 
     companion object {

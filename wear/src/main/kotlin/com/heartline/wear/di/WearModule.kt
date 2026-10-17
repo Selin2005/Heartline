@@ -10,6 +10,7 @@ import com.heartline.wear.diag.RawCapture
 import com.heartline.shared.diag.LogFiles
 import com.heartline.shared.diag.LogOffload
 import com.heartline.datalayer.DataLayerTransport
+import com.heartline.shared.sync.PeerBackoff
 import com.heartline.shared.sync.Protocol
 import com.heartline.shared.sync.SyncTransport
 import com.heartline.shared.sync.WatchSyncEngine
@@ -97,7 +98,7 @@ val wearModule = module {
     single<HrSource> {
         if (BuildConfig.USE_FAKE_SENSORS) FakeHrSource() else SdkHrSource(get<SensorGateway>() as SdkSensorGateway)
     }
-    single { DataLayerTransport(androidContext(), Protocol.CAPABILITY_PHONE) } bind SyncTransport::class
+    single { DataLayerTransport(androidContext(), Protocol.CAPABILITY_PHONE, PeerBackoff()) } bind SyncTransport::class
     single {
         WatchSyncEngine(
             get(),

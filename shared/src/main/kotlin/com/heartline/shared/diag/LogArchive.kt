@@ -5,7 +5,9 @@ package com.heartline.shared.diag
 
 import com.heartline.shared.sync.ArchiveAck
 import java.io.File
+import java.io.IOException
 import java.io.InputStream
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.sync.Mutex
 
@@ -35,18 +37,34 @@ class WatchLogArchive(
     private val minFreeBytes: Long = 1024L * 1024 * 1024,
     private val freeBytes: () -> Long = { dir.usableSpace }
 ) {
-    /** Stores [input] as file [name] of [type]; returns its size, or null for a name that isn't a log file. */
-    @Synchronized
+    /**
+     * Stores [input] as file [name] of [type]; returns its size, or null for a name that isn't a log
+     * file. Streams are read side by side, each into a file of its own: one that stalls never holds
+     * up the others, and a broken one leaves nothing behind.
+     */
     fun receive(type: String, name: String, input: InputStream): Long? = input.use { stream ->
         if (!LogFiles.valid(type, name)) return null
         val folder = File(dir, type).apply { mkdirs() }
-        val tmp = File(folder, "$name.tmp")
-        tmp.outputStream().buffered().use { stream.copyTo(it) }
-        val file = File(folder, name)
-        file.delete()
-        tmp.renameTo(file)
-        trim()
-        file.length()
+        val tmp = File(folder, "$name.${UUID.randomUUID()}$TMP")
+        try {
+            tmp.outputStream().buffered().use { stream.copyTo(it) }
+            synchronized(this) {
+                val file = File(folder, name)
+                file.delete()
+                if (!tmp.renameTo(file)) throw IOException("could not keep $name")
+                dropStaleTemp(folder)
+                trim()
+                file.length()
+            }
+        } finally {
+            tmp.delete()
+        }
+    }
+
+    /** Pieces of streams cut off before this version cleaned up after them. */
+    private fun dropStaleTemp(folder: File) {
+        val before = System.currentTimeMillis() - STALE_TMP_MS
+        folder.listFiles { f -> f.name.endsWith(TMP) && f.lastModified() < before }?.forEach { it.delete() }
     }
 
     /** The watch's text log segments here, oldest first. */
@@ -64,6 +82,11 @@ class WatchLogArchive(
     }
 
     private fun files(type: String): List<File> = File(dir, type).listFiles { f -> LogFiles.valid(type, f.name) }.orEmpty().toList()
+
+    private companion object {
+        const val TMP = ".tmp"
+        const val STALE_TMP_MS = 3_600_000L
+    }
 
     private fun trim() {
         val all = (logSegments() + rawSessions()).sortedBy { it.lastModified() }.toMutableList()
