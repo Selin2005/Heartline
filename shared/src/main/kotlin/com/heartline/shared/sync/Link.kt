@@ -42,15 +42,29 @@ class WatchLinkChecker(
     private val hello: () -> Hello,
     private val clock: () -> Long = System::currentTimeMillis,
     private val timeoutMs: Long = 8_000,
+    private val reuseMs: Long = 5 * 60_000L,
     private val log: (String) -> Unit = {}
 ) {
-    suspend fun check(): LinkState {
+    @Volatile private var answeredAtMs: Long? = null
+
+    /**
+     * [reuseRecent]: a routine re-check (the app came back to the screen) doesn't say hello again
+     * when the phone answered one less than [reuseMs] ago in this process; each hello costs the
+     * phone four messages back, and the watch sent one on every screen-on.
+     */
+    suspend fun check(reuseRecent: Boolean = false): LinkState {
         val probe = directory.probe()
         log("probe=$probe")
         when (probe) {
             PeerProbe.NO_DEVICE -> return LinkState(LinkStage.NO_DEVICE)
             PeerProbe.APP_MISSING -> return LinkState(LinkStage.APP_MISSING)
             PeerProbe.REACHABLE -> Unit
+        }
+        val answered = answeredAtMs
+        val recent = latest.value
+        if (reuseRecent && answered != null && clock() - answered < reuseMs && recent != null && recent.status.isCompatible()) {
+            log("hello skipped: the phone answered ${(clock() - answered) / 1000} s ago")
+            return LinkState(LinkStage.CONNECTED, recent.status)
         }
         val askedAt = clock()
         val sent = transport.send(Protocol.HELLO, Protocol.json.encodeToString(hello()).encodeToByteArray())
@@ -61,7 +75,7 @@ class WatchLinkChecker(
         return when {
             reply == null -> LinkState(LinkStage.NO_RESPONSE)
             !reply.status.isCompatible() -> LinkState(LinkStage.INCOMPATIBLE, reply.status)
-            else -> LinkState(LinkStage.CONNECTED, reply.status)
+            else -> LinkState(LinkStage.CONNECTED, reply.status).also { answeredAtMs = clock() }
         }
     }
 }

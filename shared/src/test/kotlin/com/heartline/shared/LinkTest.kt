@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -93,6 +94,25 @@ class LinkTest {
         assertTrue(state.status!!.setupComplete)
         assertEquals("Sam", state.status!!.displayName)
         assertEquals(1, rig.hellos.size)
+    }
+
+    @Test
+    fun aRoutineRecheckSoonAfterAnAnswerSkipsTheHello() = runTest {
+        val rig = Rig(this, complete)
+        assertEquals(LinkStage.CONNECTED, rig.checker.check().stage)
+        advanceTimeBy(60_000)
+        // The app came back to the screen a minute later: no new hello, the phone's answer stands.
+        assertEquals(LinkStage.CONNECTED, rig.checker.check(reuseRecent = true).stage)
+        assertEquals(1, rig.hellos.size)
+        // A check the user asked for (or one after a problem) always says hello.
+        rig.checker.check()
+        assertEquals(2, rig.hellos.size)
+        advanceTimeBy(6 * 60_000)
+        rig.checker.check(reuseRecent = true)
+        assertEquals(3, rig.hellos.size)
+        // The phone went away: the probe still notices.
+        rig.directory.probe = PeerProbe.NO_DEVICE
+        assertEquals(LinkStage.NO_DEVICE, rig.checker.check(reuseRecent = true).stage)
     }
 
     @Test

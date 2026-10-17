@@ -52,6 +52,7 @@ import com.heartline.wear.sensor.FakeSensorGateway
 import com.heartline.wear.sensor.SyncScheduler
 import com.heartline.wear.sensor.sdk.SdkEcgSource
 import com.heartline.wear.sync.SyncWorker
+import com.heartline.wear.sensor.GatewayState
 import com.heartline.wear.sensor.SensorGateway
 import com.heartline.wear.sensor.sdk.SdkSensorGateway
 import com.heartline.wear.ui.HistoryViewModel
@@ -182,6 +183,7 @@ val wearModule = module {
             hello = {
                 Hello(
                     appVersion = BuildConfig.VERSION_NAME,
+                    sensorServiceVersion = (get<SensorGateway>().state.value as? GatewayState.Connected)?.serviceVersion,
                     deviceName = Build.MODEL,
                     settings = get<WatchSettingsStore>().settings.value,
                     features = listOf(com.heartline.shared.sync.Features.REMOTE_MEASURE),

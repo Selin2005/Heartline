@@ -89,7 +89,7 @@ class SetupGateViewModel(
         val quiet = mutable.value is GateState.Ready
         job = viewModelScope.launch {
             if (!quiet) mutable.value = GateState.CheckingPhone
-            val link = checker.check()
+            val link = checker.check(reuseRecent = quiet)
             HLog.i(TAG, "link=${link.stage} status=${link.status}")
             val status = link.status
             when {

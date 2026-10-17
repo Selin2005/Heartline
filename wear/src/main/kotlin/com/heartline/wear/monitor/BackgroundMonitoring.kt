@@ -8,6 +8,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.os.BatteryManager
 import android.os.Build
 import android.os.PowerManager
 import android.os.SystemClock
@@ -115,6 +116,10 @@ object BackgroundMonitoring {
     fun hasBackgroundPermission(context: Context) =
         Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(context, backgroundPermission) == PackageManager.PERMISSION_GRANTED
 
+    /** For the log: what the monitoring costs shows only next to the battery level. */
+    private fun batteryPercent(context: Context): Int? =
+        context.getSystemService(BatteryManager::class.java)?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+
     /** Applies [settings]: registers/unregisters the passive listener and schedules/cancels IRN windows. */
     suspend fun sync(context: Context, settings: MonitorSettings) {
         val allowed = canRun(context)
@@ -164,7 +169,7 @@ object BackgroundMonitoring {
             work.cancelUniqueWork(VITALS_WORK)
             work.cancelUniqueWork(VITALS_RETRY)
         }
-        HLog.i(TAG, "sync allowed=$allowed monitoring=${settings.heartMonitoring} rhythm=${settings.rhythmActive} stress=${settings.stressActive} spo2=${settings.spo2Active}/${settings.spo2Interval}min temp=${settings.skinTempActive} sensitivity=${settings.alertSensitivity} background=${hasBackgroundPermission(context)}")
+        HLog.i(TAG, "sync allowed=$allowed monitoring=${settings.heartMonitoring} rhythm=${settings.rhythmActive} stress=${settings.stressActive} spo2=${settings.spo2Active}/${settings.spo2Interval}min temp=${settings.skinTempActive} sensitivity=${settings.alertSensitivity} background=${hasBackgroundPermission(context)} battery=${batteryPercent(context)}%")
     }
 }
 
