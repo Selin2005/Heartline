@@ -263,6 +263,8 @@ class WearScreenshotTest(private val size: String) {
 
     @Test fun spo2ResultLowConfidence() = shot("spo2_result_low_confidence") { QuickResultScreen(Metric.SPO2, RecordSummary.Spo2(75, 86, true)) }
 
+    @Test fun spo2Failed() = shot("spo2_failed") { com.heartline.wear.ui.screens.QuickFailedScreen(Metric.SPO2, QuickHint.TIMED_OUT) }
+
     @Test fun tempResult() = shot("temp_result") { QuickResultScreen(Metric.SKIN_TEMPERATURE, RecordSummary.SkinTemperature(33.6f, 24.5f)) }
 
     private val body = RecordSummary.BodyComposition(

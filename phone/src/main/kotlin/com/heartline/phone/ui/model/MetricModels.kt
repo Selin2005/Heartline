@@ -221,7 +221,7 @@ object BackgroundVitals {
         val monitor = VitalsMonitor(zoneId) { "" }
         val off = MonitorSettings().copy(spo2Monitoring = false)
         var h = VitalsHistory()
-        spo2.forEach { h = monitor.onSpo2(h, Spo2Sample(it.tsMs, it.percent, it.context, it.confirmation), emptyList(), off).first }
+        spo2.forEach { h = monitor.onSpo2(h, Spo2Sample(it.tsMs, it.percent, it.context, it.confirmation, it.lowConfidence), emptyList(), off).first }
         temps.forEach { h = monitor.onTemp(h, TempSample(it.tsMs, it.skinC, it.ambientC, it.context, it.counted)) }
         return h
     }

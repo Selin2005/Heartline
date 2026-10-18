@@ -25,9 +25,10 @@ import com.heartline.shared.body.BodyComposition
 import com.heartline.shared.model.Metric
 import com.heartline.shared.model.RecordSummary
 import com.heartline.shared.sensor.PermissionPolicy
-import com.heartline.wear.sensor.SensorProblem
+import com.heartline.wear.sensor.QuickHint
 import com.heartline.wear.ui.screens.BodyResultScreen
 import com.heartline.wear.ui.screens.ProfileNeededScreen
+import com.heartline.wear.ui.screens.QuickFailedScreen
 import com.heartline.wear.ui.screens.QuickInstructionScreen
 import com.heartline.wear.ui.screens.QuickMeasuringScreen
 import com.heartline.wear.ui.screens.QuickResultScreen
@@ -153,7 +154,10 @@ fun QuickFlow(
                 QuickResultScreen(metric, s.summary, onDone = done)
             }
         }
-        is QuickState.Failed -> SensorErrorScreen(s.problem ?: SensorProblem.OFF_BODY, onAction = { vm.reset() })
+        is QuickState.Failed -> when (val problem = s.problem) {
+            null -> QuickFailedScreen(metric, s.hint ?: QuickHint.LOW_SIGNAL, onRetry = { vm.reset() })
+            else -> SensorErrorScreen(problem, onAction = { vm.reset() })
+        }
     }
 }
 

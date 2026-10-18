@@ -18,9 +18,19 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.serialization.Serializable
 
-/** One background blood-oxygen reading. [confirmation]: a re-check right after a low reading. */
+/**
+ * One background blood-oxygen reading. [confirmation]: a re-check right after a low reading.
+ * [lowConfidence]: its pulse didn't match the wrist's ([VitalsQuality.spo2Quality]): kept and
+ * shown, but not enough on its own for a notice.
+ */
 @Serializable
-data class Spo2Sample(val tsMs: Long, val percent: Int, val context: HrContext, val confirmation: Boolean = false)
+data class Spo2Sample(
+    val tsMs: Long,
+    val percent: Int,
+    val context: HrContext,
+    val confirmation: Boolean = false,
+    val lowConfidence: Boolean = false
+)
 
 /** How a background SpO2 try ended, for the phone's "today" card. */
 @Serializable
@@ -103,27 +113,34 @@ data class VitalsLimits(
 
 /** Reading quality: only believable readings are kept. */
 object VitalsQuality {
+    enum class Spo2Quality { KEEP, LOW_CONFIDENCE, REJECT }
+
     /**
-     * A completed SpO2 reading (status 2) between 70 and 100 %, taken still, whose own pulse is
-     * within 15 % (and at least [SPO2_BPM_MIN_GAP] bpm) of the recent background heart rate (when
-     * known). 15 % alone was 7–9 bpm asleep: 96 % with pulse 68 against 57 was rejected.
+     * A completed SpO2 reading (status 2): rejected only outside 70–100 % or when the wrist moved
+     * just before the value ([movedBeforeResult], [spo2MovedBeforeResult]). A pulse more than 15 %
+     * (and [SPO2_BPM_MIN_GAP] bpm) off the recent background heart rate (when known) makes it low
+     * confidence, not wrong: 39 readings were thrown away for that in two weeks of a real log, while
+     * the sensor itself had completed them.
      */
-    fun spo2(percent: Int, sensorBpm: Int?, recentBpm: Int?, moved: Boolean): Boolean {
-        if (moved || percent !in 70..100) return false
-        if (sensorBpm == null || sensorBpm <= 0 || recentBpm == null) return true
-        return abs(sensorBpm - recentBpm) <= maxOf(recentBpm * 0.15, SPO2_BPM_MIN_GAP)
+    fun spo2Quality(percent: Int, sensorBpm: Int?, recentBpm: Int?, movedBeforeResult: Boolean): Spo2Quality = when {
+        movedBeforeResult || percent !in 70..100 -> Spo2Quality.REJECT
+        sensorBpm == null || sensorBpm <= 0 || recentBpm == null -> Spo2Quality.KEEP
+        abs(sensorBpm - recentBpm) <= maxOf(recentBpm * 0.15, SPO2_BPM_MIN_GAP) -> Spo2Quality.KEEP
+        else -> Spo2Quality.LOW_CONFIDENCE
     }
 
     const val SPO2_BPM_MIN_GAP = 12.0
 
     /**
-     * A measured-on-request SpO2 is shown but marked low confidence when the sensor saw the wrist
-     * move during it ([movedDuring], its "hold still" hint) or it is under [SPOT_CONFIRM_BELOW] %:
-     * a real log kept 75 % from a measurement the sensor had flagged moving, and 92 % two minutes later.
+     * Whether the wrist moved just before the sensor gave its value ([msSinceHoldStill]: since its
+     * last "hold still", null without one): then the reading hadn't settled. A low value alone is
+     * no sign of noise (a real 88 % at night came with shortness of breath), and a movement earlier
+     * on isn't either: the sensor pauses, and its 21 results after one in a real log matched the
+     * others (median 93 % against 94 %); only 2 came within [SETTLE_MS] of it.
      */
-    fun spo2SpotLowConfidence(percent: Int, movedDuring: Boolean): Boolean = movedDuring || percent < SPOT_CONFIRM_BELOW
+    fun spo2MovedBeforeResult(msSinceHoldStill: Long?): Boolean = msSinceHoldStill != null && msSinceHoldStill <= SETTLE_MS
 
-    const val SPOT_CONFIRM_BELOW = 90
+    const val SETTLE_MS = 5_000L
 
     /**
      * Skin 30–40 °C, and the "ambient" reading not changed by more than 5 °C since the last
@@ -322,7 +339,9 @@ class VitalsMonitor(private val zone: ZoneId = ZoneId.systemDefault(), private v
         var h = history
         // A night reading counts as low only when its re-check agrees: single artefacts (3 % of
         // wrist readings) added up to false "several low readings in one night" notices.
-        val confirmedLow = first.percent < nightLowBelow && rechecks.firstOrNull()?.let { it.percent < nightLowBelow } == true
+        // Without a re-check result the low reading counts as it is (the owner's choice: real lows at
+        // night, with shortness of breath, were dropped when the re-check gave nothing).
+        val confirmedLow = first.percent < nightLowBelow && rechecks.firstOrNull()?.let { it.percent < nightLowBelow } != false
         for (s in listOf(first) + rechecks) {
             val dayKey = VitalsBaseline.dayOf(s.tsMs, s.context, zone)
             val d = h.day(dayKey)
@@ -340,6 +359,8 @@ class VitalsMonitor(private val zone: ZoneId = ZoneId.systemDefault(), private v
         }
         val all = listOf(first) + rechecks
         if (!settings.spo2Active || rechecks.size < RECHECKS || all.any { it.percent >= limit }) return h to null
+        // Readings whose pulse didn't match the wrist's are kept, but three of them alone don't notify.
+        if (all.all { it.lowConfidence }) return h to null
         val last = rechecks.last()
         val key = "SPO2_LOW"
         if (h.lastAlerts[key]?.let { last.tsMs - it < SPO2_COOLDOWN_MS } == true) return h to null

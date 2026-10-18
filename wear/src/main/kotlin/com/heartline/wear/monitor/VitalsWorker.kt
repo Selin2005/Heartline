@@ -84,7 +84,8 @@ object VitalsMeasurer {
  * minutes: skin temperature in sleep (hourly by day), SpO2 every hour awake and asleep, only while
  * the watch is worn and the wearer still ([Spo2Schedule]: a moving wearer is tried again 10
  * minutes later, up to four times an hour). A low SpO2 reading is checked again 2 minutes later,
- * twice at most; it counts only when the re-check agrees, and three low in a row notify.
+ * twice at most; a normal re-check overrides it, no re-check result leaves it as it is, and three
+ * low in a row notify (not when all three are low confidence).
  */
 class VitalsWorker(context: Context, params: WorkerParameters) :
     CoroutineWorker(context, params),
@@ -224,7 +225,9 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
                     }
                     Spo2Schedule.Decision.Measure -> if (allowed(Metric.SPO2)) {
                         sources[Metric.SPO2]?.let { source ->
-                            var first = spo2(source, context, now, confirmation = false, stopOnMove = !asleep)
+                            // The sensor pauses on a movement and finishes by itself (21 of its results in a real
+                            // log came after one, no different from the rest): no more stopping at the first one.
+                            var first = spo2(source, context, now, confirmation = false)
                             // Stopped by movement: wait for a still arm again and start once more.
                             var starts = 1
                             while (first == null && stoppedForMove && Spo2Schedule.tryAgain(starts, SystemClock.elapsedRealtime() - waitStart)) {
@@ -232,7 +235,7 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
                                 if (!waitStill()) break
                                 starts++
                                 HLog.i(TAG, "SpO2 start $starts/${Spo2Schedule.MAX_STARTS} after ${waitedS}s")
-                                first = spo2(source, context, System.currentTimeMillis(), confirmation = false, stopOnMove = true)
+                                first = spo2(source, context, System.currentTimeMillis(), confirmation = false)
                             }
                             store.lastSpo2Ms = now
                             store.spo2Retries = 0
@@ -260,20 +263,16 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
                                     last = spo2(source, context, System.currentTimeMillis(), confirmation = true) ?: if (++missed <= 1) continue else break
                                     rechecks += last
                                 }
-                                // A low reading counts only when its re-check agrees.
+                                // A low reading with a normal re-check was an artefact; without a re-check result it counts as it is.
                                 val kept = Spo2Schedule.confirmed(first, rechecks) { monitor.needsRecheck(it, settings, history, first.tsMs) }
-                                spo2Samples += kept
-                                if (kept.isEmpty()) {
-                                    HLog.i(TAG, "SpO2 ${first.percent} low not confirmed (no re-check result): not kept, trying again later")
-                                    BackgroundMonitoring.scheduleVitalsRetry(applicationContext, Spo2Schedule.RETRY_MINUTES.toLong())
-                                    store.lastSpo2Ms = 0
-                                    attempts += Spo2Attempt(now, Spo2Outcome.LOW_UNCONFIRMED, retryAtMs = now + Spo2Schedule.RETRY_MINUTES * MINUTE)
-                                } else {
-                                    attempts += Spo2Attempt(now, Spo2Outcome.MEASURED, percent = kept.last().percent, waitedS = waitedS)
-                                    val (next, alert) = monitor.onSpo2(history, kept.first(), kept.drop(1), settings)
-                                    history = next
-                                    alert?.let { alerts += it }
+                                if (rechecks.isEmpty() && monitor.needsRecheck(first.percent, settings, history, first.tsMs)) {
+                                    HLog.i(TAG, "SpO2 ${first.percent} low, no re-check result: kept as it is")
                                 }
+                                spo2Samples += kept
+                                attempts += Spo2Attempt(now, Spo2Outcome.MEASURED, percent = kept.last().percent, waitedS = waitedS)
+                                val (next, alert) = monitor.onSpo2(history, kept.first(), kept.drop(1), settings)
+                                history = next
+                                alert?.let { alerts += it }
                             }
                         }
                     }
@@ -328,12 +327,17 @@ class VitalsWorker(context: Context, params: WorkerParameters) :
             return null
         }
         val recent = Spo2Schedule.recentBpm(store.latestHeartRate, store.lastPassiveHeartRateMs, System.currentTimeMillis())
-        if (!VitalsQuality.spo2(r.percent, r.heartRate, recent, reading.moved)) {
-            HLog.i(TAG, "SpO2 ${r.percent} rejected (moved=${reading.moved} hr=${r.heartRate}/${recent ?: "-"})")
-            lastFailure = if (reading.moved) Spo2Outcome.MOVING else Spo2Outcome.REJECTED
+        // The source marks a value the wrist moved just before (it hadn't settled); a movement earlier on doesn't count.
+        val movedBefore = r.lowConfidence
+        val quality = VitalsQuality.spo2Quality(r.percent, r.heartRate, recent, movedBefore)
+        if (quality == VitalsQuality.Spo2Quality.REJECT) {
+            HLog.i(TAG, "SpO2 ${r.percent} rejected (moved just before=$movedBefore hr=${r.heartRate}/${recent ?: "-"})")
+            lastFailure = if (movedBefore) Spo2Outcome.MOVING else Spo2Outcome.REJECTED
             return null
         }
-        return Spo2Sample(at, r.percent, context, confirmation)
+        val unsure = quality == VitalsQuality.Spo2Quality.LOW_CONFIDENCE
+        if (unsure) HLog.i(TAG, "SpO2 ${r.percent} kept, low confidence (hr=${r.heartRate}/$recent)")
+        return Spo2Sample(at, r.percent, context, confirmation, lowConfidence = unsure)
     }
 
     private fun allowed(metric: Metric) = PermissionPolicy.permissionsFor(metric, Build.VERSION.SDK_INT)

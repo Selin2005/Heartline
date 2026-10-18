@@ -74,7 +74,8 @@ class Spo2ScheduleTest {
         fun s(p: Int, t: Long) = Spo2Sample(t, p, HrContext.REST, confirmation = t > 0)
         val low = { p: Int -> p < 92 }
         // 80 % with no re-check result (the log, 10/06 09:04 and 10/07 11:34): nothing is kept.
-        assertEquals(emptyList<Spo2Sample>(), Spo2Schedule.confirmed(s(80, 0), emptyList(), low))
+        // No re-check result: the low reading counts as it is.
+        assertEquals(listOf(s(80, 0)), Spo2Schedule.confirmed(s(80, 0), emptyList(), low))
         // A normal re-check stands alone; a low one confirms.
         assertEquals(listOf(s(95, 2)), Spo2Schedule.confirmed(s(80, 0), listOf(s(95, 2)), low))
         assertEquals(listOf(s(85, 0), s(86, 2)), Spo2Schedule.confirmed(s(85, 0), listOf(s(86, 2)), low))

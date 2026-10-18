@@ -97,18 +97,26 @@ It uses the same sources as a manual measurement, through `VitalsMeasurer`.
 
 ## 3. Reading quality (`VitalsQuality`)
 
-**SpO2.** A reading is kept only when:
-- it completed (SDK status 2), within 70–100 %;
-- the sensor itself saw no movement during it (its "hold still" hint). The watch's
-  accelerometer no longer rejects a reading the sensor accepted;
-- the pulse it reports is within 15 % (and at least 12 bpm) of the background heart rate,
-  compared only when that is under 5 minutes old. A mismatch means the sensor locked onto noise.
-  15 % alone allowed 7–9 bpm asleep (96 % with pulse 68 against 57 was rejected). A rejected
-  reading is tried again 10 minutes later, at most twice per slot, instead of an hour later;
-- if it is low, its re-check agrees (`Spo2Schedule.confirmed`). A re-check without a result gets
-  one more go, 2 minutes later. With still no re-check result the low value is not kept (the log
-  had 80 % at rest kept that way) and another try follows 10 minutes later; with a normal
-  re-check, only the re-check counts.
+**SpO2.** A value is judged by signal evidence only, never by how far it is from the usual: a
+real 88 % at night came with shortness of breath. A completed reading (SDK status 2):
+- is rejected outside 70–100 %, or when the sensor's "hold still" came less than 5 s before the
+  value (`VitalsQuality.spo2MovedBeforeResult`): it hadn't settled. A movement earlier on doesn't
+  count: the sensor pauses and finishes by itself, and its 21 results after one in a 14-day log
+  matched the others (median 93 % against 94 %). Background tries no longer stop at the first
+  movement either;
+- is kept but marked low confidence (`Spo2Sample.lowConfidence`) when the pulse it reports is more
+  than 15 % (and 12 bpm) off the background heart rate, compared only when that is under 5 minutes
+  old. These were thrown away before: 39 in two weeks. Three low readings in a row notify only
+  when at least one of them is not low confidence;
+- if it is low, is checked again 2 minutes later (`Spo2Schedule.confirmed`); a re-check without a
+  result gets one more go. A normal re-check overrides the low one (an artefact); with no
+  re-check result the low reading counts as it is, in the charts and towards the night's low
+  readings (it used to be dropped).
+
+On request (`SdkSpo2Source`): the value is shown, marked to measure again only when the wrist
+moved just before it. When the sensor gives up without a value (status −5 low signal or −6 out
+of time, both near 25–30 s, usually after an early movement), the watch starts once more by itself
+and only then says why, on its own screen: both used to read "Wear your watch".
 
 **Skin temperature.** A reading is kept only when:
 - it completed (status 0), with skin between 30 and 40 °C. A watch lying on a table cools to
@@ -189,8 +197,9 @@ This is checked once a day, at or after 10:00. It notifies when either holds:
 - the night median is at least **3 points** (low 4, high 2) below the wearer's usual night on
   **2 of the last 3 nights**. "Usual" is computed without those 3 nights, and needs at least
   **5 of the wearer's own nights**;
-- **3 or more readings below 90 % in one night, each confirmed by its re-check.** A low reading
-  whose re-check is back above 90 % was an artefact and does not count.
+- **3 or more readings below 90 % in one night, none overruled by its re-check.** A low reading
+  whose re-check is back above 90 % was an artefact and does not count; one whose re-check gave
+  no result counts as it is.
 
 At high sensitivity (a 2-point drop), all 3 of the last 3 nights must be lower, not 2: a
 2-point drop over 2 nights is within a wrist oximeter's noise.

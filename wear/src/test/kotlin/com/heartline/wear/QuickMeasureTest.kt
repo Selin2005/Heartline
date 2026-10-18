@@ -210,4 +210,49 @@ class QuickMeasureTest {
         assertEquals(15, held.secondsLeft)
         vm.cancel()
     }
+
+    @Test
+    fun spo2StartsOnceMoreWhenTheSensorGivesUpAndSaysWhyAfterTheSecond() = runBlocking {
+        // Real log: "hold still" early, then status -6 near 30 s. It showed "Wear your watch".
+        var runs = 0
+        val gaveUp = object : com.heartline.wear.sensor.QuickSource {
+            override val metric = Metric.SPO2
+            override val kind = RecordKind.SPO2
+            override val seconds = 30
+
+            override fun measure(profile: UserProfile?) = kotlinx.coroutines.flow.flow {
+                runs++
+                emit(com.heartline.wear.sensor.QuickEvent.Progress(0.3f))
+                emit(com.heartline.wear.sensor.QuickEvent.Failed(null, QuickHint.TIMED_OUT))
+                kotlinx.coroutines.awaitCancellation()
+            }
+        }
+        val vm = QuickMeasureViewModel(gaveUp, profiles, store, { scheduled++ })
+        vm.start()
+        val failed = withTimeout(5_000) { vm.state.first { it is QuickState.Failed } } as QuickState.Failed
+        assertEquals(2, runs)
+        assertEquals(null, failed.problem)
+        assertEquals(QuickHint.TIMED_OUT, failed.hint)
+    }
+
+    @Test
+    fun aSecondRunThatMeasuresGivesTheResult() = runBlocking {
+        var runs = 0
+        val second = object : com.heartline.wear.sensor.QuickSource {
+            override val metric = Metric.SPO2
+            override val kind = RecordKind.SPO2
+            override val seconds = 30
+
+            override fun measure(profile: UserProfile?) = kotlinx.coroutines.flow.flow {
+                runs++
+                if (runs == 1) emit(com.heartline.wear.sensor.QuickEvent.Failed(null, QuickHint.LOW_SIGNAL))
+                else emit(com.heartline.wear.sensor.QuickEvent.Result(RecordSummary.Spo2(95, 70, false)))
+                kotlinx.coroutines.awaitCancellation()
+            }
+        }
+        val vm = QuickMeasureViewModel(second, profiles, store, { scheduled++ })
+        vm.start()
+        val done = withTimeout(5_000) { vm.state.first { it is QuickState.Done } } as QuickState.Done
+        assertEquals(95, (done.summary as RecordSummary.Spo2).percent)
+    }
 }

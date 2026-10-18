@@ -78,6 +78,8 @@ val QuickHint.text: Int
         QuickHint.HANDS_APART -> R.string.hint_hands_apart
         QuickHint.KEYS_ONLY -> R.string.hint_keys_only
         QuickHint.CHECK_PROFILE -> R.string.hint_check_profile
+        QuickHint.TIMED_OUT -> R.string.hint_timed_out
+        QuickHint.MEASURING_AGAIN -> R.string.quick_measuring_again
     }
 
 @Composable
@@ -201,6 +203,24 @@ fun QuickResultScreen(metric: Metric, summary: RecordSummary, onDone: () -> Unit
         }
     }
     if (good) com.heartline.wear.ui.components.EdgeGlowSweep(summary, WearColors.metric(metric))
+    }
+}
+
+/**
+ * A measurement the sensor ended without a result: says why (weak signal, out of time, check the
+ * profile…). It used to show "Wear your watch" for all of them, whatever the sensor said.
+ */
+@Composable
+fun QuickFailedScreen(metric: Metric, hint: QuickHint, onRetry: () -> Unit = {}) {
+    ActionScreen(stringResource(R.string.action_retry), onRetry) {
+        MetricBadge(metric)
+        Text(
+            stringResource(R.string.quick_failed_title),
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+        Detail(stringResource(hint.text))
     }
 }
 

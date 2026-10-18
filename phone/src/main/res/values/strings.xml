@@ -965,7 +965,7 @@
     <string name="measure_saved">Saved to your history.</string>
     <string name="measure_hr_range">Range during the check: %1$d–%2$d bpm</string>
     <string name="measure_bp_pulse">Pulse %1$d bpm</string>
-    <string name="measure_spo2_low_confidence">Your wrist moved or the reading was low. Measure again, sitting still, to confirm it.</string>
+    <string name="measure_spo2_low_confidence">Your wrist moved just before this reading. Measure again, sitting still, to confirm it.</string>
     <string name="measure_stress_unit">of 100</string>
     <string name="measure_again">Measure again</string>
     <string name="measure_try_again">Try again</string>

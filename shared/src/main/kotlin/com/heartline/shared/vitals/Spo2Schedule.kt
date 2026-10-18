@@ -96,13 +96,13 @@ object Spo2Schedule {
         latestBpm?.takeIf { latestAtMs != null && nowMs - latestAtMs <= FRESH_HEART_RATE_MS }
 
     /**
-     * Which readings of one try count. A low first reading counts only when its re-check agrees:
-     * with no re-check result it is dropped, and with a normal one the re-check stands alone (the
-     * log had 80 % kept awake at rest when the re-check gave nothing).
+     * Which readings of one try count. A low first reading with a normal re-check was an artefact:
+     * the re-check stands alone. With no re-check result it counts as it is, like any reading (it
+     * used to be dropped, and real lows at night went with it).
      */
     fun confirmed(first: Spo2Sample, rechecks: List<Spo2Sample>, isLow: (Int) -> Boolean): List<Spo2Sample> = when {
         !isLow(first.percent) -> listOf(first) + rechecks
-        rechecks.isEmpty() -> emptyList()
+        rechecks.isEmpty() -> listOf(first)
         isLow(rechecks.first().percent) -> listOf(first) + rechecks
         else -> rechecks
     }

@@ -34,18 +34,19 @@ class VitalsTest {
 
     @Test
     fun qualityRejectsMovementWrongPulseAndOffWristTemperature() {
-        assertTrue(VitalsQuality.spo2(97, 62, 60, moved = false))
-        assertFalse(VitalsQuality.spo2(97, 62, 60, moved = true))
-        assertFalse(VitalsQuality.spo2(97, 90, 60, moved = false)) // its pulse doesn't match the wrist's
+        val keep = VitalsQuality.Spo2Quality.KEEP
+        assertEquals(keep, VitalsQuality.spo2Quality(97, 62, 60, movedBeforeResult = false))
+        assertEquals(VitalsQuality.Spo2Quality.REJECT, VitalsQuality.spo2Quality(97, 62, 60, movedBeforeResult = true))
+        // Its pulse doesn't match the wrist's: kept, low confidence.
+        assertEquals(VitalsQuality.Spo2Quality.LOW_CONFIDENCE, VitalsQuality.spo2Quality(97, 90, 60, movedBeforeResult = false))
+        assertEquals(VitalsQuality.Spo2Quality.LOW_CONFIDENCE, VitalsQuality.spo2Quality(100, 63, 90, movedBeforeResult = false))
         // A slow pulse asleep: 15 % is under 9 bpm, so the gap allowed is at least 12 (real log: 96 % at 68 against 57).
-        assertTrue(VitalsQuality.spo2(96, 68, 57, moved = false))
-        assertFalse(VitalsQuality.spo2(100, 63, 90, moved = false))
-        // On request: shown, but marked to measure again when the wrist moved or it is low (real log: 75 % after "hold still").
-        assertTrue(VitalsQuality.spo2SpotLowConfidence(75, movedDuring = true))
-        assertTrue(VitalsQuality.spo2SpotLowConfidence(88, movedDuring = false))
-        assertTrue(VitalsQuality.spo2SpotLowConfidence(97, movedDuring = true))
-        assertFalse(VitalsQuality.spo2SpotLowConfidence(96, movedDuring = false))
-        assertFalse(VitalsQuality.spo2(65, null, null, moved = false))
+        assertEquals(keep, VitalsQuality.spo2Quality(96, 68, 57, movedBeforeResult = false))
+        // Low confidence only when the wrist moved just before the value; a low value alone is not a sign of noise.
+        assertTrue(VitalsQuality.spo2MovedBeforeResult(2_000))
+        assertFalse(VitalsQuality.spo2MovedBeforeResult(18_000)) // the 75 % of the real log: moved 18 s before
+        assertFalse(VitalsQuality.spo2MovedBeforeResult(null))
+        assertEquals(VitalsQuality.Spo2Quality.REJECT, VitalsQuality.spo2Quality(65, null, null, movedBeforeResult = false))
         assertTrue(VitalsQuality.temperature(34.2f, 24f, 24.5f))
         // Real Galaxy Watch8 Classic readings: the case's "ambient" is warmer than skin when worn.
         assertTrue(VitalsQuality.temperature(34.725f, 35.99f, 35.96f))
@@ -81,6 +82,10 @@ class VitalsTest {
         assertNull(monitor.onSpo2(h, low.copy(tsMs = at(day0, 16)), listOf(s(122, 87), s(124, 86)), on).second)
         // The blood oxygen part switched off: readings still kept, no notice.
         assertNull(monitor.onSpo2(VitalsHistory(), low, listOf(s(2, 87), s(4, 89)), on.copy(spo2Monitoring = false)).second)
+        // Three whose pulse didn't match the wrist's are kept but don't notify alone; one confident one does.
+        fun unsure(x: Spo2Sample) = x.copy(lowConfidence = true)
+        assertNull(monitor.onSpo2(VitalsHistory(), unsure(low), listOf(unsure(s(2, 87)), unsure(s(4, 89))), on).second)
+        assertNotNull(monitor.onSpo2(VitalsHistory(), low, listOf(unsure(s(2, 87)), unsure(s(4, 89))), on).second)
     }
 
     @Test

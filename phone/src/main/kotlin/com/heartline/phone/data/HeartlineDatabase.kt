@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [RecordEntity::class, HrMinuteEntity::class, AlertEntity::class, Spo2SampleEntity::class, TempSampleEntity::class, StressSampleEntity::class, BpCalibrationEntity::class, BpValidationEntity::class, Spo2AttemptEntity::class],
-    version = 10,
+    version = 11,
     exportSchema = true,
 )
 abstract class HeartlineDatabase : RoomDatabase() {
@@ -120,9 +120,16 @@ abstract class HeartlineDatabase : RoomDatabase() {
             }
         }
 
+        /** v11: a blood oxygen reading whose pulse didn't match the wrist's is kept, marked. */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `spo2_samples` ADD COLUMN `lowConfidence` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun create(context: Context): HeartlineDatabase =
             Room.databaseBuilder(context, HeartlineDatabase::class.java, "heartline.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                 .build()
 
         fun inMemory(context: Context): HeartlineDatabase =

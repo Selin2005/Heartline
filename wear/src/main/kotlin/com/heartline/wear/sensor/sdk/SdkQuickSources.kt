@@ -136,23 +136,23 @@ object Spo2Status {
     fun hint(status: Int?): QuickHint? = if (status == -4) QuickHint.HOLD_STILL else null
 }
 
-/** SPO2_ON_DEMAND: status 0 calculating, 2 complete, -4 moved, -5 low signal, -6 timeout. */
+/** SPO2_ON_DEMAND: status 0 calculating, 2 complete, -4 moved, -5 low signal, -6 timeout (both near 25–30 s). */
 class SdkSpo2Source(private val gateway: SdkSensorGateway) :
     SdkQuickSource(gateway, TrackerKind.SPO2_ON_DEMAND, Metric.SPO2, RecordKind.SPO2, 30) {
     override fun create(profile: UserProfile?) = gateway.tracker(TrackerKind.SPO2_ON_DEMAND)
 
     override val clearsItself = true
 
-    /** The sensor asked to hold still at some point in this measurement. */
-    @Volatile private var movedDuring = false
+    /** The sensor's time of its last "hold still" in this measurement, ms, or null. */
+    @Volatile private var lastHoldStillMs: Long? = null
 
     override fun onStart() {
-        movedDuring = false
+        lastHoldStillMs = null
     }
 
     override fun ProducerScope<QuickEvent>.onData(points: List<DataPoint>): Boolean {
         points.forEach {
-            if (it.getValue(ValueKey.SpO2Set.STATUS) == -4) movedDuring = true
+            if (it.getValue(ValueKey.SpO2Set.STATUS) == -4) lastHoldStillMs = it.timestamp
             HLog.i(
                 QUICK_RAW_TAG,
                 "SpO2 status=${it.getValue(ValueKey.SpO2Set.STATUS)} spo2=${it.getValue(ValueKey.SpO2Set.SPO2)} " +
@@ -163,7 +163,7 @@ class SdkSpo2Source(private val gateway: SdkSensorGateway) :
         return when (p.getValue(ValueKey.SpO2Set.STATUS)) {
             2 -> {
                 val percent = p.getValue(ValueKey.SpO2Set.SPO2) ?: 0
-                val low = VitalsQuality.spo2SpotLowConfidence(percent, movedDuring)
+                val low = VitalsQuality.spo2MovedBeforeResult(lastHoldStillMs?.let { p.timestamp - it })
                 trySendBlocking(QuickEvent.Result(RecordSummary.Spo2(percent, p.getValue(ValueKey.SpO2Set.HEART_RATE), low)))
                 true
             }
@@ -187,7 +187,9 @@ class SdkSpo2Source(private val gateway: SdkSensorGateway) :
                 true
             }
             -6 -> {
-                trySendBlocking(QuickEvent.Failed(null, QuickHint.WRIST_CONTACT))
+                // The sensor's own time ran out (about 30 s, usually after the wrist moved early on):
+                // it was shown as "wear your watch", which sent users to fix a fit that was fine.
+                trySendBlocking(QuickEvent.Failed(null, QuickHint.TIMED_OUT))
                 true
             }
             else -> false

@@ -118,7 +118,7 @@
     <string name="bp_crisis">Very high</string>
     <string name="bp_calibrate_notification">Tap to take calibration round %1$d</string>
     <string name="spo2_instruction">Rest your arm on a table, watch face up, and keep still.</string>
-    <string name="spo2_low_confidence">Measure again, sitting still, to confirm</string>
+    <string name="spo2_low_confidence">Moved just before. Measure again</string>
     <string name="temp_instruction">Wear your watch snugly for a few minutes, then keep still.</string>
     <string name="body_instruction">Middle and ring fingers on the two keys. Touch nothing else.</string>
     <string name="stress_instruction">Sit still and breathe normally for one minute.</string>
@@ -134,6 +134,9 @@
     <string name="hint_hands_apart">Keep your arms away from your body</string>
     <string name="hint_keys_only">Touch only the two keys</string>
     <string name="hint_check_profile">Check your profile details</string>
+    <string name="hint_timed_out">Couldn\'t finish. Rest your arm on a table and try again</string>
+    <string name="quick_failed_title">Couldn\'t measure</string>
+    <string name="quick_measuring_again">Measuring again. Keep your arm still</string>
     <string name="temp_ambient">Ambient %1$s °C</string>
     <string name="body_fat">Body fat</string>
     <string name="action_continue">Continue</string>

@@ -66,6 +66,7 @@ data class Spo2SampleEntity(
     val percent: Int,
     val context: HrContext,
     val confirmation: Boolean,
+    @ColumnInfo(defaultValue = "0") val lowConfidence: Boolean = false,
 )
 
 /** A background SpO2 try and how it ended (v10), for the oxygen screen's "today" card. Kept 14 days. */

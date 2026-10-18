@@ -141,6 +141,19 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate10To11MarksNoOldOxygenReadingLowConfidence() {
+        helper.createDatabase(DB, 10).use { db ->
+            db.execSQL("INSERT INTO spo2_samples (tsMs, percent, context, confirmation) VALUES (1, 88, 'SLEEP', 0)")
+        }
+        helper.runMigrationsAndValidate(DB, 11, true, HeartlineDatabase.MIGRATION_10_11).use { db ->
+            db.query("SELECT lowConfidence FROM spo2_samples WHERE tsMs = 1").use { c ->
+                c.moveToFirst()
+                assertEquals(0, c.getInt(0))
+            }
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

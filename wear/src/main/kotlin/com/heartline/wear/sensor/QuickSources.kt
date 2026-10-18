@@ -43,6 +43,12 @@ enum class QuickHint {
 
     /** Body composition: the result was implausible for the profile (height, weight, age). */
     CHECK_PROFILE,
+
+    /** The sensor ran out of time without a result (SpO2 status −6): not a wrist-contact problem. */
+    TIMED_OUT,
+
+    /** SpO2 starts once more by itself after the sensor gave up. */
+    MEASURING_AGAIN,
 }
 
 sealed interface QuickEvent {

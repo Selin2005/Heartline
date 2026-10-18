@@ -147,7 +147,7 @@ class RemoteMeasureReporter(
 
         fun hint(hint: QuickHint?): MeasureHint = when (hint) {
             null -> MeasureHint.NONE
-            QuickHint.HOLD_STILL -> MeasureHint.HOLD_STILL
+            QuickHint.HOLD_STILL, QuickHint.MEASURING_AGAIN -> MeasureHint.HOLD_STILL
             QuickHint.WRIST_CONTACT -> MeasureHint.WRIST_CONTACT
             else -> MeasureHint.LOW_SIGNAL
         }

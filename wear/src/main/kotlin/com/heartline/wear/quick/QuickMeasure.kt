@@ -6,6 +6,7 @@ package com.heartline.wear.quick
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.heartline.datalayer.diag.HLog
 import com.heartline.shared.model.Metric
 import com.heartline.shared.model.RecordMeta
 import com.heartline.shared.model.RecordSummary
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import java.util.UUID
@@ -132,9 +134,36 @@ class QuickMeasureViewModel(
     }
 
     private suspend fun collect(profile: UserProfile?, startedAt: Long) {
+        // SpO2: the sensor gives up near 30 s after an early movement (weak signal, out of time); one
+        // more go usually works, as the watch's own app does, so it starts again once by itself.
+        var tries = 0
+        while (true) {
+            tries++
+            val failed = measureOnce(profile, startedAt) ?: return
+            val again = source.metric == Metric.SPO2 && tries < SPO2_TRIES && failed.problem == null &&
+                failed.hint in RETRY_HINTS
+            if (!again) {
+                mutable.value = QuickState.Failed(failed.problem, failed.hint)
+                return
+            }
+            HLog.i(TAG, "SpO2 ended without a result (${failed.hint}): measuring again")
+            val current = mutable.value as? QuickState.Measuring
+            // The ring starts over: this is a new run of the sensor.
+            mutable.value = QuickState.Measuring(0f, source.seconds, QuickHint.MEASURING_AGAIN, current?.bpm, current?.hrvMs)
+        }
+    }
+
+    /** One run of the sensor; the failure it ended with, or null when it gave a result. */
+    private suspend fun measureOnce(profile: UserProfile?, startedAt: Long): QuickEvent.Failed? {
+        var failure: QuickEvent.Failed? = null
         run {
             source.measure(profile)
                 .catch { e -> emit(QuickEvent.Failed((e as? SensorException)?.problem ?: SensorProblem.NOT_SUPPORTED)) }
+                // A result or a failure ends this run, whether or not the source closes.
+                .transformWhile { event ->
+                    emit(event)
+                    event !is QuickEvent.Result && event !is QuickEvent.Failed
+                }
                 .collect { event ->
                     when (event) {
                         is QuickEvent.Progress -> {
@@ -144,10 +173,12 @@ class QuickMeasureViewModel(
                             val previous = current?.progress ?: 0f
                             val restart = source.metric == Metric.BODY_COMPOSITION && event.hint != null
                             val fraction = if (restart) event.fraction else maxOf(event.fraction, previous)
+                            // "Measuring again" stays up for the start of the second run, not one tick.
+                            val keepAgain = current?.hint == QuickHint.MEASURING_AGAIN && event.hint == null && fraction < AGAIN_SHOWN_UNTIL
                             mutable.value = QuickState.Measuring(
                                 fraction,
                                 ((1 - fraction) * source.seconds).toInt().coerceAtLeast(1),
-                                event.hint,
+                                if (keepAgain) QuickHint.MEASURING_AGAIN else event.hint,
                                 current?.bpm,
                                 current?.hrvMs,
                             )
@@ -155,7 +186,7 @@ class QuickMeasureViewModel(
                         is QuickEvent.Live -> (mutable.value as? QuickState.Measuring)?.let { m ->
                             mutable.value = m.copy(bpm = event.bpm ?: m.bpm, hrvMs = event.hrvMs ?: m.hrvMs)
                         }
-                        is QuickEvent.Failed -> mutable.value = QuickState.Failed(event.problem, event.hint)
+                        is QuickEvent.Failed -> failure = event
                         is QuickEvent.Result -> {
                             val previous = store.recent.first().firstOrNull { it.kind == source.kind }?.summary
                             val meta = RecordMeta(UUID.randomUUID().toString(), source.kind, startedAt, now() - startedAt, 0, 0, event.summary)
@@ -166,6 +197,7 @@ class QuickMeasureViewModel(
                     }
                 }
         }
+        return failure
     }
 
     fun cancel() {
@@ -175,5 +207,18 @@ class QuickMeasureViewModel(
 
     fun reset() {
         mutable.value = QuickState.Idle
+    }
+
+    private companion object {
+        const val TAG = "Heartline/Measure"
+
+        /** SpO2 runs at most this often in one measurement (the second after a give-up). */
+        const val SPO2_TRIES = 2
+
+        /** Give-ups worth one more go: the sensor's weak signal and out of time. */
+        val RETRY_HINTS = setOf(QuickHint.LOW_SIGNAL, QuickHint.TIMED_OUT)
+
+        /** Progress up to which the second run keeps saying "measuring again". */
+        const val AGAIN_SHOWN_UNTIL = 0.15f
     }
 }
