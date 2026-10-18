@@ -42,7 +42,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -60,10 +59,9 @@ val LocalOpenAppHome = compositionLocalOf<(() -> Unit)?> { null }
  * One UI "reachability" layout: a tall header holding a large title in the upper part of the
  * screen that scrolls away, leaving a compact app bar whose title fades in.
  *
- * The header ends at [HEADER_SHARE] of the window height: 30 % opened tall (20:9 and longer)
- * phones on a block of empty space (issue #1), and "just under the app bar" plus a gap was still
- * a little much there. It never gets shorter than the title needs, so landscape and short windows
- * keep the title under the app bar. The list shrinks above the keyboard so a focused text field
+ * The large title sits right under the app bar, with no extra gap: 30 % of the screen height
+ * opened tall (20:9 and longer) phones on a block of empty space (issue #1), and a gap or a share
+ * of the height was still too much there. The list shrinks above the keyboard so a focused text field
  * is scrolled into view.
  */
 @Composable
@@ -82,11 +80,7 @@ fun ReachabilityScaffold(
         val appBarBottom = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + AppBarHeight
         // The large title (and subtitle) never meets the app bar or the back button.
         val titleRoom = if (subtitle != null) 100.dp else 72.dp
-        // The whole window, not this screen's box: tab screens lose the bottom bar's height, and
-        // their title must sit where it does on the other screens.
-        val windowHeight = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
-            .takeIf { it > 0.dp } ?: maxHeight
-        val headerHeight = maxOf(appBarBottom + titleRoom, windowHeight * HEADER_SHARE)
+        val headerHeight = appBarBottom + titleRoom
         val headerPx = with(LocalDensity.current) { headerHeight.toPx() }
         val collapse by remember(listState, headerPx) {
             derivedStateOf {
@@ -169,9 +163,6 @@ fun ReachabilityScaffold(
 }
 
 private val AppBarHeight = 56.dp
-
-/** Where the large-title header ends, as a share of the window height (status bar included). */
-private const val HEADER_SHARE = 0.20f
 
 /** Standard horizontal inset for items placed in a [ReachabilityScaffold]. */
 fun Modifier.gutter(): Modifier = padding(horizontal = Dimens.gutter)
