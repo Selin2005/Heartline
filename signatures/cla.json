@@ -1,3 +1,20 @@
 {
-   "signedContributors": []
+  "signedContributors": [
+    {
+      "name": "xiangshoujimo",
+      "id": 144456125,
+      "comment_id": 6105547430,
+      "created_at": "2026-10-11T04:45:21Z",
+      "repoId": 1385951373,
+      "pullRequestNo": 3
+    },
+    {
+      "name": "xiangshoujimo",
+      "id": 144456125,
+      "comment_id": 6251579509,
+      "created_at": "2026-10-18T15:18:05Z",
+      "repoId": 1385951373,
+      "pullRequestNo": 3
+    }
+  ]
 }
