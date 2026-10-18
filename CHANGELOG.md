@@ -3,6 +3,25 @@
 All notable changes to Heartline. Each release's notes are written by the Build workflow when the
 release is made, and the app shows them under *What's new* after an update.
 
+## 0.0.2.230-beta.1 — 2026-10-18
+
+### Improved
+
+- Large titles now sit right under the app bar and take up less room at the top of the screen, leaving more space for your content.
+- When a reading doesn't look trustworthy — for example, if your wrist moved during it — the app now asks you to measure again or check your profile instead of showing the number.
+- Your watch and phone now check in with each other less often in the background, and the watch tells the phone which measurements it supports.
+
+### Fixed
+
+- SpO2 measurements that end early now show the actual reason, like a weak signal, instead of always saying "Wear your watch."
+- Background heart rate readings no longer lose beats that were wrongly thrown out, so your rhythm data has fewer gaps.
+- Body composition exports now show the phase angle the same way the app does.
+- A warm night now only counts as a sign of illness when there are at least four of your usual nights to compare it with, so stress tracking isn't held back as often.
+- More background SpO2 readings make it through instead of being rejected by overly strict checks.
+- Pulse arrival time is left out when the heartbeats disagree too much, instead of showing a number that can't be trusted — for ECG records and blood pressure estimates alike.
+- Syncing no longer gets stuck when one stream stalls, and your watch eases off when your phone isn't nearby.
+- Diagnostic exports no longer include your name, birth date, height, or weight.
+
 ## 0.0.2.221-beta.1 — 2026-10-10
 
 ### Changes
