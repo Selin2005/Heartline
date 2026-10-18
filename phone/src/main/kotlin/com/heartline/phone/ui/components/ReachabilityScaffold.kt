@@ -79,7 +79,7 @@ fun ReachabilityScaffold(
     BoxWithConstraints(modifier.fillMaxSize().background(colors.background)) {
         val appBarBottom = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + AppBarHeight
         // The large title (and subtitle) never meets the app bar or the back button.
-        val titleRoom = if (subtitle != null) 100.dp else 72.dp
+        val titleRoom = if (subtitle != null) 92.dp else 64.dp
         val headerHeight = appBarBottom + titleRoom
         val headerPx = with(LocalDensity.current) { headerHeight.toPx() }
         val collapse by remember(listState, headerPx) {
