@@ -99,6 +99,7 @@ val EcgResult.shortLabel: Int
         EcgResult.LOW_HEART_RATE -> R.string.widget_ecg_short_low
         EcgResult.INCONCLUSIVE -> R.string.widget_ecg_short_inconclusive
         EcgResult.POOR_RECORDING -> R.string.widget_ecg_short_poor
+        EcgResult.FREQUENT_EXTRA_BEATS -> R.string.widget_ecg_short_extra_beats
     }
 
 fun BpCategory.severity() = when (this) {

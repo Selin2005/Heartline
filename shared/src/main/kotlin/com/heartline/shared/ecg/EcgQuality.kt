@@ -232,7 +232,9 @@ object BeatClusters {
         val templateRangeMv: Double,
         val inverted: Boolean,
         /** Clusters whose shape is clearly unlike the dominant one (not just noise-split from it). */
-        val distinct: BooleanArray = BooleanArray(clusterSizes.size)
+        val distinct: BooleanArray = BooleanArray(clusterSizes.size),
+        /** Correlation of each beat with the dominant template over the QRS window (1 at the edges). */
+        val dominantCorrelation: DoubleArray = DoubleArray(cluster.size) { 1.0 }
     ) {
         fun isSingleton(beat: Int) = clusterSizes[cluster[beat]] < 2
 
@@ -322,7 +324,8 @@ object BeatClusters {
                         range / dominantRange.coerceAtLeast(1e-9) !in 0.6..1.6
                     )
         }
-        return Beats(cluster, sizes, corr, noise, widths, dominantRange, inverted, distinct)
+        val toDominant = DoubleArray(peaks.size) { b -> windows[b]?.let { correlation(dominant, it) } ?: 1.0 }
+        return Beats(cluster, sizes, corr, noise, widths, dominantRange, inverted, distinct, toDominant)
     }
 
     /** Span around R where the template stays above 20 % of its R deflection, ms. */

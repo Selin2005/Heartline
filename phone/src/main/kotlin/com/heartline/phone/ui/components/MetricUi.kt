@@ -62,6 +62,7 @@ val EcgResult.label: Int
         EcgResult.LOW_HEART_RATE -> R.string.ecg_result_low_hr
         EcgResult.INCONCLUSIVE -> R.string.ecg_result_inconclusive
         EcgResult.POOR_RECORDING -> R.string.ecg_result_poor
+        EcgResult.FREQUENT_EXTRA_BEATS -> R.string.ecg_result_frequent_extra_beats
     }
 
 val EcgResult.explanation: Int
@@ -72,6 +73,7 @@ val EcgResult.explanation: Int
         EcgResult.LOW_HEART_RATE -> R.string.ecg_explain_low_hr
         EcgResult.INCONCLUSIVE -> R.string.ecg_explain_inconclusive
         EcgResult.POOR_RECORDING -> R.string.ecg_explain_poor
+        EcgResult.FREQUENT_EXTRA_BEATS -> R.string.ecg_explain_frequent_extra_beats
     }
 
 val Symptom.label: Int

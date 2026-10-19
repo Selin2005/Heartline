@@ -57,7 +57,8 @@ object RhythmClassifier {
         val modelProbabilities: List<Double>? = null
     )
 
-    data class Decision(val result: EcgResult, val note: EcgNote)
+    /** [sinus]: the rhythm was judged sinus (a PR interval means something). */
+    data class Decision(val result: EcgResult, val note: EcgNote, val sinus: Boolean = false)
 
     /**
      * Early beats: an interval shorter than [PREMATURE] × the local median, followed by a

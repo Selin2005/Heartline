@@ -21,7 +21,8 @@ import org.junit.Test
  *
  *     ECG_DATASET=/path/ecg-eval ECG_SCALE=0.4 ./gradlew :shared:test --tests '*EcgDatasetReport*' -i
  *
- * ECG_SCALE multiplies the signal (0.4 ≈ wrist lead-I amplitude); ECG_GROUP limits to one group.
+ * ECG_SCALE multiplies the signal (0.4 ≈ wrist lead-I amplitude); ECG_GROUP limits to one group;
+ * ECG_MIN_SEC=8 also analyses 10 s records (PTB-XL, Chapman), which the watch would call too short.
  */
 class EcgDatasetReport {
     private data class Entry(val id: String, val group: String, val label: String, val file: File, val beats: File?)
@@ -34,7 +35,10 @@ class EcgDatasetReport {
         val fp: Int,
         val fn: Int,
         val details: String = "",
-        val featureRow: String = ""
+        val featureRow: String = "",
+        val beatRows: List<String> = emptyList(),
+        val template: DoubleArray? = null,
+        val resultRow: String = ""
     )
 
     @Test
@@ -48,7 +52,7 @@ class EcgDatasetReport {
             .filter { group == null || it.group == group }
         // The watch always records 30 s: shorter database records (CinC has 9–60 s) would only measure "too short".
         val outcomes = entries.parallelStream().map { e -> run(e, scale) }.toList().filterNotNull()
-        val text = "skipped ${entries.size - outcomes.size} records shorter than 20 s\n" + render(outcomes, scale)
+        val text = "skipped ${entries.size - outcomes.size} records shorter than $MIN_SEC s\n" + render(outcomes, scale)
         println(text)
         System.getenv("ECG_REPORT_OUT")?.let { File(it).writeText(text) }
         System.getenv("ECG_FEATURES_OUT")?.let { path ->
@@ -56,6 +60,40 @@ class EcgDatasetReport {
                 "id,group,label,reason,rule," + com.heartline.shared.ecg.RhythmFeatures.NAMES.joinToString(",") + "\n" +
                     outcomes.joinToString("\n") { it.featureRow }
             )
+        }
+        System.getenv("ECG_BEATS_OUT")?.let { path ->
+            File(path).bufferedWriter().use { w ->
+                w.write("id,group,beat,ref," + com.heartline.shared.ecg.EctopicBeats.NAMES.joinToString(",") + "\n")
+                outcomes.forEach { o -> o.beatRows.forEach { w.write(it + "\n") } }
+            }
+        }
+        // What the app would show, per recording (tools/ecg-eval/evaluate_short.py reads it).
+        System.getenv("ECG_RESULTS_OUT")?.let { path ->
+            File(path).writeText(
+                "id,group,label,result,note,poor,bpm,supraventricular,ventricular,qrs_ms,pr_ms,long_pr\n" +
+                    outcomes.joinToString("\n") { it.resultRow }
+            )
+        }
+        // Median-beat features (EcgMorphology.features) for the median-beat models.
+        System.getenv("ECG_MORPH_OUT")?.let { path ->
+            File(path).bufferedWriter().use { w ->
+                w.write("id," + com.heartline.shared.ecg.EcgMorphology.FEATURES.joinToString(",") + "\n")
+                outcomes.forEach { o ->
+                    o.template?.let { t ->
+                        w.write(
+                            o.entry.id + "," + com.heartline.shared.ecg.EcgMorphology.features(t, FS).joinToString(",") + "\n"
+                        )
+                    }
+                }
+            }
+        }
+        // Median beats for tuning the wave timing: one "id,v0,v1,…" line per recording.
+        System.getenv("ECG_TEMPLATES_OUT")?.let { path ->
+            File(path).bufferedWriter().use { w ->
+                outcomes.forEach { o ->
+                    o.template?.let { t -> w.write(o.entry.id + "," + t.joinToString(",") { "%.4f".format(it) } + "\n") }
+                }
+            }
         }
         System.getenv("ECG_DETAILS_OUT")?.let { path ->
             File(path).writeText(
@@ -77,8 +115,8 @@ class EcgDatasetReport {
 
     private fun run(e: Entry, scale: Float): Outcome? {
         val x = floats(e.file).let { s -> if (scale == 1f) s else FloatArray(s.size) { s[it] * scale } }
-        if (x.size < 20 * FS) return null
-        val a = EcgAnalyzer.analyze(x, FS, EcgSession())
+        if (x.size < MIN_SEC * FS) return null
+        val a = EcgAnalyzer.analyze(x, FS, EcgSession(), minOf(MIN_SEC.toFloat(), EcgAnalyzer.MIN_DURATION_SEC))
         var tp = 0
         var fp = 0
         var fn = 0
@@ -120,7 +158,22 @@ class EcgDatasetReport {
             }
         ).joinToString(",") + ";" + a.seconds.joinToString(";") { (k, q) -> "${k.name}:${q?.b}:${q?.k}:${q?.p}:${q?.bas}" }
         val featureRow = listOf(e.id, e.group, e.label, a.signalReason, a.result).joinToString(",") + "," + a.features.joinToString(",")
-        return Outcome(e, a.result, a.metrics.poorReason.name, tp, fp, fn, details, featureRow)
+        // Every classifiable beat, with its reference class (N / S / V) where a matching annotated
+        // beat exists and "?" otherwise: the beat model trains on the first and the recording
+        // counts (s_beat_share, v_beat_share) are recomputed from all of them.
+        val sym = e.beats?.let { File(it.path.removeSuffix(".beats") + ".sym") }?.takeIf { it.exists() }?.readText()
+        val ref = if (sym != null) ints(e.beats!!) else IntArray(0)
+        val beatRows = a.beatFeatures.mapIndexedNotNull { i, row ->
+            if (row == null) return@mapIndexedNotNull null
+            val j = ref.indices.minByOrNull { abs(ref[it] - a.peaks[i]) }
+            val cls = j?.let { sym?.getOrNull(it) }?.takeIf { abs(ref[j] - a.peaks[i]) <= TOLERANCE && it != '-' } ?: '?'
+            listOf(e.id, e.group, i, cls).joinToString(",") + "," + row.joinToString(",")
+        }
+        val resultRow = listOf(
+            e.id, e.group, e.label, a.result, m.note, m.poorReason, m.averageBpm ?: "", m.supraventricularBeats, m.ventricularBeats,
+            m.qrsMs ?: "", m.prMs ?: "", m.longPr
+        ).joinToString(",")
+        return Outcome(e, a.result, a.metrics.poorReason.name, tp, fp, fn, details, featureRow, beatRows, a.template, resultRow)
     }
 
     private fun render(o: List<Outcome>, scale: Float): String = buildString {
@@ -205,6 +258,7 @@ class EcgDatasetReport {
         EcgResult.LOW_HEART_RATE -> "low"
         EcgResult.INCONCLUSIVE -> "inconc"
         EcgResult.POOR_RECORDING -> "poor"
+        EcgResult.FREQUENT_EXTRA_BEATS -> "freqx"
     }
 
     private fun pct(k: Int, n: Int) = if (n == 0) "–" else "%.0f%%".format(100.0 * k / n)
@@ -212,5 +266,6 @@ class EcgDatasetReport {
     private companion object {
         const val FS = 500
         const val TOLERANCE = 37 // 75 ms
+        val MIN_SEC = System.getenv("ECG_MIN_SEC")?.toInt() ?: 20
     }
 }

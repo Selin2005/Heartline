@@ -21,8 +21,24 @@ object RhythmFeatures {
     val NAMES = listOf(
         "bpm", "nrmssd", "entropy", "tpr", "cov", "clean_nrmssd", "clean_entropy", "clean_cov", "clean_share",
         "p_ratio", "ectopic_share", "other_shape_share", "patterned", "noise", "usable_share", "valid_beat_share",
-        "mean_b", "median_ln_k", "sd1_sd2", "near_median_share", "max_min_ratio", "pauses", "qrs_width_ms", "amplitude_mv"
+        "mean_b", "median_ln_k", "sd1_sd2", "near_median_share", "max_min_ratio", "pauses", "qrs_width_ms", "amplitude_mv",
+        // Algorithm 4: what kind of early beats, wave timing, atrial activity, how much rhythm was seen.
+        "early_other_shape_share", "early_corr", "early_width_diff_ms", "compensatory_ratio",
+        "qrs_ms", "pr_ms", "atrial_peak_hz", "atrial_concentration", "atrial_ratio", "intervals", "lag1",
+        "s_beat_share", "v_beat_share"
     )
+
+    /** What the early beats look like, from the beat clusters. */
+    data class Ectopy(
+        /** Correlation of each beat with the dominant template. */
+        val dominantCorrelation: DoubleArray,
+        /** QRS width of each beat's cluster minus the dominant one's, ms. */
+        val widthDiffMs: DoubleArray
+    ) {
+        companion object {
+            val NONE = Ectopy(DoubleArray(0), DoubleArray(0))
+        }
+    }
 
     fun of(
         bpm: Int?,
@@ -37,7 +53,11 @@ object RhythmFeatures {
         sqis: List<WindowSqi?>,
         pauses: Int,
         qrsWidthMs: Double,
-        amplitudeMv: Double
+        amplitudeMv: Double,
+        ectopy: Ectopy = Ectopy.NONE,
+        timing: EcgMorphology.Timing? = null,
+        atrial: AtrialActivity.Spectrum = AtrialActivity.NONE,
+        beatCounts: EctopicBeats.Counts = EctopicBeats.Counts.NONE
     ): DoubleArray {
         val all = runs.flatten().map { it.ms }
         val f = RrFeatures.of(all)
@@ -53,6 +73,12 @@ object RhythmFeatures {
             sd(d) / sd(s).coerceAtLeast(1e-9)
         }
         val median = all.sorted().let { if (it.isEmpty()) 0.0 else it[it.size / 2] }
+        val early = premature.toList()
+        // Short interval + the next one against twice the median: 1 for a full compensatory pause
+        // (typical after a ventricular beat), less when the sinus node was reset (atrial beats).
+        val compensatory = runs.flatMap { run ->
+            run.indices.filter { run[it].beat in premature && it + 1 < run.size }.map { (run[it].ms + run[it + 1].ms) / (2 * median) }
+        }
         return doubleArrayOf(
             bpm?.toDouble() ?: 0.0,
             f?.nRmssd ?: 0.0,
@@ -77,9 +103,33 @@ object RhythmFeatures {
             if (all.isEmpty()) 0.0 else all.max() / all.min(),
             pauses.toDouble(),
             qrsWidthMs,
-            amplitudeMv
+            amplitudeMv,
+            premature.count { it in otherShape }.toDouble() / (all.size + 1),
+            if (early.isEmpty()) 1.0 else medianOf(early.mapNotNull { ectopy.dominantCorrelation.getOrNull(it) }, 1.0),
+            if (early.isEmpty()) 0.0 else medianOf(early.mapNotNull { ectopy.widthDiffMs.getOrNull(it) }, 0.0),
+            medianOf(compensatory, 0.0),
+            timing?.qrsMs ?: 0.0,
+            timing?.prMs ?: -1.0,
+            atrial.peakHz,
+            atrial.concentration,
+            atrial.ratio,
+            all.size.toDouble(),
+            f?.lag1 ?: 0.0,
+            beatCounts.supraventricular.toDouble() / beatCounts.classified.coerceAtLeast(1),
+            beatCounts.ventricular.toDouble() / beatCounts.classified.coerceAtLeast(1)
         )
     }
+
+    /**
+     * Regular (after removing early beats) with a P wave before the beats: what names a fast or
+     * slow rate "sinus" (tools/ecg-eval/evaluate_short.py checks it on 10 s databases).
+     */
+    fun sinusLike(features: DoubleArray): Boolean {
+        val at = { name: String -> features[NAMES.indexOf(name)] }
+        return at("p_ratio") >= RhythmClassifier.P_WAVE_PRESENT_RATIO && at("clean_nrmssd") < 0.08 && at("clean_cov") < 0.10
+    }
+
+    private fun medianOf(v: List<Double>, empty: Double) = if (v.isEmpty()) empty else v.sorted()[v.size / 2]
 
     private fun sd(x: List<Double>): Double {
         val m = x.average()
@@ -131,13 +181,14 @@ class RhythmModel(
         fun parse(text: String): RhythmModel = json.decodeFromString(text)
 
         /** The bundled model, or null if it isn't there (the rules alone then decide). */
-        val bundled: RhythmModel? by lazy {
-            runCatching {
-                RhythmModel::class.java.getResourceAsStream("/ecg/rhythm_model.json")?.use {
-                    json.decodeFromString<RhythmModel>(it.readBytes().decodeToString())
-                }
-            }.getOrNull()?.takeIf { it.features == RhythmFeatures.NAMES }
-        }
+        val bundled: RhythmModel? by lazy { resource("/ecg/rhythm_model.json", RhythmFeatures.NAMES) }
+
+        /** A model bundled as a resource, if it is there and reads exactly [features]. */
+        internal fun resource(path: String, features: List<String>): RhythmModel? = runCatching {
+            RhythmModel::class.java.getResourceAsStream(path)?.use {
+                json.decodeFromString<RhythmModel>(it.readBytes().decodeToString())
+            }
+        }.getOrNull()?.takeIf { it.features == features }
     }
 }
 

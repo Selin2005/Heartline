@@ -1,0 +1,13 @@
+records: 51140 ({np.str_('chapman'): np.int64(31945), np.str_('ptbxl'): np.int64(19195)})
+-- wide_qrs: 2600 of 51140 records; threshold 0.100 (95% specificity)
+  model:
+    chapman  sensitivity 63% (508)  specificity 95.7% (31437)  PPV 19%
+    ptbxl    sensitivity 76% (2092)  specificity 93.6% (17103)  PPV 59%
+    all      sensitivity 73% (2600)  specificity 95.0% (48540)  PPV 44%
+  wrote /tmp/ecg-work/final/wide_qrs_model.json (229 kB)
+-- long_pr: 2970 of 51140 records; threshold 0.107 (95% specificity)
+  model + measured PR ≥ 180 ms (as the app):
+    chapman  sensitivity 78% (1043)  specificity 95.2% (30902)  PPV 35%
+    ptbxl    sensitivity 76% (1927)  specificity 94.8% (17268)  PPV 62%
+    all      sensitivity 76% (2970)  specificity 95.1% (48170)  PPV 49%
+  wrote /tmp/ecg-work/final/long_pr_model.json (273 kB)

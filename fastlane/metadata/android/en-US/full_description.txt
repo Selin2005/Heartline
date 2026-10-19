@@ -1,7 +1,7 @@
 Heartline brings heart health features to your Galaxy Watch and keeps your history on your phone, in a clean One UI style.
 
 WHAT YOU CAN DO
-• Record a 30-second single-lead ECG with your watch and see a wellness rhythm label: sinus rhythm, signs of AFib, high or low heart rate, inconclusive or poor recording.
+• Record a 30-second single-lead ECG with your watch and see a wellness rhythm label: sinus rhythm, signs of AFib, frequent extra beats, high or low heart rate, inconclusive or poor recording. The watch also says which kind of extra beats it saw (upper or lower chambers) and when the gap between the P wave and the beat looked longer than usual.
 • View every ECG on ECG paper and save it as a PDF to share with your doctor.
 • Estimate blood pressure with your watch after calibrating it with your own cuff.
 • Turn on background checks for an irregular rhythm and high or low heart rate.

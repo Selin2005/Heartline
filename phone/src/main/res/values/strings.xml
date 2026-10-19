@@ -67,6 +67,7 @@
 
     <string name="ecg_result_sinus">Sinus rhythm</string>
     <string name="ecg_result_afib">Signs of AFib</string>
+    <string name="ecg_result_frequent_extra_beats">Frequent extra beats</string>
     <string name="ecg_result_high_hr">High heart rate</string>
     <string name="ecg_result_low_hr">Low heart rate</string>
     <string name="ecg_result_inconclusive">Inconclusive</string>
@@ -77,6 +78,7 @@
     <string name="ecg_explain_high_hr">Your heart rate was over 120 bpm, so the rhythm couldn\'t be checked. Exercise, stress, alcohol or dehydration can raise your heart rate.</string>
     <string name="ecg_explain_low_hr">Your heart rate was under 50 bpm, so the rhythm couldn\'t be checked. Some medicines and very good fitness can lower your heart rate.</string>
     <string name="ecg_explain_inconclusive">The recording couldn\'t be classified. Make sure your arm is resting and try again.</string>
+    <string name="ecg_explain_frequent_extra_beats">Your heart beat in a sinus rhythm, but more than one in ten beats came early. Extra beats are common and often harmless; if you have many of them, or they come with symptoms, talk to your doctor.</string>
     <string name="ecg_explain_poor">Too much noise was detected. Rest your arm on a table, keep still and touch the key lightly.</string>
 
     <string name="symptom_palpitations">Rapid, pounding or fluttering heartbeat</string>
@@ -553,6 +555,9 @@
     <string name="ecg_detail_note">Finding</string>
     <string name="ecg_detail_second_opinion">Second opinion (phone AI)</string>
     <string name="ecg_detail_extra_beats">Extra beats</string>
+    <string name="ecg_detail_extra_upper">Extra beats, upper chambers</string>
+    <string name="ecg_detail_extra_lower">Extra beats, lower chambers</string>
+    <string name="ecg_detail_pr">PR interval (approximate)</string>
     <string name="ecg_detail_pauses">Pauses over 2 s</string>
     <string name="ecg_detail_segments">Contact segments</string>
     <string name="ecg_detail_quality">Signal quality</string>
@@ -574,6 +579,12 @@
     <string name="ecg_note_fast_regular">Regular rhythm between 100 and 120 bpm.</string>
     <string name="ecg_note_pauses">A pause of more than 2 seconds was seen.</string>
     <string name="ecg_note_noisy_rhythm">Irregular, but too noisy to call AFib. Try again.</string>
+    <string name="ecg_note_extra_beats_upper">Extra beats from the upper chambers (atria) were seen.</string>
+    <string name="ecg_note_extra_beats_lower">Extra beats from the lower chambers (ventricles) were seen.</string>
+    <string name="ecg_note_extra_beats_both">Extra beats from both the upper and the lower chambers were seen.</string>
+    <string name="ecg_note_sinus_fast">Regular, with a P wave before each beat: a fast sinus rhythm.</string>
+    <string name="ecg_note_sinus_slow">Regular, with a P wave before each beat: a slow sinus rhythm.</string>
+    <string name="ecg_note_long_pr">The gap between the P wave and the beat looked longer than usual. On its own this is often harmless; mention it to your doctor at your next visit.</string>
     <string name="ecg_poor_motion">Too much movement. Rest your arm on a table and keep still.</string>
     <string name="ecg_poor_muscle">Muscle noise. Relax your arm and touch the key lightly instead of pressing.</string>
     <string name="ecg_poor_low">The signal was too weak. Wear the watch snugly above the wrist bone and keep your fingertip on the key.</string>
@@ -781,6 +792,7 @@
     <string name="widget_ecg_short_low">Low HR</string>
     <string name="widget_ecg_short_inconclusive">Unclear</string>
     <string name="widget_ecg_short_poor">Poor</string>
+    <string name="widget_ecg_short_extra_beats">Extra beats</string>
     <string name="widget_weight">Weight %1$.1f kg</string>
     <string name="widget_measure_metric">Measure %1$s</string>
     <string name="widget_dashboard_named">%1$s\'s heart</string>
