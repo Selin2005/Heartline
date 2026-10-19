@@ -3,6 +3,17 @@
 All notable changes to Heartline. Each release's notes are written by the Build workflow when the
 release is made, and the app shows them under *What's new* after an update.
 
+## 0.0.2.279-beta.1 — 2026-10-19
+
+### New
+
+- Your watch now keeps an eye on your heart rate after you get up. If it jumps sharply from your resting level, Heartline takes note — and if that happens on 3 days within 2 weeks, you'll get a wellness notice to check in with how you're feeling. This runs as part of heart monitoring with no separate switch, and it stays off if AFib or a pacemaker has been detected.
+
+### Improved
+
+- ECG results are more descriptive: extra beats are now sorted by where they come from (upper or lower chambers), frequent extra beats are called out, rhythms with extra beats get clearer names, and a long PR interval gets its own note.
+- Documentation, terms, and policy updates.
+
 ## 0.0.2.230-beta.1 — 2026-10-18
 
 ### Improved
