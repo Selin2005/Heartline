@@ -94,7 +94,7 @@ val wearModule = module {
     single {
         val store = get<WatchSettingsStore>()
         val profile = get<WatchProfileStore>()
-        BackgroundHeart(get<WatchMonitorOutput>(), store::activityAt, { profile.profile.value?.age() }, { profile.profile.value?.calcSex }) { store.settings.value }
+        BackgroundHeart(get<WatchMonitorOutput>(), store::activityAt, { profile.profile.value?.age() }, { profile.profile.value?.calcSex }, steps = store::stepsAt) { store.settings.value }
     }
     single<HrSource> {
         if (BuildConfig.USE_FAKE_SENSORS) FakeHrSource() else SdkHrSource(get<SensorGateway>() as SdkSensorGateway)

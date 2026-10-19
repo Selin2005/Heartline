@@ -206,4 +206,86 @@ class HeartRepositoryTest {
         repo.deleteAll()
         assertTrue(repo.spo2AttemptsSince(0).first().isEmpty())
     }
+
+    /** Still readings every 3 minutes, then up: [peak] held for two readings, with [steps] a minute. */
+    private fun getUp(upMs: Long, rest: Int = 68, peak: Int = 102, steps: Int? = 40) =
+        (5 downTo 1).map { HrMinute(upMs - it * 180_000L, rest, rest - 2, rest + 2, activity = HrContext.REST) } +
+            (0..2).map { HrMinute(upMs + it * 180_000L, peak, peak - 3, peak + 3, resting = false, activity = HrContext.ACTIVE, steps = steps) }
+
+    private val day = 86_400_000L
+    private val start = 1_800_000_000_000L
+
+    private fun posturalRepo(on: Boolean = true, health: com.heartline.shared.hr.HealthContext = com.heartline.shared.hr.HealthContext()) = HeartRepository(
+        db.heart(),
+        onAlert = { notified += it },
+        settings = { com.heartline.shared.hr.MonitorSettings(posturalRise = on, health = health) },
+        zone = java.time.ZoneOffset.UTC,
+    )
+
+    @Test
+    fun stepsAreStoredAndMerged() = runBlocking {
+        repo.saveBatch(HrBatch("a", listOf(HrMinute(0, 90, 85, 95, resting = false, activity = HrContext.ACTIVE, steps = 30))))
+        repo.saveBatch(HrBatch("b", listOf(HrMinute(0, 92, 85, 97, resting = false, activity = HrContext.ACTIVE, steps = 45))))
+        repo.saveBatch(HrBatch("c", listOf(HrMinute(0, 92, 85, 97, resting = false, activity = HrContext.ACTIVE))))
+        assertEquals(45, repo.minutes(0, Long.MAX_VALUE).first().single().steps)
+    }
+
+    @Test
+    fun risesOnThreeDaysNotifyOnce() = runBlocking {
+        val repo = posturalRepo()
+        // Two days: not yet a pattern.
+        repo.saveBatch(HrBatch("d1", getUp(start + 8 * 3_600_000L)))
+        repo.saveBatch(HrBatch("d2", getUp(start + day + 8 * 3_600_000L)))
+        assertTrue(notified.isEmpty())
+        // The third day's rise counts once its 10 minutes have passed (a later reading).
+        repo.saveBatch(HrBatch("d3", getUp(start + 2 * day + 8 * 3_600_000L) + HrMinute(start + 2 * day + 8 * 3_600_000L + 15 * 60_000L, 75, 72, 78)))
+        val alert = notified.single()
+        assertEquals(com.heartline.shared.hr.HeartTrend.POSTURAL_RISE, alert.trend)
+        assertEquals(68, alert.normal)
+        assertEquals(102, alert.bpm)
+        assertEquals(34f, alert.value)
+        val stored = repo.alerts.first().single()
+        assertEquals(com.heartline.shared.hr.HeartTrend.POSTURAL_RISE, stored.trend)
+        assertNull(stored.watchVersion)
+        // A fourth day within the cooldown: no second notice.
+        repo.saveBatch(HrBatch("d4", getUp(start + 3 * day + 8 * 3_600_000L) + HrMinute(start + 3 * day + 9 * 3_600_000L, 70, 68, 72)))
+        assertEquals(1, notified.size)
+    }
+
+    @Test
+    fun risesAreNotJudgedWhenOffOrWithAPacemaker() = runBlocking {
+        val off = posturalRepo(on = false)
+        val paced = posturalRepo(health = com.heartline.shared.hr.HealthContext(heartDevice = com.heartline.shared.hr.Answer.YES))
+        for (r in listOf(off, paced)) {
+            db.heart().deleteMinutes()
+            (0..3).forEach { d -> r.saveBatch(HrBatch("p$d", getUp(start + d * day + 8 * 3_600_000L) + HrMinute(start + d * day + 9 * 3_600_000L, 70, 68, 72))) }
+        }
+        assertTrue(notified.isEmpty())
+    }
+
+    @Test
+    fun briskWalkingIsNotGettingUp() = runBlocking {
+        val repo = posturalRepo()
+        (0..3).forEach { d -> repo.saveBatch(HrBatch("w$d", getUp(start + d * day + 8 * 3_600_000L, steps = 118) + HrMinute(start + d * day + 9 * 3_600_000L, 70, 68, 72))) }
+        assertTrue(notified.isEmpty())
+    }
+
+    @Test
+    fun theHeartScreenListsTheRises() {
+        val minutes = (0..2).flatMap { d -> getUp(start + d * day + 8 * 3_600_000L) }.map {
+            HrMinuteEntity(it.minuteStartMs, it.avgBpm, it.minBpm, it.maxBpm, it.rmssdMs, it.resting, it.activity, it.steps)
+        }
+        val now = start + 2 * day + 9 * 3_600_000L
+        val ui = HeartSummaries.postural(minutes, now, 30, java.time.ZoneOffset.UTC) { "d$it" to "t" }
+        assertEquals(3, ui.rises)
+        assertEquals(3, ui.days)
+        assertTrue(ui.pattern)
+        assertEquals(68, ui.medianRestBpm)
+        assertEquals(3, ui.latest.size)
+        assertEquals("d${start + 2 * day + 8 * 3_600_000L}", ui.latest.first().date)
+        // Two days earlier, the third rise was not there yet: some rises, no pattern.
+        val earlier = HeartSummaries.postural(minutes, start + day + 9 * 3_600_000L, 30, java.time.ZoneOffset.UTC) { "" to "" }
+        assertEquals(2, earlier.rises)
+        assertTrue(!earlier.pattern)
+    }
 }

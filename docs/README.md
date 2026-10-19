@@ -10,6 +10,7 @@
 - [ECG algorithm](algorithms/ECG_ALGORITHM.md)
 - [Blood pressure algorithm](algorithms/BP_ALGORITHM.md) (complete specification) and its [change history](algorithms/BP_HISTORY.md)
 - [Background heart monitoring and heart notifications](algorithms/HEART_MONITORING.md)
+- [Heart rate after getting up](algorithms/POSTURAL_RISE.md) (an opt-in check for large rises after standing)
 - [Background blood oxygen and skin temperature](algorithms/VITALS_MONITORING.md)
 - [Background stress monitoring](algorithms/STRESS_MONITORING.md)
 - [Watch ↔ phone sync protocol](architecture/PROTOCOL.md)

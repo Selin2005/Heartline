@@ -13,7 +13,7 @@ Regenerate with `./gradlew recordPaparazziDebug` and `python3 tools/screenshots/
 | [**Measuring from the phone**](phone/measure/README.md) | [<img src="phone/measure/measure_starting_light.png" width="120" alt="">](phone/measure/README.md) | 12 |
 | [**ECG**](phone/ecg/README.md) | [<img src="phone/ecg/ecg_home_light.png" width="120" alt="">](phone/ecg/README.md) | 8 |
 | [**Blood pressure**](phone/blood-pressure/README.md) | [<img src="phone/blood-pressure/bp_home_light.png" width="120" alt="">](phone/blood-pressure/README.md) | 8 |
-| [**Heart rate and alerts**](phone/heart-rate/README.md) | [<img src="phone/heart-rate/heart_rate_light.png" width="120" alt="">](phone/heart-rate/README.md) | 5 |
+| [**Heart rate and alerts**](phone/heart-rate/README.md) | [<img src="phone/heart-rate/heart_rate_light.png" width="120" alt="">](phone/heart-rate/README.md) | 7 |
 | [**SpO₂, temperature and stress**](phone/more-measurements/README.md) | [<img src="phone/more-measurements/spo2_light.png" width="120" alt="">](phone/more-measurements/README.md) | 3 |
 | [**Body composition**](phone/body-composition/README.md) | [<img src="phone/body-composition/body_composition_light.png" width="120" alt="">](phone/body-composition/README.md) | 3 |
 | [**Settings, updates and sharing**](phone/settings/README.md) | [<img src="phone/settings/settings_light.png" width="120" alt="">](phone/settings/README.md) | 26 |

@@ -22,6 +22,8 @@ import com.heartline.shared.profile.Sex
 import com.heartline.shared.hr.MonitorSettings
 import com.heartline.shared.irn.IrregularRhythmDetector
 import com.heartline.shared.model.EcgResult
+import com.heartline.shared.pots.OrthostaticEventDetector
+import com.heartline.shared.pots.PosturalPatternRules
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlin.math.roundToInt
@@ -77,7 +79,28 @@ data class HeartRateUi(
     val restingWeek: List<Float?> = emptyList(),
     /** Today's chart for each kind of minute (only kinds with data). */
     val dayByActivity: Map<HrContext, List<RangeBucket>> = emptyMap(),
+    /** Rises after getting up over the last two weeks; null when that check is off. */
+    val postural: PosturalUi? = null,
 )
+
+/**
+ * Large heart-rate rises after getting up ([com.heartline.shared.pots]) in the last
+ * [HeartSummaries.POSTURAL_DAYS] days: how many, on how many days, whether they make the pattern
+ * that notifies, and the latest few.
+ */
+data class PosturalUi(
+    val rises: Int = 0,
+    val days: Int = 0,
+    /** The rise that counts (30 bpm, 40 for teenagers). */
+    val minRiseBpm: Int = com.heartline.shared.pots.OrthostaticEventDetector.ADULT_RISE_BPM,
+    /** Repeated on enough days to notify; then the usual rate before and after. */
+    val pattern: Boolean = false,
+    val medianRestBpm: Int? = null,
+    val medianPeakBpm: Int? = null,
+    val latest: List<RiseUi> = emptyList(),
+)
+
+data class RiseUi(val date: String, val time: String, val restBpm: Int, val peakBpm: Int)
 
 data class AlertUi(
     val id: String,
@@ -140,6 +163,28 @@ object HeartSummaries {
     /** Median heart rate in sleep of the night ending on [day], if there are enough readings. */
     fun night(history: HeartHistory, day: Long): Int? = history.days.firstOrNull { it.day == day }
         ?.let { Histogram(it.sleep) }?.takeIf { it.count >= HeartBaseline.MIN_NIGHT_READINGS }?.median()?.roundToInt()
+
+    const val POSTURAL_DAYS = 14
+
+    /** The rises after getting up in [minutes] as of [nowMs], with [minRise] for the wearer's age. */
+    fun postural(minutes: List<HrMinuteEntity>, nowMs: Long, minRise: Int, zone: ZoneId, label: (Long) -> Pair<String, String>): PosturalUi {
+        val from = nowMs - POSTURAL_DAYS * 86_400_000L
+        val events = OrthostaticEventDetector(minRiseBpm = minRise)
+            .detect(minutes.filter { it.minuteStartMs >= from - 15 * 60_000L }.map { it.toMinute() }, nowMs)
+            .filter { it.startMs >= from }
+        val pattern = PosturalPatternRules(windowDays = POSTURAL_DAYS).evaluate(events, nowMs, zone)
+        return PosturalUi(
+            rises = events.size,
+            days = events.map { Instant.ofEpochMilli(it.startMs).atZone(zone).toLocalDate() }.toSet().size,
+            minRiseBpm = minRise,
+            pattern = pattern != null,
+            medianRestBpm = pattern?.medianRestBpm,
+            medianPeakBpm = pattern?.medianPeakBpm,
+            latest = events.takeLast(3).reversed().map { e -> label(e.startMs).let { (d, t) -> RiseUi(d, t, e.restBpm, e.peakBpm) } },
+        )
+    }
+
+    private fun HrMinuteEntity.toMinute() = HrMinute(minuteStartMs, avgBpm, minBpm, maxBpm, rmssdMs, resting, activity, steps)
 
     /** Minutes in each zone given its lower [bounds]; minutes below the first are not counted. */
     fun zones(minutes: List<HrMinuteEntity>, bounds: List<Int>): List<Int> {
@@ -234,6 +279,9 @@ class HeartRateViewModel(
             nights = (0 until 28).map { i -> HeartSummaries.night(history, todayKey - 27 + i)?.toFloat() },
             restingWeek = days.map { day -> HeartSummaries.resting(week.filter { it.minuteStartMs in dayRange(day) })?.toFloat() },
             dayByActivity = todays.groupBy { it.activity }.mapValues { (_, list) -> dayBuckets(list) },
+            postural = latest?.takeIf { monitor.posturalRiseActive }?.let {
+                HeartSummaries.postural(month, it.minuteStartMs + 60_000L, OrthostaticEventDetector.minRiseFor(years), zone) { t -> formatter.date(t) to formatter.time(t) }
+            },
         )
     }
 

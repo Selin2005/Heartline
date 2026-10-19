@@ -154,6 +154,21 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate11To12AddsStepsToHeartMinutes() {
+        helper.createDatabase(DB, 11).use { db ->
+            db.execSQL("INSERT INTO hr_minutes (minuteStartMs, avgBpm, minBpm, maxBpm, rmssdMs, resting, activity) VALUES (0, 60, 58, 62, NULL, 1, 'REST')")
+        }
+        helper.runMigrationsAndValidate(DB, 12, true, HeartlineDatabase.MIGRATION_11_12).use { db ->
+            // Older minutes have no step count: unknown, not zero.
+            db.query("SELECT steps FROM hr_minutes WHERE minuteStartMs = 0").use { c ->
+                c.moveToFirst()
+                assertEquals(true, c.isNull(0))
+            }
+            db.execSQL("INSERT INTO hr_minutes (minuteStartMs, avgBpm, minBpm, maxBpm, rmssdMs, resting, activity, steps) VALUES (60000, 95, 90, 99, NULL, 0, 'ACTIVE', 42)")
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

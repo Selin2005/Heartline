@@ -224,6 +224,7 @@ class PhoneNotifier(private val context: Context) {
         private fun trendTitle(alert: HealthAlert) = when (alert.trend) {
             HeartTrend.ELEVATED_RESTING -> R.string.alert_trend_title
             HeartTrend.HIGH_NORMAL -> R.string.alert_high_normal_title
+            HeartTrend.POSTURAL_RISE -> R.string.alert_postural_title
             null -> alertTitle(alert.kind)
         }
 
@@ -251,6 +252,7 @@ class PhoneNotifier(private val context: Context) {
             when (alert.trend) {
                 HeartTrend.ELEVATED_RESTING -> return context.getString(R.string.alert_trend_text, bpm, normal ?: 0)
                 HeartTrend.HIGH_NORMAL -> return context.getString(R.string.alert_high_normal_text, bpm)
+                HeartTrend.POSTURAL_RISE -> return context.getString(R.string.alert_postural_text, alert.value?.toInt() ?: 0, normal ?: 0, bpm)
                 null -> Unit
             }
             return when (alert.kind) {

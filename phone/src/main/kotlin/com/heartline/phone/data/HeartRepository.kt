@@ -10,9 +10,18 @@ import com.heartline.shared.hr.HeartLimits
 import com.heartline.shared.stress.StressLimits
 import com.heartline.shared.vitals.VitalsLimits
 import com.heartline.shared.hr.HrBatch
+import com.heartline.shared.hr.AlertKind
+import com.heartline.shared.hr.HeartTrend
 import com.heartline.shared.hr.HrContext
+import com.heartline.shared.hr.HrMinute
+import com.heartline.shared.hr.MinuteAggregator
+import com.heartline.shared.hr.MonitorSettings
+import com.heartline.shared.pots.OrthostaticEventDetector
+import com.heartline.shared.pots.PosturalPatternRules
 import com.heartline.shared.sync.HeartDataSink
 import kotlinx.coroutines.flow.Flow
+import java.time.ZoneId
+import java.util.UUID
 
 /** Heart-rate trends and alerts received from the watch. */
 class HeartRepository(
@@ -23,6 +32,12 @@ class HeartRepository(
     private val onStressLimits: suspend (StressLimits) -> Unit = {},
     /** The connected watch app's version, kept with each alert. */
     private val watchVersion: suspend () -> String? = { null },
+    /** For the phone's own check of rises after getting up: the settings, the wearer's age and tagged symptom times. */
+    private val settings: suspend () -> MonitorSettings = { MonitorSettings() },
+    private val age: suspend () -> Int? = { null },
+    private val symptomTimes: suspend (fromMs: Long) -> List<Long> = { emptyList() },
+    private val zone: ZoneId = ZoneId.systemDefault(),
+    private val newId: () -> String = { UUID.randomUUID().toString() },
 ) : HeartDataSink {
     /** Background stress readings since [fromMs], and the latest awake one. */
     fun stressSince(fromMs: Long): Flow<List<StressSampleEntity>> = dao.stressSince(fromMs)
@@ -55,7 +70,7 @@ class HeartRepository(
      * has HRV), or closed early and then completed. Both are combined rather than one replacing the other.
      */
     override suspend fun saveBatch(batch: HrBatch) {
-        val incoming = batch.minutes.map { HrMinuteEntity(it.minuteStartMs, it.avgBpm, it.minBpm, it.maxBpm, it.rmssdMs, it.resting, it.activity) }
+        val incoming = batch.minutes.map { HrMinuteEntity(it.minuteStartMs, it.avgBpm, it.minBpm, it.maxBpm, it.rmssdMs, it.resting, it.activity, it.steps) }
         val existing = dao.minutesAt(incoming.map { it.minuteStartMs }).associateBy { it.minuteStartMs }
         dao.insertMinutes(incoming.map { m -> existing[m.minuteStartMs]?.let { merge(it, m) } ?: m })
         batch.limits?.let { onLimits(it) }
@@ -68,6 +83,36 @@ class HeartRepository(
             dao.insertSpo2Attempts(batch.spo2Attempts.map { Spo2AttemptEntity(it.tsMs, it.outcome, it.percent, it.retryAtMs) })
             dao.deleteSpo2AttemptsBefore(batch.spo2Attempts.maxOf { it.tsMs } - ATTEMPTS_KEPT_MS)
         }
+        if (incoming.isNotEmpty()) checkPosturalRise(incoming.maxOf { it.minuteStartMs } + MINUTE)
+    }
+
+    /**
+     * Rises after getting up (docs/algorithms/POSTURAL_RISE.md): found here rather than on the
+     * watch, which keeps only 90 minutes while a pattern takes days. Judged at the time of the
+     * newest minute, so a late batch is judged as of its own data. The notice is the phone's own:
+     * it carries no watch version, and no watch ever receives it.
+     */
+    private suspend fun checkPosturalRise(nowMs: Long) {
+        val cfg = settings()
+        if (!cfg.posturalRiseActive) return
+        val last = dao.lastTrendAlert(HeartTrend.POSTURAL_RISE.name)
+        if (last != null && nowMs - last < PosturalPatternRules.COOLDOWN_MS) return
+        val from = nowMs - PATTERN_LOOKBACK_MS
+        val minutes = dao.minutesBetween(from, nowMs).map { HrMinute(it.minuteStartMs, it.avgBpm, it.minBpm, it.maxBpm, it.rmssdMs, it.resting, it.activity, it.steps) }
+        val minRise = OrthostaticEventDetector.minRiseFor(age())
+        val events = OrthostaticEventDetector(minRiseBpm = minRise).detect(minutes, nowMs)
+        val rules = PosturalPatternRules()
+        // Symptoms only describe a pattern, so the ECG records are read only once there is one.
+        if (rules.evaluate(events, nowMs, zone) == null) return
+        val pattern = rules.evaluate(events, nowMs, zone, symptomTimes(from)) ?: return
+        val alert = HealthAlert(
+            newId(), AlertKind.HIGH_HEART_RATE, nowMs, pattern.medianPeakBpm,
+            threshold = minRise, context = HrContext.ACTIVE, normal = pattern.medianRestBpm,
+            trend = HeartTrend.POSTURAL_RISE, value = pattern.medianRiseBpm.toFloat(),
+        )
+        HLog.i("Heartline/Alert", "postural rise: ${pattern.events} rises on ${pattern.days} days, symptoms=${pattern.withSymptoms} ${alert.describe()}")
+        dao.insertAlert(AlertEntity(alert.id, alert.kind, alert.atMs, alert.bpm, 0, threshold = alert.threshold, context = alert.context, normal = alert.normal, trend = alert.trend, value = alert.value))
+        onAlert(alert)
     }
 
     /**
@@ -89,6 +134,10 @@ class HeartRepository(
     companion object {
         /** The SpO2 tries are for the "today" card and a look back; two weeks is plenty. */
         const val ATTEMPTS_KEPT_MS = 14 * 86_400_000L
+        private const val MINUTE = 60_000L
+
+        /** The pattern's two weeks, and the still minutes before its first day's rise. */
+        const val PATTERN_LOOKBACK_MS = 14 * 86_400_000L + 15 * MINUTE
 
         fun merge(old: HrMinuteEntity, new: HrMinuteEntity) = new.copy(
             avgBpm = (old.avgBpm + new.avgBpm) / 2,
@@ -97,6 +146,7 @@ class HeartRepository(
             rmssdMs = new.rmssdMs ?: old.rmssdMs,
             resting = old.resting && new.resting,
             activity = if (new.activity == HrContext.REST) old.activity else new.activity,
+            steps = MinuteAggregator.maxSteps(old.steps, new.steps),
         )
     }
 

@@ -191,11 +191,12 @@ class BackgroundHeart(
     age: () -> Int? = { null },
     sex: () -> Sex? = { null },
     zone: ZoneId = ZoneId.systemDefault(),
+    steps: (minuteStartMs: Long) -> Int? = { null },
     settings: () -> MonitorSettings,
 ) {
     private val lock = Mutex()
 
-    val trends = HeartMonitor(output, { false }, { settings().normalized().copy(irregularRhythmEnabled = false) }, activity, age, sex, zone)
+    val trends = HeartMonitor(output, { false }, { settings().normalized().copy(irregularRhythmEnabled = false) }, activity, age, sex, zone, steps = steps)
 
     /**
      * Rhythm windows keep no alert history of their own (their heart-rate alerts are off). Their
@@ -213,7 +214,7 @@ class BackgroundHeart(
     }
 
     /** Each window is a fresh check: no spacing inside the monitor, the worker does the scheduling. */
-    val irn = HeartMonitor(irnOutput, { false }, { settings().normalized().copy(heartRateAlertsEnabled = false) }, activity, age, sex, zone, windowEveryMs = 0)
+    val irn = HeartMonitor(irnOutput, { false }, { settings().normalized().copy(heartRateAlertsEnabled = false) }, activity, age, sex, zone, windowEveryMs = 0, steps = steps)
 
     suspend fun onPassive(samples: List<HrSample>) = lock.withLock {
         samples.sortedBy { it.tsMs }.forEach { trends.onSample(it) }

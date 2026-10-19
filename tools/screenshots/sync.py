@@ -94,9 +94,11 @@ PHONE = [
     ("heart-rate", "Heart rate and alerts", "Heart rate over the day and week, resting rate, HRV and rhythm alerts.", [
         ("heart_rate", "Heart rate"),
         ("heart_rate_empty", "Heart rate, no data yet"),
+        ("heart_rate_postural", "Heart rate after getting up: a repeated pattern, a few rises, none"),
         ("hr_chart_selected", "Day chart with a selected hour"),
         ("hr_chart_week", "Week chart"),
         ("alerts", "Irregular rhythm and high / low heart rate alerts"),
+        ("alerts_postural", "Alerts with a heart-rate-after-getting-up notice"),
     ]),
     ("more-measurements", "SpO₂, temperature and stress", "Blood oxygen, skin temperature and stress details.", [
         ("spo2", "Blood oxygen"),

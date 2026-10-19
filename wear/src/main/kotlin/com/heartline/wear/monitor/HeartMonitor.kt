@@ -68,6 +68,8 @@ class HeartMonitor(
     private val windowEveryMs: Long = 15 * 60_000L,
     private val batchEveryMinutes: Int = 15,
     private val newId: () -> String = { UUID.randomUUID().toString() },
+    /** Steps the watch counted in a minute, if it knows; the phone uses them for rises after getting up. */
+    private val steps: (minuteStartMs: Long) -> Int? = { null },
 ) {
     private val open = sortedMapOf<Long, MutableList<HrSample>>()
     private val window = mutableListOf<HrSample>()
@@ -142,7 +144,7 @@ class HeartMonitor(
     private suspend fun closeMinutes(before: Long) {
         val closing = open.headMap(before).values.flatten()
         open.headMap(before).clear()
-        val closed = MinuteAggregator.aggregate(closing, activity)
+        val closed = MinuteAggregator.aggregate(closing, activity, steps)
         if (closed.isEmpty()) return
         val current = loadState()
         val byStart = current.minutes.associateBy { it.minuteStartMs }.toMutableMap()

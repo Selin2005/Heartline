@@ -44,9 +44,13 @@ object MinuteAggregator {
     /**
      * [activity]: what the wearer was doing in the minute starting at the given time, if known
      * (sleep or exercise from the watch). Otherwise, and when that says rest, a minute with
-     * movement counts as active.
+     * movement counts as active. [steps]: the steps the watch counted in that minute, if known.
      */
-    fun aggregate(samples: List<HrSample>, activity: (minuteStartMs: Long) -> HrContext? = { null }): List<HrMinute> = samples
+    fun aggregate(
+        samples: List<HrSample>,
+        activity: (minuteStartMs: Long) -> HrContext? = { null },
+        steps: (minuteStartMs: Long) -> Int? = { null }
+    ): List<HrMinute> = samples
         .filter { it.onBody && it.reliable && it.bpm > 0 }
         .groupBy { it.tsMs / MINUTE * MINUTE }
         .toSortedMap()
@@ -63,7 +67,8 @@ object MinuteAggregator {
                 maxBpm = group.maxOf { it.bpm },
                 rmssdMs = Hrv.compute(group.flatMap { it.ibiMs })?.rmssdMs,
                 resting = context == HrContext.REST,
-                activity = context
+                activity = context,
+                steps = steps(start)
             )
         }
 
@@ -74,6 +79,10 @@ object MinuteAggregator {
         maxBpm = maxOf(a.maxBpm, b.maxBpm),
         rmssdMs = a.rmssdMs ?: b.rmssdMs,
         resting = a.resting && b.resting,
-        activity = if (a.activity == HrContext.REST) b.activity else a.activity
+        activity = if (a.activity == HrContext.REST) b.activity else a.activity,
+        steps = maxSteps(a.steps, b.steps)
     )
+
+    /** Steps of one minute seen twice: the later count can only have grown. */
+    fun maxSteps(a: Int?, b: Int?): Int? = listOfNotNull(a, b).maxOrNull()
 }

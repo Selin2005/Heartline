@@ -240,6 +240,27 @@ object SampleData {
         BodyDetailUi(entries, 76.4f)
     }
 
+    /** Rises after getting up: repeated on enough days to notify, a few on fewer days, and none. */
+    val posturalPattern = com.heartline.phone.ui.model.PosturalUi(
+        rises = 4,
+        days = 3,
+        pattern = true,
+        medianRestBpm = 68,
+        medianPeakBpm = 103,
+        latest = listOf(
+            com.heartline.phone.ui.model.RiseUi("Today", "7:52 AM", 67, 104),
+            com.heartline.phone.ui.model.RiseUi("Sep 23", "8:10 AM", 70, 103),
+            com.heartline.phone.ui.model.RiseUi("Sep 21", "6:58 PM", 68, 101),
+        ),
+    )
+    val posturalSome = com.heartline.phone.ui.model.PosturalUi(rises = 2, days = 1, latest = listOf(com.heartline.phone.ui.model.RiseUi("Today", "7:52 AM", 66, 98)))
+    val posturalNone = com.heartline.phone.ui.model.PosturalUi()
+
+    val posturalAlert = AlertUi(
+        "a6", AlertKind.HIGH_HEART_RATE, "Today", "8:03 AM", 103, 0, read = false, threshold = 30,
+        context = com.heartline.shared.hr.HrContext.ACTIVE, normal = 68, trend = com.heartline.shared.hr.HeartTrend.POSTURAL_RISE, value = 35f,
+    )
+
     val alerts = listOf(
         AlertUi("a5", AlertKind.HIGH_HEART_RATE, "Today", "3:45 PM", 79, 0, read = false, vital = com.heartline.shared.hr.VitalAlert.STRESS, value = 78f),
         AlertUi("a4", AlertKind.HIGH_HEART_RATE, "Sep 25", "10:05 AM", null, 0, read = false, vital = com.heartline.shared.hr.VitalAlert.TEMPERATURE, value = 1.2f),

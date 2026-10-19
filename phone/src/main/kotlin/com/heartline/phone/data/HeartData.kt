@@ -26,6 +26,8 @@ data class HrMinuteEntity(
     val resting: Boolean,
     /** Rest, moving about, exercise or sleep (rest for minutes from older watch versions). */
     @ColumnInfo(defaultValue = "REST") val activity: HrContext = if (resting) HrContext.REST else HrContext.ACTIVE,
+    /** Steps the watch counted in the minute (v12); null from older watches and older rows. */
+    val steps: Int? = null,
 )
 
 @Entity(tableName = "alerts")
@@ -165,6 +167,12 @@ interface HeartDao {
 
     @Query("SELECT * FROM alerts ORDER BY atMs DESC")
     fun alerts(): Flow<List<AlertEntity>>
+
+    @Query("SELECT MAX(atMs) FROM alerts WHERE trend = :trend")
+    suspend fun lastTrendAlert(trend: String): Long?
+
+    @Query("SELECT * FROM hr_minutes WHERE minuteStartMs >= :fromMs AND minuteStartMs < :toMs ORDER BY minuteStartMs")
+    suspend fun minutesBetween(fromMs: Long, toMs: Long): List<HrMinuteEntity>
 
     @Query("UPDATE alerts SET read = 1")
     suspend fun markAlertsRead()

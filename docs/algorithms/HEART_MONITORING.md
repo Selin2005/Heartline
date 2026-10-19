@@ -495,6 +495,9 @@ Older versions:
   - `HeartRepositoryTest`: minute merge, limits kept, the phone's own baseline, summaries,
     zones, ECG follow-up;
   - `MigrationTest`: v4 → v5 → v6.
+
+Rises after getting up (an opt-in check on the phone, using the steps in each minute) have their
+own page: [POSTURAL_RISE.md](POSTURAL_RISE.md).
 - On a device: [DEVICE_TESTING.md](../DEVICE_TESTING.md), checklist item 15.
 
 ## 9. Simulation

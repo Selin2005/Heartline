@@ -64,6 +64,17 @@ class BackgroundHeartTest {
     }
 
     @Test
+    fun stepsGoToThePhoneWithEachMinute() = runBlocking {
+        val out = Recorder()
+        val timeline = com.heartline.shared.hr.ActivityTimeline().withSteps(listOf(com.heartline.shared.hr.StepSpan(60_000L, 120_000L, 45)), 120_000L)
+        val heart = BackgroundHeart(out, activity = timeline::contextAt, steps = { timeline.stepsPerMinute(it).toInt() }) { MonitorSettings() }
+        heart.onPassive(listOf(HrSample(10_000L, 66, emptyList()), HrSample(70_000L, 92, emptyList())))
+        val minutes = out.batches.single().minutes
+        assertEquals(listOf(0, 45), minutes.map { it.steps })
+        assertEquals(listOf(HrContext.REST, HrContext.ACTIVE), minutes.map { it.activity })
+    }
+
+    @Test
     fun alertHistorySurvivesANewProcess() = runBlocking {
         val out = Recorder()
         // Sparse resting readings above the safety net (nothing learnt yet, so not 130: there is no

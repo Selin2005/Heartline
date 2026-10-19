@@ -215,6 +215,28 @@
     <string name="alert_trend_title">Resting heart rate higher than usual</string>
     <string name="alert_trend_text">Your heart rate in sleep has been higher than usual for several nights (about %1$d bpm, usually %2$d). Rest, sleep and drink enough, and talk to a doctor if it continues.</string>
     <string name="alert_high_normal_title">Resting heart rate above 100</string>
+    <string name="alert_postural_title">Heart rate rises a lot after getting up</string>
+    <string name="alert_postural_text">On several days this fortnight, your heart rate rose by about %1$d bpm within 10 minutes of getting up (from about %2$d to %3$d bpm). This is a pattern, not a diagnosis. Consider talking to a doctor about it, especially if you feel dizzy, light-headed or faint when standing.</string>
+    <string name="postural_title">Heart rate after getting up</string>
+    <string name="postural_caption">Rises of %1$d bpm or more within 10 minutes of getting up from rest, over the last 14 days. Brisk walking and workouts are left out.</string>
+    <string name="postural_none">No large rises after getting up.</string>
+    <string name="postural_some">%1$s, %2$s. You\'re notified only if they repeat on 3 or more days.</string>
+    <plurals name="postural_rises">
+        <item quantity="one">%1$d large rise</item>
+        <item quantity="other">%1$d large rises</item>
+    </plurals>
+    <plurals name="postural_days">
+        <item quantity="one">on %1$d day</item>
+        <item quantity="other">on %1$d days</item>
+    </plurals>
+    <string name="postural_pattern">Repeated large rises on %1$d days: usually from about %2$d to %3$d bpm. Consider talking to a doctor, especially if you feel dizzy or faint when standing.</string>
+    <string name="postural_rise_row">%1$d → %2$d bpm (+%3$d)</string>
+    <string name="postural_rise_value">+%1$d bpm after getting up</string>
+    <string name="postural_rest_to_peak">%1$d → %2$d bpm</string>
+    <string name="postural_footer">Getting up is estimated from your steps; the watch can\'t see your posture. Coffee, heat, little sleep or not drinking enough can raise it too. A check, not a diagnosis.</string>
+    <string name="settings_postural_rise">Heart rate after getting up</string>
+    <string name="settings_postural_rise_text">Look for large heart-rate rises after you get up from rest, on several days. Uses your all-day heart rate and steps.</string>
+    <string name="settings_postural_rise_unavailable">Not available with AFib or a pacemaker (your answers)</string>
     <string name="alert_high_normal_text">Your usual resting heart rate has been above 100 bpm this week (%1$d bpm). Consider talking to a doctor about it.</string>
     <string name="alert_low_text">Your heart rate stayed low for a while, down to %1$d bpm.</string>
     <string name="alert_low_rest_text">While you were resting, your heart rate stayed below %1$d bpm for over 10 minutes (down to %2$d bpm).</string>

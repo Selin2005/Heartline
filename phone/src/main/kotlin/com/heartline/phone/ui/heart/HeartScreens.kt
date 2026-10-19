@@ -21,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.heartline.phone.R
@@ -46,6 +47,7 @@ import com.heartline.phone.ui.components.gutter
 import com.heartline.phone.ui.ecg.EmptyCard
 import com.heartline.phone.ui.model.AlertUi
 import com.heartline.phone.ui.model.HeartRateUi
+import com.heartline.phone.ui.model.PosturalUi
 import com.heartline.phone.ui.theme.HeartlineTheme
 import com.heartline.shared.hr.AlertKind
 import com.heartline.shared.hr.HeartTrend
@@ -222,6 +224,9 @@ fun HeartRateScreen(
                     }
                 }
             }
+            state.postural?.let { postural ->
+                item(key = "postural") { PosturalCard(postural) }
+            }
             if (state.zoneBounds.isNotEmpty()) {
                 item {
                     RoundedCard(Modifier.gutter()) {
@@ -301,7 +306,11 @@ fun AlertsScreen(alerts: List<AlertUi>, onBack: (() -> Unit)? = null) {
                             colors.statusWarn,
                         )
                     } else if (alert.trend != null) {
-                        Triple(if (alert.trend == HeartTrend.HIGH_NORMAL) R.string.alert_high_normal_title else R.string.alert_trend_title, Icons.Rounded.NorthEast, colors.statusWarn)
+                        Triple(
+                            com.heartline.phone.notify.PhoneNotifier.alertTitle(com.heartline.shared.hr.HealthAlert(alert.id, alert.kind, 0, alert.bpm, trend = alert.trend)),
+                            Icons.Rounded.NorthEast,
+                            colors.statusWarn,
+                        )
                     } else when (alert.kind) {
                         AlertKind.IRREGULAR_RHYTHM -> Triple(R.string.alert_irn_title, Icons.Rounded.MonitorHeart, colors.statusAlert)
                         AlertKind.HIGH_HEART_RATE -> Triple(R.string.alert_high_title, Icons.Rounded.NorthEast, colors.statusWarn)
@@ -315,6 +324,10 @@ fun AlertsScreen(alerts: List<AlertUi>, onBack: (() -> Unit)? = null) {
                                 else -> "%+.1f °C".format(v)
                             }
                         } ?: ""
+                        alert.trend == HeartTrend.POSTURAL_RISE -> listOfNotNull(
+                            alert.value?.let { stringResource(R.string.postural_rise_value, it.toInt()) },
+                            alert.normal?.let { rest -> alert.bpm?.let { stringResource(R.string.postural_rest_to_peak, rest, it) } },
+                        ).joinToString(" · ")
                         alert.kind == AlertKind.IRREGULAR_RHYTHM -> listOfNotNull(
                             stringResource(R.string.alert_irn_detail, alert.windows),
                             when (alert.ecgRegular) {
@@ -353,5 +366,42 @@ fun AlertsScreen(alerts: List<AlertUi>, onBack: (() -> Unit)? = null) {
                 modifier = Modifier.padding(horizontal = 28.dp),
             )
         }
+    }
+}
+
+/**
+ * Rises after getting up over the last two weeks: none, some (not yet a pattern), or repeated on
+ * enough days to notify. Worded as a check, never as a condition (docs/algorithms/POSTURAL_RISE.md).
+ */
+@Composable
+fun PosturalCard(state: PosturalUi) {
+    val colors = HeartlineTheme.colors
+    RoundedCard(Modifier.gutter()) {
+        CardTitle(stringResource(R.string.postural_title))
+        Text(stringResource(R.string.postural_caption, state.minRiseBpm), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+        Spacer(Modifier.height(12.dp))
+        val summary = when {
+            state.pattern -> stringResource(R.string.postural_pattern, state.days, state.medianRestBpm ?: 0, state.medianPeakBpm ?: 0)
+            state.rises > 0 -> stringResource(
+                R.string.postural_some,
+                pluralStringResource(R.plurals.postural_rises, state.rises, state.rises),
+                pluralStringResource(R.plurals.postural_days, state.days, state.days),
+            )
+            else -> stringResource(R.string.postural_none)
+        }
+        Text(summary, style = MaterialTheme.typography.bodyMedium, color = if (state.pattern) colors.statusWarn else colors.onBackground)
+        state.latest.forEach { rise ->
+            Spacer(Modifier.height(8.dp))
+            Row {
+                Text("${rise.date} · ${rise.time}", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, modifier = Modifier.weight(1f))
+                Text(
+                    stringResource(R.string.postural_rise_row, rise.restBpm, rise.peakBpm, rise.peakBpm - rise.restBpm),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.onBackground,
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(stringResource(R.string.postural_footer), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
     }
 }

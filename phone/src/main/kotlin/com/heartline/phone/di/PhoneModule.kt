@@ -60,6 +60,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import com.heartline.shared.model.RecordSummary
 import com.heartline.shared.model.RecordKind
+import com.heartline.shared.model.Symptom
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import org.koin.android.ext.koin.androidContext
@@ -94,6 +95,15 @@ val phoneModule = module {
             onVitalsLimits = { limits -> get<SettingsRepository>().saveVitalsLimits(limits) },
             onStressLimits = { limits -> get<SettingsRepository>().saveStressLimits(limits) },
             watchVersion = { get<UpdateRepository>().prefs.first().watchVersion },
+            settings = { get<SettingsRepository>().monitor.first() },
+            age = { get<ProfileRepository>().profile.first()?.age() },
+            symptomTimes = { from ->
+                // Symptoms are tagged on ECGs: how the wearer felt when they took one.
+                val felt = setOf(Symptom.DIZZINESS, Symptom.PALPITATIONS, Symptom.FAINTING, Symptom.FATIGUE)
+                get<RecordRepository>().observe(RecordKind.ECG).first()
+                    .filter { r -> r.entity.startedAtMs >= from && (r.summary as? RecordSummary.Ecg)?.symptoms?.any { it in felt } == true }
+                    .map { it.entity.startedAtMs }
+            },
         )
     }
     single { SettingsRepository(androidContext()) }

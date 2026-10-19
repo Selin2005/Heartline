@@ -128,6 +128,14 @@ class PhoneScreenshotTest(private val theme: String) {
 
     @Test fun alerts() = shot("alerts") { AlertsScreen(SampleData.alerts, onBack = {}) }
 
+    @Test fun heartRatePostural() = shot("heart_rate_postural") {
+        com.heartline.phone.ui.components.ReachabilityScaffold(title = "Heart rate", onBack = {}) {
+            listOf(SampleData.posturalPattern, SampleData.posturalSome, SampleData.posturalNone).forEach { item { com.heartline.phone.ui.heart.PosturalCard(it) } }
+        }
+    }
+
+    @Test fun alertsPostural() = shot("alerts_postural") { AlertsScreen(listOf(SampleData.posturalAlert) + SampleData.alerts, onBack = {}) }
+
     @Test fun bloodPressure() = shot("bp_home") { BpHomeScreen(SampleData.bpHome, onBack = {}) }
 
     @Test fun bloodPressureAccuracy() = shot("bp_home_accuracy") {

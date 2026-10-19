@@ -48,7 +48,9 @@ data class HrMinute(
     val rmssdMs: Double? = null,
     /** Awake and still; kept for older phone versions, which only know this flag. */
     val resting: Boolean = true,
-    val activity: HrContext = if (resting) HrContext.REST else HrContext.ACTIVE
+    val activity: HrContext = if (resting) HrContext.REST else HrContext.ACTIVE,
+    /** Steps in the minute as the watch counted them; null from older watches (they ignore it too). */
+    val steps: Int? = null
 )
 
 /**
@@ -176,7 +178,13 @@ enum class HeartTrend {
     ELEVATED_RESTING,
 
     /** The usual resting heart rate itself has been above 100 bpm for a week. */
-    HIGH_NORMAL
+    HIGH_NORMAL,
+
+    /**
+     * Large heart-rate rises after getting up, on several days (com.heartline.shared.pots). Found
+     * on the phone only, from its stored minutes, so no watch ever receives it.
+     */
+    POSTURAL_RISE
 }
 
 /** Rhythm-check thresholds: standard suits the wrist sensor; high is the earlier, looser profile. */
@@ -222,6 +230,12 @@ data class MonitorSettings(
     /** Stress from the rhythm windows' heart-rate variability, and its notification. */
     val stressMonitoring: Boolean = true,
     val stressNotifications: Boolean = true,
+    /**
+     * Look for large heart-rate rises after getting up (docs/algorithms/POSTURAL_RISE.md), on the
+     * phone from the all-day heart rate. Off until the wearer turns it on: it is a narrow check
+     * most people don't need. Older versions ignore it.
+     */
+    val posturalRise: Boolean = false,
     /** Blood oxygen in sleep too (its red light can be seen in the dark). */
     val spo2InSleep: Boolean = true,
     /**
@@ -316,6 +330,12 @@ data class MonitorSettings(
 
     /** Stress needs readable heart-rate variability. */
     val stressActive: Boolean get() = heartMonitoring && stressMonitoring && !health.hrvUnreadable
+
+    /**
+     * Rises after getting up: the heart part and its switch, but not with a pacemaker (it raises
+     * the rate with movement) or atrial fibrillation (the rate itself is irregular).
+     */
+    val posturalRiseActive: Boolean get() = heartActive && posturalRise && !health.hrvUnreadable
 
     /** Temperature notices: not in pregnancy, when skin is warmer anyway. */
     val temperatureNotices: Boolean get() = skinTempActive && !health.pregnant

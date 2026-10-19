@@ -111,6 +111,9 @@ sealed interface SettingChange {
     data class TempPart(val on: Boolean) : SettingChange
     data class StressPart(val on: Boolean) : SettingChange
     data class StressNotifications(val on: Boolean) : SettingChange
+
+    /** Look for large heart-rate rises after getting up (off by default). */
+    data class PosturalRise(val on: Boolean) : SettingChange
     data class CalibrationReminder(val on: Boolean) : SettingChange
     data class DailyReminder(val on: Boolean) : SettingChange
     data class DailyReminderTime(val minuteOfDay: Int) : SettingChange
@@ -134,6 +137,7 @@ sealed interface SettingChange {
         is TempPart -> s.copy(skinTempMonitoring = on)
         is StressPart -> s.copy(stressMonitoring = on)
         is StressNotifications -> s.copy(stressNotifications = on)
+        is PosturalRise -> s.copy(posturalRise = on)
         is CalibrationReminder -> s.copy(calibrationReminder = on)
         is DailyReminder -> s.copy(dailyReminder = on)
         is DailyReminderTime -> s.copy(dailyReminderMinute = minuteOfDay)
@@ -278,6 +282,18 @@ fun SettingsScreen(
                         trailing = { OneUiSwitch(monitor.heartAlerts) { if (it) onChange(SettingChange.HeartPart(true)) else heartOff = true } },
                         showDivider = true,
                     )
+                    if (monitor.heartAlerts) {
+                        CardRow(
+                            stringResource(R.string.settings_postural_rise),
+                            subtitle = stringResource(
+                                if (monitor.health.hrvUnreadable) R.string.settings_postural_rise_unavailable else R.string.settings_postural_rise_text,
+                            ),
+                            leading = { Spacer(Modifier.size(40.dp)) },
+                            trailing = { OneUiSwitch(monitor.posturalRise) { onChange(SettingChange.PosturalRise(it)) } },
+                            showDivider = true,
+                            subtitleMaxLines = 4,
+                        )
+                    }
                     CardRow(
                         stringResource(R.string.settings_part_spo2),
                         subtitle = stringResource(

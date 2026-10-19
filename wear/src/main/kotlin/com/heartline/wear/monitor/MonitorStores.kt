@@ -138,6 +138,9 @@ class WatchSettingsStore(context: Context, private val now: () -> Long = System:
     /** What the wearer was doing in a minute, if the watch knows. */
     fun activityAt(minuteStartMs: Long): HrContext? = activity.contextAt(minuteStartMs)
 
+    /** Steps in a minute, or null when the watch has no step counts (no permission, or none for hours). */
+    fun stepsAt(minuteStartMs: Long): Int? = activity.takeIf { it.steps.isNotEmpty() }?.stepsPerMinute(minuteStartMs)?.let { kotlin.math.round(it).toInt() }
+
     /** Blood-oxygen and skin-temperature history (daily values, notices). */
     var vitals: VitalsHistory
         get() = prefs.getString(KEY_VITALS, null)?.let { runCatching { Protocol.json.decodeFromString<VitalsHistory>(it) }.getOrNull() } ?: VitalsHistory()
