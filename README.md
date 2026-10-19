@@ -33,7 +33,7 @@ of Samsung Electronics Co., Ltd.; Wear OS is a trademark of Google LLC.
 
 | | On the watch | On the phone |
 |---|---|---|
-| **ECG** | 30-second single-lead recording, live waveform, rhythm label (sinus rhythm, signs of AFib, high / low heart rate, inconclusive, poor recording) | History, waveform on ECG paper, symptoms, PDF report, second opinion model |
+| **ECG** | 30-second single-lead recording, live waveform, rhythm label (sinus rhythm, signs of AFib, frequent extra beats, high / low heart rate, inconclusive, poor recording), which kind of extra beats were seen (upper or lower chambers) and a longer-than-usual PR interval | History, waveform on ECG paper, symptoms, PDF report, second opinion model |
 | **Blood pressure** | PPG-based estimate after calibration with your own cuff | Calibration wizard, trends, averages, accuracy against your cuff |
 | **Heart rate & rhythm** | Live heart rate, background irregular rhythm and high / low heart rate alerts | Day and week charts, resting rate, HRV, alert history |
 | **More** | SpO₂, skin temperature, stress, body composition | Details, ranges and trends |

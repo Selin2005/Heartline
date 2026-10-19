@@ -32,7 +32,12 @@ object EcgDetailRows {
         m.averageBpm?.let { add(res.getString(R.string.ecg_avg_hr) to res.getString(R.string.ecg_bpm_value, it)) }
         if (m.minBpm != null && m.maxBpm != null) add(res.getString(R.string.ecg_detail_range) to res.getString(R.string.value_bpm_range, m.minBpm, m.maxBpm))
         add(res.getString(R.string.ecg_detail_beats) to "${m.beats}")
-        if (m.ectopicBeats > 0) add(res.getString(R.string.ecg_detail_extra_beats) to "${m.ectopicBeats}")
+        if (m.algorithm >= 4) {
+            if (m.supraventricularBeats > 0) add(res.getString(R.string.ecg_detail_extra_upper) to "${m.supraventricularBeats}")
+            if (m.ventricularBeats > 0) add(res.getString(R.string.ecg_detail_extra_lower) to "${m.ventricularBeats}")
+        } else if (m.ectopicBeats > 0) {
+            add(res.getString(R.string.ecg_detail_extra_beats) to "${m.ectopicBeats}")
+        }
         if (m.pauses > 0) add(res.getString(R.string.ecg_detail_pauses) to "${m.pauses} (${res.getString(R.string.value_ms, m.longestPauseMs ?: 0)})")
         if (m.segments > 1) add(res.getString(R.string.ecg_detail_segments) to "${m.segments}")
         m.meanRrMs?.let { add(res.getString(R.string.ecg_detail_rr) to res.getString(R.string.value_ms, it)) }
@@ -41,6 +46,8 @@ object EcgDetailRows {
         add(res.getString(R.string.ecg_detail_quality) to "${m.qualityScore}/100")
         if (m.poorReason != EcgPoorReason.NONE) add(res.getString(R.string.ecg_detail_why) to res.getString(reason(m.poorReason)))
         note(m.note)?.let { add(res.getString(R.string.ecg_detail_note) to res.getString(it)) }
+        m.prMs?.let { add(res.getString(R.string.ecg_detail_pr) to res.getString(R.string.value_ms, it)) }
+        if (m.longPr) add(res.getString(R.string.ecg_detail_note) to res.getString(R.string.ecg_note_long_pr))
         m.secondOpinion?.let { add(res.getString(R.string.ecg_detail_second_opinion) to res.getString(it.label)) }
         add(res.getString(R.string.ecg_detail_sampling) to res.getString(R.string.value_hz, m.sampleRateHz.roundToInt()))
     }
@@ -64,6 +71,11 @@ object EcgDetailRows {
         EcgNote.FAST_REGULAR -> R.string.ecg_note_fast_regular
         EcgNote.PAUSES -> R.string.ecg_note_pauses
         EcgNote.NOISY_RHYTHM -> R.string.ecg_note_noisy_rhythm
+        EcgNote.EXTRA_BEATS_UPPER -> R.string.ecg_note_extra_beats_upper
+        EcgNote.EXTRA_BEATS_LOWER -> R.string.ecg_note_extra_beats_lower
+        EcgNote.EXTRA_BEATS_BOTH -> R.string.ecg_note_extra_beats_both
+        EcgNote.SINUS_FAST -> R.string.ecg_note_sinus_fast
+        EcgNote.SINUS_SLOW -> R.string.ecg_note_sinus_slow
     }
 
     fun reason(r: EcgPoorReason): Int = when (r) {

@@ -12,6 +12,7 @@ import com.heartline.phone.data.RecordRepository
 import com.heartline.shared.ecg.EcgAnalyzer
 import com.heartline.shared.ecg.EcgFounderInput
 import com.heartline.shared.ecg.EcgSession
+import com.heartline.shared.ecg.RhythmFeatures
 import com.heartline.shared.ecg.RhythmModel
 import com.heartline.shared.model.EcgPoorReason
 import com.heartline.shared.model.EcgResult
@@ -87,8 +88,7 @@ class EcgSecondOpinion(
         val analysis = EcgAnalyzer.analyze(wave, fs, EcgSession())
         if (analysis.signalReason != EcgPoorReason.NONE || analysis.averageBpm == null) return EcgResult.POOR_RECORDING to 0.0
         val probs = f.probabilities(EcgFounderInput.windows(wave, fs)) ?: return null
-        val features = analysis.features + probs
-        if (features.size != m.features.size) return null
+        val features = inputs(m.features, analysis.features, probs) ?: return null
         val p = m.predict(features)
         val rules = com.heartline.shared.ecg.RhythmClassifier.Decision(analysis.result, analysis.metrics.note)
         val decision = EcgAnalyzer.decide(m, p, analysis.averageBpm!!, rules)
@@ -106,6 +106,21 @@ class EcgSecondOpinion(
 
     companion object {
         const val MODEL_ASSET = "ecg/second_opinion_model.json"
+
+        /**
+         * The model's inputs by name: the app's features it was trained with (algorithm 4 only
+         * appended new ones, so a model trained on algorithm 3's still finds all of its own), then
+         * ECGFounder's probabilities ("ef_…", in their order). Null if anything is missing.
+         */
+        fun inputs(names: List<String>, app: DoubleArray, founder: DoubleArray): DoubleArray? {
+            val byName = RhythmFeatures.NAMES.zip(app.toList()).toMap()
+            val ef = names.count { it.startsWith("ef_") }
+            if (ef != founder.size) return null
+            var k = 0
+            val out = DoubleArray(names.size)
+            for ((i, name) in names.withIndex()) out[i] = if (name.startsWith("ef_")) founder[k++] else byName[name] ?: return null
+            return out
+        }
 
         fun fromAssets(context: Context): EcgSecondOpinion {
             val founder by lazy { OnnxEcgFounder.fromAssets(context) }

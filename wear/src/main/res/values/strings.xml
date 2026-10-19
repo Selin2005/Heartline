@@ -35,6 +35,7 @@
     <string name="ecg_result_low_hr">Low heart rate</string>
     <string name="ecg_result_inconclusive">Inconclusive</string>
     <string name="ecg_result_poor">Poor recording</string>
+    <string name="ecg_result_frequent_extra_beats">Frequent extra beats</string>
 
     <string name="error_not_supported_title">Not supported</string>
     <string name="error_not_supported_body">This watch can\'t take this measurement.</string>
@@ -281,6 +282,7 @@
     <string name="ecg_short_low">Low</string>
     <string name="ecg_short_inconclusive">Unclear</string>
     <string name="ecg_short_poor">Poor</string>
+    <string name="ecg_short_extra_beats">Extra</string>
     <string name="tile_heart_description">Heart rate and ECG</string>
     <string name="tile_bp_description">Blood pressure</string>
     <string name="state_on">On</string>
@@ -347,6 +349,8 @@
     <string name="ecg_detail_rmssd">HRV (RMSSD)</string>
     <string name="ecg_detail_quality">Signal quality</string>
     <string name="ecg_detail_extra_beats">Extra beats</string>
+    <string name="ecg_detail_extra_upper">From the upper chambers</string>
+    <string name="ecg_detail_extra_lower">From the lower chambers</string>
     <string name="value_seconds">%1$d s</string>
     <string name="value_seconds_percent">%1$d s · %2$d%%</string>
     <string name="value_ms">%1$d ms</string>
@@ -358,6 +362,12 @@
     <string name="ecg_note_fast_regular">Regular rhythm between 100 and 120 bpm.</string>
     <string name="ecg_note_pauses">A pause of more than 2 seconds was seen.</string>
     <string name="ecg_note_noisy_rhythm">Irregular, but too noisy to call AFib. Try again.</string>
+    <string name="ecg_note_extra_beats_upper">Extra beats from the upper chambers (atria) were seen.</string>
+    <string name="ecg_note_extra_beats_lower">Extra beats from the lower chambers (ventricles) were seen.</string>
+    <string name="ecg_note_extra_beats_both">Extra beats from both the upper and the lower chambers were seen.</string>
+    <string name="ecg_note_sinus_fast">Regular, with a P wave before each beat: a fast sinus rhythm.</string>
+    <string name="ecg_note_sinus_slow">Regular, with a P wave before each beat: a slow sinus rhythm.</string>
+    <string name="ecg_note_long_pr">The gap between the P wave and the beat looked longer than usual.</string>
     <string name="ecg_poor_motion">Too much movement. Rest your arm on a table and keep still.</string>
     <string name="ecg_poor_muscle">Muscle noise. Relax your arm and touch the key lightly, don\'t press.</string>
     <string name="ecg_poor_low">Signal too weak. Wear the watch snugly and keep your fingertip on the key.</string>

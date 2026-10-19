@@ -175,11 +175,14 @@ class WatchSettingsStore(context: Context, private val now: () -> Long = System:
         get() = prefs.getLong(KEY_LAST_PASSIVE, -1).takeIf { it > 0 }
         set(value) = prefs.edit().putLong(KEY_LAST_PASSIVE, value ?: -1).apply()
 
-    /** An ECG result: a regular one soon after a rhythm notification makes the next one more cautious. */
+    /**
+     * An ECG result: a sinus one (with or without frequent extra beats) soon after a rhythm
+     * notification makes the next one more cautious.
+     */
     @Synchronized
     fun noteEcg(result: EcgResult, atMs: Long) {
         val state = irnState
-        val next = state.withEcg(result == EcgResult.SINUS_RHYTHM, atMs)
+        val next = state.withEcg(result == EcgResult.SINUS_RHYTHM || result == EcgResult.FREQUENT_EXTRA_BEATS, atMs)
         if (next != state) irnState = next
     }
 

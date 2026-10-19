@@ -4,7 +4,10 @@
 package com.heartline.shared
 
 import com.heartline.shared.ecg.EcgAnalyzer
+import com.heartline.shared.ecg.EcgModels
+import com.heartline.shared.ecg.EcgMorphology
 import com.heartline.shared.ecg.EcgSession
+import com.heartline.shared.ecg.EctopicBeats
 import com.heartline.shared.ecg.RPeakDetector
 import com.heartline.shared.ecg.RhythmFeatures
 import com.heartline.shared.ecg.RhythmModel
@@ -21,7 +24,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Algorithm 3: unusual rhythms and shapes are findings, not noise. */
+/** Algorithms 3 and 4: unusual rhythms and shapes are findings, not noise. */
 class EcgAlgorithm3Test {
     private val fs = 500
 
@@ -30,7 +33,13 @@ class EcgAlgorithm3Test {
      * Normal beats have a P wave and a narrow QRS; ventricular ones no P, a wide, taller QRS and an
      * opposite T. [tWave] scales the T wave (tall T waves tempt detectors to count them).
      */
-    private fun ecg(beats: List<Pair<Double, Boolean>>, tWave: Double = 0.25, noise: Double = 0.01, seed: Int = 1): FloatArray {
+    private fun ecg(
+        beats: List<Pair<Double, Boolean>>,
+        tWave: Double = 0.25,
+        noise: Double = 0.01,
+        seed: Int = 1,
+        pr: Double = 0.16
+    ): FloatArray {
         val total = beats.sumOf { it.first } + 1.0
         val out = FloatArray((total * fs).toInt())
         val r = Random(seed)
@@ -46,7 +55,7 @@ class EcgAlgorithm3Test {
                     (g(t, t0, 0.035, 0.9) + g(t, t0 + 0.06, 0.03, -0.3) + g(t, t0 + 0.3, 0.07, -tWave)).toFloat()
                 } else {
                     (
-                        g(t, t0 - 0.16, 0.025, 0.06) + g(t, t0 - 0.02, 0.008, -0.05) + g(t, t0, 0.01, 0.45) + g(t, t0 + 0.025, 0.01, -0.1) +
+                        g(t, t0 - pr, 0.025, 0.06) + g(t, t0 - 0.02, 0.008, -0.05) + g(t, t0, 0.01, 0.45) + g(t, t0 + 0.025, 0.01, -0.1) +
                             g(t, t0 + 0.26, 0.045, tWave)
                         ).toFloat()
                 }
@@ -62,7 +71,8 @@ class EcgAlgorithm3Test {
     fun sinusIsSinus() {
         val a = EcgAnalyzer.analyze(ecg(sinus(36)), fs, EcgSession())
         assertEquals("${a.metrics}", EcgResult.SINUS_RHYTHM, a.result)
-        assertEquals(3, a.metrics.algorithm)
+        assertEquals(EcgAnalyzer.ALGORITHM, a.metrics.algorithm)
+        assertEquals("${a.metrics}", EcgNote.NONE, a.metrics.note)
     }
 
     @Test
@@ -75,6 +85,49 @@ class EcgAlgorithm3Test {
         assertEquals(EcgPoorReason.NONE, a.metrics.poorReason)
         assertTrue("${a.metrics}", a.metrics.ectopicBeats >= 10)
         assertTrue("${a.metrics}", a.metrics.ventricularLikeBeats >= 10)
+        // Algorithm 4: if the rhythm is named at all, it is frequent extra beats from the lower chambers.
+        if (a.result != EcgResult.INCONCLUSIVE) {
+            assertEquals("${a.metrics}", EcgResult.FREQUENT_EXTRA_BEATS, a.result)
+            assertTrue("${a.metrics}", a.metrics.note == EcgNote.EXTRA_BEATS_LOWER || a.metrics.note == EcgNote.EXTRA_BEATS_BOTH)
+        }
+    }
+
+    @Test
+    fun earlyNarrowBeatsAreFromTheUpperChambers() {
+        // Early beats of the normal shape, with their own P wave, that reset the rhythm (no full pause).
+        val beats = sinus(38).toMutableList()
+        for (i in listOf(8, 20, 31)) {
+            beats[i] = 0.55 to false
+            beats[i + 1] = 0.9 to false
+        }
+        val a = EcgAnalyzer.analyze(ecg(beats), fs, EcgSession())
+        assertNotEquals("${a.metrics}", EcgResult.AFIB_SIGNS, a.result)
+        assertEquals("${a.metrics}", 0, a.metrics.ventricularBeats)
+        assertTrue("${a.metrics}", a.metrics.supraventricularBeats >= 2)
+        if (a.result == EcgResult.SINUS_RHYTHM) assertEquals("${a.metrics}", EcgNote.EXTRA_BEATS_UPPER, a.metrics.note)
+    }
+
+    @Test
+    fun aRegularSlowOrSomewhatFastRhythmWithPWavesIsNamedSinus() {
+        val slow = EcgAnalyzer.analyze(ecg(sinus(24, rr = 1.35)), fs, EcgSession())
+        assertEquals("${slow.metrics}", EcgResult.LOW_HEART_RATE, slow.result)
+        assertEquals("${slow.metrics}", EcgNote.SINUS_SLOW, slow.metrics.note)
+        val fast = EcgAnalyzer.analyze(ecg(sinus(54, rr = 0.55), tWave = 0.2), fs, EcgSession())
+        assertEquals("${fast.metrics}", EcgResult.INCONCLUSIVE, fast.result)
+        assertEquals("${fast.metrics}", EcgNote.SINUS_FAST, fast.metrics.note)
+        // Above 120 bpm flutter and SVT can look the same on one lead: no "sinus" there.
+        val faster = EcgAnalyzer.analyze(ecg(sinus(64, rr = 0.46), tWave = 0.15), fs, EcgSession())
+        assertEquals("${faster.metrics}", EcgResult.HIGH_HEART_RATE, faster.result)
+        assertNotEquals("${faster.metrics}", EcgNote.SINUS_FAST, faster.metrics.note)
+    }
+
+    @Test
+    fun aLongPrIntervalIsNotedOnlyWhenItIsLong() {
+        val usual = EcgAnalyzer.analyze(ecg(sinus(36)), fs, EcgSession())
+        assertEquals("${usual.metrics}", false, usual.metrics.longPr)
+        val long = EcgAnalyzer.analyze(ecg(sinus(36, rr = 0.95), pr = 0.30), fs, EcgSession())
+        assertEquals("${long.metrics}", EcgResult.SINUS_RHYTHM, long.result)
+        assertEquals("${long.metrics}", true, long.metrics.longPr)
     }
 
     @Test
@@ -87,7 +140,10 @@ class EcgAlgorithm3Test {
         val a = EcgAnalyzer.analyze(ecg(beats), fs, EcgSession())
         assertTrue("${a.result} ${a.metrics}", a.result == EcgResult.SINUS_RHYTHM || a.result == EcgResult.INCONCLUSIVE)
         assertEquals(3, a.metrics.ectopicBeats)
-        assertTrue(a.metrics.note == EcgNote.EXTRA_BEATS || a.metrics.note == EcgNote.FREQUENT_EXTRA_BEATS)
+        // Algorithm 4: the beat model names them (wide, early, no P wave: from the lower chambers).
+        assertEquals("${a.metrics}", 3, a.metrics.ventricularBeats)
+        assertEquals("${a.metrics}", 0, a.metrics.supraventricularBeats)
+        assertEquals("${a.result} ${a.metrics}", EcgNote.EXTRA_BEATS_LOWER, a.metrics.note)
     }
 
     @Test
@@ -144,5 +200,14 @@ class EcgAlgorithm3Test {
         val p = a.evidence.modelProbabilities!!
         assertEquals(1.0, p.sum(), 1e-9)
         assertTrue("$p", p[0] > 0.5)
+    }
+
+    @Test
+    fun theAlgorithm4ModelsLoadAndMatchTheirFeatures() {
+        assertEquals(EctopicBeats.NAMES, EctopicBeats.bundled!!.features)
+        assertEquals(listOf("N", "S", "V"), EctopicBeats.bundled!!.classes)
+        assertEquals(RhythmFeatures.NAMES, EcgModels.sinusBeneath!!.features)
+        assertEquals(EcgMorphology.FEATURES, EcgModels.longPr!!.features)
+        assertNotNull(RhythmModel.bundled!!.thresholds["sinus_beneath"])
     }
 }

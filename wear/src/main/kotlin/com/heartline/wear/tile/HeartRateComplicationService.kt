@@ -328,6 +328,7 @@ internal val EcgResult.shortLabel: Int
         EcgResult.LOW_HEART_RATE -> R.string.ecg_short_low
         EcgResult.INCONCLUSIVE -> R.string.ecg_short_inconclusive
         EcgResult.POOR_RECORDING -> R.string.ecg_short_poor
+        EcgResult.FREQUENT_EXTRA_BEATS -> R.string.ecg_short_extra_beats
     }
 
 /** Shared provider: loads the data and hands it to one [Complications] builder. */

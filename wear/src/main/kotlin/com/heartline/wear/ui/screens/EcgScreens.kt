@@ -261,6 +261,15 @@ fun EcgResultScreen(result: EcgResult, averageBpm: Int?, metrics: EcgMetrics? = 
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
+        if (metrics?.longPr == true) {
+            Text(
+                stringResource(R.string.ecg_note_long_pr),
+                style = MaterialTheme.typography.bodySmall,
+                color = WearColors.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
         metrics?.let { EcgDetails(it) }
     }
         // A normal rhythm: a band of light runs once around the rim.
@@ -268,7 +277,7 @@ fun EcgResultScreen(result: EcgResult, averageBpm: Int?, metrics: EcgMetrics? = 
     }
 }
 
-/** What else the recording shows, or why it stayed inconclusive (algorithm 3). */
+/** What else the recording shows, or why it stayed inconclusive (algorithms 3 and 4). */
 val EcgNote.text: Int?
     get() = when (this) {
         EcgNote.EXTRA_BEATS -> R.string.ecg_note_extra_beats
@@ -279,6 +288,11 @@ val EcgNote.text: Int?
         EcgNote.FAST_REGULAR -> R.string.ecg_note_fast_regular
         EcgNote.PAUSES -> R.string.ecg_note_pauses
         EcgNote.NOISY_RHYTHM -> R.string.ecg_note_noisy_rhythm
+        EcgNote.EXTRA_BEATS_UPPER -> R.string.ecg_note_extra_beats_upper
+        EcgNote.EXTRA_BEATS_LOWER -> R.string.ecg_note_extra_beats_lower
+        EcgNote.EXTRA_BEATS_BOTH -> R.string.ecg_note_extra_beats_both
+        EcgNote.SINUS_FAST -> R.string.ecg_note_sinus_fast
+        EcgNote.SINUS_SLOW -> R.string.ecg_note_sinus_slow
         EcgNote.NONE -> null
     }
 
@@ -292,7 +306,12 @@ private fun EcgDetails(m: EcgMetrics) {
     DetailRow(stringResource(R.string.ecg_detail_noise), stringResource(R.string.value_seconds, m.noiseSec.roundToInt()))
     if (m.minBpm != null && m.maxBpm != null) DetailRow(stringResource(R.string.ecg_detail_range), "${m.minBpm}–${m.maxBpm}")
     DetailRow(stringResource(R.string.ecg_detail_beats), "${m.beats}")
-    if (m.ectopicBeats > 0) DetailRow(stringResource(R.string.ecg_detail_extra_beats), "${m.ectopicBeats}")
+    if (m.algorithm >= 4) {
+        if (m.supraventricularBeats > 0) DetailRow(stringResource(R.string.ecg_detail_extra_upper), "${m.supraventricularBeats}")
+        if (m.ventricularBeats > 0) DetailRow(stringResource(R.string.ecg_detail_extra_lower), "${m.ventricularBeats}")
+    } else if (m.ectopicBeats > 0) {
+        DetailRow(stringResource(R.string.ecg_detail_extra_beats), "${m.ectopicBeats}")
+    }
     m.rmssdMs?.let { DetailRow(stringResource(R.string.ecg_detail_rmssd), stringResource(R.string.value_ms, it)) }
     DetailRow(stringResource(R.string.ecg_detail_quality), "${m.qualityScore}/100")
 }

@@ -20,11 +20,14 @@ components, each under its own license. Those licenses keep applying to those co
 
 ## Models trained by the project
 
-`shared/src/main/resources/ecg/rhythm_model.json` and
-`phone/src/main/assets/ecg/second_opinion_model.json` are trained by the scripts in `tools/`, using
-public PhysioNet databases (PhysioNet/CinC Challenge 2017, MIT-BIH Arrhythmia, MIT-BIH Atrial
-Fibrillation, MIT-BIH Noise Stress Test). The databases themselves are not included. Their
-licenses and citation requirements are listed on each database's PhysioNet page.
+The models in `shared/src/main/resources/ecg/` (rhythm, sinus beneath early beats, beat kinds,
+long PR) and `phone/src/main/assets/ecg/second_opinion_model.json` are trained by the scripts in
+`tools/`, using public PhysioNet databases: PhysioNet/CinC Challenge 2017, MIT-BIH Arrhythmia,
+MIT-BIH Atrial Fibrillation, MIT-BIH Noise Stress Test, CPSC 2021, MIT-BIH Supraventricular
+Arrhythmia, St Petersburg INCART 12-lead Arrhythmia, Long Term AF, PTB-XL with PTB-XL+ (CC BY
+4.0) and the Chapman-Shaoxing / Ningbo 12-lead ECG database (CC BY 4.0). The databases themselves
+are not included. Their licenses and citation requirements are listed on each database's
+PhysioNet page.
 
 ## Used only at build or test time (not shipped)
 

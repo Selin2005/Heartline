@@ -1,0 +1,30 @@
+-- what the app shows on 10 s records (never trained on for rhythm)
+  chapman  AF   n=  1780  AF 74%, INC 12%, POOR 8%, HIGH 4%, SINUS 1%, LOW 0%, FREQ+S 0%, INC/sinus 0%
+  chapman  FL   n=  8060  AF 61%, INC 14%, POOR 10%, HIGH 8%, SINUS 4%, INC/sinus 1%, FREQ+V 1%, FREQ+S 0%
+  chapman  S    n=  1183  INC 35%, INC/sinus 17%, FREQ+S 16%, POOR 6%, HIGH 6%, SINUS 6%, AF 5%, LOW/sinus 2%
+  chapman  SB   n= 16050  SINUS 84%, POOR 8%, LOW/sinus 4%, INC 2%, LOW 1%, FREQ+V 0%, FREQ+S 0%, AF 0%
+  chapman  SR   n=  7939  SINUS 94%, POOR 2%, INC 1%, HIGH 1%, INC/sinus 1%, FREQ+V 0%, SINUS+V 0%, FREQ+S 0%
+  chapman  ST   n=  6583  INC/sinus 68%, HIGH 20%, POOR 9%, INC 2%, SINUS 1%, AF 0%, FREQ+V 0%, FREQ+S 0%
+  chapman  SVT  n=   974  POOR 45%, HIGH 35%, AF 7%, INC 6%, SINUS 3%, INC/sinus 2%, FREQ+S 0%, FREQ+V 0%
+  chapman  V    n=   120  INC/sinus 28%, INC 26%, POOR 16%, FREQ+V 10%, HIGH 9%, SINUS 3%, LOW 2%, FREQ+S 2%
+  ptbxl    AF   n=  1510  AF 70%, INC 16%, POOR 7%, HIGH 3%, SINUS 2%, FREQ+V 1%, FREQ+S 1%, LOW 0%
+  ptbxl    FL   n=    56  HIGH 66%, AF 14%, POOR 9%, SINUS 5%, INC 5%
+  ptbxl    S    n=   313  INC 45%, FREQ+S 26%, SINUS+S 8%, INC/sinus 5%, AF 4%, SINUS 4%, POOR 3%, HIGH 2%
+  ptbxl    SB   n=   622  POOR 37%, SINUS 32%, LOW/sinus 24%, LOW 4%, INC 3%, FREQ+S 0%, SINUS+S 0%, AF 0%
+  ptbxl    SR   n= 16468  SINUS 93%, INC 4%, POOR 1%, FREQ+S 1%, INC/sinus 0%, SINUS+S 0%, FREQ+V 0%, AF 0%
+  ptbxl    ST   n=   694  INC/sinus 82%, HIGH 9%, POOR 4%, INC 3%, SINUS 1%, AF 1%
+  ptbxl    SVT  n=    34  HIGH 53%, POOR 38%, INC 6%, INC/sinus 3%
+  ptbxl    V    n=   984  INC 39%, FREQ+V 30%, SINUS+V 8%, INC/sinus 6%, SINUS 5%, POOR 5%, FREQ+S 2%, AF 2%
+-- summary (PTB-XL + Chapman)
+  sinus tachycardia named sinus (ST → HIGH/INC + sinus): 69% of 7277
+  SVT, flutter, AFib named sinus (wrongly):             5% of 12414
+  sinus bradycardia < 50 bpm named sinus (LOW → + sinus): 88% of 980
+  ventricular early beats reported with V:              36% of 1104
+  supraventricular early beats reported as S:           22% of 1496
+  normal sinus: early beats reported (wrongly):          1% of 24407
+  normal sinus → AF (wrongly):                           0% of 24407
+  AFib → AF:                                             72% of 3290
+-- long PR note on PTB-XL sinus recordings (PTB-XL+ PR > 200 ms or first-degree AV block)
+  sensitivity 81% (1637)  specificity 95.7% (16048)  PPV 66%  (in-sample: the model was trained on these records; train_morphology.py has the cross-validated numbers)
+  PR interval (lead I) vs 12SL (12 leads): n=17411 bias -6 ms, median spread 10 ms
+  QRS duration (lead I) vs 12SL (12 leads): n=19191 bias -24 ms, median spread 10 ms

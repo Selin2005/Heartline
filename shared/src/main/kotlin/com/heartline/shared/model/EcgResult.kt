@@ -10,14 +10,17 @@ enum class EcgResult {
     HIGH_HEART_RATE,
     LOW_HEART_RATE,
     INCONCLUSIVE,
-    POOR_RECORDING
+    POOR_RECORDING,
+
+    /** Algorithm 4: sinus rhythm with many early beats (≥ 10 % of beats); EcgNote says which kind. */
+    FREQUENT_EXTRA_BEATS
     ;
 
     val severity: Severity
         get() = when (this) {
             SINUS_RHYTHM -> Severity.NORMAL
             AFIB_SIGNS -> Severity.ALERT
-            HIGH_HEART_RATE, LOW_HEART_RATE -> Severity.WARN
+            HIGH_HEART_RATE, LOW_HEART_RATE, FREQUENT_EXTRA_BEATS -> Severity.WARN
             INCONCLUSIVE, POOR_RECORDING -> Severity.NEUTRAL
         }
 }

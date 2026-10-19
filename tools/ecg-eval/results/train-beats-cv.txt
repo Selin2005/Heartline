@@ -1,0 +1,53 @@
+beats: Counter({np.str_('N'): 436551, np.str_('S'): 19692, np.str_('V'): 17132})
+patients: 389
+  beat N: sensitivity 90.9%  PPV 98.9%
+  beat S: sensitivity 73.9%  PPV 28.9%
+  beat V: sensitivity 85.9%  PPV 67.2%
+-- thresholds {'S': 0.94, 'V': 0.95}
+  mitdb: normal recordings with early beats reported: 1.1%  V found in V: 84%  S found in S: 81%
+  svdb: normal recordings with early beats reported: 7.7%  V found in V: 65%  S found in S: 65%
+  incart: normal recordings with early beats reported: 3.2%  V found in V: 76%  S found in S: 79%
+  ltafdb: normal recordings with early beats reported: 2.0%  V found in V: 54%  S found in S: 57%
+  cpsc2021: normal recordings with early beats reported: 5.1%  V found in V: 66%  S found in S: 55%
+  N   n= 4198 has V  : 2%
+  N   n= 4198 has S  : 2%
+  N   n= 4198 has any: 4%
+  V   n= 2376 has V  : 71%
+  V   n= 2376 has S  : 6%
+  V   n= 2376 has any: 74%
+  S   n= 2318 has V  : 7%
+  S   n= 2318 has S  : 60%
+  S   n= 2318 has any: 64%
+  VS  n= 1125 has V  : 58%
+  VS  n= 1125 has S  : 49%
+  VS  n= 1125 has any: 82%
+  A   n= 2229 has V  : 17%
+  A   n= 2229 has S  : 18%
+  A   n= 2229 has any: 32%
+  O   n=  433 has V  : 15%
+  O   n=  433 has S  : 32%
+  O   n=  433 has any: 44%
+  FL  n=   28 has V  : 32%
+  FL  n=   28 has S  : 14%
+  FL  n=   28 has any: 43%
+  SB  n=  129 has V  : 8%
+  SB  n=  129 has S  : 5%
+  SB  n=  129 has any: 13%
+  VT  n=   59 has V  : 78%
+  VT  n=   59 has S  : 24%
+  VT  n=   59 has any: 90%
+  cinc2017 A   n=  640 any S: 22%  any V: 21%
+  cinc2017 N   n= 4582 any S: 2%  any V: 12%
+  cinc2017 O   n= 2137 any S: 27%  any V: 31%
+  cinc2017 ~   n=   49 any S: 12%  any V: 61%
+  afdb A   n=  457 any S: 14%  any V: 25%
+  afdb FL  n=   74 any S: 54%  any V: 3%
+  afdb N   n=  522 any S: 18%  any V: 11%
+  afdb O   n=    6 any S: 50%  any V: 17%
+  afdb X   n=  261 any S: 36%  any V: 18%
+  afdb XF  n=    5 any S: 40%  any V: 40%
+  nstdb 06  n=   16 any S: 0%  any V: 56%
+  nstdb 12  n=   49 any S: 12%  any V: 67%
+  nstdb 18  n=   52 any S: 15%  any V: 50%
+  nstdb 24  n=   52 any S: 27%  any V: 52%
+wrote shared/src/main/resources/ecg/beat_model.json (786 kB)

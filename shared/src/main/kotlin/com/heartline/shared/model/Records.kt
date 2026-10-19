@@ -139,7 +139,22 @@ enum class EcgNote {
     PAUSES,
 
     /** Looked irregular, but the recording was too noisy to call AFib. */
-    NOISY_RHYTHM
+    NOISY_RHYTHM,
+
+    /** Algorithm 4 (the beat model): early beats from the upper chambers (supraventricular). */
+    EXTRA_BEATS_UPPER,
+
+    /** Algorithm 4: early beats from the lower chambers (ventricular). */
+    EXTRA_BEATS_LOWER,
+
+    /** Algorithm 4: early beats of both kinds. */
+    EXTRA_BEATS_BOTH,
+
+    /** Algorithm 4: 100–120 bpm, regular, with a P wave before each beat (a fast sinus rhythm). */
+    SINUS_FAST,
+
+    /** Algorithm 4: a slow rate with a regular rhythm and a P wave before each beat (sinus). */
+    SINUS_SLOW
 }
 
 /** Why a recording couldn't be classified (NONE for a usable one). */
@@ -189,7 +204,15 @@ data class EcgMetrics(
     val note: EcgNote = EcgNote.NONE,
     /** The phone's second opinion (app features + ECGFounder), when that model is installed. */
     val secondOpinion: EcgResult? = null,
-    val secondOpinionAfProbability: Double? = null
+    val secondOpinionAfProbability: Double? = null,
+    /** Algorithm 4: early beats the beat model counted as supraventricular / ventricular. */
+    val supraventricularBeats: Int = 0,
+    val ventricularBeats: Int = 0,
+    /** Algorithm 4: QRS duration and PR interval of the median beat, ms (one lead: approximate). */
+    val qrsMs: Int? = null,
+    val prMs: Int? = null,
+    /** Algorithm 4: the median beat's PR interval looks longer than usual (sinus rhythm only). */
+    val longPr: Boolean = false
 ) {
     val usablePercent: Int get() = if (durationSec <= 0f) 0 else (usableSec / durationSec * 100f).toInt()
 }
