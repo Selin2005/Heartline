@@ -31,6 +31,8 @@ def main():
     ap.add_argument("--ids", required=True, help="feature csv whose ids to process (first column)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--batch", type=int, default=16, help="recordings per forward pass")
+    ap.add_argument("--resume", action="store_true", help="skip recordings already in --out")
     a = ap.parse_args()
     sys.path.insert(0, a.repo)
     from net1d import Net1D
@@ -47,20 +49,36 @@ def main():
     ids = [r[0] for r in list(csv.reader(open(a.ids)))[1:]]
     if a.limit:
         ids = ids[: a.limit]
+    done = set()
+    if a.resume and os.path.exists(a.out):
+        done = {r[0] for r in list(csv.reader(open(a.out)))[1:]}
     b, bn = iirnotch(50, 30, FS)
-    with open(a.out, "w", newline="") as f:
+
+    def windows(rid):
+        x = np.fromfile(os.path.join(a.data, rid + ".f32"), dtype="<f4").astype(np.float64)
+        x = filtfilt(b, bn, x)
+        wins = [x[i:i + WIN] for i in range(0, min(len(x), 3 * WIN) - WIN + 1, WIN)]
+        return [(s - s.mean()) / (s.std() + 1e-8) for s in wins]
+
+    todo = [rid for rid in ids if rid not in done]
+    with open(a.out, "a" if done else "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["id"] + ["ef_" + l.lower().replace(" ", "_").replace(",", "")[:40] for l in labels])
-        for n, rid in enumerate(ids):
-            x = np.fromfile(os.path.join(a.data, rid + ".f32"), dtype="<f4").astype(np.float64)
-            x = filtfilt(b, bn, x)
-            wins = [x[i:i + WIN] for i in range(0, min(len(x), 3 * WIN) - WIN + 1, WIN)]
-            batch = np.stack([(s - s.mean()) / (s.std() + 1e-8) for s in wins])[:, None, :]
+        if not done:
+            w.writerow(["id"] + ["ef_" + l.lower().replace(" ", "_").replace(",", "")[:40] for l in labels])
+        # Windows of several recordings go through the network together; each recording gets the
+        # mean of its own windows' sigmoid outputs.
+        for start in range(0, len(todo), a.batch):
+            chunk = todo[start:start + a.batch]
+            wins = [windows(rid) for rid in chunk]
+            flat = np.stack([s for ws in wins for s in ws])[:, None, :]
             with torch.inference_mode():
-                p = torch.sigmoid(model(torch.tensor(batch, dtype=torch.float32))).mean(0).numpy()
-            w.writerow([rid] + [f"{v:.4f}" for v in p])
-            if n % 200 == 0:
-                print(n, "/", len(ids), flush=True)
+                p = torch.sigmoid(model(torch.tensor(flat, dtype=torch.float32))).numpy()
+            k = 0
+            for rid, ws in zip(chunk, wins):
+                w.writerow([rid] + [f"{v:.4f}" for v in p[k:k + len(ws)].mean(0)])
+                k += len(ws)
+            f.flush()
+            print(start + len(chunk), "/", len(todo), flush=True)
 
 
 if __name__ == "__main__":

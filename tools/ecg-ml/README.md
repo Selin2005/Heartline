@@ -65,6 +65,13 @@ its details, PDF and share text. To regenerate the model file:
 python export_ecgfounder_onnx.py --repo ecgfounder --out ../../phone/src/main/assets/ecg/ecgfounder_1lead_fp16.onnx
 ```
 
+Algorithm 4 (docs/algorithms/ECG_ALGORITHM.md) only appended features to the app's
+`RhythmFeatures`, so `EcgSecondOpinion` builds the second opinion's inputs by name and this model,
+trained on algorithm 3's 24 features, still gets exactly what it was trained on. It keeps its four
+classes; extra-beat kinds and the long-PR note come from the watch's own models.
+`ecgfounder_features.py` batches several recordings per forward pass (`--batch`) and can resume
+(`--resume`), for when it is retrained on more databases.
+
 A smaller route is distilling ECGFounder into a compact network (it could then run on the watch
 too), best done once real watch recordings are available to check it on.
 
