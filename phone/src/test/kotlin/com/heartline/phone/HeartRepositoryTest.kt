@@ -218,7 +218,7 @@ class HeartRepositoryTest {
     private fun posturalRepo(on: Boolean = true, health: com.heartline.shared.hr.HealthContext = com.heartline.shared.hr.HealthContext()) = HeartRepository(
         db.heart(),
         onAlert = { notified += it },
-        settings = { com.heartline.shared.hr.MonitorSettings(posturalRise = on, health = health) },
+        settings = { com.heartline.shared.hr.MonitorSettings(health = health).let { if (on) it else it.withMonitoring(false) } },
         zone = java.time.ZoneOffset.UTC,
     )
 
@@ -270,22 +270,79 @@ class HeartRepositoryTest {
         assertTrue(notified.isEmpty())
     }
 
+    /** Still readings before [upMs] only; the watch's probe sees what follows. */
+    private fun still(upMs: Long, rest: Int = 68) = (5 downTo 1).map { HrMinute(upMs / 60_000L * 60_000L - it * 180_000L, rest, rest - 2, rest + 2, activity = HrContext.REST) }
+
+    private fun probe(upMs: Long, held: Int = 103) = com.heartline.shared.pots.StandProbe(
+        upMs,
+        listOf(20_000L, 150_000L, 360_000L).flatMap { at -> (0 until 8).map { k -> com.heartline.shared.pots.StandReading(upMs + at + k * 5_000L, held + k % 3 - 1) } },
+        40,
+    )
+
     @Test
-    fun theHeartScreenListsTheRises() {
+    fun theWatchesProbesFindRisesTheSparseReadingsMiss() = runBlocking {
+        val repo = posturalRepo()
+        (0..2).forEach { d ->
+            val up = start + d * day + 8 * 3_600_000L + 20_000L
+            repo.saveBatch(HrBatch("m$d", still(up)))
+            repo.saveBatch(HrBatch("p$d", emptyList(), stands = listOf(probe(up))))
+        }
+        val alert = notified.single()
+        assertEquals(com.heartline.shared.hr.HeartTrend.POSTURAL_RISE, alert.trend)
+        assertEquals(68, alert.normal)
+        assertEquals(103, alert.bpm)
+    }
+
+    @Test
+    fun aProbeCountsOnceItsStillMinutesArrive() = runBlocking {
+        val repo = posturalRepo()
+        // The probe can reach the phone before the passive readings of the minutes before it.
+        (0..2).forEach { d -> repo.saveBatch(HrBatch("p$d", emptyList(), stands = listOf(probe(start + d * day + 8 * 3_600_000L)))) }
+        assertTrue(notified.isEmpty())
+        (0..2).forEach { d -> repo.saveBatch(HrBatch("m$d", still(start + d * day + 8 * 3_600_000L))) }
+        assertEquals(1, notified.size)
+    }
+
+    @Test
+    fun howTheWearerFeltIsKeptPerRise() = runBlocking {
+        repo.setRiseSymptoms(42L, listOf(com.heartline.shared.model.Symptom.DIZZINESS, com.heartline.shared.model.Symptom.FATIGUE))
+        assertEquals(listOf(com.heartline.shared.model.Symptom.DIZZINESS, com.heartline.shared.model.Symptom.FATIGUE), repo.riseSymptoms.first()[42L])
+        repo.setRiseSymptoms(42L, emptyList())
+        assertTrue(repo.riseSymptoms.first().isEmpty())
+        repo.saveBatch(HrBatch("p", emptyList(), stands = listOf(probe(start))))
+        repo.setRiseSymptoms(start, listOf(com.heartline.shared.model.Symptom.PALPITATIONS))
+        repo.deleteAll()
+        assertTrue(repo.posturalSince(0).first().second.isEmpty())
+        assertTrue(repo.riseSymptoms.first().isEmpty())
+    }
+
+    @Test
+    fun theReportExistsOnlyOnceThereIsAPattern() {
+        val zone = java.time.ZoneOffset.UTC
         val minutes = (0..2).flatMap { d -> getUp(start + d * day + 8 * 3_600_000L) }.map {
             HrMinuteEntity(it.minuteStartMs, it.avgBpm, it.minBpm, it.maxBpm, it.rmssdMs, it.resting, it.activity, it.steps)
         }
         val now = start + 2 * day + 9 * 3_600_000L
-        val ui = HeartSummaries.postural(minutes, now, 30, java.time.ZoneOffset.UTC) { "d$it" to "t" }
-        assertEquals(3, ui.rises)
-        assertEquals(3, ui.days)
-        assertTrue(ui.pattern)
-        assertEquals(68, ui.medianRestBpm)
-        assertEquals(3, ui.latest.size)
-        assertEquals("d${start + 2 * day + 8 * 3_600_000L}", ui.latest.first().date)
-        // Two days earlier, the third rise was not there yet: some rises, no pattern.
-        val earlier = HeartSummaries.postural(minutes, start + day + 9 * 3_600_000L, 30, java.time.ZoneOffset.UTC) { "" to "" }
-        assertEquals(2, earlier.rises)
-        assertTrue(!earlier.pattern)
+        val today = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+        val events = com.heartline.phone.ui.model.PosturalSummaries.events(minutes, emptyList(), now, 30)
+        val felt = mapOf(events.first().startMs to listOf(com.heartline.shared.model.Symptom.DIZZINESS))
+        val report = com.heartline.phone.ui.model.PosturalSummaries.report(events, felt, null, now, 30, today, zone, java.util.Locale.UK) { "d$it" to "t" }
+        assertEquals(com.heartline.shared.pots.PosturalStatus.PATTERN, report.status)
+        assertEquals(3, report.days)
+        assertEquals(3, report.riseCount)
+        assertEquals(34, report.medianRiseBpm)
+        assertEquals(3, report.chart.size)
+        assertEquals(29, report.chart.last().index)
+        // Newest first, with how the wearer felt and the curve.
+        assertEquals(start + 2 * day + 8 * 3_600_000L, report.rises.first().startMs)
+        assertEquals(listOf(com.heartline.shared.model.Symptom.DIZZINESS), report.rises.last().symptoms)
+        assertTrue(report.curves.getValue(report.rises.first().startMs).any { it.seconds < 0 })
+        // Two days in: single rises are no report, so the heart screen shows nothing.
+        val earlier = start + day + 9 * 3_600_000L
+        assertNull(com.heartline.phone.ui.model.PosturalSummaries.banner(events.filter { it.startMs < earlier }, null, earlier, zone))
+        assertEquals(com.heartline.shared.pots.PosturalStatus.PATTERN, com.heartline.phone.ui.model.PosturalSummaries.banner(events, null, now, zone)?.status)
+        // After a notice, with the rises gone, the report stays as "seen less often".
+        val later = now + 20 * day
+        assertEquals(com.heartline.shared.pots.PosturalStatus.EASING, com.heartline.phone.ui.model.PosturalSummaries.banner(events, now, later, zone)?.status)
     }
 }

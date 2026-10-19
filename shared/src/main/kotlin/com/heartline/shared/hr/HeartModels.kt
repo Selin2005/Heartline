@@ -69,7 +69,9 @@ data class HrBatch(
     val stress: List<com.heartline.shared.stress.StressSample> = emptyList(),
     val stressLimits: com.heartline.shared.stress.StressLimits? = null,
     /** Every background SpO2 try that was due, and how it ended (older phones ignore it). */
-    val spo2Attempts: List<com.heartline.shared.vitals.Spo2Attempt> = emptyList()
+    val spo2Attempts: List<com.heartline.shared.vitals.Spo2Attempt> = emptyList(),
+    /** Measurements right after getting up (older phones ignore them). */
+    val stands: List<com.heartline.shared.pots.StandProbe> = emptyList()
 )
 
 @Serializable
@@ -230,12 +232,6 @@ data class MonitorSettings(
     /** Stress from the rhythm windows' heart-rate variability, and its notification. */
     val stressMonitoring: Boolean = true,
     val stressNotifications: Boolean = true,
-    /**
-     * Look for large heart-rate rises after getting up (docs/algorithms/POSTURAL_RISE.md), on the
-     * phone from the all-day heart rate. Off until the wearer turns it on: it is a narrow check
-     * most people don't need. Older versions ignore it.
-     */
-    val posturalRise: Boolean = false,
     /** Blood oxygen in sleep too (its red light can be seen in the dark). */
     val spo2InSleep: Boolean = true,
     /**
@@ -332,10 +328,11 @@ data class MonitorSettings(
     val stressActive: Boolean get() = heartMonitoring && stressMonitoring && !health.hrvUnreadable
 
     /**
-     * Rises after getting up: the heart part and its switch, but not with a pacemaker (it raises
-     * the rate with movement) or atrial fibrillation (the rate itself is irregular).
+     * Rises after getting up (docs/algorithms/POSTURAL_RISE.md): part of heart monitoring, with no
+     * switch of its own, but not with a pacemaker (it raises the rate with movement) or atrial
+     * fibrillation (the rate itself is irregular).
      */
-    val posturalRiseActive: Boolean get() = heartActive && posturalRise && !health.hrvUnreadable
+    val posturalRiseActive: Boolean get() = heartActive && !health.hrvUnreadable
 
     /** Temperature notices: not in pregnancy, when skin is warmer anyway. */
     val temperatureNotices: Boolean get() = skinTempActive && !health.pregnant

@@ -18,6 +18,13 @@ import com.heartline.shared.hr.MinuteAggregator
 import com.heartline.shared.hr.MonitorSettings
 import com.heartline.shared.pots.OrthostaticEventDetector
 import com.heartline.shared.pots.PosturalPatternRules
+import com.heartline.shared.pots.RiseSource
+import com.heartline.shared.pots.StandProbe
+import com.heartline.shared.pots.StandReading
+import com.heartline.shared.model.Symptom
+import com.heartline.shared.sync.Protocol
+import kotlinx.coroutines.flow.map
+import kotlinx.serialization.builtins.ListSerializer
 import com.heartline.shared.sync.HeartDataSink
 import kotlinx.coroutines.flow.Flow
 import java.time.ZoneId
@@ -83,14 +90,30 @@ class HeartRepository(
             dao.insertSpo2Attempts(batch.spo2Attempts.map { Spo2AttemptEntity(it.tsMs, it.outcome, it.percent, it.retryAtMs) })
             dao.deleteSpo2AttemptsBefore(batch.spo2Attempts.maxOf { it.tsMs } - ATTEMPTS_KEPT_MS)
         }
-        if (incoming.isNotEmpty()) checkPosturalRise(incoming.maxOf { it.minuteStartMs } + MINUTE)
+        if (batch.stands.isNotEmpty()) dao.insertStandProbes(batch.stands.map { it.toEntity() })
+        // As of the newest data stored: a probe can arrive before the still minutes it needs.
+        if (incoming.isNotEmpty() || batch.stands.isNotEmpty()) {
+            val newest = listOfNotNull(dao.newestMinuteMs()?.plus(MINUTE), dao.newestStandProbeMs()).maxOrNull()
+            if (newest != null) checkPosturalRise(newest)
+        }
+    }
+
+    /** The minutes and stand probes from [fromMs] on, for the report of rises after getting up. */
+    fun posturalSince(fromMs: Long): Flow<Pair<List<HrMinuteEntity>, List<StandProbe>>> =
+        kotlinx.coroutines.flow.combine(dao.minutes(fromMs, Long.MAX_VALUE), dao.standProbesSince(fromMs)) { m, p -> m to p.map { it.toProbe() } }
+
+    /** How the wearer felt at each rise after getting up, by the rise's start. */
+    val riseSymptoms: Flow<Map<Long, List<Symptom>>> = dao.riseSymptoms().map { list -> list.associate { it.startMs to decodeSymptoms(it.symptoms) } }
+
+    suspend fun setRiseSymptoms(startMs: Long, symptoms: List<Symptom>) {
+        if (symptoms.isEmpty()) dao.clearRiseSymptoms(startMs) else dao.setRiseSymptoms(RiseSymptomsEntity(startMs, symptoms.joinToString(",") { it.name }))
     }
 
     /**
      * Rises after getting up (docs/algorithms/POSTURAL_RISE.md): found here rather than on the
-     * watch, which keeps only 90 minutes while a pattern takes days. Judged at the time of the
-     * newest minute, so a late batch is judged as of its own data. The notice is the phone's own:
-     * it carries no watch version, and no watch ever receives it.
+     * watch, which keeps only 90 minutes while a pattern takes days, from the minutes and the
+     * watch's stand probes of the last two weeks. The notice is the phone's own: it carries no
+     * watch version, and no watch ever receives it.
      */
     private suspend fun checkPosturalRise(nowMs: Long) {
         val cfg = settings()
@@ -98,19 +121,21 @@ class HeartRepository(
         val last = dao.lastTrendAlert(HeartTrend.POSTURAL_RISE.name)
         if (last != null && nowMs - last < PosturalPatternRules.COOLDOWN_MS) return
         val from = nowMs - PATTERN_LOOKBACK_MS
-        val minutes = dao.minutesBetween(from, nowMs).map { HrMinute(it.minuteStartMs, it.avgBpm, it.minBpm, it.maxBpm, it.rmssdMs, it.resting, it.activity, it.steps) }
+        val minutes = dao.minutesBetween(from, nowMs).map { it.toMinute() }
+        val probes = dao.standProbesBetween(from, nowMs + 1).map { it.toProbe() }
         val minRise = OrthostaticEventDetector.minRiseFor(age())
-        val events = OrthostaticEventDetector(minRiseBpm = minRise).detect(minutes, nowMs)
+        val events = OrthostaticEventDetector(minRiseBpm = minRise).detect(minutes, nowMs, probes)
         val rules = PosturalPatternRules()
         // Symptoms only describe a pattern, so the ECG records are read only once there is one.
         if (rules.evaluate(events, nowMs, zone) == null) return
-        val pattern = rules.evaluate(events, nowMs, zone, symptomTimes(from)) ?: return
+        val tagged = dao.riseSymptomsSince(from).filter { r -> decodeSymptoms(r.symptoms).any { it in FELT } }.map { it.startMs }
+        val pattern = rules.evaluate(events, nowMs, zone, symptomTimes(from) + tagged) ?: return
         val alert = HealthAlert(
             newId(), AlertKind.HIGH_HEART_RATE, nowMs, pattern.medianPeakBpm,
             threshold = minRise, context = HrContext.ACTIVE, normal = pattern.medianRestBpm,
             trend = HeartTrend.POSTURAL_RISE, value = pattern.medianRiseBpm.toFloat(),
         )
-        HLog.i("Heartline/Alert", "postural rise: ${pattern.events} rises on ${pattern.days} days, symptoms=${pattern.withSymptoms} ${alert.describe()}")
+        HLog.i("Heartline/Alert", "postural rise: ${pattern.events} rises on ${pattern.days} days (${events.count { it.source == RiseSource.PROBE }} measured), symptoms=${pattern.withSymptoms} ${alert.describe()}")
         dao.insertAlert(AlertEntity(alert.id, alert.kind, alert.atMs, alert.bpm, 0, threshold = alert.threshold, context = alert.context, normal = alert.normal, trend = alert.trend, value = alert.value))
         onAlert(alert)
     }
@@ -139,6 +164,17 @@ class HeartRepository(
         /** The pattern's two weeks, and the still minutes before its first day's rise. */
         const val PATTERN_LOOKBACK_MS = 14 * 86_400_000L + 15 * MINUTE
 
+        /** How the wearer may feel at a rise; tagged on a rise or on an ECG, they describe the notice. */
+        val FELT = setOf(Symptom.DIZZINESS, Symptom.PALPITATIONS, Symptom.FAINTING, Symptom.FATIGUE)
+
+        fun HrMinuteEntity.toMinute() = HrMinute(minuteStartMs, avgBpm, minBpm, maxBpm, rmssdMs, resting, activity, steps)
+
+        fun StandProbe.toEntity() = StandProbeEntity(startMs, Protocol.json.encodeToString(ListSerializer(StandReading.serializer()), readings), stepsPerMinute)
+
+        fun StandProbeEntity.toProbe() = StandProbe(startMs, runCatching { Protocol.json.decodeFromString(ListSerializer(StandReading.serializer()), readingsJson) }.getOrDefault(emptyList()), stepsPerMinute)
+
+        fun decodeSymptoms(text: String): List<Symptom> = text.split(',').mapNotNull { name -> Symptom.entries.firstOrNull { it.name == name } }
+
         fun merge(old: HrMinuteEntity, new: HrMinuteEntity) = new.copy(
             avgBpm = (old.avgBpm + new.avgBpm) / 2,
             minBpm = minOf(old.minBpm, new.minBpm),
@@ -156,6 +192,8 @@ class HeartRepository(
         dao.deleteTemps()
         dao.deleteStress()
         dao.deleteMinutes()
+        dao.deleteStandProbes()
+        dao.deleteRiseSymptoms()
         dao.deleteAlerts()
     }
 }

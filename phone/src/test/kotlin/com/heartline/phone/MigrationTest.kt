@@ -169,6 +169,21 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migrate12To13AddsStandProbesAndRiseSymptoms() {
+        helper.createDatabase(DB, 12).use { db ->
+            db.execSQL("INSERT INTO hr_minutes (minuteStartMs, avgBpm, minBpm, maxBpm, rmssdMs, resting, activity, steps) VALUES (0, 60, 58, 62, NULL, 1, 'REST', 0)")
+        }
+        helper.runMigrationsAndValidate(DB, 13, true, HeartlineDatabase.MIGRATION_12_13).use { db ->
+            db.execSQL("INSERT INTO stand_probes (startMs, readingsJson, stepsPerMinute) VALUES (1, '[]', NULL)")
+            db.execSQL("INSERT INTO rise_symptoms (startMs, symptoms) VALUES (1, 'DIZZINESS')")
+            db.query("SELECT COUNT(*) FROM hr_minutes").use { c ->
+                c.moveToFirst()
+                assertEquals(1, c.getInt(0))
+            }
+        }
+    }
+
     private companion object {
         const val DB = "migration-test.db"
     }

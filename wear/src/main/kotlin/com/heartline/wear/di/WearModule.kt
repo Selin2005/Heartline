@@ -90,7 +90,7 @@ val wearModule = module {
     single { WatchRecordStore(get(), androidContext().filesDir, get()) }
     single { WatchSettingsStore(androidContext()) }
     single { WatchNotifier(androidContext()) }
-    single { WatchMonitorOutput(get(), get(), get(), get()) }
+    single { WatchMonitorOutput(get(), get(), get(), get()) } bind com.heartline.wear.monitor.MonitorOutput::class
     single {
         val store = get<WatchSettingsStore>()
         val profile = get<WatchProfileStore>()

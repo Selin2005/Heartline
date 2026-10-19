@@ -128,10 +128,25 @@ class PhoneScreenshotTest(private val theme: String) {
 
     @Test fun alerts() = shot("alerts") { AlertsScreen(SampleData.alerts, onBack = {}) }
 
-    @Test fun heartRatePostural() = shot("heart_rate_postural") {
-        com.heartline.phone.ui.components.ReachabilityScaffold(title = "Heart rate", onBack = {}) {
-            listOf(SampleData.posturalPattern, SampleData.posturalSome, SampleData.posturalNone).forEach { item { com.heartline.phone.ui.heart.PosturalCard(it) } }
-        }
+    @Test fun heartRatePostural() = shot("heart_rate_postural") { HeartRateScreen(SampleData.heartRate.copy(postural = SampleData.posturalBanner), onBack = {}) }
+
+    @Test fun heartRatePosturalEasing() = shot("heart_rate_postural_easing") { HeartRateScreen(SampleData.heartRate.copy(postural = SampleData.posturalBannerEasing), onBack = {}) }
+
+    @Test fun posturalReport() = shot("heart_rate_after_standing") { com.heartline.phone.ui.heart.PosturalReportScreen(SampleData.posturalReport, onBack = {}, onShare = {}) }
+
+    @Test fun posturalReportScrolled() = shot("heart_rate_after_standing_rises") {
+        com.heartline.phone.ui.heart.PosturalReportScreen(SampleData.posturalReport, onBack = {}, listState = rememberLazyListState(initialFirstVisibleItemIndex = 3))
+    }
+
+    @Test fun posturalReportEnd() = shot("heart_rate_after_standing_more") {
+        com.heartline.phone.ui.heart.PosturalReportScreen(SampleData.posturalReport, onBack = {}, listState = rememberLazyListState(initialFirstVisibleItemIndex = 6))
+    }
+
+    @Test fun posturalReportEmpty() = shot("heart_rate_after_standing_empty") { com.heartline.phone.ui.heart.PosturalReportScreen(com.heartline.phone.ui.model.PosturalReportUi(), onBack = {}) }
+
+    @Test fun riseDetail() = shot("heart_rate_rise_detail") {
+        val rise = SampleData.posturalReport.rises.first()
+        com.heartline.phone.ui.heart.RiseDetailScreen(rise, SampleData.riseCurve(67, 104), 30, onBack = {})
     }
 
     @Test fun alertsPostural() = shot("alerts_postural") { AlertsScreen(listOf(SampleData.posturalAlert) + SampleData.alerts, onBack = {}) }

@@ -63,6 +63,37 @@ class ReportScreenshotTest {
     }
 }
 
+/** The report of rises after getting up, drawn at 2x (A4 portrait) as it prints. */
+class PosturalReportScreenshotTest {
+    @get:Rule
+    val paparazzi = Paparazzi(
+        deviceConfig = DeviceConfig.PIXEL_6.copy(
+            screenWidth = com.heartline.phone.report.PosturalReportPainter.PAGE_WIDTH * 2,
+            screenHeight = com.heartline.phone.report.PosturalReportPainter.PAGE_HEIGHT * 2,
+            density = Density.XHIGH,
+            xdpi = 320,
+            ydpi = 320,
+        ),
+        maxPercentDifference = 0.1,
+    )
+
+    @Test
+    fun posturalReportPage() {
+        val data = com.heartline.phone.report.PosturalReportBuilder(paparazzi.context, "0.0.2", java.time.ZoneOffset.UTC, java.util.Locale.US).data(SampleData.posturalReport, name = "Alex")
+        paparazzi.snapshot {
+            Canvas(Modifier.fillMaxSize()) {
+                val scale = size.width / com.heartline.phone.report.PosturalReportPainter.PAGE_WIDTH
+                drawIntoCanvas { canvas ->
+                    canvas.nativeCanvas.save()
+                    canvas.nativeCanvas.scale(scale, scale)
+                    com.heartline.phone.report.PosturalReportPainter().draw(canvas.nativeCanvas, data)
+                    canvas.nativeCanvas.restore()
+                }
+            }
+        }
+    }
+}
+
 class SymptomsSheetScreenshotTest {
     @get:Rule
     val paparazzi = Paparazzi(deviceConfig = DeviceConfig.PIXEL_6, maxPercentDifference = 0.1)

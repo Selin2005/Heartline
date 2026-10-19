@@ -154,4 +154,143 @@ class OrthostaticTest {
         assertFalse(rules.evaluate(events, now, utc, listOf(events[1].startMs + 2 * 3_600_000L))!!.withSymptoms)
         assertNull(rules.evaluate(events.take(2), now, utc, listOf(events[0].startMs)))
     }
+
+    /** A probe at [up] (mid-minute) with slices around +0.5, +3 and +6.5 minutes. */
+    private fun probe(up: Long, vararg slices: Int, steps: Int? = 50) = StandProbe(
+        up,
+        slices.flatMapIndexed { i, bpm ->
+            val at = up + listOf(30_000L, 180_000L, 390_000L)[i]
+            (0 until 8).map { k -> StandReading(at + k * 5_000L, bpm + (k % 3) - 1) }
+        },
+        steps
+    )
+
+    /** Still passive readings every 3 minutes before [up] only: the probe alone sees the rise. */
+    private fun stillBefore(up: Long, rest: Int = 70) = listOf(15, 12, 9, 6, 3).map { m(up - it, rest, HrContext.REST) }
+
+    @Test fun aProbeSeesWhatSparseReadingsMiss() {
+        val up = 100 * minute + 20_000
+        val minutes = stillBefore(100) + m(104, 88, HrContext.ACTIVE)
+        // One passive reading after: the passive check can't judge it.
+        assertTrue(detect(minutes).isEmpty())
+        val e = detector.detect(minutes, Long.MAX_VALUE, listOf(probe(up, 96, 104, 106))).single()
+        assertEquals(RiseSource.PROBE, e.source)
+        assertEquals(70, e.restBpm)
+        assertEquals(104, e.peakBpm)
+        // Minute 85 started 15 min 20 s before: outside the 15 minutes.
+        assertEquals(4, e.before.size)
+        assertEquals(24, e.after.size)
+    }
+
+    @Test fun aProbeNeedsTwoSlicesAndAHeldRise() {
+        val up = 100 * minute + 20_000
+        val minutes = stillBefore(100)
+        assertTrue(detector.detect(minutes, Long.MAX_VALUE, listOf(probe(up, 110))).isEmpty())
+        assertTrue(detector.detect(minutes, Long.MAX_VALUE, listOf(probe(up, 120, 85, 84))).isEmpty())
+        assertEquals(1, detector.detect(minutes, Long.MAX_VALUE, listOf(probe(up, 102, 101))).size)
+    }
+
+    @Test fun aProbeNeedsRestBeforeAndNoBriskWalking() {
+        val up = 100 * minute + 20_000
+        assertTrue(detector.detect(listOf(m(97, 70, HrContext.REST)), Long.MAX_VALUE, listOf(probe(up, 104, 106))).isEmpty())
+        assertTrue(detector.detect(stillBefore(100), Long.MAX_VALUE, listOf(probe(up, 104, 106, steps = 112))).isEmpty())
+        val workout = stillBefore(100) + m(103, 130, HrContext.EXERCISE)
+        assertTrue(detector.detect(workout, Long.MAX_VALUE, listOf(probe(up, 104, 106))).isEmpty())
+    }
+
+    @Test fun aProbedGettingUpIsCountedOnce() {
+        // Both the probe and the passive readings saw the same getting-up: one rise, the probe's.
+        val events = detector.detect(getUp(100, 70, listOf(104, 106, 105)), Long.MAX_VALUE, listOf(probe(100 * minute + 5_000, 103, 105)))
+        assertEquals(listOf(RiseSource.PROBE), events.map { it.source })
+    }
+
+    @Test fun slicesAreToldApartByTheirGaps() {
+        val slices = probe(0, 90, 100, 110).sliceMedians()
+        assertEquals(listOf(90, 100, 110), slices.map { it.bpm })
+    }
+
+    @Test fun theReportExistsOnlyAfterAPattern() {
+        val now = 100 * day
+        val pattern = PosturalPattern(3, 3, 70, 104, 34, false)
+        assertEquals(PosturalStatus.NONE, PosturalStatus.of(null, null, now))
+        assertEquals(PosturalStatus.PATTERN, PosturalStatus.of(pattern, null, now))
+        assertEquals(PosturalStatus.EASING, PosturalStatus.of(null, now - 20 * day, now))
+        assertEquals(PosturalStatus.NONE, PosturalStatus.of(null, now - 61 * day, now))
+    }
+
+    private val on = com.heartline.shared.hr.MonitorSettings(sleepStartMinute = 23 * 60, sleepEndMinute = 7 * 60)
+    private val nine = 100 * day + 9 * 3_600_000L
+
+    private fun decide(
+        now: Long = nine,
+        lastMotion: Long? = nine - 20 * minute,
+        probes: List<Long> = emptyList(),
+        ctx: HrContext? = null,
+        settings: com.heartline.shared.hr.MonitorSettings = on
+    ) = StandProbePolicy.decide(now, lastMotion, probes, ctx, settings, utc)
+
+    @Test fun aProbeStartsAfterAStillStretch() {
+        assertTrue(decide().start)
+        assertTrue(decide(lastMotion = null).start)
+        assertFalse(decide(lastMotion = nine - 4 * minute).start)
+    }
+
+    @Test fun noProbeAsleepInAWorkoutOrAtNight() {
+        assertFalse(decide(ctx = HrContext.SLEEP).start)
+        assertFalse(decide(ctx = HrContext.EXERCISE).start)
+        assertFalse(decide(now = 100 * day + 3 * 3_600_000L, lastMotion = null).start)
+    }
+
+    @Test fun probesAreRationed() {
+        assertFalse(decide(probes = listOf(nine - 30 * minute)).start)
+        assertTrue(decide(probes = listOf(nine - 50 * minute)).start)
+        // Six already today, however long ago.
+        assertFalse(decide(probes = (1..6).map { 100 * day + 7 * 3_600_000L + it * minute }).start)
+        // Yesterday's don't count.
+        assertTrue(decide(probes = (1..6).map { 99 * day + 12 * 3_600_000L + it * minute }).start)
+    }
+
+    @Test fun noProbeWithoutHeartMonitoringOrWithAPacemaker() {
+        assertFalse(decide(settings = on.withMonitoring(false)).start)
+        val paced = on.copy(health = com.heartline.shared.hr.HealthContext(heartDevice = com.heartline.shared.hr.Answer.YES))
+        assertFalse(decide(settings = paced).start)
+    }
+
+    @Test fun aProbeKeepsGoodReadingsAsFiveSecondMedians() {
+        val samples = (0 until 20).map { com.heartline.shared.hr.HrSample(1_000_000L + it * 1_000L, 90 + it % 5, emptyList()) } +
+            com.heartline.shared.hr.HrSample(1_000_500L, 160, emptyList(), reliable = false) +
+            com.heartline.shared.hr.HrSample(1_001_500L, 150, emptyList(), onBody = false)
+        val probe = StandProbe.of(999_000L, samples, 30)
+        assertEquals(4, probe.readings.size)
+        assertTrue(probe.readings.all { it.bpm in 90..94 })
+        assertEquals(30, probe.stepsPerMinute)
+    }
+
+    @Test fun withoutTheMotionSensorStepsAfterStillnessAreAGettingUp() {
+        val now = 100 * day
+        fun timeline(vararg spans: com.heartline.shared.hr.StepSpan) = com.heartline.shared.hr.ActivityTimeline(steps = spans.toList())
+        val walk = com.heartline.shared.hr.StepSpan(now - 60_000L, now, 60)
+        val earlier = com.heartline.shared.hr.StepSpan(now - 40 * minute, now - 39 * minute, 50)
+        assertEquals(now - 60_000L to now - 39 * minute, StandProbePolicy.gettingUpFromSteps(timeline(earlier, walk), now))
+        // Steps three minutes before: not still.
+        val recent = com.heartline.shared.hr.StepSpan(now - 4 * minute, now - 3 * minute, 40)
+        assertNull(StandProbePolicy.gettingUpFromSteps(timeline(recent, walk), now))
+        // Too late to measure the first minutes.
+        assertNull(StandProbePolicy.gettingUpFromSteps(timeline(walk), now + 5 * minute))
+        // A few steps are not walking.
+        assertNull(StandProbePolicy.gettingUpFromSteps(timeline(com.heartline.shared.hr.StepSpan(now - 60_000L, now, 6)), now))
+    }
+
+    @Test fun probesTravelToThePhone() {
+        val batch = com.heartline.shared.hr.HrBatch("b", emptyList(), stands = listOf(probe(1_000L, 90, 100)))
+        val json = com.heartline.shared.sync.Protocol.json.encodeToString(com.heartline.shared.hr.HrBatch.serializer(), batch)
+        assertEquals(batch, com.heartline.shared.sync.Protocol.json.decodeFromString(com.heartline.shared.hr.HrBatch.serializer(), json))
+        // An older phone's batch has none.
+        assertTrue(
+            com.heartline.shared.sync.Protocol.json.decodeFromString(
+                com.heartline.shared.hr.HrBatch.serializer(),
+                """{"id":"x","minutes":[]}"""
+            ).stands.isEmpty()
+        )
+    }
 }

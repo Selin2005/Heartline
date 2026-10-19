@@ -170,7 +170,9 @@ object BackgroundMonitoring {
             work.cancelUniqueWork(VITALS_WORK)
             work.cancelUniqueWork(VITALS_RETRY)
         }
-        HLog.i(TAG, "sync allowed=$allowed monitoring=${settings.heartMonitoring} rhythm=${settings.rhythmActive} stress=${settings.stressActive} spo2=${settings.spo2Active}/${settings.spo2Interval}min temp=${settings.skinTempActive} sensitivity=${settings.alertSensitivity} background=${hasBackgroundPermission(context)} battery=${batteryPercent(context)}%")
+        // Rises after getting up: the motion sensor that starts a stand probe.
+        runCatching { StandTrigger.sync(context, settings.normalized().posturalRiseActive) }.onFailure { HLog.w(TAG, "stand trigger update failed", it) }
+        HLog.i(TAG, "sync allowed=$allowed monitoring=${settings.heartMonitoring} rhythm=${settings.rhythmActive} stress=${settings.stressActive} spo2=${settings.spo2Active}/${settings.spo2Interval}min temp=${settings.skinTempActive} sensitivity=${settings.alertSensitivity} stand=${settings.normalized().posturalRiseActive}/${StandTrigger.available(context)} background=${hasBackgroundPermission(context)} battery=${batteryPercent(context)}%")
     }
 }
 
@@ -247,6 +249,9 @@ class PassiveHeartRateService :
             StepSpan(it.getStartInstant(boot).toEpochMilli(), it.getEndInstant(boot).toEpochMilli(), it.value)
         }
         if (steps.isNotEmpty()) store.recordSteps(steps)
+        // A new process forgets the motion sensor's trigger: arm it again on every delivery.
+        StandTrigger.sync(this)
+        if (steps.isNotEmpty()) StandTrigger.onSteps(this, System.currentTimeMillis())
         val samples = dataPoints.getData(DataType.HEART_RATE_BPM).mapNotNull { point ->
             val bpm = point.value.toInt().takeIf { it in 25..240 } ?: return@mapNotNull null
             HrSample(tsMs = point.getTimeInstant(boot).toEpochMilli(), bpm = bpm, ibiMs = emptyList(), onBody = true)
@@ -295,6 +300,12 @@ class IrnWindowWorker(context: Context, params: WorkerParameters) :
         // window now would share its heart-rate tracker. The next window comes in 15 minutes.
         if (measurements.busy) {
             HLog.i(TAG, "IRN window skipped: a measurement is running")
+            return Result.success()
+        }
+        StandTrigger.sync(applicationContext)
+        // A stand probe has the tracker for a few minutes; the next window comes in 15.
+        if (StandProbeWorker.running) {
+            HLog.i(TAG, "IRN window skipped: a stand probe is running")
             return Result.success()
         }
         // On the charger the watch is off the wrist: no sensor at all (the off-body sensor below

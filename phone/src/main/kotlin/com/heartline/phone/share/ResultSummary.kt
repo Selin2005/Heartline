@@ -65,4 +65,21 @@ object ResultSummary {
         appendLine()
         append(res.getString(R.string.ai_disclaimer))
     }
+
+    /** The report of rises after getting up, for AI apps: the summary and each rise, no conclusions. */
+    fun postural(res: Resources, state: com.heartline.phone.ui.model.PosturalReportUi, person: String?, prompt: String): String = buildString {
+        appendLine(prompt)
+        appendLine()
+        appendLine(res.getString(R.string.postural_report_title_pdf))
+        person?.let { appendLine(res.getString(R.string.ai_person, it)) }
+        appendLine(res.getString(R.string.postural_report_guidance))
+        appendLine("${res.getString(R.string.postural_days_label)}: ${res.getString(R.string.postural_days_value, state.days, com.heartline.phone.ui.model.PosturalSummaries.PATTERN_DAYS)}")
+        state.medianRiseBpm?.let { appendLine("${res.getString(R.string.postural_report_rise)}: +$it bpm (${state.medianRestBpm} → ${state.medianPeakBpm} bpm)") }
+        state.rises.forEach { r ->
+            val felt = r.symptoms.joinToString { res.getString(it.label) }
+            appendLine("${r.date} ${r.time}: ${r.restBpm} → ${r.peakBpm} bpm (+${r.riseBpm})" + if (felt.isNotEmpty()) " · $felt" else "")
+        }
+        appendLine()
+        append(res.getString(R.string.ai_disclaimer))
+    }
 }

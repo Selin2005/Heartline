@@ -95,6 +95,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.heartline.phone.R
 import com.heartline.phone.report.EcgReportBuilder
+import com.heartline.phone.ui.heart.PosturalReportScreen
+import com.heartline.phone.ui.heart.RiseDetailScreen
+import com.heartline.phone.ui.model.PosturalViewModel
 import com.heartline.phone.share.ResultSummary
 import com.heartline.phone.ui.share.ShareFormat
 import com.heartline.phone.ui.share.ShareRequest
@@ -122,6 +125,8 @@ object Routes {
     const val ECG_DETAIL = "ecg/{id}"
     const val HEART_RATE = "heart_rate"
     const val ALERTS = "alerts"
+    const val POSTURAL = PhoneNotifier.POSTURAL_ROUTE
+    const val POSTURAL_RISE = "${PhoneNotifier.POSTURAL_ROUTE}/{start}"
     const val BLOOD_PRESSURE = "blood_pressure"
     const val BP_CALIBRATION = "blood_pressure/calibration"
     const val METRIC = "metric/{metric}"
@@ -142,6 +147,8 @@ object Routes {
     fun metric(metric: Metric) = "metric/${metric.name}"
 
     fun ecgDetail(id: String) = "ecg/$id"
+
+    fun postural(start: Long) = "${PhoneNotifier.POSTURAL_ROUTE}/$start"
 }
 
 private data class Tab(val route: String, val label: Int, val icon: ImageVector)
@@ -171,6 +178,8 @@ fun HeartlineApp(
             Routes.UPDATES, PhoneNotifier.UPDATES_INSTALL_ROUTE -> link.route
             // Home-screen widgets open their metric.
             Routes.HEART_RATE, Routes.ECG, Routes.BLOOD_PRESSURE -> link.route
+            // The notice of rises after getting up opens their report.
+            Routes.POSTURAL -> link.route
             else -> link.route.takeIf { it.startsWith("metric/") && Metric.entries.any { m -> it == Routes.metric(m) } }
                 // Quick Settings tiles and widgets measure from the phone.
                 ?: link.route.takeIf { Metric.entries.any { m -> m.measuresOnPhone && it == Routes.measure(m) } }
@@ -216,6 +225,7 @@ fun HeartlineApp(
     val openOnWatch: (String) -> Unit = { opener.open(it) }
     val share = rememberShareSheet()
     val reports: EcgReportBuilder = koinInject()
+    val posturalReports: com.heartline.phone.report.PosturalReportBuilder = koinInject()
     val backStack by navController.currentBackStackEntryAsState()
     val route = backStack?.destination?.route ?: Routes.HOME
     val activity = LocalActivity.current
@@ -353,6 +363,7 @@ fun HeartlineApp(
                         state,
                         onBack = goBack,
                         onOpenAlerts = { navController.navigate(Routes.ALERTS) },
+                        onOpenPostural = { navController.navigate(Routes.POSTURAL) },
                         onMeasureOnWatch = { navController.navigate(Routes.measure(Metric.HEART_RATE)) },
                         onShare = {
                             share(
@@ -521,7 +532,36 @@ fun HeartlineApp(
                     val vm: AlertsViewModel = koinViewModel()
                     val alerts by vm.alerts.collectAsStateWithLifecycle()
                     LaunchedEffect(alerts) { vm.markRead() }
-                    AlertsScreen(alerts, onBack = goBack)
+                    AlertsScreen(alerts, onBack = goBack, onOpenPostural = { navController.navigate(Routes.POSTURAL) })
+                }
+                composable(Routes.POSTURAL) {
+                    val vm: PosturalViewModel = koinViewModel()
+                    val state by vm.state.collectAsStateWithLifecycle()
+                    PosturalReportScreen(
+                        state,
+                        onBack = goBack,
+                        onOpenRise = { navController.navigate(Routes.postural(it)) },
+                        onShare = {
+                            share(
+                                ShareRequest(
+                                    kind = "AfterGettingUp",
+                                    formats = listOf(
+                                        ShareFormat("pdf", "application/pdf", R.string.share_format_pdf) { file, name, profile -> posturalReports.export(state, profile, name, file) },
+                                    ),
+                                    text = { prompt, person -> ResultSummary.postural(context.resources, state, person, prompt) },
+                                ),
+                            )
+                        },
+                    )
+                }
+                composable(Routes.POSTURAL_RISE) { entry ->
+                    val start = entry.arguments?.getString("start")?.toLongOrNull()
+                    val vm: PosturalViewModel = koinViewModel()
+                    val state by vm.state.collectAsStateWithLifecycle()
+                    val rise = state.rises.firstOrNull { it.startMs == start }
+                    if (rise != null) {
+                        RiseDetailScreen(rise, state.curves[rise.startMs].orEmpty(), state.minRiseBpm, onBack = goBack, onSymptoms = { vm.setSymptoms(rise.startMs, it) })
+                    }
                 }
                 composable(Routes.ECG_DETAIL) { entry ->
                     val id = entry.arguments?.getString("id").orEmpty()

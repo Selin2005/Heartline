@@ -11,8 +11,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [RecordEntity::class, HrMinuteEntity::class, AlertEntity::class, Spo2SampleEntity::class, TempSampleEntity::class, StressSampleEntity::class, BpCalibrationEntity::class, BpValidationEntity::class, Spo2AttemptEntity::class],
-    version = 12,
+    entities = [RecordEntity::class, HrMinuteEntity::class, AlertEntity::class, Spo2SampleEntity::class, TempSampleEntity::class, StressSampleEntity::class, BpCalibrationEntity::class, BpValidationEntity::class, Spo2AttemptEntity::class, StandProbeEntity::class, RiseSymptomsEntity::class],
+    version = 13,
     exportSchema = true,
 )
 abstract class HeartlineDatabase : RoomDatabase() {
@@ -134,9 +134,20 @@ abstract class HeartlineDatabase : RoomDatabase() {
             }
         }
 
+        /** v13: the watch's measurements right after getting up, and how the wearer felt at each rise. */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `stand_probes` (`startMs` INTEGER NOT NULL, `readingsJson` TEXT NOT NULL, " +
+                        "`stepsPerMinute` INTEGER, PRIMARY KEY(`startMs`))",
+                )
+                db.execSQL("CREATE TABLE IF NOT EXISTS `rise_symptoms` (`startMs` INTEGER NOT NULL, `symptoms` TEXT NOT NULL, PRIMARY KEY(`startMs`))")
+            }
+        }
+
         fun create(context: Context): HeartlineDatabase =
             Room.databaseBuilder(context, HeartlineDatabase::class.java, "heartline.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
                 .build()
 
         fun inMemory(context: Context): HeartlineDatabase =

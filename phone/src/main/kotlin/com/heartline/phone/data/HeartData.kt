@@ -90,8 +90,56 @@ data class TempSampleEntity(
     val counted: Boolean,
 )
 
+/** A measurement the watch took right after the wearer got up (v13); [readingsJson] is the StandReading list. */
+@Entity(tableName = "stand_probes")
+data class StandProbeEntity(
+    @PrimaryKey val startMs: Long,
+    val readingsJson: String,
+    val stepsPerMinute: Int?,
+)
+
+/** How the wearer felt at a rise after getting up (v13): Symptom names, comma separated, keyed by the rise's start. */
+@Entity(tableName = "rise_symptoms")
+data class RiseSymptomsEntity(
+    @PrimaryKey val startMs: Long,
+    val symptoms: String,
+)
+
 @Dao
 interface HeartDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertStandProbes(probes: List<StandProbeEntity>)
+
+    @Query("SELECT * FROM stand_probes WHERE startMs >= :fromMs AND startMs < :toMs ORDER BY startMs")
+    suspend fun standProbesBetween(fromMs: Long, toMs: Long): List<StandProbeEntity>
+
+    @Query("SELECT * FROM stand_probes WHERE startMs >= :fromMs ORDER BY startMs")
+    fun standProbesSince(fromMs: Long): Flow<List<StandProbeEntity>>
+
+    @Query("SELECT MAX(startMs) FROM stand_probes")
+    suspend fun newestStandProbeMs(): Long?
+
+    @Query("SELECT MAX(minuteStartMs) FROM hr_minutes")
+    suspend fun newestMinuteMs(): Long?
+
+    @Query("DELETE FROM stand_probes")
+    suspend fun deleteStandProbes()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun setRiseSymptoms(entry: RiseSymptomsEntity)
+
+    @Query("DELETE FROM rise_symptoms WHERE startMs = :startMs")
+    suspend fun clearRiseSymptoms(startMs: Long)
+
+    @Query("SELECT * FROM rise_symptoms")
+    fun riseSymptoms(): Flow<List<RiseSymptomsEntity>>
+
+    @Query("SELECT * FROM rise_symptoms WHERE startMs >= :fromMs")
+    suspend fun riseSymptomsSince(fromMs: Long): List<RiseSymptomsEntity>
+
+    @Query("DELETE FROM rise_symptoms")
+    suspend fun deleteRiseSymptoms()
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSpo2(samples: List<Spo2SampleEntity>)
 

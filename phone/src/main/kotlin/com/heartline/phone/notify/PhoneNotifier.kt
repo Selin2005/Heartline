@@ -47,12 +47,17 @@ class PhoneNotifier(private val context: Context) {
     fun alert(alert: HealthAlert) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val (title, text) = context.getString(alertTitle(alert)) to alertText(context, alert)
-        val open = PendingIntent.getActivity(
-            context,
-            0,
-            Intent(context, MainActivity::class.java).putExtra(EXTRA_OPEN_ALERTS, true),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
+        // The rises after getting up have their own report; everything else opens the list.
+        val open = if (alert.trend == HeartTrend.POSTURAL_RISE) {
+            openPending(alert.id.hashCode(), POSTURAL_ROUTE)
+        } else {
+            PendingIntent.getActivity(
+                context,
+                0,
+                Intent(context, MainActivity::class.java).putExtra(EXTRA_OPEN_ALERTS, true),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+        }
         manager.notify(
             alert.id.hashCode(),
             NotificationCompat.Builder(context, CHANNEL_ALERTS)
@@ -283,6 +288,9 @@ class PhoneNotifier(private val context: Context) {
         const val UPDATE_PROGRESS_ID = 7_007
         const val UPDATE_READY_ID = 7_008
         const val UPDATES_ROUTE = "updates"
+
+        /** The report of rises after getting up. */
+        const val POSTURAL_ROUTE = "heart_rate/after_standing"
 
         /** The Updates screen, starting the installer for the downloaded update. */
         const val UPDATES_INSTALL_ROUTE = "updates?install=true"

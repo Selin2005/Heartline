@@ -240,21 +240,45 @@ object SampleData {
         BodyDetailUi(entries, 76.4f)
     }
 
-    /** Rises after getting up: repeated on enough days to notify, a few on fewer days, and none. */
-    val posturalPattern = com.heartline.phone.ui.model.PosturalUi(
-        rises = 4,
-        days = 3,
-        pattern = true,
-        medianRestBpm = 68,
-        medianPeakBpm = 103,
-        latest = listOf(
-            com.heartline.phone.ui.model.RiseUi("Today", "7:52 AM", 67, 104),
-            com.heartline.phone.ui.model.RiseUi("Sep 23", "8:10 AM", 70, 103),
-            com.heartline.phone.ui.model.RiseUi("Sep 21", "6:58 PM", 68, 101),
-        ),
-    )
-    val posturalSome = com.heartline.phone.ui.model.PosturalUi(rises = 2, days = 1, latest = listOf(com.heartline.phone.ui.model.RiseUi("Today", "7:52 AM", 66, 98)))
-    val posturalNone = com.heartline.phone.ui.model.PosturalUi()
+    /** Rises after getting up: the report with a pattern, the heart screen's links to it. */
+    val posturalReport: com.heartline.phone.ui.model.PosturalReportUi by lazy {
+        val rises = listOf(
+            com.heartline.phone.ui.model.RiseUi(1_758_786_720_000L, "Today", "7:52 AM", 67, 104, measured = true, symptoms = listOf(com.heartline.shared.model.Symptom.DIZZINESS)),
+            com.heartline.phone.ui.model.RiseUi(1_758_615_000_000L, "Sep 23", "8:10 AM", 70, 103, measured = true),
+            com.heartline.phone.ui.model.RiseUi(1_758_481_080_000L, "Sep 21", "6:58 PM", 68, 101, measured = false, symptoms = listOf(com.heartline.shared.model.Symptom.FATIGUE, com.heartline.shared.model.Symptom.PALPITATIONS)),
+            com.heartline.phone.ui.model.RiseUi(1_758_180_660_000L, "Sep 18", "7:31 AM", 66, 97, measured = true),
+        )
+        val dates = (0 until 30).map { i -> java.time.LocalDate.of(2025, 8, 27).plusDays(i.toLong()) }
+        com.heartline.phone.ui.model.PosturalReportUi(
+            status = com.heartline.shared.pots.PosturalStatus.PATTERN,
+            days = 4,
+            riseCount = 4,
+            previousDays = 1,
+            medianRestBpm = 68,
+            medianPeakBpm = 103,
+            medianRiseBpm = 35,
+            chart = listOf(
+                com.heartline.shared.hr.RangeBucket(9, 71, 99, 99),
+                com.heartline.shared.hr.RangeBucket(23, 66, 97, 97),
+                com.heartline.shared.hr.RangeBucket(26, 68, 101, 101),
+                com.heartline.shared.hr.RangeBucket(28, 70, 103, 103),
+                com.heartline.shared.hr.RangeBucket(29, 67, 104, 104),
+            ),
+            chartDates = dates.map { it.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", java.util.Locale.UK)) },
+            chartLabels = dates.filterIndexed { i, _ -> i % 7 == 0 }.map { it.format(java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.UK)) },
+            rises = rises,
+            chartStart = java.time.LocalDate.of(2025, 8, 27),
+            curves = mapOf(1_758_786_720_000L to riseCurve(67, 104)),
+        )
+    }
+
+    /** Still readings every 3 minutes before getting up, then the watch's three slices. */
+    fun riseCurve(rest: Int, held: Int): List<com.heartline.phone.ui.model.CurvePoint> =
+        listOf(-14, -11, -8, -5, -2).mapIndexed { i, m -> com.heartline.phone.ui.model.CurvePoint(m * 60 + 30, rest + listOf(1, -1, 2, 0, -2)[i]) } +
+            listOf(20 to held - 9, 150 to held, 360 to held - 2).flatMap { (at, bpm) -> (0 until 8).map { k -> com.heartline.phone.ui.model.CurvePoint(at + k * 5, bpm + listOf(0, 2, -1, 1, 3, 0, -2, 1)[k]) } }
+
+    val posturalBanner = com.heartline.phone.ui.model.PosturalBannerUi(com.heartline.shared.pots.PosturalStatus.PATTERN, days = 4, restBpm = 68, peakBpm = 103)
+    val posturalBannerEasing = com.heartline.phone.ui.model.PosturalBannerUi(com.heartline.shared.pots.PosturalStatus.EASING)
 
     val posturalAlert = AlertUi(
         "a6", AlertKind.HIGH_HEART_RATE, "Today", "8:03 AM", 103, 0, read = false, threshold = 30,

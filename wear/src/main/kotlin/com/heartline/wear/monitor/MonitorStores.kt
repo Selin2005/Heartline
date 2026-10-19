@@ -178,6 +178,21 @@ class WatchSettingsStore(context: Context, private val now: () -> Long = System:
         get() = prefs.getLong(KEY_LAST_PASSIVE, -1).takeIf { it > 0 }
         set(value) = prefs.edit().putLong(KEY_LAST_PASSIVE, value ?: -1).apply()
 
+    /** When the motion sensor last saw the wearer start moving (StandTrigger). */
+    var lastMotionMs: Long?
+        get() = prefs.getLong(KEY_LAST_MOTION, -1).takeIf { it > 0 }
+        set(value) = prefs.edit().putLong(KEY_LAST_MOTION, value ?: -1).apply()
+
+    /** When the recent stand probes started (the last two days), to ration them. */
+    val standProbes: List<Long>
+        get() = prefs.getString(KEY_STAND_PROBES, null)?.split(',')?.mapNotNull { it.toLongOrNull() }.orEmpty()
+
+    @Synchronized
+    fun recordStandProbe(atMs: Long) {
+        val kept = (standProbes + atMs).filter { atMs - it <= 2 * 86_400_000L }.sorted()
+        prefs.edit().putString(KEY_STAND_PROBES, kept.joinToString(",")).apply()
+    }
+
     /** An ECG result: a regular one soon after a rhythm notification makes the next one more cautious. */
     @Synchronized
     fun noteEcg(result: EcgResult, atMs: Long) {
@@ -200,6 +215,8 @@ class WatchSettingsStore(context: Context, private val now: () -> Long = System:
         const val KEY_SPO2_RETRIES = "spo2_retries"
         const val KEY_SPO2_RETRY_SLOT = "spo2_retry_slot"
         const val KEY_LAST_PASSIVE = "last_passive_hr"
+        const val KEY_LAST_MOTION = "last_motion"
+        const val KEY_STAND_PROBES = "stand_probes"
         const val KEY_HR = "latest_hr"
         const val KEY_HR_DAY = "hr_day"
         const val KEY_HR_MIN = "hr_min"

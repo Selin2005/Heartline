@@ -60,7 +60,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import com.heartline.shared.model.RecordSummary
 import com.heartline.shared.model.RecordKind
-import com.heartline.shared.model.Symptom
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import org.koin.android.ext.koin.androidContext
@@ -99,9 +98,8 @@ val phoneModule = module {
             age = { get<ProfileRepository>().profile.first()?.age() },
             symptomTimes = { from ->
                 // Symptoms are tagged on ECGs: how the wearer felt when they took one.
-                val felt = setOf(Symptom.DIZZINESS, Symptom.PALPITATIONS, Symptom.FAINTING, Symptom.FATIGUE)
                 get<RecordRepository>().observe(RecordKind.ECG).first()
-                    .filter { r -> r.entity.startedAtMs >= from && (r.summary as? RecordSummary.Ecg)?.symptoms?.any { it in felt } == true }
+                    .filter { r -> r.entity.startedAtMs >= from && (r.summary as? RecordSummary.Ecg)?.symptoms?.any { it in HeartRepository.FELT } == true }
                     .map { it.entity.startedAtMs }
             },
         )
@@ -228,6 +226,7 @@ val phoneModule = module {
     viewModel { HomeViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { EcgListViewModel(get(), get()) }
     single { EcgReportBuilder(androidContext()) }
+    single { com.heartline.phone.report.PosturalReportBuilder(androidContext(), BuildConfig.VERSION_NAME) }
     viewModel { params -> EcgDetailViewModel(params.get(), get(), get(), get()) }
     viewModel { SettingsViewModel(get(), get(), get(), get(), get()) { Reminders.sync(androidContext(), it) } }
     viewModel {
@@ -241,6 +240,9 @@ val phoneModule = module {
                 list.mapNotNull { r -> (r.summary as? com.heartline.shared.model.RecordSummary.HeartRate)?.let { r.entity.startedAtMs to it } }
             },
         )
+    }
+    viewModel {
+        com.heartline.phone.ui.model.PosturalViewModel(get(), get(), age = get<ProfileRepository>().profile.map { it?.age() })
     }
     viewModel { UpdatesViewModel(get(), get(), BuildConfig.VERSION_NAME, WorkManagerDownloads(androidContext()), get()) }
     viewModel { DiagnosticsViewModel(get(), get(), get()) }

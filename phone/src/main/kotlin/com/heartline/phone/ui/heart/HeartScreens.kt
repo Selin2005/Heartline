@@ -21,7 +21,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.heartline.phone.R
@@ -47,7 +46,6 @@ import com.heartline.phone.ui.components.gutter
 import com.heartline.phone.ui.ecg.EmptyCard
 import com.heartline.phone.ui.model.AlertUi
 import com.heartline.phone.ui.model.HeartRateUi
-import com.heartline.phone.ui.model.PosturalUi
 import com.heartline.phone.ui.theme.HeartlineTheme
 import com.heartline.shared.hr.AlertKind
 import com.heartline.shared.hr.HeartTrend
@@ -69,6 +67,7 @@ fun HeartRateScreen(
     onOpenAlerts: () -> Unit = {},
     onMeasureOnWatch: (() -> Unit)? = null,
     onShare: (() -> Unit)? = null,
+    onOpenPostural: () -> Unit = {},
 ) {
     val colors = HeartlineTheme.colors
     ReachabilityScaffold(
@@ -77,6 +76,8 @@ fun HeartRateScreen(
         onBack = onBack,
         actions = { if (onShare != null && state.latestBpm != null) ShareAction(onShare) },
     ) {
+        // Only once rises after getting up made a pattern: first on the screen, so it isn't missed.
+        state.postural?.let { banner -> item(key = "postural") { PosturalBanner(banner, onOpenPostural) } }
         onMeasureOnWatch?.let { measure ->
             item { TonalPillButton(stringResource(R.string.action_measure_now), onClick = measure, modifier = Modifier.gutter(), color = colors.heartRate) }
         }
@@ -224,9 +225,6 @@ fun HeartRateScreen(
                     }
                 }
             }
-            state.postural?.let { postural ->
-                item(key = "postural") { PosturalCard(postural) }
-            }
             if (state.zoneBounds.isNotEmpty()) {
                 item {
                     RoundedCard(Modifier.gutter()) {
@@ -284,7 +282,7 @@ fun HeartRateScreen(
 }
 
 @Composable
-fun AlertsScreen(alerts: List<AlertUi>, onBack: (() -> Unit)? = null) {
+fun AlertsScreen(alerts: List<AlertUi>, onBack: (() -> Unit)? = null, onOpenPostural: () -> Unit = {}) {
     val colors = HeartlineTheme.colors
     ReachabilityScaffold(title = stringResource(R.string.alerts_history), onBack = onBack) {
         if (alerts.isEmpty()) {
@@ -354,6 +352,8 @@ fun AlertsScreen(alerts: List<AlertUi>, onBack: (() -> Unit)? = null) {
                         subtitle = "${alert.date} · ${alert.time}${if (detail.isNotEmpty()) " · $detail" else ""}$origin",
                         leading = { IconBadge(icon, tint) },
                         showDivider = i < alerts.lastIndex,
+                        // The rises after getting up have their own report.
+                        onClick = if (alert.trend == HeartTrend.POSTURAL_RISE) onOpenPostural else null,
                     )
                 }
             }
@@ -369,39 +369,3 @@ fun AlertsScreen(alerts: List<AlertUi>, onBack: (() -> Unit)? = null) {
     }
 }
 
-/**
- * Rises after getting up over the last two weeks: none, some (not yet a pattern), or repeated on
- * enough days to notify. Worded as a check, never as a condition (docs/algorithms/POSTURAL_RISE.md).
- */
-@Composable
-fun PosturalCard(state: PosturalUi) {
-    val colors = HeartlineTheme.colors
-    RoundedCard(Modifier.gutter()) {
-        CardTitle(stringResource(R.string.postural_title))
-        Text(stringResource(R.string.postural_caption, state.minRiseBpm), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-        Spacer(Modifier.height(12.dp))
-        val summary = when {
-            state.pattern -> stringResource(R.string.postural_pattern, state.days, state.medianRestBpm ?: 0, state.medianPeakBpm ?: 0)
-            state.rises > 0 -> stringResource(
-                R.string.postural_some,
-                pluralStringResource(R.plurals.postural_rises, state.rises, state.rises),
-                pluralStringResource(R.plurals.postural_days, state.days, state.days),
-            )
-            else -> stringResource(R.string.postural_none)
-        }
-        Text(summary, style = MaterialTheme.typography.bodyMedium, color = if (state.pattern) colors.statusWarn else colors.onBackground)
-        state.latest.forEach { rise ->
-            Spacer(Modifier.height(8.dp))
-            Row {
-                Text("${rise.date} · ${rise.time}", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, modifier = Modifier.weight(1f))
-                Text(
-                    stringResource(R.string.postural_rise_row, rise.restBpm, rise.peakBpm, rise.peakBpm - rise.restBpm),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.onBackground,
-                )
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        Text(stringResource(R.string.postural_footer), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-    }
-}
