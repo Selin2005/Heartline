@@ -222,6 +222,29 @@ The models must be retrained whenever feature code changes (`RhythmFeatures`, `E
 models were trained on. The beat model comes first: the rhythm models are trained on its
 out-of-fold counts.
 
+## Checking on real watch recordings, without a reference
+
+There is no reference ECG for the recordings Heartline users make. `./gradlew :shared:ecgEval
+-Pdir=<unpacked log export>` (`EcgExportEvaluation`) still checks what can be checked without one,
+and lists the recordings worth showing to someone who reads ECGs:
+
+- **The wrist signal:** QRS amplitude (the models were checked at × 0.3 of clinical lead I) and
+  how often a P wave is found on sinus recordings (PTB-XL lead I: 99 %). Far fewer P waves mean
+  the extra-beat kinds and the long-PR note can't be trusted on that wrist.
+- **Algorithm 3 vs 4** on the same recordings (algorithm 3's model is kept in the test resources
+  only), and which results changed.
+- **Replay:** the watch's stored result against the same wave replayed now (the analysis is
+  deterministic; only lead-off splices, which the export doesn't keep, can differ).
+- **Repeats:** recordings ≤ 15 min apart should agree (rhythm, extra beats, long PR, PR within a
+  few ms). Recording twice in a row now and then is the one consistency check without a reference.
+- **Rates against clinical normal recordings:** AFib 0–1 %, extra beats 1–3 %, long PR about 5 %,
+  inconclusive 5–10 %. For people who feel well, much higher rates point at the signal (false
+  alarms), not at the heart.
+- **Watch vs the phone's second opinion** (ECGFounder, a different model): disagreements.
+
+The watch's log also has one line per ECG with algorithm 4's reasons (`ECG algorithm 4: note=…
+rules=… model=… sinusBeneath=… extra[S=… V=…] qrs=… pr=… longPr=… amplitude=…`).
+
 ## Limits
 
 - Wellness only: no diagnosis. Public databases are clinical recordings, not wrist lead I from a

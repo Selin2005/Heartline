@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.heartline.shared.dsp.StreamingEcgFilter
 import com.heartline.shared.ecg.EcgAnalyzer
+import com.heartline.shared.ecg.RhythmFeatures
 import com.heartline.shared.bp.PulseArrival
 import com.heartline.shared.ecg.ContactPhase
 import com.heartline.shared.ecg.EcgRecorder
@@ -208,6 +209,16 @@ class EcgMeasureViewModel(
                 "leadOff=${m.leadOffSec}s beats=${m.beats} hr=${m.averageBpm} (${m.minBpm}-${m.maxBpm}) rmssd=${m.rmssdMs} " +
                 "pWave=${analysis.evidence.pWaveRatio} inverted=${m.inverted} rate=${m.sampleRateHz}Hz " +
                 "raw[min=${recording.minOrNull()} max=${recording.maxOrNull()} mean=${recording.average()}] noisy=${m.noisySeconds}",
+        )
+        // Algorithm 4's reasons, so an exported log shows what the watch saw (tools: ecgEval).
+        HLog.i(
+            TAG,
+            "ECG algorithm ${m.algorithm}: note=${m.note} rules=${analysis.rules?.result}/${analysis.rules?.note} " +
+                "model=${analysis.evidence.modelProbabilities?.joinToString("/") { "%.3f".format(it) }} " +
+                "sinusBeneath=${"%.3f".format(analysis.sinusBeneath)} extra[S=${m.supraventricularBeats} V=${m.ventricularBeats} " +
+                "of ${analysis.beatCounts.classified}] qrs=${m.qrsMs} pr=${m.prMs} longPr=${m.longPr} amplitude=${"%.2f".format(
+                    analysis.features.getOrElse(RhythmFeatures.NAMES.indexOf("amplitude_mv")) { 0.0 }
+                )}mV",
         )
         val id = UUID.randomUUID().toString()
         val meta = RecordMeta(

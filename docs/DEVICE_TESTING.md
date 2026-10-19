@@ -60,6 +60,14 @@ To measure the blood-pressure algorithm on an export: unzip it and run
 `./gradlew :shared:bpEval -Pdir=<folder>`. Every cuff-checked reading is replayed through the
 current algorithm and its variants, with the error in the terms of ISO 81060-2 / IEEE 1708.
 
+To check the ECG algorithm on an export: run `./gradlew :shared:ecgEval -Pdir=<folder>`. No
+reference rhythm is needed: every ECG in `records/` is replayed through algorithms 3 and 4, and
+the report shows the wrist signal (amplitude, P waves found), what each algorithm says, whether
+the watch's stored result replays the same, whether recordings minutes apart agree, how often
+each finding comes up against clinical normal recordings, and which recordings deserve a look
+(also written to `<folder>/ecg-eval.csv`). Recording twice in a row now and then makes the
+repeat check possible (docs/algorithms/ECG_ALGORITHM.md, "Checking on real watch recordings").
+
 In a session, `ECG_ON_DEMAND.csv`, `PPG_ON_DEMAND.csv`, `HEART_RATE_CONTINUOUS.csv`,
 `SPO2_ON_DEMAND.csv`, … hold every value the Samsung tracker gave (all its keys: values, statuses,
 LEAD_OFF, sequence, …); `HEART_RATE_CONTINUOUS.IBI_LIST.csv` the beat-to-beat intervals;

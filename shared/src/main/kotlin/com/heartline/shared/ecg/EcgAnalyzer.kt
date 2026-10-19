@@ -33,7 +33,11 @@ data class EcgAnalysis(
     val beatProbabilities: List<DoubleArray?> = emptyList(),
     val beatCounts: EctopicBeats.Counts = EctopicBeats.Counts.NONE,
     /** Median dominant beat (EcgMorphology.template), mV. */
-    val template: DoubleArray? = null
+    val template: DoubleArray? = null,
+    /** The rules' own decision (algorithm 3's fallback and note; tools replay older algorithms with it). */
+    val rules: RhythmClassifier.Decision? = null,
+    /** The sinus-beneath-early-beats model's probability (0 without it). */
+    val sinusBeneath: Double = 0.0
 )
 
 /** The learned models algorithm 4 ships besides the rhythm model (shared/src/main/resources/ecg). */
@@ -307,7 +311,7 @@ object EcgAnalyzer {
                 }
             ),
             rrRuns, noise, IntArray(peaks.size) { if (beats.isOtherShape(it)) 1 else 0 }, modelFeatures, reason,
-            beatRows, beatProbabilities, beatCounts, template
+            beatRows, beatProbabilities, beatCounts, template, rules, sinusBeneath
         )
     }
 

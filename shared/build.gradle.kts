@@ -25,6 +25,15 @@ dependencies {
 }
 
 // Replays the cuff-checked blood-pressure sessions of an unpacked diagnostic export:
+// ./gradlew :shared:ecgEval -Pdir=<folder>
+tasks.register<JavaExec>("ecgEval") {
+    group = "verification"
+    description = "ECG recordings of an unpacked export replayed through algorithms 3 and 4, no reference needed (-Pdir=<folder>)"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.heartline.shared.tools.EcgEvalMainKt")
+    args(project.findProperty("dir")?.toString() ?: "")
+}
+
 // ./gradlew :shared:bpEval -Pdir=<folder>
 tasks.register<JavaExec>("bpEval") {
     group = "verification"
