@@ -3,6 +3,14 @@
 All notable changes to Heartline. Each release's notes are written by the Build workflow when the
 release is made, and the app shows them under *What's new* after an update.
 
+## 0.0.2.281-beta.1 — 2026-10-24
+
+### New
+- Heartline is now available in Simplified Chinese, on both your phone and your watch.
+
+### Thanks
+- A big thank-you to @xiangshoujimo for translating the whole app into Simplified Chinese, for phone and watch alike!
+
 ## 0.0.2.279-beta.1 — 2026-10-19
 
 ### New
