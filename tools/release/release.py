@@ -59,6 +59,9 @@ SESSION_ID = "heartline-" + (
     f"{os.environ['GITHUB_RUN_ID']}-{os.environ.get('GITHUB_RUN_ATTEMPT', '1')}" if os.environ.get("GITHUB_RUN_ID") else uuid.uuid4().hex
 )
 TRAILER = re.compile(r"^(Co-Authored-By|Signed-off-by|Claude-Session|Change-Id):", re.I)
+# "Contributed-by: @login" in a commit (added when merging an outside contributor's pull request):
+# the release notes thank that GitHub user and tag them.
+CONTRIBUTOR = re.compile(r"^Contributed-by:\s*@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)\s*$", re.I)
 
 
 def git(*args: str) -> str:
@@ -174,10 +177,11 @@ DOCS_LINE = "Documentation, terms and policy updates"
 
 
 def commits(previous: str):
-    """Commit messages since [previous] that matter to users, and whether docs changed too."""
+    """Commit messages since [previous] that matter to users, whether docs changed too, and the
+    outside contributors to thank as (login, commit subject)."""
     rng = f"{previous}..HEAD" if previous else "HEAD"
     raw = git("log", "--no-merges", "--format=%x1e%s%n%b%x1f", "--name-only", rng)
-    entries, docs = [], False
+    entries, docs, thanks = [], False, []
     for block in raw.split("\x1e"):
         if not block.strip():
             continue
@@ -190,9 +194,12 @@ def commits(previous: str):
             docs = True
             continue
         lines = [line for line in message.strip().splitlines() if line.strip() and not TRAILER.match(line.strip())]
+        logins = [m.group(1) for m in map(CONTRIBUTOR.match, (line.strip() for line in lines)) if m]
+        lines = [line for line in lines if not CONTRIBUTOR.match(line.strip())]
+        thanks += [(login, lines[0] if lines else "") for login in logins]
         if lines:
             entries.append(lines)
-    return entries, docs
+    return entries, docs, thanks
 
 
 def stream_text(response, deadline: float) -> str:
@@ -284,7 +291,7 @@ def ask_model(system: str, user: str):
     return None
 
 
-def ai_notes(version: str, entries, docs: bool, stat: str):
+def ai_notes(version: str, entries, docs: bool, stat: str, thanks=()):
     if not entries:
         return None
     # Subject and the first lines of each body: enough for the model, and a quicker answer.
@@ -293,13 +300,17 @@ def ai_notes(version: str, entries, docs: bool, stat: str):
         "You write release notes for Heartline, a wellness app for Galaxy Watch and Android phones "
         "(ECG, blood pressure estimates, heart rate, SpO2, stress, body composition). Write for end "
         "users in plain, friendly English. Use Markdown with only these sections, in this order and "
-        "only when they have content: '### New', '### Improved', '### Fixed'. One short bullet per "
-        "user-visible change; merge related commits. Leave out refactoring, tests, CI, docs and other "
-        "internal work. Never claim medical accuracy or diagnosis. No title, no introduction, no "
-        "version number, no closing remarks."
+        "only when they have content: '### New', '### Improved', '### Fixed', '### Thanks'. One short "
+        "bullet per user-visible change; merge related commits. Leave out refactoring, tests, CI, docs "
+        "and other internal work. Never claim medical accuracy or diagnosis. No title, no "
+        "introduction, no version number, no closing remarks. '### Thanks' is only for the "
+        "contributors listed after the commits: one warm bullet each that thanks them for their "
+        "contribution and tags them with their @login exactly as given (no backticks), and nobody else."
     )
     if docs:
         log += f"\n\n(Also: {DOCS_LINE}. Mention this as exactly one bullet under '### Improved'.)"
+    if thanks:
+        log += "\n\nContributors to thank:\n" + "\n".join(f"- @{login}: {subject}" for login, subject in thanks)
     text = ask_model(system, f"Version {version}. Changed files: {stat}\n\nCommits:\n{log}")
     if not text:
         return None
@@ -310,10 +321,21 @@ def ai_notes(version: str, entries, docs: bool, stat: str):
 MENTION = re.compile(r"(?<![\w`/])@[\w.-]+(?::[\w.-]+)?")
 
 
-def no_mentions(text: str) -> str:
+def no_mentions(text: str, keep=()) -> str:
     """Puts "@name" in backticks: GitHub would link it to that user and list them among the
-    release's contributors (a commit about "@param:StringRes" once added a stranger)."""
-    return MENTION.sub(lambda m: f"`{m.group(0)}`", text)
+    release's contributors (a commit about "@param:StringRes" once added a stranger). The logins
+    in [keep], the contributors being thanked, stay tagged."""
+    kept = {login.lower() for login in keep}
+    return MENTION.sub(lambda m: m.group(0) if m.group(0)[1:].rstrip(".-").lower() in kept else f"`{m.group(0)}`", text)
+
+
+def with_thanks(notes: str, thanks) -> str:
+    """[notes] with a '### Thanks' bullet for every contributor the model left out."""
+    missing = [(login, subject) for login, subject in thanks if f"@{login}".lower() not in notes.lower()]
+    if not missing:
+        return notes
+    lines = [f"- Thanks to @{login} for their contribution: {subject}" for login, subject in missing]
+    return notes.rstrip() + ("\n" if "### Thanks" in notes else "\n\n### Thanks\n") + "\n".join(lines)
 
 
 def plain_notes(entries, docs: bool = False) -> str:
@@ -358,9 +380,10 @@ def cmd_notes(a) -> None:
         # The notes cover everything since the last version users saw in the changelog.
         a.previous = changelog_base(a.changelog, a.version)
     print(f"Release notes for {a.version}: commits since {a.previous or 'the first commit'}", file=sys.stderr)
-    entries, docs = commits(a.previous)
+    entries, docs, thanks = commits(a.previous)
     stat = git("diff", "--shortstat", a.previous, "HEAD") if a.previous else "first release"
-    notes = no_mentions(ai_notes(a.version, entries, docs, stat) or plain_notes(entries, docs))
+    notes = ai_notes(a.version, entries, docs, stat, thanks) or plain_notes(entries, docs)
+    notes = no_mentions(with_thanks(notes, thanks), keep=[login for login, _ in thanks])
     with open(a.out, "w", encoding="utf-8") as f:
         f.write(notes.strip() + "\n")
     if a.changelog:
@@ -373,7 +396,9 @@ def inline_html(text: str) -> str:
     out = html.escape(text, quote=False)
     out = re.sub(r"`([^`]+)`", r"<code>\1</code>", out)
     out = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", out)
-    return re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r'<a href="\2">\1</a>', out)
+    out = re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r'<a href="\2">\1</a>', out)
+    # A tagged contributor is a GitHub login: Telegram would link "@name" to its own user of that name.
+    return re.sub(r"(?<![\w>/.-])@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)(?![\w<])", r'<a href="https://github.com/\1">@\1</a>', out)
 
 
 def notes_html(notes: str) -> str:
@@ -394,7 +419,8 @@ def summary(version: str, notes: str):
     system = (
         "Summarise these release notes of Heartline, a wellness app for Galaxy Watch, in one or two "
         "short, friendly sentences for a community chat. Plain text only, no emoji, no version "
-        "number, no medical claims."
+        "number, no medical claims. If the notes thank contributors, thank them too, by name "
+        "without the @."
     )
     text = ask_model(system, f"Version {version}\n\n{notes}")
     return re.sub(r"\s+", " ", text).strip() if text else None
@@ -514,10 +540,10 @@ def cmd_ai_check(a) -> None:
     if not pong:
         problems.append("the model gave no answer")
 
-    entries, docs = commits(a.previous)
+    entries, docs, thanks = commits(a.previous)
     stat = git("diff", "--shortstat", a.previous, "HEAD") if a.previous else "first release"
     started = time.time()
-    notes = ai_notes(a.version, entries, docs, stat)
+    notes = ai_notes(a.version, entries, docs, stat, thanks)
     print(f"\n2. Release notes from {len(entries)} commits since {a.previous or 'the first commit'} ({time.time() - started:.1f} s):\n{notes}")
     if not notes:
         problems.append("no release notes from the model (a build would fall back to the commit list)")
