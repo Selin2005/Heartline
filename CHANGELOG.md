@@ -3,6 +3,11 @@
 All notable changes to Heartline. Each release's notes are written by the Build workflow when the
 release is made, and the app shows them under *What's new* after an update.
 
+## 0.0.2.282-beta.1 — 2026-10-25
+
+### Fixed
+- Fixed an issue where the app failed to install on some phones (such as ColorOS devices) due to how the installation package was signed.
+
 ## 0.0.2.281-beta.1 — 2026-10-24
 
 ### New
