@@ -172,6 +172,15 @@ def certificates(apk: str) -> list[str]:
     return re.findall(r"certificate SHA-256 digest: ([0-9a-f]+)", out)
 
 
+def v1_signed(apk: str) -> bool:
+    """Whether the APK has v1 (JAR) signature files: some installers refuse it without them."""
+    # apksigner skips v1 for an app with minSdk 24+; checking as for Android 6 makes it look.
+    out = subprocess.run(
+        [tool("apksigner"), "verify", "--verbose", "--min-sdk-version", "23", apk], capture_output=True, text=True,
+    ).stdout
+    return bool(re.search(r"Verified using v1 scheme \(JAR signing\): true", out))
+
+
 def release_certificate() -> str | None:
     keystore = os.environ.get("HEARTLINE_KEYSTORE_FILE")
     if not keystore:
@@ -264,6 +273,7 @@ def check(role: str, apk: str) -> dict:
         fail("phone: assets/docs/CHANGELOG.md is missing (What's new)")
 
     info["certs"] = certificates(apk)
+    info["v1"] = v1_signed(apk)
     print(f"   {info['package']} {info['name']} ({info['code']}), {len(classes)} classes, {len(resources)} resources, certificate {','.join(c[:16] for c in info['certs'])}…")
     return info
 
@@ -287,6 +297,9 @@ def main() -> None:
             fail(f"version{key.title()} differs: phone {phone[key]}, watch {watch[key]}")
         if expected and phone[key] != expected:
             fail(f"version{key.title()} is {phone[key]}, expected {expected}")
+    for which, info in (("phone", phone), ("watch", watch)):
+        if not info["v1"]:
+            fail(f"the {which} APK has no v1 (JAR) signature: some phones refuse to install it (\"the package has no signature file\")")
     if not phone["certs"] or phone["certs"] != watch["certs"]:
         fail(f"the phone and watch aren't signed with the same key ({phone['certs']} / {watch['certs']}): the Wear Data Layer won't connect them")
     release = release_certificate()

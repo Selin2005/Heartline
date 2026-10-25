@@ -49,6 +49,13 @@ android {
                 keyPassword = System.getenv("HEARTLINE_KEY_PASSWORD")
             }
         }
+        // v1 (JAR) signatures besides v2: with minSdk 24+ the build leaves v1 out, and some phone
+        // installers refuse an APK without its META-INF signature files (ColorOS on a OnePlus Ace 3:
+        // "安装包没有签名文件", the package has no signature file).
+        configureEach {
+            enableV1Signing = true
+            enableV2Signing = true
+        }
     }
 
     buildTypes {
