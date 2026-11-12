@@ -274,7 +274,8 @@ def caption(name: str) -> str:
 
 def collect(platform: str) -> dict[str, dict[str | None, pathlib.Path]]:
     screens: dict[str, dict[str | None, pathlib.Path]] = {}
-    for path in sorted(GOLDENS[platform].glob("*.png")):
+    # Sort by raw filename string so WindowsPath case-folding does not reorder names vs POSIX CI.
+    for path in sorted(GOLDENS[platform].glob("*.png"), key=lambda p: p.name):
         if "CardScreenshotTest" in path.name:
             continue
         name, variant = golden_name(path.name)
