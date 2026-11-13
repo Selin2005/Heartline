@@ -4,6 +4,7 @@
 package com.heartline.datalayer.diag
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.os.Process
 import android.util.Log
 import com.heartline.shared.diag.LogLine
@@ -39,12 +40,15 @@ object HLog {
 
     @Volatile private var redactor: Redactor = Redactor.NONE
 
+    @Volatile private var logcatVerbose = false
+
     /**
      * Called once from Application.onCreate. Logging to logcat works before and without it.
      * [onSegment] gets each closed segment (on the logging thread; it must only hand it on).
      */
     fun init(context: Context, budgetBytes: Long, onSegment: (File) -> Unit = {}) {
         if (file != null) return
+        logcatVerbose = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         file = SegmentedLog(File(context.filesDir, "logs"), budgetBytes, onSealed = onSegment).also { log -> writer.execute { log.migrate() } }
         writer.scheduleWithFixedDelay(::flushNow, FLUSH_MS, FLUSH_MS, TimeUnit.MILLISECONDS)
         val previous = Thread.getDefaultUncaughtExceptionHandler()
@@ -71,15 +75,20 @@ object HLog {
 
     val isKeeping: Boolean get() = persistent
 
-    fun d(tag: String, message: String, error: Throwable? = null): Int = Log.d(tag, message, error).also { record('D', tag, message, error) }
+    fun d(tag: String, message: String, error: Throwable? = null): Int =
+        (if (logcatVerbose) Log.d(tag, redactor.redact(message), error) else 0).also { record('D', tag, message, error) }
 
-    fun v(tag: String, message: String, error: Throwable? = null): Int = Log.v(tag, message, error).also { record('V', tag, message, error) }
+    fun v(tag: String, message: String, error: Throwable? = null): Int =
+        (if (logcatVerbose) Log.v(tag, redactor.redact(message), error) else 0).also { record('V', tag, message, error) }
 
-    fun i(tag: String, message: String, error: Throwable? = null): Int = Log.i(tag, message, error).also { record('I', tag, message, error) }
+    fun i(tag: String, message: String, error: Throwable? = null): Int =
+        (if (logcatVerbose) Log.i(tag, redactor.redact(message), error) else 0).also { record('I', tag, message, error) }
 
-    fun w(tag: String, message: String, error: Throwable? = null): Int = Log.w(tag, message, error).also { record('W', tag, message, error) }
+    fun w(tag: String, message: String, error: Throwable? = null): Int =
+        Log.w(tag, redactor.redact(message), error).also { record('W', tag, message, error) }
 
-    fun e(tag: String, message: String, error: Throwable? = null): Int = Log.e(tag, message, error).also { record('E', tag, message, error) }
+    fun e(tag: String, message: String, error: Throwable? = null): Int =
+        Log.e(tag, redactor.redact(message), error).also { record('E', tag, message, error) }
 
     private fun record(level: Char, tag: String, message: String, error: Throwable?) {
         if (!persistent || file == null) return

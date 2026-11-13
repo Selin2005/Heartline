@@ -261,7 +261,7 @@ class PhoneLogExporter(
             val w = out.bufferedWriter()
             w.write("id,kind,start,startMs,durationMs,sampleRateHz,sampleCount,note,summary\n")
             all.forEach { r ->
-                w.write(listOf(r.id, r.kind.name, TIME.format(Instant.ofEpochMilli(r.startedAtMs)), r.startedAtMs, r.durationMs, r.sampleRateHz, r.sampleCount, r.note.orEmpty(), r.summaryJson).joinToString(",") { csv(it.toString()) })
+                w.write(listOf(r.id, r.kind.name, TIME.format(Instant.ofEpochMilli(r.startedAtMs)), r.startedAtMs, r.durationMs, r.sampleRateHz, r.sampleCount, HLog.redact(r.note.orEmpty()), HLog.redact(r.summaryJson)).joinToString(",") { csv(it.toString()) })
                 w.write("\n")
             }
             w.flush()

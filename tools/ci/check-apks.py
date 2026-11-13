@@ -271,6 +271,14 @@ def check(role: str, apk: str) -> dict:
             fail(f"{role}: native library {lib} is missing")
     if role == "phone" and "assets/docs/CHANGELOG.md" not in entries:
         fail("phone: assets/docs/CHANGELOG.md is missing (What's new)")
+    for notice in (
+        "assets/docs/LICENSE",
+        "assets/docs/LICENSE-EXCEPTION.md",
+        "assets/docs/THIRD_PARTY_NOTICES.md",
+        "assets/docs/third_party/inter/LICENSE.txt",
+    ):
+        if notice not in entries:
+            fail(f"{role}: {notice} is missing")
 
     info["certs"] = certificates(apk)
     info["v1"] = v1_signed(apk)

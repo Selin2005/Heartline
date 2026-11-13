@@ -78,7 +78,7 @@ class HeartRepository(
      */
     override suspend fun saveBatch(batch: HrBatch) {
         val incoming = batch.minutes.map { HrMinuteEntity(it.minuteStartMs, it.avgBpm, it.minBpm, it.maxBpm, it.rmssdMs, it.resting, it.activity, it.steps) }
-        val existing = dao.minutesAt(incoming.map { it.minuteStartMs }).associateBy { it.minuteStartMs }
+        val existing = incoming.map { it.minuteStartMs }.chunked(500).flatMap { dao.minutesAt(it) }.associateBy { it.minuteStartMs }
         dao.insertMinutes(incoming.map { m -> existing[m.minuteStartMs]?.let { merge(it, m) } ?: m })
         batch.limits?.let { onLimits(it) }
         if (batch.spo2.isNotEmpty()) dao.insertSpo2(batch.spo2.map { Spo2SampleEntity(it.tsMs, it.percent, it.context, it.confirmation, it.lowConfidence) })

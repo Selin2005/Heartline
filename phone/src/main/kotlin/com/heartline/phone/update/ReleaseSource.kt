@@ -19,7 +19,10 @@ import java.security.MessageDigest
 import kotlin.coroutines.coroutineContext
 
 /** Reads the project's releases from the GitHub API and downloads release files. No personal data is sent. */
-open class ReleaseSource(private val userAgent: String) {
+open class ReleaseSource(
+    private val userAgent: String,
+    private val allowLocalhostForTesting: Boolean = false,
+) {
     open suspend fun releases(): List<Release> = Releases.parse(text(RELEASES_API))
 
     open suspend fun text(url: String): String = withContext(Dispatchers.IO) {
@@ -79,24 +82,53 @@ open class ReleaseSource(private val userAgent: String) {
     }
 
     private fun open(url: String, accept: String = "application/vnd.github+json", from: Long = 0): HttpURLConnection {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        connection.connectTimeout = 15_000
-        connection.readTimeout = 30_000
-        connection.instanceFollowRedirects = true
-        connection.setRequestProperty("Accept", accept)
-        connection.setRequestProperty("User-Agent", userAgent)
-        if (from > 0) connection.setRequestProperty("Range", "bytes=$from-")
-        val code = connection.responseCode
-        if (code !in 200..299 && !(from > 0 && code == RANGE_NOT_SATISFIABLE)) {
-            connection.disconnect()
-            throw IOException("HTTP $code for $url")
+        var current = url
+        repeat(MAX_REDIRECTS + 1) {
+            val parsed = URL(current)
+            if (!isAllowedUpdateUrl(parsed)) throw IOException("Refusing non-GitHub or non-HTTPS URL: $current")
+            val connection = parsed.openConnection() as HttpURLConnection
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 30_000
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("Accept", accept)
+            connection.setRequestProperty("User-Agent", userAgent)
+            if (from > 0) connection.setRequestProperty("Range", "bytes=$from-")
+            val code = connection.responseCode
+            if (code in REDIRECT_CODES) {
+                val location = connection.getHeaderField("Location")
+                connection.disconnect()
+                if (location.isNullOrBlank()) throw IOException("Redirect without Location header for $current")
+                current = URL(parsed, location).toString()
+                return@repeat
+            }
+            if (code !in 200..299 && !(from > 0 && code == RANGE_NOT_SATISFIABLE)) {
+                connection.disconnect()
+                throw IOException("HTTP $code for $current")
+            }
+            return connection
         }
-        return connection
+        throw IOException("Too many redirects for $url")
+    }
+
+    internal fun isAllowedUpdateUrl(url: URL): Boolean {
+        val host = url.host.lowercase()
+        if (allowLocalhostForTesting && (host == "127.0.0.1" || host == "localhost")) return true
+        if (!url.protocol.equals("https", ignoreCase = true)) return false
+        return host in ALLOWED_HOSTS
     }
 
     companion object {
         private const val TAG = "Heartline/Update"
         private const val RANGE_NOT_SATISFIABLE = 416
+        private const val MAX_REDIRECTS = 5
+        private val REDIRECT_CODES = setOf(301, 302, 303, 307, 308)
+        private val ALLOWED_HOSTS = setOf(
+            "api.github.com",
+            "github.com",
+            "objects.githubusercontent.com",
+            "release-assets.githubusercontent.com",
+            "github-releases.githubusercontent.com",
+        )
 
         /** The total size from a `Content-Range: bytes 100-199/200` header. */
         internal fun totalOf(contentRange: String?): Long? = contentRange?.substringAfterLast('/', "")?.trim()?.toLongOrNull()

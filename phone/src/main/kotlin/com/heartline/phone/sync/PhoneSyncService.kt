@@ -7,11 +7,13 @@ import com.google.android.gms.wearable.ChannelClient
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
 import com.heartline.datalayer.DataLayerTransport
+import com.heartline.datalayer.diag.HLog
 import com.heartline.phone.di.APP_SCOPE
 import com.heartline.shared.diag.RemoteLogs
 import com.heartline.shared.sync.Envelope
 import com.heartline.shared.sync.PhoneSyncEngine
 import com.heartline.shared.sync.Protocol
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
@@ -28,23 +30,33 @@ class PhoneSyncService : WearableListenerService() {
     override fun onMessageReceived(event: MessageEvent) {
         val envelope = Envelope(event.path, event.data)
         scope.launch {
-            transport.deliver(envelope)
-            engine.handle(envelope)
+            runCatching {
+                transport.deliver(envelope)
+                engine.handle(envelope)
+            }.onFailure { e ->
+                if (e is CancellationException) throw e
+                HLog.w("Heartline/Sync", "message ${event.path} failed", e)
+            }
         }
     }
 
     override fun onChannelOpened(channel: ChannelClient.Channel) {
         scope.launch {
-            if (channel.path.startsWith(Protocol.LOGS_SEGMENT_PREFIX)) {
-                // A segment of the watch's log: streamed into a file, not read into memory.
-                val requestId = channel.path.removePrefix(Protocol.LOGS_SEGMENT_PREFIX)
-                transport.readChannelStream(channel) { remoteLogs.onSegment(requestId, it) }
-            } else if (channel.path.startsWith(Protocol.LOGS_ARCHIVE_PREFIX)) {
-                // A finished log segment or raw session the watch moves here: into the archive, then acked.
-                val (type, name) = channel.path.removePrefix(Protocol.LOGS_ARCHIVE_PREFIX).split('/', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
-                transport.readChannelStream(channel) { inbox.receive(type, name, it) }
-            } else {
-                engine.handle(Envelope(channel.path, transport.readChannel(channel)))
+            runCatching {
+                if (channel.path.startsWith(Protocol.LOGS_SEGMENT_PREFIX)) {
+                    // A segment of the watch's log: streamed into a file, not read into memory.
+                    val requestId = channel.path.removePrefix(Protocol.LOGS_SEGMENT_PREFIX)
+                    transport.readChannelStream(channel) { remoteLogs.onSegment(requestId, it) }
+                } else if (channel.path.startsWith(Protocol.LOGS_ARCHIVE_PREFIX)) {
+                    // A finished log segment or raw session the watch moves here: into the archive, then acked.
+                    val (type, name) = channel.path.removePrefix(Protocol.LOGS_ARCHIVE_PREFIX).split('/', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+                    transport.readChannelStream(channel) { inbox.receive(type, name, it) }
+                } else {
+                    engine.handle(Envelope(channel.path, transport.readChannel(channel)))
+                }
+            }.onFailure { e ->
+                if (e is CancellationException) throw e
+                HLog.w("Heartline/Sync", "channel ${channel.path} failed", e)
             }
         }
     }

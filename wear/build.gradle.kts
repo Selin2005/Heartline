@@ -62,11 +62,13 @@ android {
             // R8 shrinks the libraries only (proguard-rules.pro keeps Heartline's own code whole and
             // unrenamed). Resources are all kept: some are read only by the system, such as the Wear OS
             // capability the phone and watch find each other by. Signed with the release key when the
-            // environment provides one.
+            // environment provides one; opt into debug signing explicitly with -Pheartline.allowDebugSigning=true.
             isMinifyEnabled = true
             isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            val allowDebugSigning = findProperty("heartline.allowDebugSigning")?.toString()?.toBoolean() == true
+            signingConfig = signingConfigs.findByName("release")
+                ?: if (allowDebugSigning) signingConfigs.getByName("debug") else null
         }
         // Google Play: the same release build, named like the phone's so both are bundled together.
         create("play") {
@@ -102,6 +104,20 @@ android {
         }
     }
 }
+
+// Root license/notice files and Inter's OFL license go into the watch APK as assets/docs/.
+val bundledDocs = layout.buildDirectory.dir("generated/bundled-docs")
+val bundleDocs = tasks.register<Sync>("bundleDocs") {
+    from(rootProject.file("LICENSE"))
+    from(rootProject.file("LICENSE-EXCEPTION.md"))
+    from(rootProject.file("THIRD_PARTY_NOTICES.md"))
+    from(rootProject.file("third_party/inter/LICENSE.txt")) {
+        into("third_party/inter")
+    }
+    into(bundledDocs.map { it.dir("docs") })
+}
+android.sourceSets.getByName("main").assets.directories.add(bundledDocs.get().asFile.path)
+tasks.named("preBuild") { dependsOn(bundleDocs) }
 
 // Unit and screenshot tests run on debug; the play build type only differs in packaging.
 tasks.matching { it.name == "testPlayUnitTest" }.configureEach { enabled = false }

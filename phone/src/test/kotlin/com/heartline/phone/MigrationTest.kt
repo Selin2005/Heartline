@@ -4,6 +4,8 @@
 package com.heartline.phone
 
 import androidx.room.testing.MigrationTestHelper
+import androidx.sqlite.db.SupportSQLiteOpenHelper
+import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.heartline.phone.data.HeartlineDatabase
@@ -11,12 +13,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
 
 /** Upgrading from every shipped schema must keep existing records (P9). */
 @RunWith(AndroidJUnit4::class)
 class MigrationTest {
     @get:Rule
-    val helper = MigrationTestHelper(InstrumentationRegistry.getInstrumentation(), HeartlineDatabase::class.java)
+    val helper = MigrationTestHelper(InstrumentationRegistry.getInstrumentation(), HeartlineDatabase::class.java, emptyList(), windowsSafeOpenFactory())
 
     @Test
     fun migrate1To3KeepsRecords() {
@@ -186,5 +189,21 @@ class MigrationTest {
 
     private companion object {
         const val DB = "migration-test.db"
+
+        // Upstream SupportSQLiteDriver.open() splits file paths only on '/', failing on Windows when
+        // Room MigrationTestHelper passes context.getDatabasePath(...).absolutePath with '\'.
+        fun windowsSafeOpenFactory(): SupportSQLiteOpenHelper.Factory {
+            val delegate = FrameworkSQLiteOpenHelperFactory()
+            return object : SupportSQLiteOpenHelper.Factory {
+                override fun create(configuration: SupportSQLiteOpenHelper.Configuration): SupportSQLiteOpenHelper {
+                    val helper = delegate.create(configuration)
+                    if (File.separatorChar == '/') return helper
+                    return object : SupportSQLiteOpenHelper by helper {
+                        override val databaseName: String?
+                            get() = helper.databaseName?.let { configuration.context.getDatabasePath(it).absolutePath }
+                    }
+                }
+            }
+        }
     }
 }

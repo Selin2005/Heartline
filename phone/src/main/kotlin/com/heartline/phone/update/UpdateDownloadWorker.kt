@@ -73,13 +73,19 @@ class UpdateDownloadWorker(context: Context, params: WorkerParameters) :
             }
         } catch (e: Updater.ChecksumMismatch) {
             return failed(version, e)
+        } catch (e: Updater.InvalidPackage) {
+            return failed(version, e)
         } catch (e: IOException) {
             if (runAttemptCount + 1 >= MAX_ATTEMPTS) return failed(version, e)
             HLog.w(TAG, "download $version stopped at ${done.get()} of ${total.get()} bytes; continuing when connected", e)
             return Result.retry()
         }
-        handOver(version, file)
-        return Result.success(workDataOf(KEY_VERSION to version))
+        return try {
+            handOver(version, file)
+            Result.success(workDataOf(KEY_VERSION to version))
+        } catch (e: Updater.InvalidPackage) {
+            failed(version, e)
+        }
     }
 
     /** On screen: straight to the installer. In the background: a notification to tap. */
@@ -87,6 +93,7 @@ class UpdateDownloadWorker(context: Context, params: WorkerParameters) :
         if (AppForeground.now()) {
             HLog.i(TAG, "$version ready: Heartline is on screen, installing")
             runCatching { updater.install(file) }.onFailure {
+                if (it is Updater.InvalidPackage) throw it
                 HLog.w(TAG, "install of $version failed to start", it)
                 notifier.updateReady(version)
             }

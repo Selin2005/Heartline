@@ -70,6 +70,7 @@ object EcgQuality {
         segments: List<IntRange>,
         fs: Int
     ): List<Pair<SecondKind, WindowSqi?>> {
+        if (fs <= 0) return emptyList()
         val count = clean.size / fs
         return List(count) { w ->
             val centre = w * fs + fs / 2

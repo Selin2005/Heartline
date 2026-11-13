@@ -273,8 +273,8 @@ object PpgFeatures {
         }
         val clean = beats.indices.filter { it !in excluded }
         val intervals = clean.map { lengths[it] }
-        val mean = intervals.average()
-        val cv = if (intervals.size < 3 || mean <= 0) {
+        val mean = if (intervals.isEmpty()) Double.NaN else intervals.average()
+        val cv = if (intervals.size < 3 || !mean.isFinite() || mean <= 0) {
             0.0
         } else {
             sqrt(intervals.sumOf { (it - mean) * (it - mean) } / (intervals.size - 1)) / mean
@@ -292,9 +292,17 @@ object PpgFeatures {
         }
         // Do the pulses look alike, whatever their spacing? (Irregular rhythm: yes; noise: no.)
         val len = median.toInt()
-        val shapes = clean.map { normalise(resample(detected.x, beats[it].first, beats[it].second, len)) }
-        val template = DoubleArray(len) { k -> shapes.map { it[k] }.sorted()[shapes.size / 2] }
-        val shapeQuality = shapes.map { correlation(it, template) }.sorted().let { if (it.isEmpty()) 0.0 else it[it.size / 2] }
+        val shapes = if (clean.isEmpty() || len <= 0) {
+            emptyList()
+        } else {
+            clean.map { normalise(resample(detected.x, beats[it].first, beats[it].second, len)) }
+        }
+        val shapeQuality = if (shapes.isEmpty()) {
+            0.0
+        } else {
+            val template = DoubleArray(len) { k -> shapes.map { it[k] }.sorted()[shapes.size / 2] }
+            shapes.map { correlation(it, template) }.sorted().let { if (it.isEmpty()) 0.0 else it[it.size / 2] }
+        }
         // The app's own irregular-rhythm features (the background notification's, Dash 2009) on the
         // clean beat-to-beat intervals.
         val rr = RrFeatures.of(intervals.map { it * 1000.0 / fs })

@@ -95,10 +95,16 @@ def main():
     for name, s in sessions.items():
         print(summary(name, s))
         if a.csv:
-            os.makedirs(a.csv, exist_ok=True)
+            out_dir = os.path.abspath(a.csv)
+            os.makedirs(out_dir, exist_ok=True)
+            safe_name = os.path.basename(name).replace("..", "_").replace("/", "_").replace("\\", "_")
             for k, x in s["streams"].items():
+                safe_k = os.path.basename(k).replace("..", "_").replace("/", "_").replace("\\", "_")
+                dest = os.path.abspath(os.path.join(out_dir, f"{safe_name}_{safe_k}.csv"))
+                if os.path.commonpath([out_dir, dest]) != out_dir:
+                    raise ValueError(f"Refusing to write outside {out_dir}: {dest}")
                 arr = np.column_stack([x["t_ns"], x["values"]])
-                np.savetxt(os.path.join(a.csv, f"{name}_{k}.csv"), arr, delimiter=",", header="t_ns," + ",".join(x["columns"]), comments="")
+                np.savetxt(dest, arr, delimiter=",", header="t_ns," + ",".join(x["columns"]), comments="")
         if a.plot:
             import matplotlib.pyplot as plt
 

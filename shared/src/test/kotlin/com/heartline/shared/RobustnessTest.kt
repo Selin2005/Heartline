@@ -3,7 +3,9 @@
 
 package com.heartline.shared
 
+import com.heartline.shared.bp.PpgFeatures
 import com.heartline.shared.model.RecordMeta
+import com.heartline.shared.stress.StressBaseline
 import com.heartline.shared.sync.Envelope
 import com.heartline.shared.sync.InMemoryTransport
 import com.heartline.shared.sync.Outbox
@@ -70,5 +72,12 @@ class RobustnessTest {
             watch.handle(Envelope(path, payload))
         }
         assertTrue(saved.isEmpty())
+    }
+
+    @Test
+    fun `signal and stress helpers guard non finite and invalid inputs`() {
+        org.junit.Assert.assertEquals(0, StressBaseline.score(Double.NaN, 70, null))
+        org.junit.Assert.assertEquals(0, StressBaseline.score(-5.0, 70, null))
+        org.junit.Assert.assertNull(PpgFeatures.rhythm(floatArrayOf(0f, 0f, 0f), fs = 0))
     }
 }

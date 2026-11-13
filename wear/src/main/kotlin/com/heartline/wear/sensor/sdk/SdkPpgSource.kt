@@ -18,7 +18,6 @@ import com.samsung.android.service.health.tracking.data.DataPoint
 import com.samsung.android.service.health.tracking.data.PpgType
 import com.samsung.android.service.health.tracking.data.ValueKey
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
@@ -67,7 +66,7 @@ class SdkPpgSource(private val gateway: SdkSensorGateway) : PpgSource {
                     // gives no green (status -1 throughout, algorithm 6.6) tells contact by the infrared.
                     val greenOff = PpgType.IR in types && kept.all { it.greenStatus == PpgWaveChoice.STATUS_OFF }
                     val contact = if (greenOff) kept.all { it.irStatus <= 0 } else kept.all { it.greenStatus <= 0 }
-                    trySendBlocking(
+                    trySend(
                         PpgChunk(
                             kept.map { it.green }.toFloatArray(),
                             contact,
@@ -86,7 +85,7 @@ class SdkPpgSource(private val gateway: SdkSensorGateway) : PpgSource {
                 }
             },
         )
-        awaitClose { tracker.unsetEventListener() }
+        awaitClose { runCatching { tracker.unsetEventListener() } }
     }
 
     private fun DataPoint.float(key: ValueKey<Int>): Float = runCatching { getValue(key)?.toFloat() }.getOrNull() ?: Float.NaN

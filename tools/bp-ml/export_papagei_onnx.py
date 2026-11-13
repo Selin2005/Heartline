@@ -38,7 +38,7 @@ def main():
     from models.resnet import ResNet1DMoE
 
     model = ResNet1DMoE(in_channels=1, base_filters=32, kernel_size=3, stride=2, groups=1, n_block=18, n_classes=512, n_experts=3)
-    state = torch.load(a.weights, map_location="cpu")
+    state = torch.load(a.weights, map_location="cpu", weights_only=True)
     model.load_state_dict({(k[7:] if k.startswith("module.") else k): v for k, v in state.items()})
     enc = Encoder(model).eval()
 

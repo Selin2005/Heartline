@@ -115,8 +115,8 @@
     <string name="bp_needs_calibration_body">使用血压功能前，需要先在手机的 Heartline 中用 3 个袖带读数完成校准。</string>
     <string name="bp_normal">正常</string>
     <string name="bp_elevated">偏高</string>
-    <string name="bp_stage1">高血压 · 1 级</string>
-    <string name="bp_stage2">高血压 · 2 级</string>
+    <string name="bp_stage1">偏高 · 1 级</string>
+    <string name="bp_stage2">偏高 · 2 级</string>
     <string name="bp_crisis">非常高</string>
     <string name="bp_calibrate_notification">点按以进行第 %1$d 次校准</string>
     <string name="spo2_instruction">手臂放在桌上，手表朝上，保持不动。</string>

@@ -214,7 +214,7 @@ object BpPipeline {
         (green as? BpOutcome.Ok)?.let { channels += it.estimate.channels }
         if (green == BpOutcome.NeedsCalibration) log?.note("needsCalibration", needsCalibrationReason(calibration, nowMs))
 
-        val irFeatures = input.ir?.takeIf { precise == null }?.let { ir ->
+        val irFeatures = input.ir?.takeIf { precise == null && range.first < it.size }?.let { ir ->
             PpgFeatures.extract(
                 ir.copyOfRange(range.first, minOf(range.last + 1, ir.size)).let {
                     com.heartline.shared.dsp.PpgRepair.repair(it)
@@ -397,10 +397,13 @@ object BpPipeline {
         }
         val window = BpWindowSelector.best(raw, fs, greenPolarity) ?: return null
         val range = window.range
-        val ir = input.ir?.takeIf { precise == null }?.copyOfRange(range.first, minOf(range.last + 1, input.ir.size))?.let {
-            com.heartline.shared.dsp.PpgRepair.repair(it)
-                ?: it
-        }
+        val ir = input.ir
+            ?.takeIf { precise == null && range.first < it.size }
+            ?.copyOfRange(range.first, minOf(range.last + 1, input.ir.size))
+            ?.let {
+                com.heartline.shared.dsp.PpgRepair.repair(it)
+                    ?: it
+            }
         val bcg = input.imu.accel?.let { accel ->
             val t = times ?: return@let null
             val pulses = PpgFeatures.pulses(raw.copyOfRange(range.first, range.last + 1), fs, greenPolarity) ?: return@let null
@@ -451,6 +454,7 @@ object BpPipeline {
 
     /** Wall-clock time of a fractional sample index (the tangent foot lies between samples). */
     private fun onsetNs(t: LongArray, offset: Int, onset: Double): Long {
+        if (t.size < 2) return t.firstOrNull() ?: 0L
         val i = (offset + onset).toInt().coerceIn(0, t.size - 2)
         val f = (offset + onset - i).coerceIn(0.0, 1.0)
         return t[i] + ((t[i + 1] - t[i]) * f).toLong()

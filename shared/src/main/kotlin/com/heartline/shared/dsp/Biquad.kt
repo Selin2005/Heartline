@@ -120,3 +120,15 @@ fun FloatArray.filtFilt(vararg stages: Biquad): FloatArray {
     x.reverse()
     return x
 }
+
+/** Forward-fills non-finite samples (leading non-finite -> 0f) without allocating when all are finite. */
+internal fun FloatArray.forwardFillNonFinite(): FloatArray {
+    if (all { it.isFinite() }) return this
+    return FloatArray(size).also { out ->
+        var last = 0f
+        for (i in indices) {
+            if (this[i].isFinite()) last = this[i]
+            out[i] = last
+        }
+    }
+}

@@ -155,23 +155,26 @@ class DataLayerTransport(context: Context, private val peerCapability: String, p
      * Hands an inbound channel's stream to [read] (called from WearableListenerService
      * .onChannelOpened for large transfers that shouldn't be held in memory), then closes it.
      */
-    suspend fun readChannelStream(channel: ChannelClient.Channel, read: suspend (InputStream) -> Unit) {
+    suspend fun readChannelStream(channel: ChannelClient.Channel, read: suspend (InputStream) -> Unit) = withContext(Dispatchers.IO) {
         backoff?.reset()
         try {
             val input = channels.getInputStream(channel).await()
             HLog.i(TAG, "receiving stream ${channel.path}")
-            read(input)
+            input.use { read(it) }
         } finally {
-            channels.close(channel)
+            runCatching { channels.close(channel) }
         }
     }
 
     /** Reads a whole inbound channel (called from WearableListenerService.onChannelOpened). */
     suspend fun readChannel(channel: ChannelClient.Channel): ByteArray = withContext(Dispatchers.IO) {
         backoff?.reset()
-        channels.getInputStream(channel).await().use { it.readBytes() }.also {
-            channels.close(channel)
-            HLog.i(TAG, "received stream ${channel.path} (${it.size} B)")
+        try {
+            channels.getInputStream(channel).await().use { it.readBytes() }.also {
+                HLog.i(TAG, "received stream ${channel.path} (${it.size} B)")
+            }
+        } finally {
+            runCatching { channels.close(channel) }
         }
     }
 

@@ -5,6 +5,7 @@ package com.heartline.shared.ecg
 
 import com.heartline.shared.dsp.Biquad
 import com.heartline.shared.dsp.filtFilt
+import com.heartline.shared.dsp.forwardFillNonFinite
 import com.heartline.shared.hr.RrFeatures
 import kotlin.math.abs
 import kotlin.math.exp
@@ -201,19 +202,22 @@ object EcgFounderInput {
     const val WINDOW = 10 * FS
 
     fun windows(raw: FloatArray, fs: Int, max: Int = 3): List<FloatArray> {
+        if (fs <= 0 || raw.size < 2 || max <= 0) return emptyList()
+        val finite = raw.forwardFillNonFinite()
         val x = if (fs == FS) {
-            raw
+            finite
         } else {
-            FloatArray((raw.size.toLong() * FS / fs).toInt()) { k ->
+            FloatArray((finite.size.toLong() * FS / fs).toInt()) { k ->
                 val pos = k.toDouble() * fs / FS
-                val i = pos.toInt().coerceAtMost(raw.size - 2)
-                (raw[i] + (raw[i + 1] - raw[i]) * (pos - i)).toFloat()
+                val i = pos.toInt().coerceAtMost(finite.size - 2)
+                (finite[i] + (finite[i + 1] - finite[i]) * (pos - i)).toFloat()
             }
         }
         if (x.size < WINDOW) return emptyList()
         val notched = x.filtFilt(Biquad.iirNotch(50.0, FS.toDouble(), 30.0))
-        return (0..minOf(notched.size, max * WINDOW) - WINDOW step WINDOW).map { start ->
+        return (0..minOf(notched.size, max * WINDOW) - WINDOW step WINDOW).mapNotNull { start ->
             val w = notched.copyOfRange(start, start + WINDOW)
+            if (w.any { !it.isFinite() }) return@mapNotNull null
             val mean = w.average()
             val sd = sqrt(w.sumOf { (it - mean) * (it - mean) } / w.size)
             FloatArray(WINDOW) { ((w[it] - mean) / (sd + 1e-8)).toFloat() }

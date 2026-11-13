@@ -163,20 +163,24 @@ class MeasureSessionManager(
 ) {
     private val mutable = MutableStateFlow<MeasureUi?>(null)
     val state: StateFlow<MeasureUi?> = mutable.asStateFlow()
+    private val lock = Any()
     private var lastSeq = -1
     private var job: Job? = null
     private var watchdog: Job? = null
 
     /** Starts [metric] (blood pressure: calibration round [round]), unless the same one is already running. */
     fun start(metric: Metric, round: Int? = null) {
-        val current = mutable.value
-        if (current != null && current.active && current.metric == metric && current.round == round) return
-        if (current != null && current.active) cancel()
-        val ui = MeasureUi(metric, newId(), MeasureStep.CHECKING, now(), round = round)
-        mutable.value = ui
-        lastSeq = -1
-        HLog.i(TAG, "start $metric${round?.let { " round $it" } ?: ""} (${ui.sessionId})")
-        job = scope.launch { begin(ui) }
+        synchronized(lock) {
+            val current = mutable.value
+            if (current != null && current.active && current.metric == metric && current.round == round) return
+            if (current != null && current.active) cancelLocked()
+            val next = MeasureUi(metric, newId(), MeasureStep.CHECKING, now(), round = round)
+            mutable.value = next
+            lastSeq = -1
+            HLog.i(TAG, "start $metric${round?.let { " round $it" } ?: ""} (${next.sessionId})")
+            job?.cancel()
+            job = scope.launch { begin(next) }
+        }
     }
 
     private suspend fun begin(ui: MeasureUi) {
@@ -204,47 +208,53 @@ class MeasureSessionManager(
 
     /** From the watch: a step of the session (late or foreign ones are ignored). */
     fun onState(state: MeasureState) {
-        val ui = mutable.value ?: return
-        if (state.sessionId != ui.sessionId || !ui.active || state.seq <= lastSeq) return
-        lastSeq = state.seq
-        if (state.stage == MeasureStage.REJECTED) return fail(ui.sessionId, MeasureIssue.of(state.reason))
-        val step = when (state.stage) {
-            MeasureStage.ACCEPTED, MeasureStage.PREPARING -> MeasureStep.PREPARING
-            else -> MeasureStep.MEASURING
+        synchronized(lock) {
+            val ui = mutable.value ?: return
+            if (state.sessionId != ui.sessionId || !ui.active || state.seq <= lastSeq) return
+            lastSeq = state.seq
+            if (state.stage == MeasureStage.REJECTED) return fail(ui.sessionId, MeasureIssue.of(state.reason))
+            val step = when (state.stage) {
+                MeasureStage.ACCEPTED, MeasureStage.PREPARING -> MeasureStep.PREPARING
+                else -> MeasureStep.MEASURING
+            }
+            val t = now()
+            // How fast the progress rises, from the last two messages (smoothed), for [MeasureUi.progressAt].
+            val rate = if (ui.step == MeasureStep.MEASURING && step == MeasureStep.MEASURING && state.hint == MeasureHint.NONE && t > ui.progressAtMs + 200) {
+                val instant = ((state.progress - ui.progress) / (t - ui.progressAtMs)).coerceIn(0f, 0.001f)
+                if (ui.ratePerMs > 0f) ui.ratePerMs * 0.5f + instant * 0.5f else instant
+            } else {
+                ui.ratePerMs
+            }
+            mutable.value = ui.copy(
+                step = step,
+                progress = state.progress,
+                secondsLeft = state.secondsLeft,
+                hint = state.hint,
+                live = state.live ?: ui.live,
+                progressAtMs = t,
+                ratePerMs = rate,
+            )
+            arm(ui.sessionId, if (step == MeasureStep.PREPARING) PREPARING_TIMEOUT_MS else SILENCE_TIMEOUT_MS)
         }
-        val t = now()
-        // How fast the progress rises, from the last two messages (smoothed), for [MeasureUi.progressAt].
-        val rate = if (ui.step == MeasureStep.MEASURING && step == MeasureStep.MEASURING && state.hint == MeasureHint.NONE && t > ui.progressAtMs + 200) {
-            val instant = ((state.progress - ui.progress) / (t - ui.progressAtMs)).coerceIn(0f, 0.001f)
-            if (ui.ratePerMs > 0f) ui.ratePerMs * 0.5f + instant * 0.5f else instant
-        } else {
-            ui.ratePerMs
-        }
-        mutable.value = ui.copy(
-            step = step,
-            progress = state.progress,
-            secondsLeft = state.secondsLeft,
-            hint = state.hint,
-            live = state.live ?: ui.live,
-            progressAtMs = t,
-            ratePerMs = rate,
-        )
-        arm(ui.sessionId, if (step == MeasureStep.PREPARING) PREPARING_TIMEOUT_MS else SILENCE_TIMEOUT_MS)
     }
 
     /** From the watch, through its outbox: how the session ended. */
     fun onResult(result: MeasureResult) {
-        val ui = mutable.value ?: return
-        if (result.sessionId != ui.sessionId || !ui.active) return
-        when (result.outcome) {
-            MeasureOutcome.OK -> finish(ui.sessionId, result.recordId, result.summary)
-            MeasureOutcome.CANCELLED -> fail(ui.sessionId, if (result.problem == MeasureProblem.WATCH_LEFT) MeasureIssue.WATCH_LEFT else MeasureIssue.CANCELLED)
-            MeasureOutcome.FAILED -> fail(ui.sessionId, MeasureIssue.of(result.problem))
+        synchronized(lock) {
+            val ui = mutable.value ?: return
+            if (result.sessionId != ui.sessionId || !ui.active) return
+            when (result.outcome) {
+                MeasureOutcome.OK -> finish(ui.sessionId, result.recordId, result.summary)
+                MeasureOutcome.CANCELLED -> fail(ui.sessionId, if (result.problem == MeasureProblem.WATCH_LEFT) MeasureIssue.WATCH_LEFT else MeasureIssue.CANCELLED)
+                MeasureOutcome.FAILED -> fail(ui.sessionId, MeasureIssue.of(result.problem))
+            }
         }
     }
 
     /** Stops the session here and on the watch. */
-    fun cancel() {
+    fun cancel() = synchronized(lock) { cancelLocked() }
+
+    private fun cancelLocked() {
         val ui = mutable.value ?: return
         if (!ui.active) return
         HLog.i(TAG, "cancel ${ui.metric} (${ui.sessionId})")
@@ -254,12 +264,12 @@ class MeasureSessionManager(
     }
 
     fun retry() {
-        val ui = mutable.value ?: return
+        val ui = synchronized(lock) { mutable.value } ?: return
         start(ui.metric, ui.round)
     }
 
     /** Forgets a finished session (the screen closed). */
-    fun dismiss() {
+    fun dismiss() = synchronized(lock) {
         if (mutable.value?.active == false) mutable.value = null
     }
 
@@ -267,34 +277,46 @@ class MeasureSessionManager(
         watchdog?.cancel()
         watchdog = scope.launch {
             delay(timeoutMs)
-            val ui = mutable.value ?: return@launch
-            if (ui.sessionId != sessionId || !ui.active) return@launch
+            val timedOutUi = synchronized(lock) {
+                val ui = mutable.value ?: return@synchronized null
+                if (ui.sessionId != sessionId || !ui.active) null else ui
+            } ?: return@launch
             // The outcome may have been delayed while the record itself came through.
-            HLog.i(TAG, "no word from the watch for ${timeoutMs / 1000} s (${ui.step}, $sessionId)")
-            val record = recordSince(ui.metric, ui.startedAtMs)
-            if (record != null && ui.round == null) {
-                finish(sessionId, record.first, record.second)
-            } else {
-                fail(sessionId, if (ui.step == MeasureStep.WAITING_WATCH) MeasureIssue.NO_RESPONSE else MeasureIssue.LOST)
+            HLog.i(TAG, "no word from the watch for ${timeoutMs / 1000} s (${timedOutUi.step}, $sessionId)")
+            val record = recordSince(timedOutUi.metric, timedOutUi.startedAtMs)
+            synchronized(lock) {
+                val ui = mutable.value ?: return@synchronized
+                if (ui.sessionId != sessionId || !ui.active) return@synchronized
+                if (record != null && ui.round == null) {
+                    finish(sessionId, record.first, record.second)
+                } else {
+                    fail(sessionId, if (ui.step == MeasureStep.WAITING_WATCH) MeasureIssue.NO_RESPONSE else MeasureIssue.LOST)
+                }
             }
         }
     }
 
     private fun finish(sessionId: String, recordId: String?, summary: RecordSummary?) {
-        update(sessionId) { it.copy(step = MeasureStep.RESULT, progress = 1f, recordId = recordId, summary = summary, hint = MeasureHint.NONE) }
-        watchdog?.cancel()
-        HLog.i(TAG, "result $sessionId")
+        synchronized(lock) {
+            update(sessionId) { it.copy(step = MeasureStep.RESULT, progress = 1f, recordId = recordId, summary = summary, hint = MeasureHint.NONE) }
+            watchdog?.cancel()
+            HLog.i(TAG, "result $sessionId")
+        }
     }
 
     private fun fail(sessionId: String, issue: MeasureIssue) {
-        update(sessionId) { it.copy(step = MeasureStep.FAILED, issue = issue) }
-        watchdog?.cancel()
-        HLog.i(TAG, "failed $sessionId: $issue")
+        synchronized(lock) {
+            update(sessionId) { it.copy(step = MeasureStep.FAILED, issue = issue) }
+            watchdog?.cancel()
+            HLog.i(TAG, "failed $sessionId: $issue")
+        }
     }
 
     private inline fun update(sessionId: String, change: (MeasureUi) -> MeasureUi) {
-        val ui = mutable.value ?: return
-        if (ui.sessionId == sessionId) mutable.value = change(ui)
+        synchronized(lock) {
+            val ui = mutable.value ?: return
+            if (ui.sessionId == sessionId) mutable.value = change(ui)
+        }
     }
 
     companion object {
