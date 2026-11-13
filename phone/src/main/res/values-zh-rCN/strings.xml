@@ -300,8 +300,8 @@
     <string name="bp_history">历史记录</string>
     <string name="bp_normal">正常</string>
     <string name="bp_elevated">偏高</string>
-    <string name="bp_stage1">高血压 · 1 级</string>
-    <string name="bp_stage2">高血压 · 2 级</string>
+    <string name="bp_stage1">偏高 · 1 级</string>
+    <string name="bp_stage2">偏高 · 2 级</string>
     <string name="bp_crisis">非常高</string>
     <string name="bp_disclaimer">手表给出的血压是基于你校准数据的估算值，不能替代袖带血压计，也不用于诊断高血压。</string>
     <string name="bp_calibration_title">校准</string>

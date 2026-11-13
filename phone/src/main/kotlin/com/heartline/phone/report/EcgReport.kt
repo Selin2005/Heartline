@@ -93,14 +93,19 @@ class EcgReportPainter(private val regular: Typeface = Typeface.DEFAULT, private
         text.color = Color.rgb(17, 17, 20)
         var belowStrips = (strips.lastOrNull()?.let { it.top + it.height } ?: mm(60.0)).toFloat() + mm(7.0).toFloat()
         if (data.recordingDetails.isNotEmpty()) belowStrips = drawDetails(canvas, data.recordingDetails, left, belowStrips) + mm(4.0).toFloat()
+        val wrapWidth = EcgStripLayout.PAGE_WIDTH_PT - 2 * left
+        text.textSize = 8f
+        text.color = Color.rgb(110, 110, 118)
+        val disclaimerLines = wrapLines(data.disclaimer, wrapWidth)
+        val disclaimerLineHeight = text.textSize + 2f
+        val disclaimerTop = (bottom - 14f) - (disclaimerLines.size - 1).coerceAtLeast(0) * disclaimerLineHeight - text.textSize
+        drawWrappedLinesUp(canvas, disclaimerLines, left, bottom - 14f, disclaimerLineHeight)
         text.typeface = regular
         text.textSize = 9f
         text.color = Color.rgb(17, 17, 20)
-        drawWrapped(canvas, data.explanation, left, belowStrips, EcgStripLayout.PAGE_WIDTH_PT - 2 * left)
-        text.textSize = 8f
-        text.color = Color.rgb(110, 110, 118)
-        drawWrapped(canvas, data.disclaimer, left, bottom - 14f, EcgStripLayout.PAGE_WIDTH_PT - 2 * left)
+        drawWrappedDown(canvas, data.explanation, left, belowStrips, wrapWidth, maxY = disclaimerTop - 4f)
         text.textSize = 7f
+        text.color = Color.rgb(110, 110, 118)
         canvas.drawText(data.footer, left, bottom, text)
     }
 
@@ -160,10 +165,21 @@ class EcgReportPainter(private val regular: Typeface = Typeface.DEFAULT, private
         val xs = EcgStripLayout.xScale(data.sampleRateHz).toFloat()
         val ys = EcgStripLayout.yScale.toFloat()
         val path = Path()
+        var started = false
         for (i in strip.fromSample until strip.toSample) {
+            val sample = data.samples[i]
+            if (!sample.isFinite()) {
+                started = false
+                continue
+            }
             val px = l + (i - strip.fromSample) * xs
-            val py = baseline - data.samples[i] * ys
-            if (i == strip.fromSample) path.moveTo(px, py) else path.lineTo(px, py)
+            val py = baseline - sample * ys
+            if (!started) {
+                path.moveTo(px, py)
+                started = true
+            } else {
+                path.lineTo(px, py)
+            }
         }
         canvas.drawPath(path, trace)
         canvas.restore()
@@ -173,21 +189,51 @@ class EcgReportPainter(private val regular: Typeface = Typeface.DEFAULT, private
         canvas.drawText("${strip.index * EcgStripLayout.SECONDS_PER_STRIP} s", l, t - 2f, text)
     }
 
-    private fun drawWrapped(canvas: Canvas, value: String, x: Float, y: Float, width: Float) {
+    private fun wrapLines(value: String, width: Float): List<String> {
         val words = value.split(' ')
         val lines = mutableListOf<String>()
         var line = ""
         for (word in words) {
             val candidate = if (line.isEmpty()) word else "$line $word"
-            if (text.measureText(candidate) > width && line.isNotEmpty()) {
+            if (text.measureText(candidate) <= width) {
+                line = candidate
+                continue
+            }
+            if (line.isNotEmpty()) {
                 lines += line
+                line = ""
+            }
+            if (text.measureText(word) <= width) {
                 line = word
             } else {
-                line = candidate
+                for (ch in word) {
+                    val part = line + ch
+                    if (text.measureText(part) > width && line.isNotEmpty()) {
+                        lines += line
+                        line = ch.toString()
+                    } else {
+                        line = part
+                    }
+                }
             }
         }
         if (line.isNotEmpty()) lines += line
-        lines.forEachIndexed { i, l -> canvas.drawText(l, x, y + i * (text.textSize + 2f) - (lines.size - 1) * (text.textSize + 2f), text) }
+        return lines
+    }
+
+    /** Anchors the first line at [y] and flows subsequent lines downward, stopping above [maxY]. */
+    private fun drawWrappedDown(canvas: Canvas, value: String, x: Float, y: Float, width: Float, maxY: Float = Float.POSITIVE_INFINITY) {
+        val step = text.textSize + 2f
+        for ((i, l) in wrapLines(value, width).withIndex()) {
+            val lineY = y + i * step
+            if (lineY > maxY) break
+            canvas.drawText(l, x, lineY, text)
+        }
+    }
+
+    /** Anchors the last pre-wrapped line at [y] and shifts earlier lines upward. */
+    private fun drawWrappedLinesUp(canvas: Canvas, lines: List<String>, x: Float, y: Float, step: Float) {
+        lines.forEachIndexed { i, l -> canvas.drawText(l, x, y + (i - (lines.size - 1)) * step, text) }
     }
 }
 

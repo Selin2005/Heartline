@@ -26,7 +26,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
-import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
@@ -82,7 +81,7 @@ class SdkHrSource(private val gateway: SdkSensorGateway) : HrSource {
             object : HealthTracker.TrackerEventListener {
                 override fun onDataReceived(points: List<DataPoint>) {
                     RawCapture.sdk(TrackerKind.HEART_RATE_CONTINUOUS.name, points)
-                    points.forEach { trySendBlocking(it.toSample()) }
+                    points.forEach { trySend(it.toSample()) }
                 }
 
                 override fun onFlushCompleted() {

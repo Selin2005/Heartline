@@ -239,11 +239,16 @@ class BpRepository(
         val at = record.entity.startedAtMs
         // With the reading's raw session, the cuff check teaches every channel (IR, BCG, ECG transit times).
         val fromSession = sessionId?.let { session(it) }?.let { log ->
-            withContext(Dispatchers.Default) { BpPipeline.capture(BpSessionReplay.input(log), cal.polarity(BpChannel.PWA_GREEN), cal.polarity(BpChannel.PWA_IR)) }
+            val input = BpSessionReplay.input(log)
+            val sessionFs = input.precise?.fs ?: input.fs
+            withContext(Dispatchers.Default) {
+                BpPipeline.capture(input, cal.polarity(BpChannel.PWA_GREEN, sessionFs), cal.polarity(BpChannel.PWA_IR, sessionFs))
+            }
         }?.let { CalibrationPoint.of(it, validation.cuffSystolic, validation.cuffDiastolic, null, at, sessionId = sessionId) }
         val point = fromSession ?: run {
             val wave = records.wave(record) ?: return
-            val features = withContext(Dispatchers.Default) { PpgFeatures.extract(wave, record.entity.sampleRateHz.takeIf { it > 0 } ?: BpCalibration.PPG_FS, cal.polarity(BpChannel.PWA_GREEN)) }
+            val fs = record.entity.sampleRateHz.takeIf { it > 0 } ?: BpCalibration.PPG_FS
+            val features = withContext(Dispatchers.Default) { PpgFeatures.extract(wave, fs, cal.polarity(BpChannel.PWA_GREEN, fs)) }
                 ?: return
             // The reading was compared with this calibration, so its wave is the calibration's.
             CalibrationPoint(features, validation.cuffSystolic, validation.cuffDiastolic, null, null, at, wave = cal.wave())
@@ -266,7 +271,8 @@ class BpRepository(
             // The personal model learned steady readings; one taken in another state is left as the watch gave it.
             if (summary.rangeOnly || (summary.bodyState != null && summary.bodyState != "STEADY")) return@withContext null
             val fs = meta.sampleRateHz.takeIf { it > 0 } ?: BpCalibration.PPG_FS
-            val features = PpgFeatures.extract(wave, fs) ?: return@withContext null
+            val polarity = calibration.first()?.aligned()?.polarity(BpChannel.PWA_GREEN, fs)
+            val features = PpgFeatures.extract(wave, fs, polarity) ?: return@withContext null
             val samples = trainingSamples(excluding = meta.id)
             if (samples.size < HybridBpModel.MIN_SAMPLES) return@withContext null
             val model = embedders().mapNotNull { HybridBpModel(it).train(samples) }.minByOrNull { it.looMaeHybrid } ?: return@withContext null
@@ -278,12 +284,14 @@ class BpRepository(
 
     /** Every cuff check whose reading's pulse wave is on the phone. */
     internal suspend fun trainingSamples(excluding: String? = null): List<HybridBpModel.Sample> {
-        val cal = calibration.first()
+        val cal = calibration.first()?.aligned()
         return dao.validations().first().filter { it.readingId != excluding }.mapNotNull { v ->
             val record = records.get(v.readingId) ?: return@mapNotNull null
             val s = record.summary as? RecordSummary.BloodPressure ?: return@mapNotNull null
             val wave = records.wave(record) ?: return@mapNotNull null
-            val features = PpgFeatures.extract(wave, record.entity.sampleRateHz.takeIf { it > 0 } ?: BpCalibration.PPG_FS) ?: return@mapNotNull null
+            val fs = record.entity.sampleRateHz.takeIf { it > 0 } ?: BpCalibration.PPG_FS
+            val polarity = cal?.polarity(BpChannel.PWA_GREEN, fs)
+            val features = PpgFeatures.extract(wave, fs, polarity) ?: return@mapNotNull null
             // The classical estimate as the current algorithm gives it (algorithm 6.4: the number
             // shown then may have had a correction since removed), from the reading's raw session
             // and the calibration without this check's own point.

@@ -5,6 +5,7 @@ package com.heartline.shared.bp
 
 import com.heartline.shared.dsp.Biquad
 import com.heartline.shared.dsp.filtFilt
+import com.heartline.shared.dsp.forwardFillNonFinite
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -186,8 +187,9 @@ object PapageiInput {
     const val SEGMENT = FS * 10
 
     fun segments(raw: FloatArray, fs: Int): List<FloatArray> {
-        if (raw.size < fs * 10) return emptyList()
-        val filtered = raw.filtFilt(Biquad.highPass(0.5, fs.toDouble()), Biquad.lowPass(12.0, fs.toDouble()))
+        if (fs <= 0 || raw.size < fs * 10 || raw.size < 2) return emptyList()
+        val finite = raw.forwardFillNonFinite()
+        val filtered = finite.filtFilt(Biquad.highPass(0.5, fs.toDouble()), Biquad.lowPass(12.0, fs.toDouble()))
         val x = if (PpgFeatures.isInverted(filtered)) FloatArray(filtered.size) { -filtered[it] } else filtered
         val w = maxOf(1, (0.05 * fs).toInt())
         val smooth = FloatArray(x.size) { i ->
@@ -198,14 +200,16 @@ object PapageiInput {
             s / (to - from + 1)
         }
         val n = (smooth.size.toLong() * FS / fs).toInt()
+        if (n < SEGMENT) return emptyList()
         val resampled = FloatArray(n) { k ->
             val pos = k.toDouble() * fs / FS
             val i = pos.toInt().coerceAtMost(smooth.size - 2)
             val f = (pos - i).toFloat()
             smooth[i] * (1 - f) + smooth[i + 1] * f
         }
-        return (0..resampled.size - SEGMENT step SEGMENT).map { start ->
+        return (0..resampled.size - SEGMENT step SEGMENT).mapNotNull { start ->
             val seg = resampled.copyOfRange(start, start + SEGMENT)
+            if (seg.any { !it.isFinite() }) return@mapNotNull null
             val mean = seg.average().toFloat()
             val sd = kotlin.math.sqrt(seg.sumOf { ((it - mean) * (it - mean)).toDouble() } / seg.size).toFloat().takeIf { it > 1e-9f } ?: 1f
             FloatArray(seg.size) { (seg[it] - mean) / sd }

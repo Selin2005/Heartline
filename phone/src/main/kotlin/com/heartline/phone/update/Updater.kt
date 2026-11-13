@@ -7,8 +7,11 @@ import com.heartline.datalayer.diag.HLog
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageInfo
 import android.content.pm.PackageInstaller
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import com.heartline.shared.update.AppVersion
 import com.heartline.shared.update.GitHubAsset
@@ -82,21 +85,22 @@ class Updater(
             HLog.i(TAG, "$version already downloaded and verified: no download")
             return file
         }
-        val expected = Releases.parseChecksums(source.text(sums.url))[apk.name] ?: throw IOException("No checksum for ${apk.name}")
+        val name = safeAssetName(apk.name)
+        val expected = Releases.parseChecksums(source.text(sums.url))[name] ?: throw IOException("No checksum for $name")
         val dir = dir()
-        val part = File(dir, "${apk.name}.part")
+        val part = File(dir, "$name.part")
         dir.listFiles()?.filter { it != part }?.forEach { it.deleteRecursively() }
         repository.clearReady()
         val actual = source.download(apk.url, part, onProgress)
         if (!actual.equals(expected, ignoreCase = true)) {
             part.delete()
-            HLog.w(TAG, "${apk.name}: checksum mismatch, deleted")
+            HLog.w(TAG, "$name: checksum mismatch, deleted")
             throw ChecksumMismatch()
         }
-        val file = File(dir, apk.name)
+        val file = File(dir, name)
         if (!part.renameTo(file)) throw IOException("Couldn't keep the download")
         repository.setReady(UpdateRepository.Ready(version, file.name, expected.lowercase()))
-        HLog.i(TAG, "downloaded and verified ${apk.name}: ready to install")
+        HLog.i(TAG, "downloaded and verified $name: ready to install")
         return file
     }
 
@@ -107,10 +111,11 @@ class Updater(
     suspend fun readyFile(version: String? = null): File? = withContext(Dispatchers.IO) {
         val ready = repository.current().ready ?: return@withContext null
         if (version != null && ready.version != version) return@withContext null
-        val file = File(dir(), ready.file)
-        if (file.isFile && ReleaseSource.sha256(file).equals(ready.sha256, ignoreCase = true)) return@withContext file
+        val name = runCatching { safeAssetName(ready.file) }.getOrNull()
+        val file = name?.let { File(dir(), it) }
+        if (file != null && file.isFile && ReleaseSource.sha256(file).equals(ready.sha256, ignoreCase = true)) return@withContext file
         HLog.w(TAG, "ready update ${ready.version} is missing or damaged: downloading again")
-        file.delete()
+        file?.delete()
         repository.clearReady()
         null
     }
@@ -132,7 +137,17 @@ class Updater(
 
     private fun dir() = File(context.filesDir, "updates").apply { mkdirs() }
 
+    private fun safeAssetName(name: String): String {
+        val clean = File(name).name
+        if (clean.isEmpty() || clean == "." || clean == ".." || clean != name) {
+            throw IOException("Invalid update asset name: $name")
+        }
+        return clean
+    }
+
     class ChecksumMismatch : IOException("Checksum mismatch: the download is damaged or not an official release")
+
+    class InvalidPackage(message: String) : IOException(message)
 
     /** Android asks once per app before it may install others ("Install unknown apps"). */
     fun canInstall(): Boolean = context.packageManager.canRequestPackageInstalls()
@@ -142,6 +157,7 @@ class Updater(
 
     /** Hands the verified APK to the system installer, which asks the user to confirm. */
     suspend fun install(apk: File) = withContext(Dispatchers.IO) {
+        verifyApkMatchesApp(apk)
         HLog.i(TAG, "installing ${apk.name}")
         val installer = context.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
@@ -157,6 +173,37 @@ class Updater(
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
             session.commit(PendingIntent.getBroadcast(context, id, intent, flags).intentSender)
         }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun verifyApkMatchesApp(apk: File) {
+        val pm = context.packageManager
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            PackageManager.GET_SIGNATURES
+        }
+        val archive = pm.getPackageArchiveInfo(apk.absolutePath, flags)
+            ?: throw InvalidPackage("Unreadable update package")
+        if (archive.packageName != context.packageName) {
+            throw InvalidPackage("Package name mismatch: ${archive.packageName}")
+        }
+        val installed = pm.getPackageInfo(context.packageName, flags)
+        val archiveSigs = signingBytes(archive)
+        val installedSigs = signingBytes(installed)
+        if (archiveSigs.isEmpty() || archiveSigs != installedSigs) {
+            throw InvalidPackage("Signing certificate mismatch for update package")
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun signingBytes(info: PackageInfo): Set<String> {
+        val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            info.signingInfo?.apkContentsSigners
+        } else {
+            info.signatures
+        }
+        return signatures.orEmpty().map { it.toCharsString() }.toSet()
     }
 
     private companion object {

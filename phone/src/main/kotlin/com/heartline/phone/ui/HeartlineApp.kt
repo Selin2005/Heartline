@@ -167,7 +167,7 @@ fun HeartlineApp(
     deepLink: String? = null,
     onDeepLinkHandled: () -> Unit = {},
 ) {
-    LaunchedEffect(openAlerts) { if (openAlerts) navController.navigate(Routes.ALERTS) }
+    LaunchedEffect(openAlerts) { if (openAlerts) navController.navigate(Routes.ALERTS) { launchSingleTop = true } }
     LaunchedEffect(deepLink) {
         val link = EntryLinks.parse(deepLink ?: return@LaunchedEffect)
         val target = when (link.route) {
@@ -421,7 +421,7 @@ fun HeartlineApp(
                     )
                 }
                 composable(Routes.METRIC) { entry ->
-                    val metric = Metric.valueOf(entry.arguments?.getString("metric") ?: Metric.SPO2.name)
+                    val metric = entry.arguments?.getString("metric")?.let { name -> Metric.entries.firstOrNull { it.name == name } } ?: Metric.SPO2
                     if (metric == Metric.BODY_COMPOSITION) {
                         val vm: BodyCompositionViewModel = koinViewModel()
                         val state by vm.state.collectAsStateWithLifecycle()
@@ -445,7 +445,10 @@ fun HeartlineApp(
                             manager.start(metric)
                         }
                     }
-                    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { manager.dismiss() } }
+                    val activity = LocalContext.current as? android.app.Activity
+                    androidx.compose.runtime.DisposableEffect(Unit) {
+                        onDispose { if (activity?.isChangingConfigurations != true) manager.dismiss() }
+                    }
                     val settings: com.heartline.phone.data.SettingsRepository = koinInject()
                     val monitor by settings.monitor.collectAsStateWithLifecycle(null)
                     com.heartline.phone.ui.measure.MeasureScreen(

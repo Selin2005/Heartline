@@ -81,7 +81,7 @@ fun WeightConfirmScreen(initialKg: Float, onConfirm: (Float) -> Unit) {
         ActionScreen(stringResource(R.string.action_continue), onAction = { onConfirm(kg) }) {
             Text(stringResource(R.string.body_weight_title), style = MaterialTheme.typography.titleSmall, color = color)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(vertical = 2.dp)) {
-                FilledTonalIconButton(onClick = { step(-0.1f) }, modifier = Modifier.size(28.dp)) {
+                FilledTonalIconButton(onClick = { step(-0.1f) }, modifier = Modifier.size(48.dp)) {
                     Icon(Icons.Rounded.Remove, contentDescription = "−0.1", modifier = Modifier.size(16.dp))
                 }
                 Row(verticalAlignment = Alignment.Bottom) {
@@ -92,7 +92,7 @@ fun WeightConfirmScreen(initialKg: Float, onConfirm: (Float) -> Unit) {
                     )
                     Text(" kg", style = MaterialTheme.typography.bodyMedium, color = WearColors.onSurfaceVariant, modifier = Modifier.padding(bottom = 6.dp))
                 }
-                FilledTonalIconButton(onClick = { step(0.1f) }, modifier = Modifier.size(28.dp)) {
+                FilledTonalIconButton(onClick = { step(0.1f) }, modifier = Modifier.size(48.dp)) {
                     Icon(Icons.Rounded.Add, contentDescription = "+0.1", modifier = Modifier.size(16.dp))
                 }
             }

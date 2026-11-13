@@ -71,4 +71,19 @@ class ReportExportTest {
         assertTrue(builder.data(SampleData.ecgRecords[0], profile, "Sari").recordedAt.startsWith("Sari, "))
         assertTrue(!builder.data(SampleData.ecgRecords[0], profile, null).recordedAt.contains("Sar"))
     }
+
+    @Test
+    fun painterHandlesNonFiniteSamplesAndLongUnbrokenExplanation() {
+        val base = EcgReportBuilder(context).data(SampleData.ecgRecords[0])
+        val noisy = base.samples.copyOf().apply {
+            this[10] = Float.NaN
+            this[250] = Float.POSITIVE_INFINITY
+        }
+        val data = base.copy(
+            samples = noisy,
+            explanation = "A".repeat(400) + " " + "Long explanatory sentence repeated. ".repeat(30),
+        )
+        val bitmap = Bitmap.createBitmap(EcgStripLayout.PAGE_WIDTH_PT, EcgStripLayout.PAGE_HEIGHT_PT, Bitmap.Config.ARGB_8888)
+        EcgReportPainter().draw(Canvas(bitmap), data)
+    }
 }

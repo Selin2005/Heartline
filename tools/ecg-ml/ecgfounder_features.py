@@ -40,7 +40,7 @@ def main():
     model = Net1D(in_channels=1, base_filters=64, ratio=1, filter_list=[64, 160, 160, 400, 400, 1024, 1024],
                   m_blocks_list=[2, 2, 2, 3, 3, 4, 4], kernel_size=16, stride=2, groups_width=16,
                   verbose=False, use_bn=False, use_do=False, n_classes=150)
-    state = torch.load(os.path.join(a.repo, "1_lead_ECGFounder.pth"), map_location="cpu", weights_only=False)["state_dict"]
+    state = torch.load(os.path.join(a.repo, "1_lead_ECGFounder.pth"), map_location="cpu", weights_only=True)["state_dict"]
     model.load_state_dict(state)
     model.eval()
     torch.set_num_threads(os.cpu_count() or 4)

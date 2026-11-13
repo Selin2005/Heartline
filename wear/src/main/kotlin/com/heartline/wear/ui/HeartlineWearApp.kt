@@ -361,11 +361,11 @@ private fun AppNavHost(nav: NavHostController, gate: SetupGateViewModel) {
         }
         composable(Routes.BP_CALIBRATION) { BpFlow(onExit = exit, calibrationSession = true) }
         composable(Routes.QUICK) { entry ->
-            val metric = Metric.valueOf(entry.arguments?.getString("metric") ?: Metric.SPO2.name)
+            val metric = entry.arguments?.getString("metric")?.let { name -> Metric.entries.firstOrNull { it.name == name } } ?: Metric.SPO2
             QuickFlow(metric, onExit = exit)
         }
         composable(Routes.OPTIONS) { entry ->
-            val metric = Metric.valueOf(entry.arguments?.getString("metric") ?: Metric.ECG.name)
+            val metric = entry.arguments?.getString("metric")?.let { name -> Metric.entries.firstOrNull { it.name == name } } ?: Metric.ECG
             val pinned = (launcherState as? LauncherState.Ready)?.entries?.firstOrNull { it.metric == metric }?.pinned == true
             MetricOptionsScreen(
                 metric,

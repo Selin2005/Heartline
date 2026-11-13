@@ -19,11 +19,13 @@ are optimised too.
   python3 tools/screenshots/sync.py --check   fail if docs/screenshots is out of date (CI)
 """
 import filecmp
+import os
 import pathlib
 import re
 import shutil
 import sys
 import tempfile
+import time
 
 import oxipng
 
@@ -393,9 +395,26 @@ def write_index(out: pathlib.Path, index) -> None:
     (out / "README.md").write_text("\n".join(lines), encoding="utf-8")
 
 
+def write_bytes_safe(path: pathlib.Path, data: bytes) -> None:
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_bytes(data)
+    for attempt in range(10):
+        try:
+            os.replace(tmp, path)
+            return
+        except OSError:
+            if attempt == 9:
+                tmp.unlink(missing_ok=True)
+                raise
+            time.sleep(0.05 * (attempt + 1))
+
+
 def optimise(out: pathlib.Path) -> None:
     for png in sorted(out.rglob("*.png")):
-        oxipng.optimize(png, level=4, strip=oxipng.StripChunks.safe())
+        data = png.read_bytes()
+        optimized = oxipng.optimize_from_memory(data, level=4, strip=oxipng.StripChunks.safe())
+        if optimized != data:
+            write_bytes_safe(png, optimized)
 
 
 def build(out: pathlib.Path) -> None:
@@ -413,17 +432,39 @@ def build(out: pathlib.Path) -> None:
     optimise(out)
 
 
+def apply_tree(src: pathlib.Path, dst: pathlib.Path) -> None:
+    for root, dirs, files in os.walk(dst, topdown=False):
+        rel = pathlib.Path(root).relative_to(dst)
+        for name in files:
+            target = pathlib.Path(root) / name
+            if not (src / rel / name).is_file():
+                target.unlink()
+        for name in dirs:
+            target = pathlib.Path(root) / name
+            if not (src / rel / name).is_dir():
+                shutil.rmtree(target)
+    for root, _, files in os.walk(src):
+        rel = pathlib.Path(root).relative_to(src)
+        (dst / rel).mkdir(parents=True, exist_ok=True)
+        for name in files:
+            s = pathlib.Path(root) / name
+            d = dst / rel / name
+            data = s.read_bytes()
+            if not d.is_file() or d.read_bytes() != data:
+                write_bytes_safe(d, data)
+
+
 def main() -> int:
-    if "--check" not in sys.argv:
-        build(DOCS)
-        if BRAND.exists():
-            optimise(BRAND)
-        print(f"Synced {sum(1 for _ in DOCS.rglob('*.png'))} screenshots to {DOCS.relative_to(ROOT)}")
-        return 0
     with tempfile.TemporaryDirectory() as tmp:
         copy = pathlib.Path(tmp) / "screenshots"
         shutil.copytree(DOCS, copy)
         build(copy)
+        if "--check" not in sys.argv:
+            apply_tree(copy, DOCS)
+            if BRAND.exists():
+                optimise(BRAND)
+            print(f"Synced {sum(1 for _ in DOCS.rglob('*.png'))} screenshots to {DOCS.relative_to(ROOT)}")
+            return 0
         diff = filecmp.dircmp(DOCS, copy)
         problems = []
 

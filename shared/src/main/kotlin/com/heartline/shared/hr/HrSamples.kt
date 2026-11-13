@@ -40,9 +40,10 @@ object HrSamples {
         val reliable = status == STATUS_SUCCESS || packed
         val ok = ibis.indices.map { i -> reliable && (ibiStatus.isEmpty() || ibiStatus.getOrNull(i) == 0) }
         val good = ibis.filterIndexed { i, _ -> ok[i] }
+        val medianIbi = good.filter { it in 300..2000 }.sorted().let { if (it.isEmpty()) 0 else it[it.size / 2] }
         return HrSample(
             tsMs = tsMs,
-            bpm = if (packed && bpm <= 0) 60_000 / good.sorted()[good.size / 2] else bpm,
+            bpm = if (packed && bpm <= 0 && medianIbi > 0) 60_000 / medianIbi else bpm,
             ibiMs = good,
             onBody = status != STATUS_OFF_BODY,
             reliable = reliable,

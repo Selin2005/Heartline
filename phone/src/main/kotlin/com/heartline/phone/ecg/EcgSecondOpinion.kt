@@ -92,7 +92,9 @@ class EcgSecondOpinion(
         val p = m.predict(features)
         val rules = com.heartline.shared.ecg.RhythmClassifier.Decision(analysis.result, analysis.metrics.note)
         val decision = EcgAnalyzer.decide(m, p, analysis.averageBpm!!, rules)
-        return decision.result to p[m.classes.indexOf("af")]
+        val afIdx = m.classes.indexOf("af")
+        val afProb = if (afIdx in p.indices) p[afIdx] else 0.0
+        return decision.result to afProb
     }
 
     /** Adds the second opinion to a newly synced ECG record. */

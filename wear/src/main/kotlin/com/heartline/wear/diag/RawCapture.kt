@@ -65,7 +65,7 @@ object RawCapture {
     }
 
     fun event(type: String, detail: String = "") {
-        sessions?.event(type, detail)
+        sessions?.event(type, HLog.redact(detail))
     }
 
     /** The blood-pressure flow records its own complete session; a copy is kept with the others. */

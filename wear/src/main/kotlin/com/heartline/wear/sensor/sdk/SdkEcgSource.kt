@@ -17,7 +17,6 @@ import com.samsung.android.service.health.tracking.HealthTracker
 import com.samsung.android.service.health.tracking.data.DataPoint
 import com.samsung.android.service.health.tracking.data.ValueKey
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
@@ -56,7 +55,7 @@ class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
                         null
                     }
                     raw.batch(points, flags, values, min, max, leadOff, saturated, ppg != null)
-                    if (values.isNotEmpty()) trySendBlocking(EcgChunk(values.toFloatArray(), leadOff, points.last().timestamp, ppg, saturated))
+                    if (values.isNotEmpty()) trySend(EcgChunk(values.toFloatArray(), leadOff, points.last().timestamp, ppg, saturated))
                 }
 
                 override fun onFlushCompleted() = Unit
@@ -68,7 +67,7 @@ class SdkEcgSource(private val gateway: SdkSensorGateway) : EcgSource {
             },
         )
         awaitClose {
-            tracker.unsetEventListener()
+            runCatching { tracker.unsetEventListener() }
             if (missing > 0) HLog.w(SdkSensorGateway.TAG, "ECG: $missing points had no ECG_MV value")
             raw.end()
         }

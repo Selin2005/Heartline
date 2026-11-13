@@ -64,7 +64,7 @@ class ReleaseSourceTest {
     fun stop() = server.stop(0)
 
     private val url get() = "http://127.0.0.1:${server.address.port}/apk"
-    private val source = ReleaseSource("test")
+    private val source = ReleaseSource("test", allowLocalhostForTesting = true)
 
     @Test
     fun downloadsAWholeFile() = runBlocking {

@@ -128,6 +128,7 @@ object StressBaseline {
 
     /** The 0–100 score of a window: personal, blended with the population score while learning. */
     fun score(rmssdMs: Double, bpm: Int, normal: Normal?): Int {
+        if (!rmssdMs.isFinite() || rmssdMs <= 0.0) return 0
         val population = StressIndex.score(rmssdMs).toDouble()
         if (normal == null) return population.roundToInt()
         val z = (ln(rmssdMs.coerceIn(3.0, 300.0)) - normal.ln) / normal.lnSd
@@ -207,7 +208,7 @@ class StressMonitor(private val zone: ZoneId = ZoneId.systemDefault(), private v
         settings: MonitorSettings,
         illness: Boolean = false
     ): Triple<StressHistory, StressSample?, HealthAlert?> {
-        if (!settings.stressActive || rmssdMs <= 0) return Triple(history, null, null)
+        if (!settings.stressActive || !rmssdMs.isFinite() || rmssdMs <= 0) return Triple(history, null, null)
         val lnR = (ln(rmssdMs) * 1000).roundToInt() / 1000f
         val dayKey = StressBaseline.dayOf(tsMs, context, zone)
         val d = history.day(dayKey)

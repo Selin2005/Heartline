@@ -169,17 +169,18 @@ jobs:
         id: version
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           # Draft releases have no git tag yet, so their versions come from the releases list.
           gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate --jq '.[].tag_name' > "$RUNNER_TEMP/release-tags.txt"
-          out=$(python3 "$RELEASE_PY" version --base "${{ inputs.version }}" --channel "$CHANNEL" --run "${{ github.run_number }}" --known-tags "$RUNNER_TEMP/release-tags.txt")
+          out=$(python3 "$RELEASE_PY" version --base "$INPUT_VERSION" --channel "$CHANNEL" --run "${{ github.run_number }}" --known-tags "$RUNNER_TEMP/release-tags.txt")
           # A commit from before the time-based versionCode (Promote builds the beta's commit) prints
           # no code: the same formula, minutes since 2026-01-01 UTC.
           grep -q '^code=' <<<"$out" || out+=$'\n'"code=$(( ($(date +%s) - 1767225600) / 60 ))"
           echo "$out" | tee -a "$GITHUB_OUTPUT"
           version=$(echo "$out" | sed -n 's/^version=//p')
           if [ -z "$version" ]; then
-            echo "::error::Could not work out the version from '${{ inputs.version }}'"
+            echo "::error::Could not work out the version from '$INPUT_VERSION'"
             exit 1
           fi
           echo "| Version | \`$version\` (tag \`v$version\`), versionCode $(echo "$out" | sed -n 's/^code=//p') |" >> "$GITHUB_STEP_SUMMARY"
@@ -232,10 +233,12 @@ jobs:
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           OPENCODE_MODEL: ${{ vars.OPENCODE_MODEL }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PREVIOUS_VERSION: ${{ steps.version.outputs.previous }}
         run: |
           python3 "$RELEASE_PY" notes \
-            --version "${{ steps.version.outputs.version }}" \
-            --previous "${{ steps.version.outputs.previous }}" \
+            --version "$VERSION" \
+            --previous "$PREVIOUS_VERSION" \
             --out "$RUNNER_TEMP/notes.md" \
             --changelog CHANGELOG.md
 
@@ -243,10 +246,11 @@ jobs:
       - name: Assemble APKs
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
         run: |
           ./gradlew --console=plain :phone:assembleRelease :wear:assembleRelease \
             -Pheartline.versionName="$VERSION" \
-            -Pheartline.versionCode="${{ steps.version.outputs.code }}"
+            -Pheartline.versionCode="$VERSION_CODE"
           mkdir -p dist
           cp phone/build/outputs/apk/release/*.apk "dist/Heartline-phone-$VERSION.apk"
           cp wear/build/outputs/apk/release/*.apk "dist/Heartline-watch-$VERSION.apk"
@@ -259,22 +263,24 @@ jobs:
       - name: Check the APKs
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
         run: |
           python3 "$RUNNER_TEMP/tools/check-apks.py" \
             --phone "dist/Heartline-phone-$VERSION.apk" \
             --watch "dist/Heartline-watch-$VERSION.apk" \
             --version-name "$VERSION" \
-            --version-code "${{ steps.version.outputs.code }}"
+            --version-code "$VERSION_CODE"
 
       # Google Play bundles (no GitHub updater inside); uploaded as run artifacts only.
       - name: Google Play bundles
         if: env.CHANNEL != 'dev'
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
         run: |
           ./gradlew --console=plain :phone:bundlePlay :wear:bundlePlay \
             -Pheartline.versionName="$VERSION" \
-            -Pheartline.versionCode="${{ steps.version.outputs.code }}"
+            -Pheartline.versionCode="$VERSION_CODE"
           mkdir -p play
           cp phone/build/outputs/bundle/play/*.aab "play/Heartline-phone-$VERSION.aab"
           cp wear/build/outputs/bundle/play/*.aab "play/Heartline-watch-$VERSION.aab"
@@ -408,9 +414,10 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID || '@HeartlineCommunity' }}
           # Topic 'Announcements & Builds' (t.me/HeartlineCommunity/5); a variable or secret overrides it.
           TELEGRAM_THREAD_ID: ${{ vars.TELEGRAM_THREAD_ID || secrets.TELEGRAM_THREAD_ID || '5' }}
+          INPUT_CHANNEL: ${{ inputs.channel }}
         run: |
           python3 tools/release/release.py telegram \
             --version "${TAG#v}" \
-            --channel "${{ inputs.channel }}" \
+            --channel "$INPUT_CHANNEL" \
             --notes "$RUNNER_TEMP/notes.md" \
             --release-url "$URL"

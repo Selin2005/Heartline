@@ -113,8 +113,13 @@ fun MonitoringSetupFlow(
 ) {
     var step by rememberSaveable { mutableIntStateOf(startStep) }
     // Unanswered until chosen: monitoring on or not is required, even on an update.
-    var monitoring by remember { mutableStateOf(if (startStep > 0 || initial.health.answered) initial.heartMonitoring else null) }
-    var draft by remember { mutableStateOf(initial) }
+    var monitoring by rememberSaveable { mutableStateOf(if (startStep > 0 || initial.health.answered) initial.heartMonitoring else null) }
+    var draft by rememberSaveable(
+        stateSaver = androidx.compose.runtime.saveable.Saver(
+            save = { com.heartline.shared.sync.Protocol.json.encodeToString(it) },
+            restore = { runCatching { com.heartline.shared.sync.Protocol.json.decodeFromString<MonitorSettings>(it) }.getOrDefault(initial) },
+        ),
+    ) { mutableStateOf(initial) }
     val back: (() -> Unit)? = if (step > 0) {
         { step = if (Step.entries[step] == Step.SUMMARY && monitoring == false) Step.MONITORING.ordinal else step - 1 }
     } else {

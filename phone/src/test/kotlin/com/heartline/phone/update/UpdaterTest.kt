@@ -19,6 +19,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.io.IOException
 import java.security.MessageDigest
 import kotlin.random.Random
 
@@ -134,5 +135,16 @@ class UpdaterTest {
         updater("1.3.0").cleanUp()
         assertNull(repository.current().ready)
         assertFalse(dir.exists())
+    }
+
+    @Test
+    fun pathTraversalAssetNameIsRejected() = runBlocking {
+        val evil = GitHubAsset("../evil.apk", 10L, "https://example.invalid/evil")
+        try {
+            updater().download("1.3.0", evil, sums)
+            fail("expected invalid asset name to fail")
+        } catch (_: IOException) {
+        }
+        assertFalse(File(context.filesDir, "evil.apk.part").exists())
     }
 }

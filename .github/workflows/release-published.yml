@@ -97,9 +97,11 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID || '@HeartlineCommunity' }}
           # Topic 'Announcements & Builds' (t.me/HeartlineCommunity/5); a variable or secret overrides it.
           TELEGRAM_THREAD_ID: ${{ vars.TELEGRAM_THREAD_ID || secrets.TELEGRAM_THREAD_ID || '5' }}
+          RELEASE_CHANNEL: ${{ steps.release.outputs.channel }}
+          RELEASE_URL: ${{ steps.release.outputs.url }}
         run: |
           python3 tools/release/release.py telegram \
             --version "${TAG#v}" \
-            --channel "${{ steps.release.outputs.channel }}" \
+            --channel "$RELEASE_CHANNEL" \
             --notes "$RUNNER_TEMP/notes.md" \
-            --release-url "${{ steps.release.outputs.url }}"
+            --release-url "$RELEASE_URL"
